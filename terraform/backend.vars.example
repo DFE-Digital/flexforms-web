@@ -1,8 +1,0 @@
-resource_group_name  = "s184d01-rsd-tfstate"
-storage_account_name = "s184d01rsdstate"
-container_name       = "s184d01-eatwebtf"
-key                  = "terraform.tstate"
-subscription_id      = ""
-client_id            = ""
-client_secret        = ""
-tenant_id            = ""

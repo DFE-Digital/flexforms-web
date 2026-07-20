@@ -24,14 +24,9 @@ variable "environment" {
   type        = string
 }
 
-variable "key_vault_access_ipv4" {
-  description = "List of IPv4 Addresses that are permitted to access the Key Vault"
+variable "tfvars_access_ipv4" {
+  description = "List of IPv4 Addresses that are permitted to access the tfvars storage"
   type        = list(string)
-}
-
-variable "enable_keyvault_private_endpoint" {
-  description = "Set to true to create a private endpoint for key vault."
-  type        = bool
 }
 
 variable "tfvars_filename" {
@@ -54,26 +49,16 @@ variable "tags" {
   type        = map(string)
 }
 
-variable "virtual_network_address_space" {
-  description = "Virtual network address space CIDR"
+variable "container_apps_infra_subnet_cidr" {
+  description = "Specify a subnet prefix to use for the container_apps_infra subnet"
   type        = string
-}
-
-variable "container_apps_infra_subnet_service_endpoints" {
-  description = "Endpoints to assign to infra subnet"
-  type        = list(string)
-  default     = []
+  default     = "172.16.110.64/28"
 }
 
 variable "enable_container_registry" {
   description = "Set to true to create a container registry"
   type        = bool
-}
-
-variable "registry_admin_enabled" {
-  description = "Do you want to enable access key based authentication for your Container Registry?"
-  type        = bool
-  default     = true
+  default     = false
 }
 
 variable "registry_server" {
@@ -90,6 +75,12 @@ variable "registry_use_managed_identity" {
 
 variable "registry_managed_identity_assign_role" {
   description = "Assign the 'AcrPull' Role to the Container App User-Assigned Managed Identity. Note: If you do not have 'Microsoft.Authorization/roleAssignments/write' permission, you will need to manually assign the 'AcrPull' Role to the identity"
+  type        = bool
+  default     = false
+}
+
+variable "registry_admin_enabled" {
+  description = "Do you want to enable access key based authentication for your Container Registry?"
   type        = bool
   default     = false
 }
@@ -114,52 +105,6 @@ variable "container_scale_http_concurrency" {
   description = "When the number of concurrent HTTP requests exceeds this value, then another replica is added. Replicas continue to add to the pool up to the max-replicas amount."
   type        = number
   default     = 10
-}
-
-variable "enable_dns_zone" {
-  description = "Conditionally create a DNS zone"
-  type        = bool
-}
-
-variable "dns_zone_domain_name" {
-  description = "DNS zone domain name. If created, records will automatically be created to point to the CDN."
-  type        = string
-}
-
-variable "dns_ns_records" {
-  description = "DNS NS records to add to the DNS Zone"
-  type = map(
-    object({
-      ttl : optional(number, 300),
-      records : list(string)
-    })
-  )
-}
-
-variable "dns_txt_records" {
-  description = "DNS TXT records to add to the DNS Zone"
-  type = map(
-    object({
-      ttl : optional(number, 300),
-      records : list(string)
-    })
-  )
-}
-
-variable "dns_mx_records" {
-  description = "DNS MX records to add to the DNS Zone"
-  type = map(
-    object({
-      ttl : optional(number, 300),
-      records : list(
-        object({
-          preference : number,
-          exchange : string
-        })
-      )
-    })
-  )
-  default = {}
 }
 
 variable "container_apps_allow_ips_inbound" {
@@ -208,95 +153,6 @@ variable "existing_network_watcher_name" {
 variable "existing_network_watcher_resource_group_name" {
   description = "Existing network watcher resource group."
   type        = string
-}
-
-variable "statuscake_api_token" {
-  description = "API token for StatusCake"
-  type        = string
-  sensitive   = true
-  default     = "00000000000000000000000000000"
-}
-
-variable "statuscake_contact_group_name" {
-  description = "Name of the contact group in StatusCake"
-  type        = string
-  default     = ""
-}
-
-variable "statuscake_contact_group_integrations" {
-  description = "List of Integration IDs to connect to your Contact Group"
-  type        = list(string)
-  default     = []
-}
-
-variable "statuscake_monitored_resource_addresses" {
-  description = "The URLs to perform TLS checks on"
-  type        = list(string)
-  default     = []
-}
-
-variable "statuscake_contact_group_email_addresses" {
-  description = "List of email address that should receive notifications from StatusCake"
-  type        = list(string)
-  default     = []
-}
-
-variable "custom_container_apps" {
-  description = "Custom container apps, by default deployed within the container app environment managed by this module."
-  type = map(object({
-    container_app_environment_id = optional(string, "")
-    resource_group_name          = optional(string, "")
-    revision_mode                = optional(string, "Single")
-    container_port               = optional(number, 0)
-    ingress = optional(object({
-      external_enabled = optional(bool, true)
-      target_port      = optional(number, null)
-      traffic_weight = object({
-        percentage = optional(number, 100)
-      })
-      cdn_frontdoor_custom_domain                = optional(string, "")
-      cdn_frontdoor_origin_fqdn_override         = optional(string, "")
-      cdn_frontdoor_origin_host_header_override  = optional(string, "")
-      enable_cdn_frontdoor_health_probe          = optional(bool, false)
-      cdn_frontdoor_health_probe_protocol        = optional(string, "")
-      cdn_frontdoor_health_probe_interval        = optional(number, 120)
-      cdn_frontdoor_health_probe_request_type    = optional(string, "")
-      cdn_frontdoor_health_probe_path            = optional(string, "")
-      cdn_frontdoor_forwarding_protocol_override = optional(string, "")
-    }), null)
-    identity = optional(list(object({
-      type         = string
-      identity_ids = list(string)
-    })), [])
-    secrets = optional(list(object({
-      name  = string
-      value = string
-    })), [])
-    registry = optional(object({
-      server               = optional(string, "")
-      username             = optional(string, "")
-      password_secret_name = optional(string, "")
-      identity             = optional(string, "")
-    }), null),
-    image   = string
-    cpu     = number
-    memory  = number
-    command = list(string)
-    liveness_probes = optional(list(object({
-      interval_seconds = number
-      transport        = string
-      port             = number
-      path             = optional(string, null)
-    })), [])
-    env = optional(list(object({
-      name      = string
-      value     = optional(string, null)
-      secretRef = optional(string, null)
-    })), [])
-    min_replicas = number
-    max_replicas = number
-  }))
-  default = {}
 }
 
 variable "container_min_replicas" {
@@ -353,55 +209,38 @@ variable "monitor_http_availability_fqdn" {
   default     = ""
 }
 
-variable "dns_alias_records" {
-  description = "DNS ALIAS records to add to the DNS Zone"
-  type = map(
-    object({
-      ttl : optional(number, 300),
-      target_resource_id : string
-    })
-  )
-  default = {}
-}
-
 variable "enable_monitoring_traces" {
   description = "Monitor App Insights traces for error messages"
   type        = bool
   default     = true
 }
 
-variable "enable_redis_cache" {
-  description = "Set to true to create an Azure Redis Cache, with a private endpoint within the virtual network"
+variable "existing_container_app_environment" {
+  description = "Conditionally launch resources into an existing Container App environment. Specifying this will NOT create an environment."
+  type = object({
+    name           = string
+    resource_group = string
+  })
+}
+
+variable "existing_virtual_network" {
+  description = "Conditionally use an existing virtual network. The `virtual_network_address_space` must match an existing address space in the VNet. This also requires the resource group name."
+  type        = string
+}
+
+variable "existing_resource_group" {
+  description = "Conditionally launch resources into an existing resource group. Specifying this will NOT create a resource group."
+  type        = string
+}
+
+variable "container_app_name_override" {
+  type        = string
+  description = "A custom name for the Container App"
+  default     = ""
+}
+
+variable "restrict_container_apps_to_cdn_inbound_only" {
+  description = "Restricts access to the Container Apps by creating a network security group rule that only allows 'AzureFrontDoor.Backend' inbound, and attaches it to the subnet of the container app environment."
   type        = bool
-}
-
-variable "redis_cache_sku" {
-  description = "Redis Cache SKU"
-  type        = string
-  default     = "Basic"
-}
-
-variable "redis_cache_subnet_cidr" {
-  description = "Redis Cache subnet CIDR"
-  type        = string
-}
-
-variable "linux_function_apps" {
-  description = "Linux function apps"
-  type = map(object({
-    runtime                                        = string
-    runtime_version                                = string
-    app_settings                                   = optional(map(string), {})
-    allowed_origins                                = optional(list(string), ["*"])
-    ftp_publish_basic_authentication_enabled       = optional(bool, false)
-    webdeploy_publish_basic_authentication_enabled = optional(bool, false)
-    ipv4_access                                    = optional(list(string), [])
-    minimum_tls_version                            = optional(string, "1.3")
-    enable_service_bus                             = optional(bool, false)
-    service_bus_additional_subscriptions           = optional(list(string), [])
-    connection_strings = optional(map(object({
-      type  = string
-      value = string
-    })), {})
-  }))
+  default     = false
 }
