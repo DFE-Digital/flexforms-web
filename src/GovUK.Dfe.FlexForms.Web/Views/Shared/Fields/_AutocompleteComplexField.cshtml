@@ -1,0 +1,1360 @@
+@using Microsoft.AspNetCore.Html;
+@using System.Text.Json;
+@using GovUK.Dfe.FlexForms.Application.Interfaces;
+@using GovUK.Dfe.FlexForms.Domain.Models;
+@using GovUK.Dfe.FlexForms.Web.Extensions;
+@using GovUK.Dfe.FlexForms.Web.Utilities
+@using GovUk.Frontend.AspNetCore.TagHelpers
+@inject IComplexFieldConfigurationService ComplexFieldConfigurationService
+@model GovUK.Dfe.FlexForms.Web.Services.FieldViewModel
+
+@{
+    var isRequired = Model.Field.Required ?? true;
+    var validationAttributes = new HtmlString(Model.ValidationAttributes);
+    var labelClasses = Model.Field.Label.IsVisible ? "govuk-label" : "govuk-visually-hidden";
+    var label = Model.Field.Label.Value;
+    
+    // Get the complex field ID from the ComplexField object
+    var complexFieldId = Model.Field.ComplexField?.Id ?? "";
+    
+    // Get configuration from appsettings
+    var configuration = ComplexFieldConfigurationService.GetConfiguration(complexFieldId);
+    
+    // Generate unique IDs
+    var inputId = $"{Model.Id}-complex-field";
+    var selectedItemsId = $"{Model.Id}-selected-items";
+    var searchInputId = $"{Model.Id}-search-input";
+    
+    // Helper function to format display value
+    string FormatDisplayValue(object value)
+    {
+        if (value is Dictionary<string, object> dict)
+        {
+            var name = dict.ContainsKey("name") ? dict["name"]?.ToString() : "";
+            var ukprn = dict.ContainsKey("ukprn") ? dict["ukprn"]?.ToString() : "";
+            var code = dict.ContainsKey("code") ? dict["code"]?.ToString() : "";
+            
+            if (!string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(ukprn))
+            {
+                return $"{name} (UKPRN: {ukprn})";
+            }
+            else if (!string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(code))
+            {
+                return $"{name} (Code: {code})";
+            }
+            else if (!string.IsNullOrEmpty(name))
+            {
+                return name;
+            }
+        }
+        return value?.ToString() ?? "";
+    }
+    
+    // Get current values (for multiple selection, stored as JSON array)
+    var currentValues = new List<object>();
+    if (!string.IsNullOrEmpty(Model.CurrentValue))
+    {
+        try
+        {
+            // Try to deserialize as array of objects first
+            using (var doc = JsonDocument.Parse(Model.CurrentValue))
+            {
+                if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var element in doc.RootElement.EnumerateArray())
+                    {
+                        if (element.ValueKind == JsonValueKind.Object)
+                        {
+                            var obj = new Dictionary<string, object>();
+                            foreach (var property in element.EnumerateObject())
+                            {
+                                if (property.Value.ValueKind == JsonValueKind.String)
+                                {
+                                    obj[property.Name] = property.Value.GetString();
+                                }
+                                else if (property.Value.ValueKind == JsonValueKind.Number)
+                                {
+                                    obj[property.Name] = property.Value.GetInt64().ToString();
+                                }
+                                else if (property.Value.ValueKind == JsonValueKind.Object)
+                                {
+                                    // Handle nested objects (e.g. gor: { name: "...", code: "..." })
+                                    // Extract the "name" property if it exists, otherwise serialize the whole object
+                                    if (property.Value.TryGetProperty("name", out var nameProperty) && 
+                                        nameProperty.ValueKind == JsonValueKind.String)
+                                    {
+                                        obj[property.Name] = nameProperty.GetString();
+                                    }
+                                    else
+                                    {
+                                        obj[property.Name] = property.Value.GetRawText();
+                                    }
+                                }
+                            }
+                            currentValues.Add(obj);
+                        }
+                        else if (element.ValueKind == JsonValueKind.String)
+                        {
+                            currentValues.Add(element.GetString());
+                        }
+                    }
+                }
+                else if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                {
+                    // Single object
+                    var obj = new Dictionary<string, object>();
+                    foreach (var property in doc.RootElement.EnumerateObject())
+                    {
+                        if (property.Value.ValueKind == JsonValueKind.String)
+                        {
+                            obj[property.Name] = property.Value.GetString();
+                        }
+                        else if (property.Value.ValueKind == JsonValueKind.Number)
+                        {
+                            obj[property.Name] = property.Value.GetInt64().ToString();
+                        }
+                        else if (property.Value.ValueKind == JsonValueKind.Object)
+                        {
+                            // Handle nested objects (e.g. gor: { name: "...", code: "..." })
+                            // Extract the "name" property if it exists, otherwise serialize the whole object
+                            if (property.Value.TryGetProperty("name", out var nameProperty) && 
+                                nameProperty.ValueKind == JsonValueKind.String)
+                            {
+                                obj[property.Name] = nameProperty.GetString();
+                            }
+                            else
+                            {
+                                obj[property.Name] = property.Value.GetRawText();
+                            }
+                        }
+                    }
+                    currentValues.Add(obj);
+                }
+                else
+                {
+                    // Single string value
+                    currentValues.Add(Model.CurrentValue);
+                }
+            }
+        }
+        catch
+        {
+            // If not JSON, treat as single string value
+            currentValues.Add(Model.CurrentValue);
+        }
+    }
+
+    // For establishment/academy fields, show postcode on confirmation; for LA/diocese show name and code
+    var isNameAndCodeField = string.Equals(complexFieldId, "LocalAuthorityComplexField", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(complexFieldId, "DioceseComplexField", StringComparison.OrdinalIgnoreCase);
+    var confirmationDisplayFields = string.Equals(complexFieldId, "EstablishmentComplexField", StringComparison.OrdinalIgnoreCase)
+        ? "trustname,postcode,ukprn,companiesHousenumber"
+        : isNameAndCodeField
+            ? "trustname,code"
+            : "trustname,ukprn,companiesHousenumber";
+}
+
+@if (string.IsNullOrEmpty(complexFieldId))
+{
+    <div class="govuk-form-group govuk-form-group--error">
+        <govuk-error-message>Complex field configuration is missing or invalid</govuk-error-message>
+    </div>
+}
+else
+{
+    <div class="govuk-form-group @(string.IsNullOrEmpty(Model.ErrorMessage) ? "" : "govuk-form-group--error")">
+        @if (!string.IsNullOrEmpty(Model.Field.Label.Value))
+        {
+            <label id="@label-label" class="@labelClasses" for="@inputId">
+                @label
+                @if (isRequired)
+                {
+                    <span class="govuk-visually-hidden">required</span>
+                }
+            </label>
+        }
+        
+        @{
+            var full = MarkdownSafe.ToSafeHtml(Model.Field.Tooltip);
+            var isSingle = MarkdownSafe.IsSingleParagraphFromHtml(full);
+            var content = isSingle ? MarkdownSafe.ToSafeHtmlInline(Model.Field.Tooltip) : full;
+        }
+
+        @if (!string.IsNullOrEmpty(Model.Field.Tooltip))
+        {
+            <div class="govuk-hint" style="@(isSingle ? null : "color: var(--govuk-text-colour);")">@Html.Raw(content)</div>
+        }
+        
+        @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+        {
+            <div class="govuk-error-message">@Model.ErrorMessage</div>
+        }
+        
+        <div class="complex-field-container" data-module="autocomplete-complex-field" data-field-type="autocomplete">
+            <!-- Hidden input for form submission -->
+            <input type="hidden" 
+                   id="@Model.Id" 
+                   name="Data[@Model.Id]" 
+                   value="@Model.CurrentValue" 
+                   data-allow-multiple="@configuration.AllowMultiple.ToString().ToLower()" 
+                   @validationAttributes />
+
+        @{
+            var ariaLabel = !string.IsNullOrEmpty(Model.Field.Label.Value) ? label + "-label" : "page-title";
+        }
+            
+            <!-- Container for autocomplete - library will create input here -->
+            <div id="@inputId-container" 
+                 class="complex-field-search-container govuk-!-margin-bottom-15"
+                 data-complex-field-id="@complexFieldId"
+                 data-min-length="@configuration.MinLength"
+                 data-allow-multiple="@configuration.AllowMultiple.ToString().ToLower()"
+                 data-max-selections="@configuration.MaxSelections"
+                 data-target-input="@Model.Id"
+                 data-selected-items-container="@selectedItemsId"
+                 data-placeholder="@configuration.Placeholder"
+                 aria-describedby="@inputId-hint"
+                 aria-labelledby="@ariaLabel">
+            </div>
+            
+            <div id="@inputId-hint" class="govuk-visually-hidden">
+                Use this field to search and select options. Type at least @configuration.MinLength characters to see results.
+                @(configuration.AllowMultiple ? "<span>You can select multiple options.</span>" : "")
+            </div>
+            
+            <!-- Maximum selections message -->
+            @if (configuration.AllowMultiple && configuration.MaxSelections > 0)
+            {
+                <div id="@inputId-max-message" class="govuk-inset-text" style="display: none;">
+                    <p class="govuk-body">You have reached the maximum number of selections (@configuration.MaxSelections). Remove a selection to add a different one.</p>
+                </div>
+            }
+            
+            <!-- Selected items container (hidden per requirement) -->
+        </div>
+    </div>
+
+    <div class="govuk-button-group">
+        @Html.RenderPrimaryConfirmationButton(
+                buttonText: "Search",
+                handler: "Page",
+                displayFields: confirmationDisplayFields,
+                buttonId: "autocomplete-confirm-button",
+                title: $"Is this the right {@configuration.Label.ToLower()}?",
+                requiredMessage: $"Select yes if this is the right { @configuration.Label.ToLower()}")
+    </div>
+}
+
+<style>
+    .complex-field-container {
+        position: relative;
+    }
+    
+    /* Selected items styling - GovUK Inset Text */
+    .complex-field-selected-items {
+        margin-top: 15px;
+    }
+    
+    .complex-field-selected-inset {
+        position: relative;
+        margin-bottom: 15px;
+    }
+    
+    .complex-field-selected-inset:last-child {
+        margin-bottom: 0;
+    }
+    
+    .complex-field-selected-inset .govuk-body {
+        margin-bottom: 15px;
+    }
+    
+    .complex-field-selected-inset .govuk-hint {
+        margin-top: 0;
+    }
+    
+    .complex-field-selected-inset .govuk-button {
+        margin-top: 0;
+    }
+    
+    /* Custom autocomplete suggestion styling */
+    .complex-field-suggestion {
+        padding: 2px 0;
+    }
+    
+    .complex-field-suggestion-name {
+        font-weight: 400;
+        color: #0b0c0c;
+        line-height: 1.2;
+    }
+    
+    .complex-field-suggestion-identifiers {
+        font-size: 16px;
+        color: #6f777b;
+        font-weight: 400;
+        margin-top: 2px;
+        line-height: 1.2;
+    }
+
+    /* Ensure suggestion text becomes white when option is highlighted/selected */
+    .autocomplete__option--focused .complex-field-suggestion-name,
+    .autocomplete__option--selected .complex-field-suggestion-name,
+    .autocomplete__option--focused .complex-field-suggestion-identifiers,
+    .autocomplete__option--selected .complex-field-suggestion-identifiers {
+        color: #ffffff;
+    }
+
+    /* Ensure nested suggestion text stays white on hover/focus */
+    .autocomplete__option:hover .complex-field-suggestion-name,
+    .autocomplete__option:hover .complex-field-suggestion-identifiers,
+    .autocomplete__option:focus .complex-field-suggestion-name,
+    .autocomplete__option:focus .complex-field-suggestion-identifiers {
+        color: #ffffff;
+    }
+    
+    /* Accessible autocomplete styling overrides */
+    .autocomplete__wrapper {
+        position: relative;
+    }
+    
+    .autocomplete__input {
+        border: 2px solid #0b0c0c;
+        border-radius: 0;
+        box-sizing: border-box;
+        font-family: "GDS Transport", arial, sans-serif;
+        font-size: 16px;
+        font-weight: 400;
+        line-height: 1.25;
+        padding: 5px 4px 4px;
+        width: 100%;
+        background-color: #ffffff;
+        color: #0b0c0c;
+    }
+    
+    .autocomplete__input:focus {
+        outline: 3px solid #ffdd00;
+        outline-offset: 0;
+        box-shadow: inset 0 0 0 2px;
+    }
+    
+    /* Error state styling */
+    .govuk-form-group--error .autocomplete__input {
+        border-color: #d4351c;
+    }
+    
+    .autocomplete__menu {
+        background-color: #ffffff;
+        border: 2px solid #0b0c0c;
+        border-top: 0;
+        color: #0b0c0c;
+        margin: 0;
+        max-height: 342px;
+        overflow-x: hidden;
+        overflow-y: auto;
+        padding: 0;
+        width: 100%;
+        z-index: 100;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    
+    .autocomplete__option {
+        border-bottom: solid #b1b4b6;
+        border-width: 1px 0;
+        cursor: pointer;
+        display: block;
+        position: relative;
+        padding: 10px;
+        font-family: "GDS Transport", arial, sans-serif;
+        font-size: 16px;
+        font-weight: 400;
+        line-height: 1.25;
+        color: #0b0c0c;
+    }
+    
+    .autocomplete__option > * {
+        pointer-events: none;
+    }
+    
+    .autocomplete__option:focus,
+    .autocomplete__option:hover {
+        background-color: #1d70b8;
+        border-color: #1d70b8;
+        color: #ffffff;
+    }
+    
+    .autocomplete__option--odd {
+        background-color: #fafafa;
+    }
+    
+    .autocomplete__option--focused,
+    .autocomplete__option--selected {
+        background-color: #1d70b8;
+        border-color: #1d70b8;
+        color: #ffffff;
+    }
+    
+    .autocomplete__hint {
+        color: #6f777b;
+        position: absolute;
+        right: 0;
+        top: 0;
+        display: none; /* hide grey predictive hint text behind the input */
+    }
+</style>
+
+<script>
+// Helper function to update hidden input value based on selected items
+function updateHiddenInputValue(hiddenInput, allowMultiple) {
+    const selectedItems = hiddenInput.closest('.complex-field-container').querySelectorAll('.complex-field-selected-inset');
+    const values = [];
+    
+    selectedItems.forEach(function(item) {
+        const valueData = item.dataset.value;
+        if (valueData) {
+            try {
+                const parsedValue = JSON.parse(valueData);
+                values.push(parsedValue);
+            } catch (e) {
+                console.error('Error parsing value data:', e);
+            }
+        }
+    });
+    
+    if (allowMultiple) {
+        hiddenInput.value = JSON.stringify(values);
+    } else {
+        hiddenInput.value = values.length > 0 ? JSON.stringify(values[0]) : '';
+    }
+    
+    console.log('Updated hidden input value:', hiddenInput.value);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Test if accessible-autocomplete is available
+    console.log('DOM loaded. Testing accessible-autocomplete...');
+    console.log('accessibleAutocomplete:', typeof accessibleAutocomplete);
+    
+    // Initialize autocomplete complex field functionality
+    const containers = document.querySelectorAll('[data-module="autocomplete-complex-field"]');
+    console.log('Found autocomplete complex field containers:', containers.length);
+    
+    containers.forEach(function(container) {
+        // Check if this container has already been initialized
+        if (container.dataset.initialized === 'true') {
+            console.log('Container already initialized, skipping...');
+            return;
+        }
+        
+        const complexFieldContainer = container.querySelector('[data-complex-field-id]');
+        const hiddenInput = container.querySelector('input[type="hidden"]');
+        const selectedItemsContainer = container.querySelector('.complex-field-selected-items');
+        const complexFieldId = complexFieldContainer.dataset.complexFieldId;
+        const fieldId = hiddenInput.id; // Use the actual field ID for form submission
+        const allowMultiple = complexFieldContainer.dataset.allowMultiple === 'true';
+        
+        // Extract the actual field ID without the "Data_" prefix
+        const actualFieldId = fieldId.startsWith('Data_') ? fieldId.substring(5) : fieldId;
+        
+        console.log('Field ID for form submission:', fieldId);
+        console.log('Actual field ID (without Data_ prefix):', actualFieldId);
+        console.log('Hidden input name:', hiddenInput.name);
+        console.log('Hidden input value:', hiddenInput.value);
+        const minLength = parseInt(complexFieldContainer.dataset.minLength) || 3;
+        const placeholder = complexFieldContainer.dataset.placeholder;
+        const maxSelections = parseInt(complexFieldContainer.dataset.maxSelections) || 0;
+        let lastConfirmedText = '';
+        let suppressMenuUntilUserInput = false;
+        
+        console.log('Initializing autocomplete complex field for container element:', complexFieldContainer);
+        console.log('Complex Field ID:', complexFieldId);
+        console.log('Placeholder:', placeholder);
+        console.log('Max selections:', maxSelections);
+        
+        // Initialize remove buttons for existing selected items
+        const removeButtons = container.querySelectorAll('.remove-selected-item');
+        removeButtons.forEach(function(button) {
+            button.addEventListener('click', function() {
+                const valueToRemove = this.dataset.value;
+                const fieldId = this.dataset.fieldId;
+                const hiddenInput = document.getElementById(fieldId);
+                
+                // Remove the selected item from the DOM
+                this.closest('.complex-field-selected-inset').remove();
+                
+                // Update the hidden input value
+                updateHiddenInputValue(hiddenInput, allowMultiple);
+            });
+        });
+        
+        // Initialize accessible autocomplete on the container element
+        if (typeof accessibleAutocomplete !== 'undefined') {
+            try {
+                    // Fallback submit enforcement attached immediately (in case input is created later)
+                    try {
+                        const formEl = container.closest('form');
+                        if (formEl) {
+                            formEl.addEventListener('submit', function(e) {
+                                // Only enforce when no selection was made
+                                if (!hiddenInput || hiddenInput.value) return;
+                                const autocompleteInput = container.querySelector('.autocomplete__input');
+                                const formGroup = container.closest('.govuk-form-group');
+
+                                const clearClientError = () => {
+                                    if (formGroup) formGroup.classList.remove('govuk-form-group--error');
+                                    // Remove any inline errors within this form group (both client and server-rendered)
+                                    if (formGroup) {
+                                        formGroup.querySelectorAll('.govuk-error-message').forEach(function(el){ el.remove(); });
+                                    }
+                                    if (autocompleteInput) autocompleteInput.setAttribute('aria-invalid', 'false');
+                                };
+                                const setClientError = (message) => {
+                                    if (!formGroup || !autocompleteInput) return;
+                                    // Prefer template-provided validation message when available
+                                    let msg = message;
+                                    if (!msg) {
+                                        msg = hiddenInput.getAttribute('data-val-regex')
+                                            || hiddenInput.getAttribute('data-val-required')
+                                            || hiddenInput.getAttribute('data-val-maxlength')
+                                            || 'Enter a value in the correct format';
+                                    }
+                                    formGroup.classList.add('govuk-form-group--error');
+                                    let err = formGroup.querySelector('.govuk-error-message[data-autocomplete-error="true"]');
+                                    if (!err) {
+                                        err = document.createElement('div');
+                                        err.className = 'govuk-error-message';
+                                        err.setAttribute('data-autocomplete-error', 'true');
+                                        formGroup.insertBefore(err, formGroup.firstChild);
+                                    }
+                                    // Prepend visually hidden Error: prefix
+                                    err.textContent = '';
+                                    const vh = document.createElement('span');
+                                    vh.className = 'govuk-visually-hidden';
+                                    vh.textContent = 'Error: ';
+                                    err.appendChild(vh);
+                                    err.appendChild(document.createTextNode(msg));
+                                    autocompleteInput.setAttribute('aria-invalid', 'true');
+
+                                    // Add/update error summary
+                                    addSummaryError(msg);
+                                };
+
+                                const q = autocompleteInput && autocompleteInput.value ? autocompleteInput.value.trim() : '';
+                                if (!q) { clearClientError(); return; }
+                                if (q.length < minLength) {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setClientError();
+                                    try { autocompleteInput && autocompleteInput.focus(); } catch {}
+                                    return;
+                                }
+                                const pattern = hiddenInput.getAttribute('data-val-regex-pattern');
+                                if (pattern) {
+                                    try {
+                                        const re = new RegExp(pattern);
+                                        if (!re.test(q)) {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setClientError();
+                                            try { autocompleteInput && autocompleteInput.focus(); } catch {}
+                                            return;
+                                        }
+                                    } catch {}
+                                }
+                                clearClientError();
+                            });
+                        }
+                    } catch {}
+
+                // Cache to store full API results with all properties
+                var cachedResults = [];
+
+                accessibleAutocomplete({
+                    element: complexFieldContainer,
+                    id: complexFieldContainer.id,
+                    placeholder: placeholder,
+                    showAllValues: false,
+                    autoselect: true,
+                    confirmOnBlur: false,
+                    templates: {
+                        inputValue: function(result) {
+                            console.log('inputValue template called with:', result);
+                            if (typeof result === 'object' && result !== null && result.name) {
+                                return result.name;
+                            }
+                            return result ? result.toString() : '';
+                        },
+                        suggestion: function(result) {
+                            console.log('suggestion template called with:', result);
+                            if (typeof result === 'object' && result !== null) {
+                                var name = result.name ? escapeHtml(result.name) : '';
+                                var ukprn = (result.ukprn !== undefined && result.ukprn !== null) ? escapeHtml(result.ukprn.toString()) : '';
+                                var code = (result.code !== undefined && result.code !== null) ? escapeHtml(result.code.toString()) : '';
+                                var ch = '';
+                                if (result.companiesHouseNumber) ch = result.companiesHouseNumber;
+                                else if (result.companiesHousenumber) ch = result.companiesHousenumber;
+                                else if (result.companies_house_number) ch = result.companies_house_number;
+                                ch = ch ? escapeHtml(ch.toString()) : '';
+
+                                var parts = [name];
+                                if (ukprn) parts.push('UKPRN: ' + ukprn);
+                                if (code) parts.push('Code: ' + code);
+                                if (ch) parts.push('Companies house number: ' + ch);
+                                return '<div class="complex-field-suggestion">' + parts.join(' - ') + '</div>';
+                            }
+                            return result ? escapeHtml(result.toString()) : '';
+                        }
+                    },
+                    source: function(query, populateResults) {
+                        console.log('Source called with query:', query);
+                        console.log('Query length:', query.length, 'Min length:', minLength);
+                        
+                        // If query is empty or too short, don't show any results
+                        if (!query || query.length < minLength) {
+                            console.log('Query too short, returning empty results');
+                            populateResults([]);
+                            try {
+                                var menuEl = container.querySelector('.autocomplete__menu');
+                                var inputEl = container.querySelector('.autocomplete__input');
+                                if (menuEl) {
+                                    menuEl.classList.remove('autocomplete__menu--visible');
+                                    menuEl.style.display = 'none';
+                                }
+                                if (inputEl) inputEl.setAttribute('aria-expanded', 'false');
+                            } catch {}
+                            return;
+                        }
+                        
+                        // Validate query against any regex rule if provided on the hidden input
+                        try {
+                            var pattern = hiddenInput.getAttribute('data-val-regex-pattern');
+                            if (pattern) {
+                                var re = new RegExp(pattern);
+                                if (!re.test(query)) {
+                                    console.log('Query failed regex validation; suppressing API call');
+                                    populateResults([]);
+                                    try {
+                                        var menuEl = container.querySelector('.autocomplete__menu');
+                                        var inputEl = container.querySelector('.autocomplete__input');
+                                        if (menuEl) {
+                                            menuEl.classList.remove('autocomplete__menu--visible');
+                                            menuEl.style.display = 'none';
+                                        }
+                                        if (inputEl) inputEl.setAttribute('aria-expanded', 'false');
+                                    } catch {}
+                                    // Show summary error as well
+                                    addSummaryError(hiddenInput.getAttribute('data-val-regex') || 'Enter a value in the correct format');
+                                    return;
+                                }
+                            }
+                        } catch {}
+
+                        // Use the complex field ID for the API call
+                        var requestUrl = window.location.pathname + '?handler=complexField&complexFieldId=' + encodeURIComponent(complexFieldId) + '&query=' + encodeURIComponent(query);
+                        console.log('Making API call to:', requestUrl);
+                        
+                        // Make API call to the endpoint
+                        fetch(requestUrl)
+                            .then(response => {
+                                console.log('API response status:', response.status);
+                                console.log('API response ok:', response.ok);
+                                return response.json();
+                            })
+                            .then(data => {
+                                console.log('Raw API response:', data);
+                                // The service now returns a simple array of objects or strings
+                                var results = Array.isArray(data) ? data : [];
+                                console.log('Results before filtering:', results);
+                                // Filter out empty values
+                                results = results.filter(function(item) {
+                                    if (typeof item === 'object' && item !== null) {
+                                        return item.name && item.name.toString().trim() !== '';
+                                    }
+                                    return item && item.toString().trim() !== '';
+                                });
+                                console.log('Final filtered results:', results);
+                                
+                                // Cache the full results with all properties
+                                cachedResults = results;
+                                console.log('Cached', cachedResults.length, 'full result objects');
+                                
+                                populateResults(results);
+                            })
+                            .catch(error => {
+                                console.error('Complex field API error:', error);
+                                populateResults([]);
+                            });
+                    },
+                    minLength: minLength,
+                    onConfirm: function(option) {
+                        console.log('OnConfirm function triggered!');
+                        console.log('Option confirmed:', option);
+                        console.log('Option type:', typeof option);
+                        console.log('Option details:', JSON.stringify(option));
+                        console.log('Option keys:', option && typeof option === 'object' ? Object.keys(option) : 'N/A');
+
+                        if (!option) {
+                            console.log('No option provided to onConfirm');
+                            return;
+                        }
+
+                        // Look up the full object from cache to ensure we have ALL properties.
+                        // Match by unique identifier when present (ukprn, companiesHouseNumber, urn) so that
+                        // items with the same name select the correct one; try each identifier if the others are not available.
+                        var fullOption = option;
+                        if (typeof option === 'object' && option.name && cachedResults.length > 0) {
+                            var foundInCache = cachedResults.find(function(item) {
+                                if (typeof item !== 'object' || item === null || item.name !== option.name) return false;
+                                var itemUkprn = item.ukprn != null ? String(item.ukprn).trim() : '';
+                                var optUkprn = option.ukprn != null ? String(option.ukprn).trim() : '';
+                                if (itemUkprn && optUkprn) return itemUkprn === optUkprn;
+                                var itemCh = (item.companiesHouseNumber ?? item.companiesHousenumber ?? item.companies_house_number);
+                                var optCh = (option.companiesHouseNumber ?? option.companiesHousenumber ?? option.companies_house_number);
+                                itemCh = itemCh != null ? String(itemCh).trim() : '';
+                                optCh = optCh != null ? String(optCh).trim() : '';
+                                if (itemCh && optCh) return itemCh === optCh;
+                                var itemUrn = item.urn != null ? String(item.urn).trim() : '';
+                                var optUrn = option.urn != null ? String(option.urn).trim() : '';
+                                if (itemUrn && optUrn) return itemUrn === optUrn;
+                                var itemCode = item.code != null ? String(item.code).trim() : '';
+                                var optCode = option.code != null ? String(option.code).trim() : '';
+                                if (itemCode && optCode) return itemCode === optCode;
+                                return true;
+                            });
+                            if (foundInCache) {
+                                console.log('Found full object in cache with', Object.keys(foundInCache).length, 'properties');
+                                fullOption = foundInCache;
+                            } else {
+                                console.log('Option not found in cache, using original');
+                            }
+                        }
+                        option = fullOption;
+                        console.log('Final option to save:', JSON.stringify(option));
+
+                        var isValidString = typeof option === 'string' && option.trim() !== '';
+                        var isValidObject = typeof option === 'object' && option !== null && option.name;
+
+                        if (!isValidString && !isValidObject) {
+                            console.log('Option validation failed');
+                            return;
+                        }
+
+                        const autocompleteInput = container.querySelector('.autocomplete__input');
+                        const menuEl = container.querySelector('.autocomplete__menu');
+
+                        if (!allowMultiple) {
+                            // Single-select: populate input with label and update hidden input only
+                            var labelText = isValidObject ? (option.name || option.toString()) : option.toString();
+
+                            if (typeof option === 'object' && option !== null) {
+                                hiddenInput.value = JSON.stringify(option);
+                            } else {
+                                hiddenInput.value = option.toString();
+                            }
+
+                            // Ensure hidden input name is normalized for server processing
+                            try { hiddenInput.name = `Data[${actualFieldId}]`; } catch {}
+
+                        if (autocompleteInput) {
+                                try {
+                                    const valueSetter = Object.getOwnPropertyDescriptor(autocompleteInput, 'value')?.set ||
+                                        Object.getOwnPropertyDescriptor(Object.getPrototypeOf(autocompleteInput), 'value')?.set;
+                                    if (valueSetter) valueSetter.call(autocompleteInput, labelText);
+                                    else autocompleteInput.value = labelText;
+                                } catch { autocompleteInput.value = labelText; }
+                            // Copy data-val* validation attributes from hidden input to the visible input
+                            try {
+                                Array.from(hiddenInput.attributes)
+                                    .filter(function(a) { return a.name && a.name.indexOf('data-val') === 0; })
+                                    .forEach(function(a) { autocompleteInput.setAttribute(a.name, a.value); });
+                            } catch {}
+                            }
+
+                            // Remember confirmed text and hide the menu until user types again (real input)
+                            lastConfirmedText = labelText;
+                            suppressMenuUntilUserInput = true;
+                            if (menuEl) {
+                                menuEl.classList.remove('autocomplete__menu--visible');
+                                menuEl.style.display = 'none';
+                            }
+                            if (autocompleteInput) autocompleteInput.setAttribute('aria-expanded', 'false');
+
+                            // Ensure no below-the-input rendering for single-select
+                            if (selectedItemsContainer) selectedItemsContainer.innerHTML = '';
+                            return;
+                        }
+
+                        // Multi-select: behave like single-select (fill input, set hidden value, no below-input list)
+                        var multiLabelText = isValidObject ? (option.name || option.toString()) : option.toString();
+
+                        if (typeof option === 'object' && option !== null) {
+                            hiddenInput.value = JSON.stringify(option);
+                        } else {
+                            hiddenInput.value = option.toString();
+                        }
+
+                        // Ensure hidden input name is normalized for server processing
+                        try { hiddenInput.name = `Data[${actualFieldId}]`; } catch {}
+
+                        if (autocompleteInput) {
+                            try {
+                                const valueSetter = Object.getOwnPropertyDescriptor(autocompleteInput, 'value')?.set ||
+                                    Object.getOwnPropertyDescriptor(Object.getPrototypeOf(autocompleteInput), 'value')?.set;
+                                if (valueSetter) valueSetter.call(autocompleteInput, multiLabelText);
+                                else autocompleteInput.value = multiLabelText;
+                            } catch { autocompleteInput.value = multiLabelText; }
+                            // Copy data-val* validation attributes from hidden input to the visible input
+                            try {
+                                Array.from(hiddenInput.attributes)
+                                    .filter(function(a) { return a.name && a.name.indexOf('data-val') === 0; })
+                                    .forEach(function(a) { autocompleteInput.setAttribute(a.name, a.value); });
+                            } catch {}
+                        }
+
+                        lastConfirmedText = multiLabelText;
+                        suppressMenuUntilUserInput = true;
+                        if (menuEl) {
+                            menuEl.classList.remove('autocomplete__menu--visible');
+                            menuEl.style.display = 'none';
+                        }
+                        if (autocompleteInput) autocompleteInput.setAttribute('aria-expanded', 'false');
+
+                        // Ensure nothing is rendered below input
+                        if (selectedItemsContainer) selectedItemsContainer.innerHTML = '';
+                        return;
+                    }
+                });
+                
+                console.log('Autocomplete complex field initialized successfully');
+                
+                // Add backup event listeners for debugging onConfirm issues
+                setTimeout(function() {
+                    const autocompleteInput = container.querySelector('.autocomplete__input');
+                    if (autocompleteInput) {
+                        // Listen for Enter key as backup
+                        autocompleteInput.addEventListener('keydown', function(e) {
+                            if (e.key === 'Enter') {
+                                console.log('Enter key pressed on autocomplete input');
+                                console.log('Current input value:', this.value);
+                                
+                                // Check if there's a highlighted option
+                                const highlightedOption = container.querySelector('.autocomplete__option--focused');
+                                if (highlightedOption) {
+                                    console.log('Highlighted option found:', highlightedOption.textContent);
+                                    // Try to trigger selection manually if onConfirm doesn't work
+                                    // This is a backup mechanism
+                                    const optionText = highlightedOption.textContent.trim();
+                                    if (optionText) {
+                                        console.log('Manually triggering selection for:', optionText);
+                                        // Clear input as backup
+                                        setTimeout(() => {
+                                            this.value = '';
+                                            this.dispatchEvent(new Event('input', { bubbles: true }));
+                                            console.log('Backup input clearing triggered');
+                                        }, 50);
+                                    }
+                                }
+                            }
+                        });
+                        
+                        // Listen for click events on options
+                        container.addEventListener('click', function(e) {
+                            if (e.target.closest('.autocomplete__option')) {
+                                console.log('Option clicked:', e.target.closest('.autocomplete__option').textContent);
+                            }
+                        });
+                        
+                        console.log('Backup event listeners added for debugging');
+                    }
+                }, 200);
+                
+                // Mark this container as initialized
+                container.dataset.initialized = 'true';
+                
+                // Apply GovUK styling to the created input after a short delay
+                setTimeout(function() {
+                    const autocompleteInput = container.querySelector('.autocomplete__input');
+                    const menuEl = container.querySelector('.autocomplete__menu');
+                    if (autocompleteInput) {
+                        // Set the correct ID to match the label's 'for' attribute
+                        autocompleteInput.id = fieldId + '-complex-field';
+                        // Ensure the visible input participates in unobtrusive validation by giving it a name
+                        try { autocompleteInput.setAttribute('name', `Data[${actualFieldId}_query]`); } catch {}
+                        autocompleteInput.classList.add('govuk-input');
+                        if (container.closest('.govuk-form-group--error')) {
+                            autocompleteInput.classList.add('govuk-input--error');
+                        }
+                        console.log('Applied GovUK styling to autocomplete complex field input');
+                        console.log('Set input ID to:', autocompleteInput.id);
+                        // Copy data-val* validation attributes from hidden input to the visible input (so client-side regex applies)
+                        try {
+                            Array.from(hiddenInput.attributes)
+                                .filter(function(a) { return a.name && a.name.indexOf('data-val') === 0; })
+                                .forEach(function(a) { autocompleteInput.setAttribute(a.name, a.value); });
+                        } catch {}
+                        // Re-parse unobtrusive validation so dynamically added attributes take effect
+                        try {
+                            if (window.jQuery && jQuery.validator && jQuery.validator.unobtrusive && autocompleteInput.form) {
+                                jQuery.validator.unobtrusive.parse(autocompleteInput.form);
+                            }
+                        } catch {}
+
+                        // Pre-populate input for single-select if a value already exists
+                        if (!allowMultiple && hiddenInput.value) {
+                            try {
+                                let v = hiddenInput.value;
+                                let labelText = '';
+                                try {
+                                    const parsed = JSON.parse(v);
+                                    labelText = parsed && parsed.name ? parsed.name : v.toString();
+                                } catch { labelText = v.toString(); }
+                                const valueSetter = Object.getOwnPropertyDescriptor(autocompleteInput, 'value')?.set ||
+                                    Object.getOwnPropertyDescriptor(Object.getPrototypeOf(autocompleteInput), 'value')?.set;
+                                if (valueSetter) valueSetter.call(autocompleteInput, labelText);
+                                else autocompleteInput.value = labelText;
+                                lastConfirmedText = labelText;
+                            } catch {}
+                        }
+
+                        // Hide dropdown until user types enough characters or changes input after a selection
+                        const hideMenu = () => {
+                                if (menuEl) menuEl.classList.remove('autocomplete__menu--visible');
+                                if (menuEl) menuEl.style.display = 'none';
+                                autocompleteInput.setAttribute('aria-expanded', 'false');
+                            };
+
+                        const maybeUpdateMenuVisibility = (e) => {
+                            const val = autocompleteInput.value || '';
+                            // If suppressed (just selected), keep hidden until real user input changes it
+                            if (suppressMenuUntilUserInput) {
+                                if (!e || !e.isTrusted || val === lastConfirmedText) {
+                                    hideMenu();
+                                    return;
+                                }
+                                // User typed something different; lift suppression
+                                suppressMenuUntilUserInput = false;
+                            }
+
+                            if (val.length < minLength || (lastConfirmedText && val === lastConfirmedText)) {
+                                hideMenu();
+                            } else {
+                                // Allow menu to show on genuine typing
+                                if (menuEl) menuEl.style.display = '';
+                            }
+                        };
+
+                        autocompleteInput.addEventListener('focus', (e) => maybeUpdateMenuVisibility(e));
+                        autocompleteInput.addEventListener('input', (e) => maybeUpdateMenuVisibility(e));
+                        // Enforce initial state
+                        hideMenu();
+                        // Ensure hidden at init
+                        if (menuEl) menuEl.style.display = 'none';
+
+                                // Client-side submit enforcement: if no selection made (hidden value empty),
+                                // validate the user's typed query against minLength and regex before submit
+                                try {
+                                    const formEl = container.closest('form');
+                                    const formGroup = container.closest('.govuk-form-group');
+
+                                    const clearClientError = () => {
+                                        if (formGroup) formGroup.classList.remove('govuk-form-group--error');
+                                        // Remove any inline errors within this form group (both client and server-rendered)
+                                        if (formGroup) {
+                                            formGroup.querySelectorAll('.govuk-error-message').forEach(function(el){ el.remove(); });
+                                        }
+                                        autocompleteInput.setAttribute('aria-invalid', 'false');
+                                    };
+
+                                    const setClientError = (message) => {
+                                        if (!formGroup) return;
+                                        // Prefer template-provided validation message when available
+                                        let msg = message;
+                                        if (!msg) {
+                                            msg = hiddenInput.getAttribute('data-val-regex')
+                                                || hiddenInput.getAttribute('data-val-required')
+                                                || hiddenInput.getAttribute('data-val-maxlength')
+                                                || 'Enter a value in the correct format';
+                                        }
+                                        formGroup.classList.add('govuk-form-group--error');
+                                        let err = formGroup.querySelector('.govuk-error-message[data-autocomplete-error="true"]');
+                                        if (!err) {
+                                            err = document.createElement('div');
+                                            err.className = 'govuk-error-message';
+                                            err.setAttribute('data-autocomplete-error', 'true');
+                                            formGroup.insertBefore(err, formGroup.firstChild);
+                                        }
+                                        // Prepend visually hidden Error: prefix
+                                        err.textContent = '';
+                                        const vh = document.createElement('span');
+                                        vh.className = 'govuk-visually-hidden';
+                                        vh.textContent = 'Error: ';
+                                        err.appendChild(vh);
+                                        err.appendChild(document.createTextNode(msg));
+                                        autocompleteInput.setAttribute('aria-invalid', 'true');
+                                    addSummaryError(msg);
+                                    };
+
+                                    const validateQuery = () => {
+                                        // Only validate typed query if no confirmed selection exists
+                                        if (hiddenInput && hiddenInput.value) {
+                                            clearClientError();
+                                            return true;
+                                        }
+                                        const q = autocompleteInput.value ? autocompleteInput.value.trim() : '';
+                                        if (!q) { clearClientError(); return true; }
+
+                                        // Enforce minLength first
+                                        if (q.length < minLength) {
+                                            setClientError();
+                                            return false;
+                                        }
+
+                                        // Enforce regex pattern if present
+                                        const pattern = hiddenInput.getAttribute('data-val-regex-pattern');
+                                        if (pattern) {
+                                            try {
+                                                const re = new RegExp(pattern);
+                                                if (!re.test(q)) {
+                                                    setClientError();
+                                                    return false;
+                                                }
+                                            } catch {}
+                                        }
+
+                                        clearClientError();
+                                        return true;
+                                    };
+
+                                    if (formEl) {
+                                        formEl.addEventListener('submit', function(e) {
+                                            if (!validateQuery()) {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                // Focus input for correction
+                                                try { autocompleteInput.focus(); } catch {}
+                                            }
+                                        });
+                                    }
+
+                                    // Live clear: on any typing, reset inline error and summary for this field
+                                    autocompleteInput.addEventListener('input', function() {
+                                        try { clearClientError(); } catch {}
+                                        try { removeSummaryError(); } catch {}
+                                        try { this.classList.remove('govuk-input--error'); } catch {}
+                                        try { this.setAttribute('aria-invalid', 'false'); } catch {}
+                                    });
+                                } catch {}
+                    }
+                }, 100);
+                
+            } catch (error) {
+                console.error('Error initializing accessible-autocomplete for autocomplete complex field:', error);
+                console.error('Error details:', error.message, error.stack);
+            }
+        } else {
+            console.error('accessibleAutocomplete is not available');
+        }
+        
+        // Attach event listeners to existing remove buttons (for server-rendered items)
+        attachRemoveButtonListeners();
+
+        // Shared helpers for error summary
+        function ensureSummary() {
+            var summary = document.querySelector('.govuk-error-summary');
+            if (!summary) {
+                summary = document.createElement('div');
+                summary.className = 'govuk-error-summary';
+                summary.setAttribute('role', 'alert');
+                summary.setAttribute('tabindex', '-1');
+                summary.setAttribute('data-live-summary', 'true');
+                var title = document.createElement('h2');
+                title.className = 'govuk-error-summary__title';
+                title.textContent = 'There is a problem';
+                var body = document.createElement('div');
+                body.className = 'govuk-error-summary__body';
+                var list = document.createElement('ul');
+                list.className = 'govuk-list govuk-error-summary__list';
+                body.appendChild(list);
+                summary.appendChild(title);
+                summary.appendChild(body);
+                var form = container.closest('form') || document.body;
+                form.insertBefore(summary, form.firstChild);
+            }
+            try { summary.removeAttribute('hidden'); } catch {}
+            var listEl = summary.querySelector('.govuk-error-summary__list');
+            if (!listEl) {
+                listEl = document.createElement('ul');
+                listEl.className = 'govuk-list govuk-error-summary__list';
+                (summary.querySelector('.govuk-error-summary__body') || summary).appendChild(listEl);
+            }
+            return { summary: summary, list: listEl };
+        }
+
+        function addSummaryError(message) {
+            var parts = ensureSummary();
+            var list = parts.list;
+            var anchorId = (container.querySelector('.autocomplete__input') || { id: inputId + '-complex-field' }).id;
+            var existing = list.querySelector('li[data-autocomplete-error="true"][data-field-id="' + anchorId + '"]');
+            if (!existing) {
+                existing = document.createElement('li');
+                existing.setAttribute('data-autocomplete-error', 'true');
+                existing.setAttribute('data-field-id', anchorId);
+                var a = document.createElement('a');
+                a.setAttribute('href', '#' + anchorId);
+                a.textContent = message;
+                existing.appendChild(a);
+                list.appendChild(existing);
+            } else {
+                var link = existing.querySelector('a');
+                if (link) link.textContent = message;
+            }
+        }
+
+        function removeSummaryError() {
+            var summary = document.querySelector('.govuk-error-summary');
+            if (!summary) return;
+            var list = summary.querySelector('.govuk-error-summary__list');
+            if (!list) return;
+            var anchorId = (container.querySelector('.autocomplete__input') || { id: inputId + '-complex-field' }).id;
+            var existing = list.querySelector('li[data-autocomplete-error="true"][data-field-id="' + anchorId + '"]');
+            if (existing) existing.remove();
+            // Also remove any server-rendered required entry that targets the hidden input anchor
+            try {
+                var serverLi = list.querySelector('a[href="#' + hiddenInput.id + '"]');
+                if (serverLi && serverLi.parentElement) serverLi.parentElement.remove();
+            } catch {}
+            var anyLeft = list.querySelector('li');
+            if (!anyLeft) {
+                if (summary.getAttribute('data-live-summary') === 'true') summary.remove(); else summary.setAttribute('hidden', 'true');
+            }
+        }
+        
+        // Check initial selection limit state
+        const initialValues = getCurrentValues();
+        updateSelectionLimitUI(initialValues);
+        
+        function attachRemoveButtonListeners() {
+            if (!selectedItemsContainer) return;
+            const existingRemoveButtons = selectedItemsContainer.querySelectorAll('.complex-field-remove-item');
+            existingRemoveButtons.forEach(function(button) {
+                button.addEventListener('click', function() {
+                    const itemElement = button.closest('.complex-field-selected-inset');
+                    if (itemElement) {
+                        const dataValue = itemElement.getAttribute('data-value');
+                        let valueToRemove;
+                        
+                        try {
+                            // Try to parse as JSON object
+                            valueToRemove = JSON.parse(dataValue);
+                        } catch {
+                            // If not JSON, use as string
+                            valueToRemove = dataValue;
+                        }
+                        
+                        console.log('Removing value:', valueToRemove);
+                        removeSelectedItem(valueToRemove);
+                    }
+                });
+            });
+        }
+        
+        function addSelectedItem(value) {
+            const currentValues = getCurrentValues();
+            
+            // Check maximum selections limit for multiple selection
+            if (allowMultiple && maxSelections > 0 && currentValues.length >= maxSelections) {
+                console.log('Maximum selections reached:', maxSelections);
+                return; // Don't add more items
+            }
+            
+            if (!allowMultiple) {
+                // Single selection - replace existing
+                currentValues.length = 0;
+                currentValues.push(value);
+            } else {
+                // Multiple selection - add if not already present
+                if (!isValueAlreadySelected(value, currentValues)) {
+                    currentValues.push(value);
+                }
+            }
+            
+            updateSelectedItems(currentValues);
+            updateHiddenInput(currentValues);
+            updateSelectionLimitUI(currentValues);
+        }
+        
+        function removeSelectedItem(value) {
+            const currentValues = getCurrentValues();
+            const index = findValueIndex(value, currentValues);
+            if (index > -1) {
+                currentValues.splice(index, 1);
+            }
+            
+            updateSelectedItems(currentValues);
+            updateHiddenInput(currentValues);
+            updateSelectionLimitUI(currentValues);
+        }
+        
+        function isValueAlreadySelected(value, currentValues) {
+            return findValueIndex(value, currentValues) > -1;
+        }
+        
+        function findValueIndex(value, currentValues) {
+            for (let i = 0; i < currentValues.length; i++) {
+                if (valuesEqual(value, currentValues[i])) {
+                    return i;
+                }
+            }
+            return -1;
+        }
+        
+        function valuesEqual(value1, value2) {
+            // If both are objects, compare their JSON representation
+            if (typeof value1 === 'object' && typeof value2 === 'object' && value1 !== null && value2 !== null) {
+                return JSON.stringify(value1) === JSON.stringify(value2);
+            }
+            // If both are strings or one is string, compare as strings
+            return value1.toString() === value2.toString();
+        }
+        
+        function getCurrentValues() {
+            const hiddenValue = hiddenInput.value;
+            if (!hiddenValue) return [];
+            
+            try {
+                const parsed = JSON.parse(hiddenValue);
+                // If it's already an array, return it
+                if (Array.isArray(parsed)) {
+                    return parsed;
+                }
+                // If it's a single object, wrap it in an array
+                return [parsed];
+            } catch {
+                // If not JSON, treat as single string value
+                return [hiddenValue];
+            }
+        }
+        
+        function updateSelectedItems(values) {
+            if (!selectedItemsContainer) return;
+            selectedItemsContainer.innerHTML = '';
+            
+            values.forEach(function(value) {
+                const itemElement = document.createElement('div');
+                itemElement.className = 'govuk-inset-text complex-field-selected-inset';
+                
+                // Handle both object and string values
+                var displayName, ukprnText = '';
+                if (typeof value === 'object' && value !== null) {
+                    displayName = value.name || value.toString();
+                    if (value.ukprn) {
+                        ukprnText = 'UKPRN: ' + value.ukprn;
+                    }
+                    itemElement.setAttribute('data-value', JSON.stringify(value));
+                } else {
+                    displayName = value.toString();
+                    itemElement.setAttribute('data-value', value);
+                }
+                
+                var html = '<p class="govuk-body">';
+                html += '<strong>' + escapeHtml(displayName) + '</strong>';
+                if (ukprnText) {
+                    html += '<br />';
+                    html += '<span class="govuk-hint">' + ukprnText + '</span>';
+                }
+                html += '</p>';
+                html += '<button type="button" class="govuk-button govuk-button--secondary govuk-button--small complex-field-remove-item" aria-label="Remove ' + escapeHtml(displayName) + '">';
+                html += 'Remove';
+                html += '</button>';
+                
+                itemElement.innerHTML = html;
+                
+                const removeButton = itemElement.querySelector('.complex-field-remove-item');
+                removeButton.addEventListener('click', function() {
+                    removeSelectedItem(value);
+                });
+                
+                selectedItemsContainer.appendChild(itemElement);
+            });
+        }
+        
+        function updateHiddenInput(values) {
+            console.log('updateHiddenInput called with values:', values);
+            console.log('Current fieldId:', fieldId);
+            console.log('Actual field ID:', actualFieldId);
+            
+            if (allowMultiple) {
+                hiddenInput.value = JSON.stringify(values);
+            } else {
+                // For single selection, still serialize objects to JSON
+                if (values.length > 0) {
+                    const value = values[0];
+                    if (typeof value === 'object' && value !== null) {
+                        hiddenInput.value = JSON.stringify(value);
+                    } else {
+                        hiddenInput.value = value;
+                    }
+                } else {
+                    hiddenInput.value = '';
+                }
+            }
+            
+            // Ensure the hidden input has the correct name attribute for form submission
+            if (hiddenInput.name !== `Data[${actualFieldId}]`) {
+                hiddenInput.name = `Data[${actualFieldId}]`;
+            }
+            
+            console.log('Updated hidden input value:', hiddenInput.value);
+            console.log('Updated hidden input name:', hiddenInput.name);
+        }
+        
+        function updateSelectionLimitUI(currentValues) {
+            if (!allowMultiple || maxSelections === 0) return;
+            
+            const autocompleteInput = container.querySelector('.autocomplete__input');
+            const maxMessage = document.getElementById(complexFieldContainer.id.replace('-container', '') + '-max-message');
+            
+            if (currentValues.length >= maxSelections) {
+                // Hide autocomplete input and show message
+                if (autocompleteInput) {
+                    autocompleteInput.style.display = 'none';
+                    autocompleteInput.disabled = true;
+                }
+                if (maxMessage) {
+                    maxMessage.style.display = 'block';
+                }
+            } else {
+                // Show autocomplete input and hide message
+                if (autocompleteInput) {
+                    autocompleteInput.style.display = 'block';
+                    autocompleteInput.disabled = false;
+                }
+                if (maxMessage) {
+                    maxMessage.style.display = 'none';
+                }
+            }
+        }
+        
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+        }
+    });
+    
+    // Global escapeHtml function for templates
+    window.escapeHtml = function(text) {
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+    };
+});
+</script> 

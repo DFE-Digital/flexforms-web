@@ -1,0 +1,62 @@
+@using Microsoft.AspNetCore.Http.Features
+@using GovUK.Dfe.FlexForms.Web.Tenancy
+@inject ITenantAppConfiguration AppConfig
+
+@{
+    var serviceName = AppConfig["Layout:ServiceName"] ?? "External Applications";
+    var consentFeature = Context.Features.Get<ITrackingConsentFeature>();
+
+    var showBanner = !(consentFeature?.CanTrack ?? false) && Context.Session.GetInt32("cookiesRejected") != 1;
+    var returnPath = Context.Request.Path;
+    var label = $"Cookies on {serviceName}";
+}
+
+@if (showBanner)
+{
+    <form asp-controller="Cookies" asp-action="SetConsent" method="post">
+        <input type="hidden" name="redirectPath" value="@Context.Request.Path">
+        <govuk-cookie-banner aria-label="@label">
+            <govuk-cookie-banner-message>
+                <govuk-cookie-banner-message-heading>@label</govuk-cookie-banner-message-heading>
+                <govuk-cookie-banner-message-content>
+                    <p class="govuk-body">We use some essential cookies to make this service work.</p>
+                    <p class="govuk-body">We’d also like to use analytics cookies so we can understand how you use the service and make improvements.</p>
+                </govuk-cookie-banner-message-content>
+                <govuk-cookie-banner-message-actions>
+                    <govuk-cookie-banner-message-action name="cookies" value="accept" text="Accept analytics cookies" type="submit" />
+                    <govuk-cookie-banner-message-action name="cookies" value="reject" text="Reject analytics cookies" type="submit" />
+                    <govuk-cookie-banner-message-action-link text="View cookies" href="/Cookies?returnPath=@returnPath" />
+                </govuk-cookie-banner-message-actions>
+            </govuk-cookie-banner-message>
+        </govuk-cookie-banner>
+    </form>
+}
+
+@{
+    var cookieSaved = (bool)(TempData["cookiePreferenceSaved"] ?? false);
+    var containsCookies = returnPath != null && returnPath!.Value!.Contains("cookies");
+}
+
+@if (cookieSaved && !showBanner && !containsCookies)
+{
+    <form asp-controller="Cookies" asp-action="HideCookieMessage" method="post">
+        <input type="hidden" name="redirectPath" value="@returnPath">
+        <govuk-cookie-banner aria-label="@label">
+            <govuk-cookie-banner-message>
+                <govuk-cookie-banner-message-content>
+                    @if (consentFeature != null && consentFeature!.HasConsent)
+                    {
+                        <p class="govuk-body">You’ve accepted analytics cookies. You can <a class="govuk-link" href="/Cookies?returnPath=@returnPath">change your cookie settings</a> at any time.</p>
+                    }
+                    else
+                    {
+                        <p class="govuk-body">You’ve rejected analytics cookies. You can <a class="govuk-link" href="/Cookies?returnPath=@returnPath">change your cookie settings</a> at any time.</p>
+                    }
+                </govuk-cookie-banner-message-content>
+                <govuk-cookie-banner-message-actions>
+                    <govuk-cookie-banner-message-action value="hide" name="cookies" text="Hide cookie message" type="submit" />
+                </govuk-cookie-banner-message-actions>
+            </govuk-cookie-banner-message>
+        </govuk-cookie-banner>
+    </form>
+}

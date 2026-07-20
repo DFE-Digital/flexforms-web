@@ -1,0 +1,39 @@
+@page "/Feedback/ThankYou"
+@using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request
+@model GovUK.Dfe.FlexForms.Web.Pages.Feedback.ThankYouModel
+@{
+    ViewData["Title"] = Model.UserFeedbackType switch
+    {
+        UserFeedbackType.BugReport => "Thank you for letting us know",
+        UserFeedbackType.SupportRequest => "Thank you - someone will be in contact",
+        UserFeedbackType.FeedbackOrSuggestion => "Thank you for your feedback",
+        _ => throw new ArgumentOutOfRangeException()
+    };
+}
+
+<div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+        @switch (Model.UserFeedbackType)
+        {
+            case UserFeedbackType.BugReport:
+                <h1 class="govuk-heading-l">Thank you for letting us know</h1>
+                <p class="govuk-body">If you have asked us to contact you we will be in touch as soon as possible.</p>
+                <p class="govuk-body">It could take up to 10 days for us to respond depending on the type of problem you have reported.</p>
+                break;
+            
+            case UserFeedbackType.SupportRequest:
+                <h1 class="govuk-heading-l">Thank you - someone will be in contact</h1>
+                <p class="govuk-body">It could take up to 10 days for us to respond depending on your question or problem.</p>
+                break;
+            
+            case UserFeedbackType.FeedbackOrSuggestion:
+                <h1 class="govuk-heading-l">Thank you for your feedback</h1>
+                <p class="govuk-body">Your comments and suggestions will help us to make this service better.</p>
+                break;
+        }
+        
+        <p class="govuk-body govuk-!-margin-top-6">
+            <a class="govuk-link" href="/applications/dashboard">Go to your applications dashboard</a>
+        </p>
+    </div>
+</div>

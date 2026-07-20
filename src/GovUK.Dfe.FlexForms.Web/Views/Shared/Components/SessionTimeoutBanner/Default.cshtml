@@ -1,0 +1,71 @@
+@model GovUK.Dfe.FlexForms.Web.ViewComponents.SessionTimeoutViewModel
+@if (Model.Show)
+{
+    // Fallback (no-JS) auto-redirect when countdown ends
+    Context.Response.Headers["Refresh"] = $"{Model.AutoRedirectSeconds};url=/Logout";
+
+    <div class="app-timeout-overlay" role="dialog" aria-modal="true" aria-labelledby="timeout-title">
+        <div class="app-timeout-dialog">
+            <h2 id="timeout-title" class="govuk-heading-m">You're about to be signed out</h2>
+            <p class="govuk-body">For your security, we will sign you out in
+                <strong id="app-timeout-count">@Model.DisplayTime</strong>.
+            </p>
+
+                <div class="app-timeout-progress">
+                    <div class="app-timeout-progress__bar" style="animation-duration:@(Model.AutoRedirectSeconds)s;"></div>
+                </div>
+
+            <form method="post" action="/session/stay-signed-in">
+                @Html.AntiForgeryToken()
+                <button class="govuk-button" data-module="govuk-button" type="submit">Stay signed in</button>
+                <button class="govuk-link govuk-!-margin-left-4" formaction="/session/sign-out" formmethod="post" type="submit" style="background:none;border:none;padding:0;">Sign out</button>
+            </form>
+        </div>
+    </div>
+
+    <style>
+        .app-timeout-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+        .app-timeout-dialog { background: #fff; border: 4px solid #ffbf47; max-width: 520px; width: 90%; padding: 24px; box-shadow: 0 0 0 4px #0b0c0c; }
+        .app-timeout-progress { height: 8px; background: #f3f2f1; margin: 12px 0 24px; overflow: hidden; }
+        .app-timeout-progress__bar { height: 100%; background: #00703c; width: 100%; animation-name: shrink; animation-timing-function: linear; animation-fill-mode: forwards; }
+        @@keyframes shrink { from { width: 100%; } to { width: 0%; } }
+    </style>
+
+    <script>
+        (function () {
+            var seconds = @Model.AutoRedirectSeconds;
+            var el = document.getElementById('app-timeout-count');
+            if (!el || isNaN(seconds) || seconds <= 0) return;
+
+            function format(s) {
+                var m = Math.floor(s / 60);
+                var r = s % 60;
+                return m + ':' + (r < 10 ? '0' + r : r);
+            }
+
+            function tick() {
+                seconds--;
+                if (seconds <= 0) {
+                    window.location.replace('/Logout');
+                    return;
+                }
+                el.textContent = format(seconds);
+                setTimeout(tick, 1000);
+            }
+
+            // Initialize content immediately to avoid one-second lag
+            el.textContent = format(seconds);
+            setTimeout(tick, 1000);
+        })();
+    </script>
+}
+else if (Model.PreOverlayRefreshSeconds > 0)
+{
+    // Add _tc query parameter to indicate this is a timeout check (not user activity)
+    var currentUrl = Context.Request.Path + Context.Request.QueryString;
+    var separator = Context.Request.QueryString.HasValue ? "&" : "?";
+    var refreshUrl = $"{currentUrl}{separator}_tc=1";
+    Context.Response.Headers["Refresh"] = $"{Model.PreOverlayRefreshSeconds};url={refreshUrl}";
+}
+
+

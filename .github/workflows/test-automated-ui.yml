@@ -42,7 +42,7 @@ jobs:
       image: cypress/browsers:22.14.0@sha256:5fedacf2c6b1fab4f2d2d24a1cb2054af6d0103e0b163cd5064e523f45ca1a88
     defaults:
       run:
-        working-directory: src/Tests/DfE.ExternalApplications.CypressTests
+        working-directory: src/Tests/GovUK.Dfe.FlexForms.CypressTests
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
         with:
@@ -62,7 +62,7 @@ jobs:
         with:
           browser: ${{ matrix.browser }}
           spec: ${{ matrix.spec }}
-          working-directory: src/Tests/DfE.ExternalApplications.CypressTests
+          working-directory: src/Tests/GovUK.Dfe.FlexForms.CypressTests
           wait-on: ${{ secrets.BASE_URL }}
 
       - name: Upload screenshots
@@ -70,7 +70,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: screenshots-${{ inputs.environment }}-${{ matrix.group }}
-          path: src/Tests/DfE.ExternalApplications.CypressTests/cypress/screenshots
+          path: src/Tests/GovUK.Dfe.FlexForms.CypressTests/cypress/screenshots
 
       - name: Generate report
         if: ${{ failure() }}
@@ -83,4 +83,4 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: reports-${{ inputs.environment }}-${{ matrix.group }}
-          path: src/Tests/DfE.ExternalApplications.CypressTests/mochareports
+          path: src/Tests/GovUK.Dfe.FlexForms.CypressTests/mochareports

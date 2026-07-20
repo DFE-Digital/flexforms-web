@@ -1,0 +1,99 @@
+@using Microsoft.AspNetCore.Html;
+@model GovUK.Dfe.FlexForms.Web.Services.FieldViewModel
+@{
+    var isRequired = Model.Field.Required ?? true;
+    var validationAttributes = new HtmlString(Model.ValidationAttributes);
+    var labelClasses = Model.Field.Label.IsVisible ? "" : "govuk-visually-hidden";
+    DateTime? parsedDate = null;
+    var current = Model.CurrentValue ?? string.Empty;
+
+    // Recover parts from stored joined value (always preserve order Year-Month-Day)
+    string persistedDay = string.Empty, persistedMonth = string.Empty, persistedYear = string.Empty;
+    var hasPersistedParts = false;
+    if (!string.IsNullOrWhiteSpace(current) && current.Contains('-'))
+    {
+        var bits = current.Split('-', StringSplitOptions.TrimEntries);
+        if (bits.Length == 3)
+        {
+            persistedYear = bits[0];
+            persistedMonth = bits[1];
+            persistedDay = bits[2];
+            hasPersistedParts = !string.IsNullOrWhiteSpace(persistedDay)
+                || !string.IsNullOrWhiteSpace(persistedMonth)
+                || !string.IsNullOrWhiteSpace(persistedYear);
+        }
+    }
+
+    // Only if no joined parts detected, try strict ISO parse with 4‑digit year
+    if (!hasPersistedParts)
+    {
+        var _formats = new[] { "yyyy-M-d", "yyyy-MM-dd", "yyyy-M-dd", "yyyy-MM-d" };
+        if (System.DateTime.TryParseExact(
+            current,
+            _formats,
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None,
+            out var dt))
+        {
+            parsedDate = dt;
+        }
+    }
+
+    // Posted values on POST
+    var request = ViewContext?.HttpContext?.Request;
+    var hasForm = request?.HasFormContentType == true && string.Equals(request.Method, "POST", StringComparison.OrdinalIgnoreCase);
+    var postedDay = hasForm ? request!.Form[$"Data[{Model.Field.FieldId}].day"].ToString() : string.Empty;
+    var postedMonth = hasForm ? request!.Form[$"Data[{Model.Field.FieldId}].month"].ToString() : string.Empty;
+    var postedYear = hasForm ? request!.Form[$"Data[{Model.Field.FieldId}].year"].ToString() : string.Empty;
+    var hasPostedParts = hasForm && (!string.IsNullOrWhiteSpace(postedDay) || !string.IsNullOrWhiteSpace(postedMonth) || !string.IsNullOrWhiteSpace(postedYear));
+}
+
+@if (hasPostedParts || hasPersistedParts)
+{
+    <govuk-date-input id="@Model.Id" name-prefix="Data[@Model.Field.FieldId]">
+        <govuk-date-input-fieldset>
+            <govuk-date-input-fieldset-legend class="govuk-fieldset__legend govuk-fieldset__legend--m @labelClasses">
+                <span class="govuk-fieldset__heading">@Model.Field.Label.Value</span>
+            </govuk-date-input-fieldset-legend>
+            @if (!string.IsNullOrEmpty(Model.Field.Tooltip))
+            {
+                <govuk-date-input-hint>
+                    @Model.Field.Tooltip
+                </govuk-date-input-hint>
+            }
+            @if (Model.ErrorMessage != String.Empty)
+            {
+                <govuk-date-input-error-message>
+                    <span class="govuk-visually-hidden">Error: </span>
+                    @Model.ErrorMessage
+                </govuk-date-input-error-message>
+            }
+        
+        <govuk-date-input-day value="@(hasPostedParts ? postedDay : persistedDay)"></govuk-date-input-day>
+        <govuk-date-input-month value="@(hasPostedParts ? postedMonth : persistedMonth)"></govuk-date-input-month>
+        <govuk-date-input-year value="@(hasPostedParts ? postedYear : persistedYear)"></govuk-date-input-year>
+        </govuk-date-input-fieldset>
+    </govuk-date-input>
+}
+else
+{
+    <govuk-date-input id="@Model.Id" name-prefix="Data[@Model.Field.FieldId]" value="@parsedDate">
+        <govuk-date-input-fieldset>
+            <govuk-date-input-fieldset-legend class="govuk-fieldset__legend govuk-fieldset__legend--m @labelClasses">
+                <span class="govuk-fieldset__heading">@Model.Field.Label.Value</span>
+            </govuk-date-input-fieldset-legend>
+            @if (!string.IsNullOrEmpty(Model.Field.Tooltip))
+            {
+                <govuk-date-input-hint>
+                    @Model.Field.Tooltip
+                </govuk-date-input-hint>
+            }
+            @if (Model.ErrorMessage != String.Empty)
+            {
+                <govuk-date-input-error-message>
+                    @Model.ErrorMessage
+                </govuk-date-input-error-message>
+            }
+        </govuk-date-input-fieldset>
+    </govuk-date-input>
+}

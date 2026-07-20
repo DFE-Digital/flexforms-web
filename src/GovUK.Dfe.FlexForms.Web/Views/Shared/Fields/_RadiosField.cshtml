@@ -1,0 +1,38 @@
+@using GovUK.Dfe.FlexForms.Web.Utilities
+@using GovUk.Frontend.AspNetCore.TagHelpers
+@using Microsoft.AspNetCore.Html;
+@model GovUK.Dfe.FlexForms.Web.Services.FieldViewModel
+@{
+    var isRequired = Model.Field.Required ?? true;
+    var validationAttributes = new HtmlString(Model.ValidationAttributes);
+    var options = Model.Field.Options ?? new List<GovUK.Dfe.FlexForms.Domain.Models.Option>();
+    var legendValue = Model.Field.Label.IsVisible ? Model.Field.Label.Value : "";
+}
+
+<govuk-radios id="@Model.Id" name="Data[@Model.Field.FieldId]" data-field-id="@Model.Field.FieldId">
+    <govuk-radios-fieldset>
+        <govuk-radios-fieldset-legend class="govuk-fieldset__legend govuk-fieldset__legend--m">
+            <span class="govuk-fieldset__heading">@legendValue</span>
+        </govuk-radios-fieldset-legend>
+
+        @{
+            var (hintHtml, hintClass) = MarkdownSafe.RenderHintWithClass(Model.Field.Tooltip);
+        }
+        <govuk-radios-hint class="@hintClass">
+            @Html.Raw(hintHtml)
+        </govuk-radios-hint>
+
+        @if (Model.ErrorMessage != String.Empty)
+        {
+            <govuk-radios-error-message ignore-modelstate-errors>
+                <span class="govuk-visually-hidden">Error: </span>
+                @Model.ErrorMessage
+            </govuk-radios-error-message>
+        }
+
+        @foreach (var opt in options)
+        {
+            <govuk-radios-item checked="@Model.CurrentValue == opt.Value" value="@opt.Value">@opt.Label</govuk-radios-item>
+        }
+    </govuk-radios-fieldset>
+</govuk-radios>

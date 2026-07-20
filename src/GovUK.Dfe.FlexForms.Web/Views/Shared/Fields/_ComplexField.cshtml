@@ -1,0 +1,44 @@
+@using Microsoft.AspNetCore.Html;
+@using System.Text.Json;
+@using GovUK.Dfe.FlexForms.Application.Interfaces;
+@using GovUK.Dfe.FlexForms.Domain.Models;
+@inject IComplexFieldConfigurationService ComplexFieldConfigurationService
+@model GovUK.Dfe.FlexForms.Web.Services.FieldViewModel
+
+@{
+    // Get the complex field ID from the ComplexField object
+    var complexFieldId = Model.Field.ComplexField?.Id ?? "";
+    
+    // Get configuration from appsettings
+    var configuration = ComplexFieldConfigurationService.GetConfiguration(complexFieldId);
+}
+
+@if (string.IsNullOrEmpty(complexFieldId))
+{
+    <div class="govuk-form-group govuk-form-group--error">
+        <govuk-error-message>Complex field configuration is missing or invalid</govuk-error-message>
+    </div>
+}
+else
+{
+    // Determine which specific complex field view to use based on the field type
+    var fieldType = configuration.FieldType?.ToLowerInvariant() ?? "autocomplete";
+    
+        switch (fieldType)
+    {
+        case "autocomplete":
+            @await Html.PartialAsync("~/Views/Shared/Fields/_AutocompleteComplexField.cshtml", Model)
+            break;
+        case "upload":
+            @await Html.PartialAsync("~/Views/Shared/Fields/_UploadComplexField.cshtml", Model, new ViewDataDictionary(ViewData))
+            break;
+        @*   case "composite":
+            @await Html.PartialAsync("~/Views/Shared/Fields/_CompositeComplexField.cshtml", Model)
+                break; *@
+        default:
+            <div class="govuk-form-group govuk-form-group--error">
+                <govuk-error-message><span class="govuk-visually-hidden">Error: </span>Complex field type not supported: @fieldType</govuk-error-message>
+            </div>
+            break;
+    }
+} 

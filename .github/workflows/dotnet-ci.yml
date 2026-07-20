@@ -43,7 +43,7 @@ jobs:
       run: dotnet tool install --global dotnet-reportgenerator-globaltool
 
     - name: Restore dependencies
-      run: dotnet restore DfE.ExternalApplications.Web.sln
+      run: dotnet restore GovUK.Dfe.FlexForms.Web.sln
 
     - name: Build, Test and Analyze
       env:
@@ -51,6 +51,6 @@ jobs:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       run: |
         dotnet-sonarscanner begin /d:sonar.qualitygate.wait=true /d:sonar.scanner.skipJreProvisioning=true /k:"DFE-Digital_external-applications-web" /o:"dfe-digital" /d:sonar.token="${{ secrets.SONAR_TOKEN }}" /d:sonar.host.url="https://sonarcloud.io"
-        dotnet build DfE.ExternalApplications.Web.sln --no-restore
-        dotnet test DfE.ExternalApplications.Web.sln --no-build --verbosity normal --collect:"XPlat Code Coverage"
+        dotnet build GovUK.Dfe.FlexForms.Web.sln --no-restore
+        dotnet test GovUK.Dfe.FlexForms.Web.sln --no-build --verbosity normal --collect:"XPlat Code Coverage"
         dotnet-sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"

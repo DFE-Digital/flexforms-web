@@ -1,0 +1,40 @@
+@using GovUK.Dfe.FlexForms.Web.Utilities
+@using GovUk.Frontend.AspNetCore.TagHelpers
+@using Microsoft.AspNetCore.Html;
+@using System.Linq;
+@model GovUK.Dfe.FlexForms.Web.Services.FieldViewModel
+@{
+    var isRequired = Model.Field.Required ?? true;
+    var validationAttributes = new HtmlString(Model.ValidationAttributes);
+    var options = Model.Field.Options ?? new List<GovUK.Dfe.FlexForms.Domain.Models.Option>();
+    var legendValue = Model.Field.Label.IsVisible ? Model.Field.Label.Value : "";
+}
+
+<govuk-checkboxes id="@Model.Id" name="Data[@Model.Field.FieldId]" data-field-id="@Model.Field.FieldId">
+    <govuk-checkboxes-fieldset>
+        <govuk-checkboxes-fieldset-legend class="govuk-fieldset__legend govuk-fieldset__legend--m">
+            <span class="govuk-fieldset__heading">@legendValue</span>
+        </govuk-checkboxes-fieldset-legend>
+
+        @{
+            var (hintHtml, hintClass) = MarkdownSafe.RenderHintWithClass(Model.Field.Tooltip);
+        }
+        <govuk-checkboxes-hint class="@hintClass">
+            @Html.Raw(hintHtml)
+        </govuk-checkboxes-hint>
+
+        @if (Model.ErrorMessage != String.Empty)
+        {
+            <govuk-checkboxes-error-message ignore-modelstate-errors>
+                <span class="govuk-visually-hidden">Error: </span>
+                @Model.ErrorMessage
+            </govuk-checkboxes-error-message>
+        }
+
+        @foreach (var opt in options)
+        {
+            var isChecked = Model.SelectedValues.Contains(opt.Value);
+            <govuk-checkboxes-item checked="@isChecked" value="@opt.Value">@opt.Label</govuk-checkboxes-item>
+        }
+    </govuk-checkboxes-fieldset>
+</govuk-checkboxes>

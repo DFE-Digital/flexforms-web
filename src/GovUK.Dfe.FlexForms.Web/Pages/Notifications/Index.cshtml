@@ -1,0 +1,106 @@
+@page
+@model GovUK.Dfe.FlexForms.Web.Pages.Notifications.IndexModel
+@{
+    ViewData["Title"] = "Notifications";
+}
+
+<h1 class="govuk-heading-l">Notifications</h1>
+
+<div class="govuk-button-group govuk-!-margin-bottom-5">
+    <button class="govuk-button govuk-button--secondary" data-module="govuk-button" id="btn-mark-all-read">Mark all as read</button>
+    <button class="govuk-button govuk-button--warning" data-module="govuk-button" id="btn-clear-all">Clear all</button>
+    <a class="govuk-link" href="/applications/dashboard">Back to home</a>
+    </div>
+
+<table class="govuk-table govuk-!-margin-top-5">
+    <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Message</th>
+            <th scope="col" class="govuk-table__header">Type</th>
+            <th scope="col" class="govuk-table__header">Date</th>
+            <th scope="col" class="govuk-table__header">Action</th>
+        </tr>
+    </thead>
+    <tbody class="govuk-table__body" id="notifications-tbody"></tbody>
+</table>
+
+<script>
+    (function () {
+        const tbody = document.getElementById('notifications-tbody');
+        const antiForgeryToken = () => {
+            const input = document.querySelector('input[name="__RequestVerificationToken"]');
+            return input ? input.value : '';
+        };
+
+        const mapTypeTag = (type) => {
+            const normalize = (val) => {
+                if (typeof val === 'number') { const byNumber = { 0: 'Success', 1: 'Error', 2: 'Info', 3: 'Warning' }; return byNumber[val] || 'Info'; }
+                if (typeof val === 'string') return val.charAt(0).toUpperCase() + val.slice(1).toLowerCase();
+                return 'Info';
+            };
+            const t = normalize(type);
+            const cls = t === 'Success' ? 'govuk-tag' : t === 'Warning' ? 'govuk-tag govuk-tag--yellow' : t === 'Error' ? 'govuk-tag govuk-tag--red' : 'govuk-tag govuk-tag--blue';
+            return `<strong class="${cls}">${t}</strong>`;
+        };
+
+        function renderRow(n) {
+            const tr = document.createElement('tr');
+            tr.className = 'govuk-table__row';
+            const created = n.createdAt ? new Date(n.createdAt) : null;
+            const dateStr = created ? created.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : '';
+            tr.innerHTML = `
+                <td class="govuk-table__cell">${n.message || ''}</td>
+                <td class="govuk-table__cell">${mapTypeTag(n.type)}</td>
+                <td class="govuk-table__cell">${dateStr}</td>
+                <td class="govuk-table__cell"><a class="govuk-link" data-id="${n.id}" href="#">Dismiss <span class="govuk-visually-hidden">this notification</span></a></td>
+            `;
+            tr.querySelector('a').onclick = async (e) => {
+                e.preventDefault();
+                const id = e.currentTarget.getAttribute('data-id');
+                try {
+                    const response = await fetch(`/notifications/remove/${encodeURIComponent(id)}`, {
+                        method: 'POST',
+                        credentials: 'include',
+                        headers: { 'RequestVerificationToken': antiForgeryToken() }
+                    });
+                    if (response.ok) {
+                        tr.innerHTML = '<td class="govuk-table__cell" aria-live="assertive" role="alert" colspan="4">Notification dismissed.</td>';
+                        setTimeout(() => tr.remove(), 3000);
+                    } else {
+                        console.error('Failed to dismiss notification:', response.status, await response.text());
+                        alert('Failed to dismiss notification. Please try again.');
+                    }
+                } catch (error) {
+                    console.error('Error dismissing notification:', error);
+                    alert('An error occurred while dismissing the notification.');
+                }
+            };
+            return tr;
+        }
+
+        async function loadAll() {
+            tbody.innerHTML = '';
+            const all = await fetch('/notifications/all', { credentials: 'include' }).then(r => r.ok ? r.json() : []);
+            all.forEach(n => tbody.appendChild(renderRow(n)));
+        }
+
+        document.getElementById('btn-mark-all-read').onclick = async () => {
+            await fetch('/notifications/read-all', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'RequestVerificationToken': antiForgeryToken() }
+            });
+        };
+        document.getElementById('btn-clear-all').onclick = async () => {
+            await fetch('/notifications/clear', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'RequestVerificationToken': antiForgeryToken() }
+            });
+            await loadAll();
+        };
+
+        loadAll();
+    })();
+</script>
+

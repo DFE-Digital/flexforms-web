@@ -1,0 +1,25 @@
+@page "/applications/{referenceNumber}/{taskId?}/{pageId?}/upload-file"
+@model GovUK.Dfe.FlexForms.Web.Pages.FormEngine.UploadFileModel
+@{
+    ViewData["Title"] = "Upload File - Backend Handler";
+}
+
+@* 
+    This page now serves as a backend handler only.
+    The UI has been moved to _UploadComplexField.cshtml partial.
+    This page handles form submissions and redirects back to the original page.
+*@
+
+@if (!string.IsNullOrEmpty(Model.ReturnUrl))
+{
+    <script>
+        // If there's a return URL but we're still on this page (shouldn't happen), redirect
+        window.location.href = '@Model.ReturnUrl';
+    </script>
+}
+else
+{
+    <h1>Upload File Handler</h1>
+    <p>This page handles file upload operations. You should not see this page directly.</p>
+    <a href="/applications/@Model.ReferenceNumber/@Model.TaskId/@Model.CurrentPageId" class="govuk-link">Return to form</a>
+} 

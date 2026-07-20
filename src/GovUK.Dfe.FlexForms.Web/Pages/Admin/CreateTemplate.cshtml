@@ -1,0 +1,49 @@
+@page "/admin/create-template"
+@model GovUK.Dfe.FlexForms.Web.Pages.Admin.CreateTemplateModel
+@{
+    ViewData["Title"] = "Create a template";
+}
+
+<div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+        <a asp-page="/Admin/Admin" class="govuk-back-link">Back</a>
+
+        <govuk-error-summary>
+            @foreach (var modelError in ViewData.ModelState.Where(item => item.Value?.Errors.Count > 0))
+            {
+                foreach (var error in modelError.Value!.Errors)
+                {
+                    <govuk-error-summary-item href="@(modelError.Key == nameof(Model.Name) ? "#Name" : "#")">
+                        @error.ErrorMessage
+                    </govuk-error-summary-item>
+                }
+            }
+        </govuk-error-summary>
+
+        <h1 class="govuk-heading-xl">@ViewData["Title"]</h1>
+        <p class="govuk-body">
+            The new template will belong to this tenant and will not be live until an administrator publishes it.
+        </p>
+
+        <form method="post">
+            <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.Name)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                <label class="govuk-label govuk-label--m" asp-for="Name">Template name</label>
+                <div id="name-hint" class="govuk-hint">For example, School transfer application</div>
+                @if (ViewData.ModelState[nameof(Model.Name)]?.Errors.FirstOrDefault() is { } nameError)
+                {
+                    <p id="name-error" class="govuk-error-message">
+                        <span class="govuk-visually-hidden">Error:</span> @nameError.ErrorMessage
+                    </p>
+                }
+                <input class="govuk-input @(ViewData.ModelState[nameof(Model.Name)]?.Errors.Any() == true ? "govuk-input--error" : "")"
+                       asp-for="Name"
+                       aria-describedby="name-hint @(ViewData.ModelState[nameof(Model.Name)]?.Errors.Any() == true ? "name-error" : "")" />
+            </div>
+
+            <div class="govuk-button-group">
+                <button class="govuk-button" data-module="govuk-button" type="submit">Create template</button>
+                <a asp-page="/Admin/Admin" class="govuk-link">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>

@@ -21,7 +21,7 @@ This repository contains the Razor Pages frontend for submitting applications to
 
 ## Domain Model Relationships (Template Models)
 
-The template engine is built around a hierarchy of domain models in `DfE.ExternalApplications.Domain.Models`. The `FormTemplate` is the root, containing task groups, tasks, pages, and fields, with conditional logic attached at the template level.
+The template engine is built around a hierarchy of domain models in `GovUK.Dfe.FlexForms.Domain.Models`. The `FormTemplate` is the root, containing task groups, tasks, pages, and fields, with conditional logic attached at the template level.
 
 ```mermaid
 classDiagram
@@ -421,7 +421,7 @@ sequenceDiagram
 
 Example event publication in the form engine:
 
-```3554:3592:src/DfE.ExternalApplications.Web/Pages/FormEngine/RenderForm.cshtml.cs
+```3554:3592:src/GovUK.Dfe.FlexForms.Web/Pages/FormEngine/RenderForm.cshtml.cs
         /// Publishes the TransferApplicationSubmittedEvent to the service bus
         /// Uses the event data mapper to extract and transform form data according to the configured mapping
         private async Task PublishApplicationSubmittedEventAsync(ApplicationDto application)
@@ -457,26 +457,26 @@ Prerequisites: .NET 8 SDK, Redis (local or container), Node/npm if running Cypre
 
 1) Clone and restore  
 ```bash
-dotnet restore DfE.ExternalApplications.Web.sln
+dotnet restore GovUK.Dfe.FlexForms.Web.sln
 ```
 
 2) Configure secrets (examples)  
 ```bash
 # Auth & token refresh
-dotnet user-secrets set "DfESignIn:ClientSecret" "<oidc-client-secret>" --project src/DfE.ExternalApplications.Web
-dotnet user-secrets set "TokenRefresh:ClientSecret" "<oidc-client-secret>" --project src/DfE.ExternalApplications.Web
+dotnet user-secrets set "DfESignIn:ClientSecret" "<oidc-client-secret>" --project src/GovUK.Dfe.FlexForms.Web
+dotnet user-secrets set "TokenRefresh:ClientSecret" "<oidc-client-secret>" --project src/GovUK.Dfe.FlexForms.Web
 
 # External Applications API auth
-dotnet user-secrets set "ExternalApplicationsApiClient:ClientSecret" "<api-client-secret>" --project src/DfE.ExternalApplications.Web
+dotnet user-secrets set "ExternalApplicationsApiClient:ClientSecret" "<api-client-secret>" --project src/GovUK.Dfe.FlexForms.Web
 
 # Messaging / telemetry / cache
-dotnet user-secrets set "MassTransit:AzureServiceBus:ConnectionString" "<sb-connection>" --project src/DfE.ExternalApplications.Web
-dotnet user-secrets set "ApplicationInsights:ConnectionString" "<ai-connection>" --project src/DfE.ExternalApplications.Web
-dotnet user-secrets set "ConnectionStrings:Redis" "localhost:6379" --project src/DfE.ExternalApplications.Web
+dotnet user-secrets set "MassTransit:AzureServiceBus:ConnectionString" "<sb-connection>" --project src/GovUK.Dfe.FlexForms.Web
+dotnet user-secrets set "ApplicationInsights:ConnectionString" "<ai-connection>" --project src/GovUK.Dfe.FlexForms.Web
+dotnet user-secrets set "ConnectionStrings:Redis" "localhost:6379" --project src/GovUK.Dfe.FlexForms.Web
 
 # Internal service-to-service auth
-dotnet user-secrets set "InternalServiceAuth:SecretKey" "<internal-signing-key>" --project src/DfE.ExternalApplications.Web
-dotnet user-secrets set "InternalServiceAuth:Services:0:ApiKey" "<internal-api-key>" --project src/DfE.ExternalApplications.Web
+dotnet user-secrets set "InternalServiceAuth:SecretKey" "<internal-signing-key>" --project src/GovUK.Dfe.FlexForms.Web
+dotnet user-secrets set "InternalServiceAuth:Services:0:ApiKey" "<internal-api-key>" --project src/GovUK.Dfe.FlexForms.Web
 
 # Optional: secured downstream APIs for complex fields (if required) 🔒
 # Matching structure:
@@ -490,8 +490,8 @@ dotnet user-secrets set "InternalServiceAuth:Services:0:ApiKey" "<internal-api-k
 #   "ApiEndpoint": "https://api.dev.academies.education.gov.uk/v4/establishments?page=1&count=10&name={0}&urn={0}&ukprn={0}&matchAny=true&excludeClosed=true",
 #   "ApiKey": "<establishments-api-key>"
 # }
-dotnet user-secrets set "FormEngine:ComplexFields:0:ApiKey" "<trusts-api-key>" --project src/DfE.ExternalApplications.Web
-dotnet user-secrets set "FormEngine:ComplexFields:1:ApiKey" "<establishments-api-key>" --project src/DfE.ExternalApplications.Web
+dotnet user-secrets set "FormEngine:ComplexFields:0:ApiKey" "<trusts-api-key>" --project src/GovUK.Dfe.FlexForms.Web
+dotnet user-secrets set "FormEngine:ComplexFields:1:ApiKey" "<establishments-api-key>" --project src/GovUK.Dfe.FlexForms.Web
 ```
 
 3) Use the dev API configuration  
@@ -499,7 +499,7 @@ dotnet user-secrets set "FormEngine:ComplexFields:1:ApiKey" "<establishments-api
 
 4) Run the web app  
 ```bash
-dotnet run --project src/DfE.ExternalApplications.Web/DfE.ExternalApplications.Web.csproj
+dotnet run --project src/GovUK.Dfe.FlexForms.Web/GovUK.Dfe.FlexForms.Web.csproj
 ```
 Browse to `https://localhost:5001` (or the HTTPS port shown in the console) and sign in with a dev DfE Sign-in account.
 
@@ -507,8 +507,8 @@ Browse to `https://localhost:5001` (or the HTTPS port shown in the console) and 
 Ensure the Service Bus connection string is set so `ScanResultConsumer` can process `ScanResultEvent` messages and clean infected uploads.
 
 ## Tests ✅
-- Unit tests: `dotnet test DfE.ExternalApplications.Web.sln`
-- Cypress (E2E): from `Tests/DfE.ExternalApplications.CypressTests`, install deps then run `npm test` or `npx cypress run`.
+- Unit tests: `dotnet test GovUK.Dfe.FlexForms.Web.sln`
+- Cypress (E2E): from `Tests/GovUK.Dfe.FlexForms.CypressTests`, install deps then run `npm test` or `npx cypress run`.
 
 ## Example workflow 📋
 1. Create a new application from the dashboard (uses the configured template ID).

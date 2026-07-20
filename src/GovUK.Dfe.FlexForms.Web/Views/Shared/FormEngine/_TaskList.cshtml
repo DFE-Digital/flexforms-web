@@ -1,0 +1,117 @@
+@using System.Security.Claims
+@model GovUK.Dfe.FlexForms.Web.Pages.FormEngine.RenderFormModel
+@{
+    var applicationId = Context.Session.GetString("ApplicationId");
+    var leadApplicantEmail = Context.Session.GetString($"ApplicationLeadApplicantEmail_{applicationId}");
+    
+    // Use robust claim checking like authentication strategies do
+    var currentUserEmail = Context.User?.FindFirst(ClaimTypes.Email)?.Value 
+                        ?? Context.User?.FindFirst("email")?.Value
+                        ?? Context.User?.FindFirst("sub")?.Value
+                        ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                        ?? Context.User?.Identity?.Name;
+}
+<div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+        <h1 class="govuk-heading-xl govuk-!-margin-bottom-6">Your @AppTerminology.Singular</h1>
+        
+        @await Html.PartialAsync("FormEngine/_FormHeader", Model)
+        
+        @foreach (var group in Model.Template.TaskGroups.OrderBy(g => g.GroupOrder))
+        {
+            var groupNameHyphenated = group.GroupName.Replace(" ", "-").ToLower();
+
+            <h2 class="govuk-heading-m" id="group-@groupNameHyphenated" data-testid="group-@groupNameHyphenated">
+                @group.GroupName
+            </h2>
+            <ul class="govuk-task-list">
+                @foreach (var task in group.Tasks.OrderBy(t => t.TaskOrder))
+                {
+                    var currentTaskStatus = Model.GetTaskStatusFromSession(task.TaskId);
+                    var statusClass = Model.GetTaskStatusDisplayClass(currentTaskStatus);
+                    var statusText = Model.GetTaskStatusDisplayText(currentTaskStatus);
+                    var taskUrl = $"/applications/{Model.ReferenceNumber}/{task.TaskId}";
+
+                    if (task.StartAtFirstPageWhenNotStarted == true &&
+                        currentTaskStatus == GovUK.Dfe.FlexForms.Domain.Models.TaskStatus.NotStarted)
+                    {
+                        // Prefer the first visible page (if conditional logic hides early pages), otherwise fall back to first page.
+                        var firstPageId = task.Pages?
+                            .OrderBy(p => p.PageOrder)
+                            .FirstOrDefault(p => !Model.IsPageHidden(p.PageId))?
+                            .PageId
+                            ?? task.Pages?
+                                .OrderBy(p => p.PageOrder)
+                                .FirstOrDefault()?
+                                .PageId;
+
+                        if (!string.IsNullOrWhiteSpace(firstPageId))
+                        {
+                            taskUrl = $"/applications/{Model.ReferenceNumber}/{task.TaskId}/{firstPageId}";
+                        }
+                    }
+
+                    var taskNameHyphenated = task.TaskName.Replace(" ", "-").ToLower();
+
+                    <li class="govuk-task-list__item govuk-task-list__item--with-link" id="group-@groupNameHyphenated-task-@taskNameHyphenated" data-testid="group-@groupNameHyphenated-task-@taskNameHyphenated">
+                        <div class="govuk-task-list__name-and-hint">
+                            @if (Model.IsApplicationEditable())
+                            {
+                                <a class="govuk-link govuk-task-list__link" href="@taskUrl" aria-label="task-@taskNameHyphenated" aria-described-by="task-@taskNameHyphenated-status">
+                                    @task.TaskName
+                                </a>
+                            }
+                            else
+                            {
+                                <span class="govuk-task-list__link" aria-label="task-@taskNameHyphenated" aria-described-by="task-@taskNameHyphenated-status">@task.TaskName</span>
+                            }
+                        </div>
+                        <div class="govuk-task-list__status" id="task-@taskNameHyphenated-status">
+                            <govuk-tag class="@statusClass">@statusText</govuk-tag>
+                        </div>
+                    </li>
+                }
+            </ul>
+        }
+        
+        <div class="govuk-!-margin-top-6">
+            @if (Model.IsApplicationEditable())
+            {
+                <a href="/applications/@Model.ReferenceNumber?preview=true" class="govuk-button" id="review-application-button" role="button">
+                    Review @AppTerminology.Singular
+                </a>
+            }
+            else
+            {
+                <a href="/applications/@Model.ReferenceNumber?preview=true" class="govuk-button" id="view-application-button" role="button">
+                    View @AppTerminology.Singular
+                </a>
+                <div class="govuk-inset-text govuk-!-margin-top-4">
+                    @if (string.Equals(Model.ApplicationStatus, "Submitted", StringComparison.OrdinalIgnoreCase))
+                    {
+                        <p>This @AppTerminology.Singular has been submitted and can no longer be changed.</p>
+                    }
+                    else
+                    {
+                        <p>You do not have permission to make changes to this @AppTerminology.Singular.</p>
+                    }
+                    <p>Status: <strong>@Model.ApplicationStatus</strong></p>
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (Model.IsContributorPatternEnabled() &&
+         string.Equals(currentUserEmail?.Trim(), leadApplicantEmail?.Trim(), StringComparison.InvariantCultureIgnoreCase))
+    {
+        <div class="govuk-grid-column-one-third">
+            <div class="govuk-!-margin-top-6">
+                <h2 class="govuk-heading-m">Contributors</h2>
+                <p class="govuk-body">You can invite other people to complete or view parts of this @AppTerminology.Singular.</p>
+                    <a href="/applications/@Model.ReferenceNumber/contributors" id="invite-contributors" class="govuk-button govuk-button--secondary" role="button">
+                        Invite contributors
+                    </a>
+            </div>
+        </div>
+    }
+</div>

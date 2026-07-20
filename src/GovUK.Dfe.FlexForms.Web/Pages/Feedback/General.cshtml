@@ -1,0 +1,99 @@
+@page "/Feedback/General"
+@using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request
+@model GovUK.Dfe.FlexForms.Web.Pages.Feedback.GeneralModel
+@using GovUK.Dfe.FlexForms.Web.Tenancy
+@inject ITenantAppConfiguration AppConfig
+@{
+	var serviceName = AppConfig["Layout:ServiceName"] ?? "External Applications";
+	ViewData["Title"] = $"Give feedback on the {serviceName} service";
+}
+
+@section BeforeContent {
+	@if (Model.ReferenceNumber is not null)
+	{
+		<govuk-back-link href="/Feedback?referenceNumber=@Model.ReferenceNumber"></govuk-back-link>
+	}
+	else
+	{
+		<govuk-back-link href="/Feedback">Back</govuk-back-link>
+	}
+}
+
+<div class="govuk-grid-row">
+	<div class="govuk-grid-column-two-thirds">
+		<h1 class="govuk-heading-l">
+			Give feedback on the @serviceName service
+		</h1>
+
+		<form method="post">
+			@Html.AntiForgeryToken()
+			<input type="hidden" value="@Model.ReferenceNumber" name="@nameof(Model.ReferenceNumber)"/>
+			<govuk-radios name="@nameof(Model.SatisfactionScore)">
+				<govuk-radios-fieldset>
+					<govuk-radios-fieldset-legend class="govuk-fieldset__legend--m">
+						On the whole, how do you feel about the service?
+					</govuk-radios-fieldset-legend>
+				
+					@if (!Model.IsPropertyValid(nameof(Model.SatisfactionScore)))
+					{
+						<govuk-radios-error-message>
+							<span class="govuk-visually-hidden">Error: </span>
+							You must choose an option
+						</govuk-radios-error-message>
+					}
+
+					<govuk-radios-item checked="@Model.SatisfactionScore == SatisfactionScore.VerySatisfied"
+					                   value="@SatisfactionScore.VerySatisfied">
+						Very satisfied
+					</govuk-radios-item>
+
+					<govuk-radios-item checked="@Model.SatisfactionScore == SatisfactionScore.Satisfied"
+					                   value="@SatisfactionScore.Satisfied">
+						Satisfied
+					</govuk-radios-item>
+
+					<govuk-radios-item
+						checked="@Model.SatisfactionScore == SatisfactionScore.NeitherSatisfiedOrDissatisfied"
+						value="@SatisfactionScore.NeitherSatisfiedOrDissatisfied">
+						Neither satisfied or dissatisfied
+					</govuk-radios-item>
+
+					<govuk-radios-item checked="@Model.SatisfactionScore == SatisfactionScore.Dissatisfied"
+					                   value="@SatisfactionScore.Dissatisfied">
+						Dissatisfied
+					</govuk-radios-item>
+
+					<govuk-radios-item checked="@Model.SatisfactionScore == SatisfactionScore.VeryDissatisfied"
+					                   value="@SatisfactionScore.VeryDissatisfied">
+						Very dissatisfied
+					</govuk-radios-item>
+				</govuk-radios-fieldset>
+			</govuk-radios>
+
+			<govuk-character-count name="@nameof(Model.Message)" max-length="2000" label-class="govuk-label--m">
+				<govuk-character-count-label>
+					What improvements could we make?
+				</govuk-character-count-label>
+
+				<govuk-character-count-hint>
+					Do not give any information that may identify you, such as names, email addresses or reference
+					numbers.
+				</govuk-character-count-hint>
+
+				@if (!Model.IsPropertyValid(nameof(Model.Message)))
+				{
+					<govuk-character-count-error-message>
+						<span class="govuk-visually-hidden">Error:</span>
+						You must give details
+					</govuk-character-count-error-message>
+				}
+
+				<govuk-character-count-value>@Model.Message</govuk-character-count-value>
+			</govuk-character-count>
+
+			<button type="submit" class="govuk-button govuk-!-margin-top-2 govuk-!-margin-bottom-8">
+				Send feedback
+			</button>
+		</form>
+	</div>
+</div>

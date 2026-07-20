@@ -1,0 +1,108 @@
+@page "/applications/{referenceNumber}/contributors"
+@using GovUK.Dfe.FlexForms.Web.Extensions
+@using GovUK.Dfe.FlexForms.Web.Tenancy
+@model ContributorsModel
+@inject ITenantAppConfiguration AppConfig
+
+@{
+    ViewData["Title"] = "Invite contributors";
+
+    var applicationId = HttpContext.Session.GetString("ApplicationId");
+    var leadApplicantName = HttpContext.Session.GetString($"ApplicationLeadApplicantName_{applicationId}");
+    var leadApplicantEmail = HttpContext.Session.GetString($"ApplicationLeadApplicantEmail_{applicationId}");
+}
+
+<div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+        <h1 class="govuk-heading-xl">
+            Invite contributors
+        </h1>
+
+        @if (Model.HasError)
+        {
+            <div class="govuk-error-summary" aria-labelledby="error-summary-title" role="alert" data-module="govuk-error-summary">
+                <h2 class="govuk-error-summary__title" id="error-summary-title">
+                    There is a problem
+                </h2>
+                <div class="govuk-error-summary__body">
+                    <span class="govuk-visually-hidden">Error: </span>
+                    <p>@Model.ErrorMessage</p>
+                </div>
+            </div>
+        }
+
+        <p class="govuk-body">
+            Invite people to help you complete your @AppTerminology.Singular by providing their email address and name.
+        </p>
+
+        <p class="govuk-body">
+            They must have a DfE Sign-in account. They can only create an account using a business email address with their name. For example, @AppConfig["Layout:ContributorEmail"].
+        </p>
+
+        <p class="govuk-body">
+            Once a contributor joins, they will be able to view and edit the @AppTerminology.Singular and see each contributor's email address.
+        </p>
+
+        <p class="govuk-body">
+            You can add contributors now or later.
+        </p>
+
+        <div class="govuk-button-group">
+            <form method="post">
+                <button id="add-a-contributor" class="govuk-button" type="submit" asp-page-handler="AddContributor" data-module="govuk-button">
+                    Add a contributor
+                </button>
+            </form>
+
+            <form method="post">
+                <button id="proceed-to-application-form" class="govuk-button govuk-button--secondary" type="submit" asp-page-handler="ProceedToForm" data-module="govuk-button">
+                    Go to @AppTerminology.Singular
+                </button>
+            </form>
+        </div>
+
+        <h2 class="govuk-heading-l govuk-!-margin-top-9">
+            Current contributors
+        </h2>
+
+        <table class="govuk-table">
+            <thead class="govuk-table__head">
+                <tr class="govuk-table__row">
+                    <th scope="col" class="govuk-table__header">Email address</th>
+                    <th scope="col" class="govuk-table__header">Full name</th>
+                    <th scope="col" class="govuk-table__header">Action</th>
+                </tr>
+            </thead>
+            <tbody class="govuk-table__body">
+                <tr class="govuk-table__row" id="contributor-1">
+                    <td class="govuk-table__cell">@leadApplicantEmail</td>
+                    <td class="govuk-table__cell">@leadApplicantName</td>
+                    <td class="govuk-table__cell"></td>
+                </tr>
+                @foreach (var (contributor, index) in Model.Contributors.Select((contributor, index) => (contributor, index)))
+                {
+                    var contributorIndex = index + 2; //zero index so adding 2 so the lead applicant can start from 1
+                    <tr class="govuk-table__row" id="contributor-@contributorIndex">
+                        <td class="govuk-table__cell">@contributor.Email</td>
+                        <td class="govuk-table__cell">@contributor.Name</td>
+                        <td class="govuk-table__cell">
+                            <form method="post" style="display: inline;">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="contributorId" value="@contributor.UserId" />
+                                <input type="hidden" name="contributorEmail" value="@contributor.Email" />
+                                <input type="hidden" name="contributorName" value="@contributor.Name" />
+                                @Html.RenderWarningConfirmationButton(
+                                    buttonText: "Remove",
+                                    handler: "RemoveContributor",
+                                    displayFields: "contributorEmail,contributorName",
+                                    title: "Are you sure you want to remove this contributor?",
+                                    requiredMessage: $"Select yes if you are sure you want to remove this contributor",
+                                    buttonId: $"remove-contributor-{contributorIndex}")
+                            </form>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

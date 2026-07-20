@@ -1,0 +1,16 @@
+@model GovUK.Dfe.FlexForms.Web.Pages.FormEngine.RenderFormModel
+@using GovUK.Dfe.FlexForms.Web.Tenancy
+@inject ITenantAppConfiguration AppConfig
+
+@{
+    var applicationId = Context.Session.GetString("ApplicationId");
+    var leadApplicantName = Context.Session.GetString($"ApplicationLeadApplicantName_{applicationId}");
+    var leadApplicantEmail = Context.Session.GetString($"ApplicationLeadApplicantEmail_{applicationId}");
+    var applicationFormVersion = Context.Session.GetString($"ApplicationFormVersion_{applicationId}");
+}
+
+<div class="govuk-!-margin-bottom-6" style="border-left: 4px solid #b1b4b6; padding-left: 15px;">
+    <p class="govuk-body govuk-!-margin-bottom-1">@AppTerminology.SingularCapitalised reference: <strong>@Model.ReferenceNumber</strong></p>
+    <p class="govuk-body govuk-!-margin-bottom-0">@AppTerminology.SingularCapitalised version: <strong>@applicationFormVersion</strong></p>
+    <p class="govuk-body govuk-!-margin-bottom-0">@AppConfig["Layout:LeadApplicant"]: <strong>@leadApplicantName</strong></p>
+</div>

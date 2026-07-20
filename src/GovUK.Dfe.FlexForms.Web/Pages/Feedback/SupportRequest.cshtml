@@ -1,0 +1,84 @@
+@page "/Feedback/Support"
+@model GovUK.Dfe.FlexForms.Web.Pages.Feedback.SupportRequestModel
+@{
+    ViewData["Title"] = $"Help with your {AppTerminology.Singular}";
+}
+
+@section BeforeContent {
+    @if (Model.ReferenceNumber is not null)
+    {
+        <govuk-back-link href="/Feedback?referenceNumber=@Model.ReferenceNumber"></govuk-back-link>
+    }
+    else
+    {
+        <govuk-back-link href="/Feedback">Back</govuk-back-link>
+    }
+}
+
+<div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+        <form method="post">
+            @Html.AntiForgeryToken()
+            <h1 class="govuk-heading-l">Help with your @AppTerminology.Singular</h1>
+            <govuk-character-count name="@nameof(Model.Message)" max-length="2000" label-class="govuk-label--m">
+                <govuk-character-count-label>
+                    What do you need help with?
+                </govuk-character-count-label>
+
+                @if (!Model.IsPropertyValid(nameof(Model.Message)))
+                {
+                    <govuk-character-count-error-message>
+                        <span class="govuk-visually-hidden">Error:</span>
+                        You must give details
+                    </govuk-character-count-error-message>
+                }
+
+                <govuk-character-count-value>@Model.Message</govuk-character-count-value>
+            </govuk-character-count>
+            
+            <govuk-input name="@nameof(Model.EmailAddress)" value="@Model.EmailAddress" label-class="govuk-label--m" type="email">
+                <govuk-input-label>
+                    What is your email address?
+                </govuk-input-label>
+                
+                <govuk-input-hint>
+                    We will use this to contact you about the problem. Make sure you enter it correctly.
+                </govuk-input-hint>
+
+                @if (!Model.IsPropertyValid(nameof(Model.EmailAddress)))
+                {
+                    <govuk-input-error-message>
+                        <span class="govuk-visually-hidden">Error: </span>
+                        You must give an email address
+                    </govuk-input-error-message>
+                }
+            </govuk-input>
+            
+            <govuk-radios name="@nameof(Model.ReferenceNumber)">
+                <govuk-radios-fieldset>
+                    <govuk-radios-fieldset-legend class="govuk-fieldset__legend--m">
+                        Which @AppTerminology.Singular do you need help with?
+                    </govuk-radios-fieldset-legend>
+                    
+                    @if (!Model.IsPropertyValid(nameof(Model.ReferenceNumber)))
+                    {
+                        <govuk-radios-error-message>
+                            <span class="govuk-visually-hidden">Error: </span>
+                            You must choose an option
+                        </govuk-radios-error-message>
+                    }
+                    
+                    @foreach (var applicationReference in Model.ApplicationReferences)
+                    {
+                        <govuk-radios-item checked="@Model.ReferenceNumber == applicationReference" value="@applicationReference">
+                            @applicationReference
+                        </govuk-radios-item>
+                    }
+                </govuk-radios-fieldset>
+            </govuk-radios>
+
+            <input type="submit" value="Submit details"
+                   class="govuk-button govuk-!-margin-top-4 govuk-!-margin-bottom-">
+        </form>
+    </div>
+</div>

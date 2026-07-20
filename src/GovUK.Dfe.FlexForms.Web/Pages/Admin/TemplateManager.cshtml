@@ -1,0 +1,231 @@
+@page "/admin/template-manager"
+@model GovUK.Dfe.FlexForms.Web.Pages.Admin.TemplateManagerModel
+@{
+    ViewData["Title"] = "Template Manager";
+
+    var showForm = Model.ShowAddVersionForm 
+                   || !ViewData.ModelState.IsValid;
+}
+
+<div class="govuk-grid-row">
+    <div class="govuk-grid-column-full">
+        <h1 class="govuk-heading-xl">@ViewData["Title"]</h1>
+
+        @if (Model.TenantTemplates.Count > 0)
+        {
+            <form method="post" asp-page-handler="SelectTemplate" class="govuk-!-margin-bottom-6">
+                <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.SelectedTemplateId)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                    <label class="govuk-label govuk-label--m" asp-for="SelectedTemplateId">
+                        Choose a template to manage
+                    </label>
+                    @if (ViewData.ModelState[nameof(Model.SelectedTemplateId)]?.Errors.FirstOrDefault() is { } selectionError)
+                    {
+                        <p class="govuk-error-message">
+                            <span class="govuk-visually-hidden">Error:</span> @selectionError.ErrorMessage
+                        </p>
+                    }
+                    <select class="govuk-select" asp-for="SelectedTemplateId">
+                        @foreach (var template in Model.TenantTemplates)
+                        {
+                            <option value="@template.TemplateId">
+                                @template.Name (@(template.IsLive ? "Live" : "Not live"))
+                            </option>
+                        }
+                    </select>
+                </div>
+                <button class="govuk-button govuk-button--secondary" type="submit">Open template</button>
+            </form>
+        }
+
+        @if (Model.ShowCreated)
+        {
+            <div class="govuk-notification-banner govuk-notification-banner--success" role="alert">
+                <div class="govuk-notification-banner__header">
+                    <h2 class="govuk-notification-banner__title">Success</h2>
+                </div>
+                <div class="govuk-notification-banner__content">
+                    <h3 class="govuk-notification-banner__heading">Template created</h3>
+                    <p class="govuk-body">The template is not live. Add its first version below.</p>
+                </div>
+            </div>
+        }
+
+        @if (Model.ShowSuccess)
+        {
+            <div class="govuk-notification-banner govuk-notification-banner--success" role="alert" aria-labelledby="govuk-notification-banner-title" data-module="govuk-notification-banner">
+                <div class="govuk-notification-banner__header">
+                    <h2 class="govuk-notification-banner__title" id="govuk-notification-banner-title">
+                        Success
+                    </h2>
+                </div>
+                <div class="govuk-notification-banner__content">
+                    <h3 class="govuk-notification-banner__heading">
+                        Template version created successfully
+                    </h3>
+                    <p class="govuk-body">The new template version has been saved.</p>
+                    <p class="govuk-body">
+                        <strong>Recommended:</strong> 
+                        <form method="post" asp-page-handler="ClearAll" style="display: inline;">
+                            <button type="submit" class="govuk-link govuk-!-font-size-16" 
+                                    style="background: none; border: none; padding: 0; color: #1d70b8; text-decoration: underline; cursor: pointer;"
+                                    onclick="return confirm('This will clear all sessions and caches. Are you sure?')">
+                                Clear all caches
+                            </button>
+                        </form> to ensure the new template version is immediately available across the application.
+                    </p>
+                </div>
+            </div>
+        }
+
+        @if (Model.ShowCacheCleared)
+        {
+            <div class="govuk-notification-banner govuk-notification-banner--success" role="alert" aria-labelledby="govuk-notification-banner-title-cleared" data-module="govuk-notification-banner">
+                <div class="govuk-notification-banner__header">
+                    <h2 class="govuk-notification-banner__title" id="govuk-notification-banner-title-cleared">
+                        Success
+                    </h2>
+                </div>
+                <div class="govuk-notification-banner__content">
+                    <h3 class="govuk-notification-banner__heading">
+                        All caches cleared successfully
+                    </h3>
+                    <p class="govuk-body">Sessions and caches have been cleared. The new template version should now be immediately available.</p>
+                </div>
+            </div>
+        }
+
+        @if (Model.HasError)
+        {
+            <div class="govuk-error-summary" aria-labelledby="error-summary-title" role="alert" data-module="govuk-error-summary">
+                <h2 class="govuk-error-summary__title" id="error-summary-title">
+                    There is a problem
+                </h2>
+                <div class="govuk-error-summary__body">
+                    <span class="govuk-visually-hidden">Error: </span>
+                    <p>@Model.ErrorMessage</p>
+                </div>
+            </div>
+        }
+
+        @if (!Model.ShowAddVersionForm && Model.SelectedTemplate != null)
+        {
+            <dl class="govuk-summary-list">
+                <div class="govuk-summary-list__row">
+                    <dt class="govuk-summary-list__key">
+                        Template ID
+                    </dt>
+                    <dd class="govuk-summary-list__value">
+                        @Model.SelectedTemplate.TemplateId
+                    </dd>
+                </div>
+                <div class="govuk-summary-list__row">
+                    <dt class="govuk-summary-list__key">
+                        Template Name
+                    </dt>
+                    <dd class="govuk-summary-list__value">
+                        @Model.SelectedTemplate.Name
+                    </dd>
+                </div>
+                <div class="govuk-summary-list__row">
+                    <dt class="govuk-summary-list__key">
+                        Current Version
+                    </dt>
+                    <dd class="govuk-summary-list__value">
+                        @(Model.CurrentVersionNumber ?? "No versions")
+                    </dd>
+                </div>
+            </dl>
+
+            <form method="post" asp-page-handler="ShowAddForm">
+                <button class="govuk-button govuk-!-margin-bottom-6" type="submit" id="add-new-template-version-button">Add New Template Version</button>
+            </form>
+            
+            @if (Model.CurrentTemplate != null)
+            {
+                <h2 class="govuk-heading-m">Current Schema</h2>
+                <div class="govuk-form-group">
+                    <textarea class="govuk-textarea" id="current-schema" name="current-schema" rows="20" readonly>@Model.CurrentTemplateJson</textarea>
+                </div>
+            }
+        }
+
+        @if (showForm)
+        {
+            <govuk-error-summary>
+                @if (!ViewData.ModelState.IsValid)
+                {
+                    @foreach (var modelError in ViewData.ModelState.Where(x => x.Value.Errors.Count > 0))
+                    {
+                        @foreach (var error in modelError.Value.Errors)
+                        {
+                            var fieldName = modelError.Key;
+                            var href = fieldName switch
+                            {
+                                nameof(Model.NewVersion) => "#NewVersion",
+                                nameof(Model.NewSchema) => "#NewSchema",
+                                _ => "#"
+                            };
+                            <govuk-error-summary-item href="@href">
+                                <span class="govuk-visually-hidden">Error: </span>
+                                @error.ErrorMessage
+                            </govuk-error-summary-item>
+                        }
+                    }
+                }
+            </govuk-error-summary>
+
+            <h2 class="govuk-heading-l">Add New Template Version</h2>
+            
+            <form method="post">
+                <div class="govuk-form-group @(ViewData.ModelState["NewVersion"]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                    <label class="govuk-label govuk-label--m" for="NewVersion">
+                        New Version Number
+                    </label>
+                    <div id="version-hint" class="govuk-hint">
+                        For example: 1.1, 2.0, 1.2.1
+                    </div>
+                    @if (ViewData.ModelState["NewVersion"]?.Errors.Any() == true)
+                    {
+                        <p id="version-error" class="govuk-error-message">
+                            <span class="govuk-visually-hidden">Error:</span> @ViewData.ModelState["NewVersion"].Errors.First().ErrorMessage
+                        </p>
+                    }
+                    <input class="govuk-input govuk-input--width-10 @(ViewData.ModelState["NewVersion"]?.Errors.Any() == true ? "govuk-input--error" : "")" 
+                           asp-for="NewVersion" 
+                           type="text" 
+                           aria-describedby="version-hint @(ViewData.ModelState["NewVersion"]?.Errors.Any() == true ? "version-error" : "")" />
+                </div>
+
+                <div class="govuk-form-group @(ViewData.ModelState["NewSchema"]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                    <label class="govuk-label govuk-label--m" for="NewSchema">
+                        JSON Schema
+                    </label>
+                    <div id="schema-hint" class="govuk-hint">
+                        Paste the complete JSON schema for the new template version
+                    </div>
+                    @if (ViewData.ModelState["NewSchema"]?.Errors.Any() == true)
+                    {
+                        <p id="schema-error" class="govuk-error-message">
+                            <span class="govuk-visually-hidden">Error:</span> @ViewData.ModelState["NewSchema"].Errors.First().ErrorMessage
+                        </p>
+                    }
+                    <textarea class="govuk-textarea @(ViewData.ModelState["NewSchema"]?.Errors.Any() == true ? "govuk-textarea--error" : "")" 
+                              asp-for="NewSchema" 
+                              rows="20" 
+                              aria-describedby="schema-hint @(ViewData.ModelState["NewSchema"]?.Errors.Any() == true ? "schema-error" : "")"></textarea>
+                </div>
+
+                <div class="govuk-button-group">
+                    <button class="govuk-button" type="submit" id="save-new-version-button">Save New Version</button>
+                    <button class="govuk-button govuk-button--secondary" type="submit" asp-page-handler="CancelAdd" id="cancel-add-version-button">Cancel</button>
+                </div>
+            </form>
+        }
+
+        @if (!Model.ShowAddVersionForm && Model.SelectedTemplate == null && !Model.HasError)
+        {
+            <p class="govuk-body">There are no templates for this tenant.</p>
+            <a asp-page="/Admin/CreateTemplate" class="govuk-button">Create a new template</a>
+        }
+    </div>
+</div> 

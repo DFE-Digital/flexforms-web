@@ -1,0 +1,70 @@
+@using GovUK.Dfe.FlexForms.Web.Extensions
+@using GovUk.Frontend.AspNetCore.TagHelpers
+@using System.Text.Json
+@using GovUK.Dfe.FlexForms.Domain.Models
+@inject GovUK.Dfe.FlexForms.Application.Interfaces.IDerivedCollectionFlowService DerivedFlowService
+@model Tuple<GovUK.Dfe.FlexForms.Web.Pages.FormEngine.RenderFormModel, DerivedCollectionFlowConfiguration>
+@{
+    var renderModel = Model.Item1;
+    var config = Model.Item2;
+    
+    // Generate items from source field
+    var derivedItems = DerivedFlowService.GenerateItemsFromSourceField(
+        config.SourceFieldId, renderModel.FormData, config);
+        
+    // Get current statuses for each item
+    var statuses = DerivedFlowService.GetItemStatuses(config.FieldId, renderModel.FormData);
+}
+
+<div class="govuk-!-margin-bottom-8">
+    <h2 class="govuk-heading-m">@config.Title</h2>
+    
+    @if (!string.IsNullOrEmpty(config.Description))
+    {
+        <p class="govuk-body">@config.Description</p>
+    }
+
+    @if (derivedItems.Any())
+    {
+        <dl class="govuk-summary-list">
+            @foreach (var item in derivedItems)
+            {
+                var status = statuses.TryGetValue(item.Id, out var s) ? s : "Not signed yet";
+                var statusClass = status == "Signed" ? "govuk-tag govuk-tag--green" : "govuk-tag govuk-tag--blue";
+                
+                <div class="govuk-summary-list__row">
+                    <dt class="govuk-summary-list__key">@item.DisplayName</dt>
+                    <dd class="govuk-summary-list__value">
+                        <span class="@statusClass">@status</span>
+                    </dd>
+                    <dd class="govuk-summary-list__actions">
+                        <a class="govuk-link"
+                           id="view-@item.DisplayName"
+                           href="/applications/@renderModel.ReferenceNumber/@renderModel.TaskId/@config.FlowId/derived/@item.Id">
+                            View
+                        </a>
+                    </dd>
+                </div>
+            }
+        </dl>
+    }
+    else
+    {
+        @if (!string.IsNullOrEmpty(config.EmptyStateMessage))
+        {
+            <p class="govuk-body">@config.EmptyStateMessage</p>
+        }
+        else
+        {
+            var sourceTask = renderModel.Template?.TaskGroups
+                ?.SelectMany(g => g.Tasks)
+                ?.FirstOrDefault(t => t?.Summary?.Flows?.Any(f => string.Equals(f.FieldId, config.SourceFieldId, StringComparison.OrdinalIgnoreCase)) == true);
+            var sourceTaskName = sourceTask?.TaskName ?? config.SourceFieldId;
+            var sourceTaskId = sourceTask?.TaskId;
+            var sourceTaskUrl = !string.IsNullOrEmpty(sourceTaskId)
+                ? $"/applications/{renderModel.ReferenceNumber}/{sourceTaskId}"
+                : $"/applications/{renderModel.ReferenceNumber}";
+            <p class="govuk-body">You need to add a trust first in <a href="@sourceTaskUrl" class="govuk-link">@sourceTaskName</a>.</p>
+        }
+    }
+</div>

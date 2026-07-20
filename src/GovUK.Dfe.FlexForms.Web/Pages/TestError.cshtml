@@ -1,0 +1,47 @@
+@page
+@model GovUK.Dfe.FlexForms.Web.Pages.TestErrorModel
+@{
+    ViewData["Title"] = "Test Error Pages";
+}
+
+<div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+        <h1 class="govuk-heading-xl">Test Error Pages</h1>
+        
+        <p class="govuk-body">This page is only available in Development and Test environments.</p>
+        
+        <div class="govuk-warning-text">
+            <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+            <strong class="govuk-warning-text__text">
+                <span class="govuk-warning-text__assistive">Warning</span>
+                Use these links to test error handling. They will trigger real errors.
+            </strong>
+        </div>
+
+        <h2 class="govuk-heading-m">Test Error Types</h2>
+        
+        <ul class="govuk-list govuk-list--bullet">
+            <li>
+                <a class="govuk-link" href="/TestError?trigger=500">Test 500 Internal Server Error</a>
+                - Throws an exception
+            </li>
+            <li>
+                <a class="govuk-link" href="/this-page-does-not-exist">Test 404 Not Found</a>
+                - Navigate to non-existent page
+            </li>
+            <li>
+                <a class="govuk-link" href="/TestError?trigger=null">Test NullReferenceException</a>
+                - Null reference error
+            </li>
+            <li>
+                <a class="govuk-link" href="/TestError?trigger=argument">Test ArgumentException</a>
+                - Invalid argument error
+            </li>
+        </ul>
+        
+        <p class="govuk-body govuk-!-margin-top-6">
+            <a class="govuk-link" href="/applications/dashboard">Return to dashboard</a>
+        </p>
+    </div>
+</div>
+
