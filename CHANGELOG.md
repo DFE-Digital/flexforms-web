@@ -2,6 +2,11 @@
 
 All notable changes to this service will be documented in this file.
 
+## [2.0.0]
+### Notes
+- FlexForms (Forms Engine SaaS)
+
+---------------------------------------------
 ## [1.0.0]
 ### Notes
 - First formally versioned public beta release.

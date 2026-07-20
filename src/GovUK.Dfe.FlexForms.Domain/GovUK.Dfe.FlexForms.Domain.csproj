@@ -6,8 +6,4 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\..\..\DfE.CoreLibs\src\GovUK.Dfe.CoreLibs.Contracts\GovUK.Dfe.CoreLibs.Contracts.csproj" />
-  </ItemGroup>
-
 </Project>

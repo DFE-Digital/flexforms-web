@@ -297,7 +297,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Consumers
                     if (fieldData.ValueKind != JsonValueKind.Object)
                         continue;
 
-                    // Each field has { "value": "...", "completed": true/false }
+                    // Each field has { "question": "...", "value": "...", "completed": true/false, "dataType": "..." }
                     if (!fieldData.TryGetProperty("value", out var valueElement))
                         continue;
 
@@ -336,14 +336,25 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Consumers
                                         reference);
                                 }
                                 
-                                // Update the field
+                                // Update the field, preserving question/dataType when already present
                                 var updatedValueJson = JsonSerializer.Serialize(files);
                                 var isCompleted = !string.IsNullOrWhiteSpace(updatedValueJson) && files.Count > 0;
-                                
+
+                                var preservedQuestion = fieldData.TryGetProperty("question", out var questionElement)
+                                    && questionElement.ValueKind == JsonValueKind.String
+                                        ? questionElement.GetString()
+                                        : null;
+                                var preservedDataType = fieldData.TryGetProperty("dataType", out var dataTypeElement)
+                                    && dataTypeElement.ValueKind == JsonValueKind.String
+                                        ? dataTypeElement.GetString()
+                                        : null;
+
                                 responseData[fieldKey] = JsonSerializer.SerializeToElement(new
                                 {
+                                    question = preservedQuestion ?? string.Empty,
                                     value = updatedValueJson,
-                                    completed = isCompleted
+                                    completed = isCompleted,
+                                    dataType = preservedDataType ?? "string"
                                 });
 
                                 dataModified = true;

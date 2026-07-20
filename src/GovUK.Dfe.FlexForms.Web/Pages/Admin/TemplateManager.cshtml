@@ -163,6 +163,7 @@
                             {
                                 nameof(Model.NewVersion) => "#NewVersion",
                                 nameof(Model.NewSchema) => "#NewSchema",
+                                nameof(Model.AcknowledgeReportingImpact) => "#AcknowledgeReportingImpact",
                                 _ => "#"
                             };
                             <govuk-error-summary-item href="@href">
@@ -213,6 +214,30 @@
                               asp-for="NewSchema" 
                               rows="20" 
                               aria-describedby="schema-hint @(ViewData.ModelState["NewSchema"]?.Errors.Any() == true ? "schema-error" : "")"></textarea>
+                </div>
+
+                <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.AcknowledgeReportingImpact)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                    <p class="govuk-body" style="color: #d4351c;">
+                        Do you agree that if you make any changes to the template in this environment it may either break your reporting in downstream services or it will not be included in the reported data.
+                        Any changes to the template in this environment need to be discussed with the relevant data team before being applied here.
+                    </p>
+                    @if (ViewData.ModelState[nameof(Model.AcknowledgeReportingImpact)]?.Errors.Any() == true)
+                    {
+                        <p id="acknowledge-error" class="govuk-error-message">
+                            <span class="govuk-visually-hidden">Error:</span> @ViewData.ModelState[nameof(Model.AcknowledgeReportingImpact)].Errors.First().ErrorMessage
+                        </p>
+                    }
+                    <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+                        <div class="govuk-checkboxes__item">
+                            <input class="govuk-checkboxes__input"
+                                   asp-for="AcknowledgeReportingImpact"
+                                   type="checkbox"
+                                   aria-describedby="@(ViewData.ModelState[nameof(Model.AcknowledgeReportingImpact)]?.Errors.Any() == true ? "acknowledge-error" : null)" />
+                            <label class="govuk-label govuk-checkboxes__label" asp-for="AcknowledgeReportingImpact" style="color: #d4351c;">
+                                I agree and confirm I have discussed any changes with the relevant data team
+                            </label>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="govuk-button-group">

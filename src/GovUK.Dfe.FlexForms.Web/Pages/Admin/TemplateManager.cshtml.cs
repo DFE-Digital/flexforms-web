@@ -57,6 +57,9 @@ public class TemplateManagerModel(
     [Required(ErrorMessage = "JSON schema is required")]
     public string? NewSchema { get; set; }
 
+    [BindProperty]
+    public bool AcknowledgeReportingImpact { get; set; }
+
     public async Task<IActionResult> OnGetAsync(
         bool showForm = false,
         bool success = false,
@@ -364,6 +367,13 @@ public class TemplateManagerModel(
             {
                 _logger.LogInformation("Template validation passed successfully");
             }
+        }
+
+        if (!AcknowledgeReportingImpact)
+        {
+            ModelState.AddModelError(nameof(AcknowledgeReportingImpact),
+                "You must confirm that you understand the reporting impact before saving.");
+            isValid = false;
         }
 
         return isValid;

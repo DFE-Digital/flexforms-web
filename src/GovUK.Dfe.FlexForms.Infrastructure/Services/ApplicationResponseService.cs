@@ -1,6 +1,7 @@
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
+using GovUK.Dfe.FlexForms.Domain.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
@@ -12,6 +13,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services;
 public class ApplicationResponseService(
     IApplicationsClient applicationsClient,
     IConnectionMultiplexer redis,
+    IFormTemplateProvider formTemplateProvider,
     ILogger<ApplicationResponseService> logger)
     : IApplicationResponseService
 {
@@ -28,8 +30,10 @@ public class ApplicationResponseService(
             var allFormData = GetAccumulatedFormData(session);
             
             var taskStatusData = GetTaskStatusFromSession(applicationId, session);
+
+            var template = await TryGetTemplateFromSessionAsync(session, cancellationToken);
             
-            var responseJson = TransformToResponseJson(allFormData, taskStatusData);
+            var responseJson = TransformToResponseJson(allFormData, taskStatusData, template);
             
             var encodedResponse = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(responseJson));
 
@@ -335,27 +339,24 @@ public class ApplicationResponseService(
         }
     }
 
-    public string TransformToResponseJson(Dictionary<string, object> formData, Dictionary<string, string> taskStatusData)
+    public string TransformToResponseJson(
+        Dictionary<string, object> formData,
+        Dictionary<string, string> taskStatusData,
+        FormTemplate? template = null)
     {
         var responseData = new Dictionary<string, object>();
+        var fieldLookup = ResponseFieldMetadataResolver.BuildLookup(template);
 
         // Add form field data
         foreach (var kvp in formData)
         {
             var fieldId = kvp.Key;
             var value = kvp.Value?.ToString() ?? string.Empty;
-            
-            // Check if the field has a value (completed)
-            var isCompleted = !string.IsNullOrWhiteSpace(value);
 
-            responseData[fieldId] = new
-            {
-                value = value,
-                completed = isCompleted
-            };
+            responseData[fieldId] = ResponseFieldMetadataResolver.BuildFormFieldEntry(fieldId, value, fieldLookup);
         }
 
-        // Add task completion status
+        // Add task completion status (unchanged shape)
         foreach (var kvp in taskStatusData)
         {
             var taskStatusKey = $"TaskStatus_{kvp.Key}";
@@ -371,6 +372,26 @@ public class ApplicationResponseService(
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             WriteIndented = true
         });
+    }
+
+    private async Task<FormTemplate?> TryGetTemplateFromSessionAsync(ISession session, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var templateId = session.GetString("TemplateId");
+            if (string.IsNullOrWhiteSpace(templateId))
+            {
+                logger.LogWarning("No TemplateId in session when saving application response; question/dataType will use runtime fallbacks only");
+                return null;
+            }
+
+            return await formTemplateProvider.GetTemplateAsync(templateId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to load template for response enrichment; continuing with runtime fallbacks");
+            return null;
+        }
     }
 
     public Dictionary<string, string> GetTaskStatusFromSession(Guid applicationId, ISession session)

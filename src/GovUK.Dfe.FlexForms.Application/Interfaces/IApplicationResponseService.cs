@@ -7,7 +7,7 @@ namespace GovUK.Dfe.FlexForms.Application.Interfaces;
 public interface IApplicationResponseService
 {
     Task SaveApplicationResponseAsync(Guid applicationId, Dictionary<string, object> formData, ISession session, CancellationToken cancellationToken = default);
-    string TransformToResponseJson(Dictionary<string, object> formData, Dictionary<string, string> taskStatusData);
+    string TransformToResponseJson(Dictionary<string, object> formData, Dictionary<string, string> taskStatusData, FormTemplate? template = null);
     void AccumulateFormData(Dictionary<string, object> newData, ISession session);
     Dictionary<string, object> GetAccumulatedFormData(ISession session);
     void ClearAccumulatedFormData(ISession session);
