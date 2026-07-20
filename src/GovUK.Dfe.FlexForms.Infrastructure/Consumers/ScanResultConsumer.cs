@@ -348,14 +348,32 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Consumers
                                     && dataTypeElement.ValueKind == JsonValueKind.String
                                         ? dataTypeElement.GetString()
                                         : null;
+                                JsonElement? preservedFields = fieldData.TryGetProperty("fields", out var fieldsElement)
+                                    && fieldsElement.ValueKind == JsonValueKind.Object
+                                        ? fieldsElement.Clone()
+                                        : null;
 
-                                responseData[fieldKey] = JsonSerializer.SerializeToElement(new
+                                if (preservedFields.HasValue)
                                 {
-                                    question = preservedQuestion ?? string.Empty,
-                                    value = updatedValueJson,
-                                    completed = isCompleted,
-                                    dataType = preservedDataType ?? "string"
-                                });
+                                    responseData[fieldKey] = JsonSerializer.SerializeToElement(new
+                                    {
+                                        question = preservedQuestion ?? string.Empty,
+                                        value = updatedValueJson,
+                                        completed = isCompleted,
+                                        dataType = preservedDataType ?? "string",
+                                        fields = preservedFields.Value
+                                    });
+                                }
+                                else
+                                {
+                                    responseData[fieldKey] = JsonSerializer.SerializeToElement(new
+                                    {
+                                        question = preservedQuestion ?? string.Empty,
+                                        value = updatedValueJson,
+                                        completed = isCompleted,
+                                        dataType = preservedDataType ?? "string"
+                                    });
+                                }
 
                                 dataModified = true;
                             }

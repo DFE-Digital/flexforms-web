@@ -7,14 +7,27 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services;
 /// <summary>
 /// Resolves question text and dataType for response JSON field entries from the template,
 /// with runtime value fallback for dataType when the template type is unavailable.
+/// Collection flows keep their existing raw <c>value</c> shape and get an additive <c>fields</c> map.
 /// </summary>
 public static class ResponseFieldMetadataResolver
 {
     public sealed record FieldMetadata(string Question, string? TemplateFieldType);
 
-    public static Dictionary<string, FieldMetadata> BuildLookup(FormTemplate? template)
+    public sealed class TemplateFieldLookup
     {
-        var lookup = new Dictionary<string, FieldMetadata>(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, FieldMetadata> Fields { get; } =
+            new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Collection/flow storage fieldId → nested template fields (question + type only).
+        /// </summary>
+        public Dictionary<string, Dictionary<string, FieldMetadata>> CollectionNestedFields { get; } =
+            new(StringComparer.OrdinalIgnoreCase);
+    }
+
+    public static TemplateFieldLookup BuildLookup(FormTemplate? template)
+    {
+        var lookup = new TemplateFieldLookup();
         if (template?.TaskGroups == null)
         {
             return lookup;
@@ -22,14 +35,13 @@ public static class ResponseFieldMetadataResolver
 
         foreach (var task in template.TaskGroups.SelectMany(g => g.Tasks))
         {
-            AddPages(lookup, task.Pages);
+            AddPages(lookup.Fields, task.Pages);
 
             if (task.Summary?.Flows != null)
             {
                 foreach (var flow in task.Summary.Flows)
                 {
-                    AddFlowField(lookup, flow.FieldId, flow.Title);
-                    AddPages(lookup, flow.Pages);
+                    AddCollectionFlow(lookup, flow.FieldId, flow.Title, flow.FlowId, flow.Pages);
                 }
             }
 
@@ -37,8 +49,7 @@ public static class ResponseFieldMetadataResolver
             {
                 foreach (var flow in task.Summary.DerivedFlows)
                 {
-                    AddFlowField(lookup, flow.FieldId, flow.Title);
-                    AddPages(lookup, flow.Pages);
+                    AddCollectionFlow(lookup, flow.FieldId, flow.Title, flow.FlowId, flow.Pages);
                 }
             }
         }
@@ -46,9 +57,9 @@ public static class ResponseFieldMetadataResolver
         return lookup;
     }
 
-    public static string ResolveQuestion(string fieldId, Dictionary<string, FieldMetadata> lookup)
+    public static string ResolveQuestion(string fieldId, TemplateFieldLookup lookup)
     {
-        return lookup.TryGetValue(fieldId, out var metadata)
+        return lookup.Fields.TryGetValue(fieldId, out var metadata)
             ? metadata.Question
             : string.Empty;
     }
@@ -56,9 +67,14 @@ public static class ResponseFieldMetadataResolver
     public static string ResolveDataType(
         string fieldId,
         string? value,
-        Dictionary<string, FieldMetadata> lookup)
+        TemplateFieldLookup lookup)
     {
-        if (lookup.TryGetValue(fieldId, out var metadata) &&
+        if (lookup.CollectionNestedFields.ContainsKey(fieldId))
+        {
+            return "array";
+        }
+
+        if (lookup.Fields.TryGetValue(fieldId, out var metadata) &&
             !string.IsNullOrWhiteSpace(metadata.TemplateFieldType))
         {
             var mapped = MapTemplateTypeToDataType(metadata.TemplateFieldType);
@@ -71,17 +87,47 @@ public static class ResponseFieldMetadataResolver
         return InferDataTypeFromValue(value);
     }
 
+    /// <summary>
+    /// Builds a response entry. Always keeps <paramref name="value"/> unchanged.
+    /// For collection flows, adds an additive <c>fields</c> map of nested question/dataType metadata.
+    /// </summary>
     public static object BuildFormFieldEntry(
         string fieldId,
         string value,
-        Dictionary<string, FieldMetadata> lookup)
+        TemplateFieldLookup lookup)
     {
+        var question = ResolveQuestion(fieldId, lookup);
+        var dataType = ResolveDataType(fieldId, value, lookup);
+        var completed = !string.IsNullOrWhiteSpace(value);
+
+        if (lookup.CollectionNestedFields.TryGetValue(fieldId, out var nestedFields) &&
+            nestedFields.Count > 0)
+        {
+            var fields = nestedFields.ToDictionary(
+                kvp => kvp.Key,
+                kvp => new
+                {
+                    question = kvp.Value.Question,
+                    dataType = ResolveNestedDataType(kvp.Value)
+                },
+                StringComparer.OrdinalIgnoreCase);
+
+            return new
+            {
+                question,
+                value,
+                completed,
+                dataType,
+                fields
+            };
+        }
+
         return new
         {
-            question = ResolveQuestion(fieldId, lookup),
+            question,
             value,
-            completed = !string.IsNullOrWhiteSpace(value),
-            dataType = ResolveDataType(fieldId, value, lookup)
+            completed,
+            dataType
         };
     }
 
@@ -144,6 +190,20 @@ public static class ResponseFieldMetadataResolver
         return "string";
     }
 
+    private static string ResolveNestedDataType(FieldMetadata metadata)
+    {
+        if (!string.IsNullOrWhiteSpace(metadata.TemplateFieldType))
+        {
+            var mapped = MapTemplateTypeToDataType(metadata.TemplateFieldType);
+            if (!string.IsNullOrWhiteSpace(mapped))
+            {
+                return mapped;
+            }
+        }
+
+        return "string";
+    }
+
     private static bool TryParseDateTime(string value)
     {
         string[] exactFormats =
@@ -165,7 +225,57 @@ public static class ResponseFieldMetadataResolver
                || DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out _)
                || DateTime.TryParse(value, CultureInfo.CurrentCulture, DateTimeStyles.AssumeLocal, out _);
     }
-    private static void AddPages(Dictionary<string, FieldMetadata> lookup, List<Page>? pages)
+
+    private static void AddCollectionFlow(
+        TemplateFieldLookup lookup,
+        string fieldId,
+        string? title,
+        string? flowId,
+        List<Page>? pages)
+    {
+        if (string.IsNullOrWhiteSpace(fieldId))
+        {
+            return;
+        }
+
+        var nested = new Dictionary<string, FieldMetadata>(StringComparer.OrdinalIgnoreCase);
+        AddPages(nested, pages);
+        // Also register nested fields in the flat lookup for any direct references
+        AddPages(lookup.Fields, pages);
+
+        lookup.CollectionNestedFields[fieldId] = nested;
+
+        var question = ResolveFlowQuestion(title, pages, flowId);
+        if (!lookup.Fields.ContainsKey(fieldId))
+        {
+            lookup.Fields[fieldId] = new FieldMetadata(question, "complexField");
+        }
+        else if (string.IsNullOrWhiteSpace(lookup.Fields[fieldId].Question) &&
+                 !string.IsNullOrWhiteSpace(question))
+        {
+            lookup.Fields[fieldId] = new FieldMetadata(question, lookup.Fields[fieldId].TemplateFieldType ?? "complexField");
+        }
+    }
+
+    private static string ResolveFlowQuestion(string? title, List<Page>? pages, string? flowId)
+    {
+        if (!string.IsNullOrWhiteSpace(title))
+        {
+            return title.Trim();
+        }
+
+        var firstPageTitle = pages?
+            .FirstOrDefault(p => !string.IsNullOrWhiteSpace(p.Title))
+            ?.Title;
+        if (!string.IsNullOrWhiteSpace(firstPageTitle))
+        {
+            return firstPageTitle!;
+        }
+
+        return flowId?.Trim() ?? string.Empty;
+    }
+
+    private static void AddPages(Dictionary<string, FieldMetadata> target, List<Page>? pages)
     {
         if (pages == null)
         {
@@ -192,21 +302,11 @@ public static class ResponseFieldMetadataResolver
                     : (page.Title ?? string.Empty);
 
                 // Prefer first definition if duplicates exist
-                if (!lookup.ContainsKey(field.FieldId))
+                if (!target.ContainsKey(field.FieldId))
                 {
-                    lookup[field.FieldId] = new FieldMetadata(question, field.Type);
+                    target[field.FieldId] = new FieldMetadata(question, field.Type);
                 }
             }
         }
-    }
-
-    private static void AddFlowField(Dictionary<string, FieldMetadata> lookup, string fieldId, string? title)
-    {
-        if (string.IsNullOrWhiteSpace(fieldId) || lookup.ContainsKey(fieldId))
-        {
-            return;
-        }
-
-        lookup[fieldId] = new FieldMetadata(title?.Trim() ?? string.Empty, "complexField");
     }
 }
