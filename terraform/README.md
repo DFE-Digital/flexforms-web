@@ -127,23 +127,31 @@ If everything looks good, answer `yes` and wait for the new infrastructure to be
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | ~> 1.9 |
 | <a name="requirement_azapi"></a> [azapi](#requirement\_azapi) | ~> 1.13 |
 | <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) | ~> 4.0 |
+| <a name="requirement_null"></a> [null](#requirement\_null) | ~> 3.2 |
 | <a name="requirement_statuscake"></a> [statuscake](#requirement\_statuscake) | ~> 2.1 |
 
 ## Providers
 
-No providers.
+| Name | Version |
+| ---- | ------- |
+| <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | 4.81.0 |
+| <a name="provider_null"></a> [null](#provider\_null) | 3.3.0 |
 
 ## Modules
 
 | Name | Source | Version |
 | ---- | ------ | ------- |
 | <a name="module_azure_container_apps_hosting"></a> [azure\_container\_apps\_hosting](#module\_azure\_container\_apps\_hosting) | github.com/DFE-Digital/terraform-azurerm-container-apps-hosting | v2.8.1 |
-| <a name="module_azurerm_key_vault"></a> [azurerm\_key\_vault](#module\_azurerm\_key\_vault) | github.com/DFE-Digital/terraform-azurerm-key-vault-tfvars | v0.5.3 |
-| <a name="module_statuscake-tls-monitor"></a> [statuscake-tls-monitor](#module\_statuscake-tls-monitor) | github.com/dfe-digital/terraform-statuscake-tls-monitor | v0.1.5 |
 
 ## Resources
 
-No resources.
+| Name | Type |
+| ---- | ---- |
+| [azurerm_storage_account.tfvars](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/storage_account) | resource |
+| [azurerm_storage_account_network_rules.tfvars](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/storage_account_network_rules) | resource |
+| [azurerm_storage_blob.tfvars](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/storage_blob) | resource |
+| [azurerm_storage_container.tfvars](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/storage_container) | resource |
+| [null_resource.tfvars](https://registry.terraform.io/providers/hashicorp/null/latest/docs/resources/resource) | resource |
 
 ## Inputs
 
@@ -154,57 +162,44 @@ No resources.
 | <a name="input_azure_location"></a> [azure\_location](#input\_azure\_location) | Azure location in which to launch resources. | `string` | n/a | yes |
 | <a name="input_azure_subscription_id"></a> [azure\_subscription\_id](#input\_azure\_subscription\_id) | Service Principal Subscription ID | `string` | n/a | yes |
 | <a name="input_azure_tenant_id"></a> [azure\_tenant\_id](#input\_azure\_tenant\_id) | Service Principal Tenant ID | `string` | n/a | yes |
+| <a name="input_container_app_name_override"></a> [container\_app\_name\_override](#input\_container\_app\_name\_override) | A custom name for the Container App | `string` | `""` | no |
 | <a name="input_container_apps_allow_ips_inbound"></a> [container\_apps\_allow\_ips\_inbound](#input\_container\_apps\_allow\_ips\_inbound) | Restricts access to the Container Apps by creating a network security group rule that only allow inbound traffic from the provided list of IPs | `list(string)` | `[]` | no |
-| <a name="input_container_apps_infra_subnet_service_endpoints"></a> [container\_apps\_infra\_subnet\_service\_endpoints](#input\_container\_apps\_infra\_subnet\_service\_endpoints) | Endpoints to assign to infra subnet | `list(string)` | `[]` | no |
+| <a name="input_container_apps_infra_subnet_cidr"></a> [container\_apps\_infra\_subnet\_cidr](#input\_container\_apps\_infra\_subnet\_cidr) | Specify a subnet prefix to use for the container\_apps\_infra subnet | `string` | `"172.16.110.64/28"` | no |
 | <a name="input_container_command"></a> [container\_command](#input\_container\_command) | Container command | `list(any)` | n/a | yes |
 | <a name="input_container_health_probe_path"></a> [container\_health\_probe\_path](#input\_container\_health\_probe\_path) | Specifies the path that is used to determine the liveness of the Container | `string` | n/a | yes |
 | <a name="input_container_min_replicas"></a> [container\_min\_replicas](#input\_container\_min\_replicas) | Container min replicas | `number` | `1` | no |
 | <a name="input_container_port"></a> [container\_port](#input\_container\_port) | Container port | `number` | `8080` | no |
 | <a name="input_container_scale_http_concurrency"></a> [container\_scale\_http\_concurrency](#input\_container\_scale\_http\_concurrency) | When the number of concurrent HTTP requests exceeds this value, then another replica is added. Replicas continue to add to the pool up to the max-replicas amount. | `number` | `10` | no |
 | <a name="input_container_secret_environment_variables"></a> [container\_secret\_environment\_variables](#input\_container\_secret\_environment\_variables) | Container secret environment variables | `map(string)` | n/a | yes |
-| <a name="input_custom_container_apps"></a> [custom\_container\_apps](#input\_custom\_container\_apps) | Custom container apps, by default deployed within the container app environment managed by this module. | <pre>map(object({<br/>    container_app_environment_id = optional(string, "")<br/>    resource_group_name          = optional(string, "")<br/>    revision_mode                = optional(string, "Single")<br/>    container_port               = optional(number, 0)<br/>    ingress = optional(object({<br/>      external_enabled = optional(bool, true)<br/>      target_port      = optional(number, null)<br/>      traffic_weight = object({<br/>        percentage = optional(number, 100)<br/>      })<br/>      cdn_frontdoor_custom_domain                = optional(string, "")<br/>      cdn_frontdoor_origin_fqdn_override         = optional(string, "")<br/>      cdn_frontdoor_origin_host_header_override  = optional(string, "")<br/>      enable_cdn_frontdoor_health_probe          = optional(bool, false)<br/>      cdn_frontdoor_health_probe_protocol        = optional(string, "")<br/>      cdn_frontdoor_health_probe_interval        = optional(number, 120)<br/>      cdn_frontdoor_health_probe_request_type    = optional(string, "")<br/>      cdn_frontdoor_health_probe_path            = optional(string, "")<br/>      cdn_frontdoor_forwarding_protocol_override = optional(string, "")<br/>    }), null)<br/>    identity = optional(list(object({<br/>      type         = string<br/>      identity_ids = list(string)<br/>    })), [])<br/>    secrets = optional(list(object({<br/>      name  = string<br/>      value = string<br/>    })), [])<br/>    registry = optional(object({<br/>      server               = optional(string, "")<br/>      username             = optional(string, "")<br/>      password_secret_name = optional(string, "")<br/>      identity             = optional(string, "")<br/>    }), null),<br/>    image   = string<br/>    cpu     = number<br/>    memory  = number<br/>    command = list(string)<br/>    liveness_probes = optional(list(object({<br/>      interval_seconds = number<br/>      transport        = string<br/>      port             = number<br/>      path             = optional(string, null)<br/>    })), [])<br/>    env = optional(list(object({<br/>      name      = string<br/>      value     = optional(string, null)<br/>      secretRef = optional(string, null)<br/>    })), [])<br/>    min_replicas = number<br/>    max_replicas = number<br/>  }))</pre> | `{}` | no |
-| <a name="input_dns_alias_records"></a> [dns\_alias\_records](#input\_dns\_alias\_records) | DNS ALIAS records to add to the DNS Zone | <pre>map(<br/>    object({<br/>      ttl : optional(number, 300),<br/>      target_resource_id : string<br/>    })<br/>  )</pre> | `{}` | no |
-| <a name="input_dns_mx_records"></a> [dns\_mx\_records](#input\_dns\_mx\_records) | DNS MX records to add to the DNS Zone | <pre>map(<br/>    object({<br/>      ttl : optional(number, 300),<br/>      records : list(<br/>        object({<br/>          preference : number,<br/>          exchange : string<br/>        })<br/>      )<br/>    })<br/>  )</pre> | `{}` | no |
-| <a name="input_dns_ns_records"></a> [dns\_ns\_records](#input\_dns\_ns\_records) | DNS NS records to add to the DNS Zone | <pre>map(<br/>    object({<br/>      ttl : optional(number, 300),<br/>      records : list(string)<br/>    })<br/>  )</pre> | n/a | yes |
-| <a name="input_dns_txt_records"></a> [dns\_txt\_records](#input\_dns\_txt\_records) | DNS TXT records to add to the DNS Zone | <pre>map(<br/>    object({<br/>      ttl : optional(number, 300),<br/>      records : list(string)<br/>    })<br/>  )</pre> | n/a | yes |
-| <a name="input_dns_zone_domain_name"></a> [dns\_zone\_domain\_name](#input\_dns\_zone\_domain\_name) | DNS zone domain name. If created, records will automatically be created to point to the CDN. | `string` | n/a | yes |
-| <a name="input_enable_container_registry"></a> [enable\_container\_registry](#input\_enable\_container\_registry) | Set to true to create a container registry | `bool` | n/a | yes |
-| <a name="input_enable_dns_zone"></a> [enable\_dns\_zone](#input\_enable\_dns\_zone) | Conditionally create a DNS zone | `bool` | n/a | yes |
+| <a name="input_enable_container_registry"></a> [enable\_container\_registry](#input\_enable\_container\_registry) | Set to true to create a container registry | `bool` | `false` | no |
 | <a name="input_enable_health_insights_api"></a> [enable\_health\_insights\_api](#input\_enable\_health\_insights\_api) | Deploys a Function App that exposes the last 3 HTTP Web Tests via an API endpoint. 'enable\_app\_insights\_integration' and 'enable\_monitoring' must be set to 'true'. | `bool` | `false` | no |
 | <a name="input_enable_init_container"></a> [enable\_init\_container](#input\_enable\_init\_container) | Deploy an Init Container. Init containers run before the primary app container and are used to perform initialization tasks such as downloading data or preparing the environment | `bool` | `false` | no |
-| <a name="input_enable_keyvault_private_endpoint"></a> [enable\_keyvault\_private\_endpoint](#input\_enable\_keyvault\_private\_endpoint) | Set to true to create a private endpoint for key vault. | `bool` | n/a | yes |
 | <a name="input_enable_monitoring"></a> [enable\_monitoring](#input\_enable\_monitoring) | Create an App Insights instance and notification group for the Container App | `bool` | n/a | yes |
 | <a name="input_enable_monitoring_traces"></a> [enable\_monitoring\_traces](#input\_enable\_monitoring\_traces) | Monitor App Insights traces for error messages | `bool` | `true` | no |
-| <a name="input_enable_redis_cache"></a> [enable\_redis\_cache](#input\_enable\_redis\_cache) | Set to true to create an Azure Redis Cache, with a private endpoint within the virtual network | `bool` | n/a | yes |
 | <a name="input_environment"></a> [environment](#input\_environment) | Environment name. Will be used along with `project_name` as a prefix for all resources. | `string` | n/a | yes |
+| <a name="input_existing_container_app_environment"></a> [existing\_container\_app\_environment](#input\_existing\_container\_app\_environment) | Conditionally launch resources into an existing Container App environment. Specifying this will NOT create an environment. | <pre>object({<br/>    name           = string<br/>    resource_group = string<br/>  })</pre> | n/a | yes |
 | <a name="input_existing_logic_app_workflow"></a> [existing\_logic\_app\_workflow](#input\_existing\_logic\_app\_workflow) | Name, and Resource Group of an existing Logic App Workflow. Leave empty to create a new Resource | <pre>object({<br/>    name : string<br/>    resource_group_name : string<br/>  })</pre> | <pre>{<br/>  "name": "",<br/>  "resource_group_name": ""<br/>}</pre> | no |
 | <a name="input_existing_network_watcher_name"></a> [existing\_network\_watcher\_name](#input\_existing\_network\_watcher\_name) | Use an existing network watcher to add flow logs. | `string` | n/a | yes |
 | <a name="input_existing_network_watcher_resource_group_name"></a> [existing\_network\_watcher\_resource\_group\_name](#input\_existing\_network\_watcher\_resource\_group\_name) | Existing network watcher resource group. | `string` | n/a | yes |
+| <a name="input_existing_resource_group"></a> [existing\_resource\_group](#input\_existing\_resource\_group) | Conditionally launch resources into an existing resource group. Specifying this will NOT create a resource group. | `string` | n/a | yes |
+| <a name="input_existing_virtual_network"></a> [existing\_virtual\_network](#input\_existing\_virtual\_network) | Conditionally use an existing virtual network. The `virtual_network_address_space` must match an existing address space in the VNet. This also requires the resource group name. | `string` | n/a | yes |
 | <a name="input_health_insights_api_cors_origins"></a> [health\_insights\_api\_cors\_origins](#input\_health\_insights\_api\_cors\_origins) | List of hostnames that are permitted to contact the Health insights API | `list(string)` | <pre>[<br/>  "*"<br/>]</pre> | no |
 | <a name="input_health_insights_api_ipv4_allow_list"></a> [health\_insights\_api\_ipv4\_allow\_list](#input\_health\_insights\_api\_ipv4\_allow\_list) | List of IPv4 addresses that are permitted to contact the Health insights API | `list(string)` | `[]` | no |
 | <a name="input_image_name"></a> [image\_name](#input\_image\_name) | Image name | `string` | n/a | yes |
 | <a name="input_init_container_command"></a> [init\_container\_command](#input\_init\_container\_command) | Container command for the Init Container | `list(any)` | `[]` | no |
 | <a name="input_init_container_image"></a> [init\_container\_image](#input\_init\_container\_image) | Image name for the Init Container. Leave blank to use the same Container image from the primary app | `string` | `""` | no |
-| <a name="input_key_vault_access_ipv4"></a> [key\_vault\_access\_ipv4](#input\_key\_vault\_access\_ipv4) | List of IPv4 Addresses that are permitted to access the Key Vault | `list(string)` | n/a | yes |
-| <a name="input_linux_function_apps"></a> [linux\_function\_apps](#input\_linux\_function\_apps) | Linux function apps | <pre>map(object({<br/>    runtime                                        = string<br/>    runtime_version                                = string<br/>    app_settings                                   = optional(map(string), {})<br/>    allowed_origins                                = optional(list(string), ["*"])<br/>    ftp_publish_basic_authentication_enabled       = optional(bool, false)<br/>    webdeploy_publish_basic_authentication_enabled = optional(bool, false)<br/>    ipv4_access                                    = optional(list(string), [])<br/>    minimum_tls_version                            = optional(string, "1.3")<br/>    enable_service_bus                             = optional(bool, false)<br/>    service_bus_additional_subscriptions           = optional(list(string), [])<br/>    connection_strings = optional(map(object({<br/>      type  = string<br/>      value = string<br/>    })), {})<br/>  }))</pre> | n/a | yes |
 | <a name="input_monitor_email_receivers"></a> [monitor\_email\_receivers](#input\_monitor\_email\_receivers) | A list of email addresses that should be notified by monitoring alerts | `list(string)` | n/a | yes |
 | <a name="input_monitor_endpoint_healthcheck"></a> [monitor\_endpoint\_healthcheck](#input\_monitor\_endpoint\_healthcheck) | Specify a route that should be monitored for a 200 OK status | `string` | n/a | yes |
 | <a name="input_monitor_http_availability_fqdn"></a> [monitor\_http\_availability\_fqdn](#input\_monitor\_http\_availability\_fqdn) | Specify a FQDN to monitor for HTTP Availability. Leave unset to dynamically calculate the correct FQDN | `string` | `""` | no |
 | <a name="input_project_name"></a> [project\_name](#input\_project\_name) | Project name. Will be used along with `environment` as a prefix for all resources. | `string` | n/a | yes |
-| <a name="input_redis_cache_sku"></a> [redis\_cache\_sku](#input\_redis\_cache\_sku) | Redis Cache SKU | `string` | `"Basic"` | no |
-| <a name="input_redis_cache_subnet_cidr"></a> [redis\_cache\_subnet\_cidr](#input\_redis\_cache\_subnet\_cidr) | Redis Cache subnet CIDR | `string` | n/a | yes |
-| <a name="input_registry_admin_enabled"></a> [registry\_admin\_enabled](#input\_registry\_admin\_enabled) | Do you want to enable access key based authentication for your Container Registry? | `bool` | `true` | no |
+| <a name="input_registry_admin_enabled"></a> [registry\_admin\_enabled](#input\_registry\_admin\_enabled) | Do you want to enable access key based authentication for your Container Registry? | `bool` | `false` | no |
 | <a name="input_registry_managed_identity_assign_role"></a> [registry\_managed\_identity\_assign\_role](#input\_registry\_managed\_identity\_assign\_role) | Assign the 'AcrPull' Role to the Container App User-Assigned Managed Identity. Note: If you do not have 'Microsoft.Authorization/roleAssignments/write' permission, you will need to manually assign the 'AcrPull' Role to the identity | `bool` | `false` | no |
 | <a name="input_registry_server"></a> [registry\_server](#input\_registry\_server) | Container registry server (required if `enable_container_registry` is false) | `string` | `""` | no |
 | <a name="input_registry_use_managed_identity"></a> [registry\_use\_managed\_identity](#input\_registry\_use\_managed\_identity) | Create a User-Assigned Managed Identity for the Container App. Note: If you do not have 'Microsoft.Authorization/roleAssignments/write' permission, you will need to manually assign the 'AcrPull' Role to the identity | `bool` | `true` | no |
-| <a name="input_statuscake_api_token"></a> [statuscake\_api\_token](#input\_statuscake\_api\_token) | API token for StatusCake | `string` | `"00000000000000000000000000000"` | no |
-| <a name="input_statuscake_contact_group_email_addresses"></a> [statuscake\_contact\_group\_email\_addresses](#input\_statuscake\_contact\_group\_email\_addresses) | List of email address that should receive notifications from StatusCake | `list(string)` | `[]` | no |
-| <a name="input_statuscake_contact_group_integrations"></a> [statuscake\_contact\_group\_integrations](#input\_statuscake\_contact\_group\_integrations) | List of Integration IDs to connect to your Contact Group | `list(string)` | `[]` | no |
-| <a name="input_statuscake_contact_group_name"></a> [statuscake\_contact\_group\_name](#input\_statuscake\_contact\_group\_name) | Name of the contact group in StatusCake | `string` | `""` | no |
-| <a name="input_statuscake_monitored_resource_addresses"></a> [statuscake\_monitored\_resource\_addresses](#input\_statuscake\_monitored\_resource\_addresses) | The URLs to perform TLS checks on | `list(string)` | `[]` | no |
+| <a name="input_restrict_container_apps_to_cdn_inbound_only"></a> [restrict\_container\_apps\_to\_cdn\_inbound\_only](#input\_restrict\_container\_apps\_to\_cdn\_inbound\_only) | Restricts access to the Container Apps by creating a network security group rule that only allows 'AzureFrontDoor.Backend' inbound, and attaches it to the subnet of the container app environment. | `bool` | `false` | no |
 | <a name="input_tags"></a> [tags](#input\_tags) | Tags to be applied to all resources | `map(string)` | n/a | yes |
+| <a name="input_tfvars_access_ipv4"></a> [tfvars\_access\_ipv4](#input\_tfvars\_access\_ipv4) | List of IPv4 Addresses that are permitted to access the tfvars storage | `list(string)` | n/a | yes |
 | <a name="input_tfvars_filename"></a> [tfvars\_filename](#input\_tfvars\_filename) | tfvars filename. This file is uploaded and stored encrupted within Key Vault, to ensure that the latest tfvars are stored in a shared place. | `string` | n/a | yes |
-| <a name="input_virtual_network_address_space"></a> [virtual\_network\_address\_space](#input\_virtual\_network\_address\_space) | Virtual network address space CIDR | `string` | n/a | yes |
 
 ## Outputs
 
