@@ -23,14 +23,13 @@
         @if (Model.Templates.Count == 0)
         {
             <p class="govuk-body">
-                There are no forms available for you yet.
                 @if (Model.IsAdmin)
                 {
-                    <text>Create a form and set it to live when you are ready for users.</text>
+                    <text>There are no forms available for you yet. Create a form and set it to live when you are ready for users.</text>
                 }
                 else
                 {
-                    <text>If you think this is wrong, contact your administrator.</text>
+                    <text>You don't have access to any Forms. Please ask the service admin to give you access to at least one Form.</text>
                 }
             </p>
             @if (Model.IsAdmin)
