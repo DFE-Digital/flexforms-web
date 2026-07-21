@@ -1,0 +1,87 @@
+@page "/admin/user-manager/edit"
+@model GovUK.Dfe.FlexForms.Web.Pages.Admin.UserManagerEditModel
+@{
+    ViewData["Title"] = "Edit user form access";
+}
+
+<div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+        <a asp-page="/Admin/UserManager" class="govuk-back-link">Back to User Manager</a>
+
+        <govuk-error-summary>
+            @foreach (var modelError in ViewData.ModelState.Where(item => item.Value?.Errors.Count > 0))
+            {
+                foreach (var error in modelError.Value!.Errors)
+                {
+                    <govuk-error-summary-item href="#">@error.ErrorMessage</govuk-error-summary-item>
+                }
+            }
+        </govuk-error-summary>
+
+        <h1 class="govuk-heading-xl">Edit form access</h1>
+
+        <dl class="govuk-summary-list">
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Name</dt>
+                <dd class="govuk-summary-list__value">@Model.UserName</dd>
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Email</dt>
+                <dd class="govuk-summary-list__value">@Model.UserEmail</dd>
+            </div>
+            <div class="govuk-summary-list__row">
+                <dt class="govuk-summary-list__key">Role</dt>
+                <dd class="govuk-summary-list__value">@Model.UserRole</dd>
+            </div>
+        </dl>
+
+        <form method="post">
+            <input type="hidden" asp-for="UserId" />
+
+            <div class="govuk-form-group">
+                <fieldset class="govuk-fieldset">
+                    <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">
+                        Forms this user can access
+                    </legend>
+                    <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+                        @if (Model.AvailableTemplates.Count == 0)
+                        {
+                            <p class="govuk-body">No forms are available in this tenant.</p>
+                        }
+                        else
+                        {
+                            @foreach (var template in Model.AvailableTemplates)
+                            {
+                                var isChecked = Model.SelectedTemplateIds.Contains(template.TemplateId);
+                                <div class="govuk-checkboxes__item">
+                                    <input class="govuk-checkboxes__input"
+                                           id="template-@template.TemplateId"
+                                           name="SelectedTemplateIds"
+                                           type="checkbox"
+                                           value="@template.TemplateId"
+                                           @(isChecked ? "checked" : null) />
+                                    <label class="govuk-label govuk-checkboxes__label" for="template-@template.TemplateId">
+                                        @template.Name
+                                        @if (template.IsLive)
+                                        {
+                                            <strong class="govuk-tag govuk-tag--green govuk-!-margin-left-1">Live</strong>
+                                        }
+                                        else
+                                        {
+                                            <strong class="govuk-tag govuk-tag--grey govuk-!-margin-left-1">Not live</strong>
+                                        }
+                                    </label>
+                                </div>
+                            }
+                        }
+                    </div>
+                </fieldset>
+            </div>
+
+            <div class="govuk-button-group">
+                <button type="submit" class="govuk-button" data-module="govuk-button">Save</button>
+                <a asp-page="/Admin/UserManager" class="govuk-link">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>

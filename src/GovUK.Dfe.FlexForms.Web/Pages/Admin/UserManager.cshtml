@@ -1,0 +1,107 @@
+@page "/admin/user-manager"
+@model GovUK.Dfe.FlexForms.Web.Pages.Admin.UserManagerModel
+@{
+    ViewData["Title"] = "User Manager";
+}
+
+<div class="govuk-grid-row">
+    <div class="govuk-grid-column-full">
+        <a asp-page="/Admin/Admin" class="govuk-back-link">Back to Admin</a>
+
+        <h1 class="govuk-heading-xl">User Manager</h1>
+        <p class="govuk-body">
+            Manage who can access forms in this tenant. Removing a user clears their form access for this tenant only.
+        </p>
+
+        @if (Model.HasError)
+        {
+            <div class="govuk-error-summary" data-module="govuk-error-summary">
+                <div role="alert">
+                    <h2 class="govuk-error-summary__title">There is a problem</h2>
+                    <div class="govuk-error-summary__body">
+                        <p class="govuk-body">@Model.ErrorMessage</p>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (Model.ShowSuccess)
+        {
+            <div class="govuk-notification-banner govuk-notification-banner--success" role="alert" data-module="govuk-notification-banner">
+                <div class="govuk-notification-banner__header">
+                    <h2 class="govuk-notification-banner__title">Success</h2>
+                </div>
+                <div class="govuk-notification-banner__content">
+                    <p class="govuk-notification-banner__heading">@Model.SuccessMessage</p>
+                </div>
+            </div>
+        }
+
+        <div class="govuk-button-group">
+            <a asp-page="/Admin/UserManagerAdd" class="govuk-button" data-module="govuk-button">Add new user</a>
+        </div>
+
+        @if (Model.Users.Count == 0)
+        {
+            <p class="govuk-body">No users currently have form access in this tenant.</p>
+        }
+        else
+        {
+            <table class="govuk-table">
+                <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                        <th scope="col" class="govuk-table__header">Name</th>
+                        <th scope="col" class="govuk-table__header">Email</th>
+                        <th scope="col" class="govuk-table__header">Role</th>
+                        <th scope="col" class="govuk-table__header">Forms</th>
+                        <th scope="col" class="govuk-table__header">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                    @foreach (var user in Model.Users)
+                    {
+                        <tr class="govuk-table__row">
+                            <td class="govuk-table__cell">@user.Name</td>
+                            <td class="govuk-table__cell">@user.Email</td>
+                            <td class="govuk-table__cell">@user.Role</td>
+                            <td class="govuk-table__cell">
+                                @if (user.Templates.Count == 0)
+                                {
+                                    <span class="govuk-hint">None</span>
+                                }
+                                else
+                                {
+                                    <ul class="govuk-list govuk-!-margin-bottom-0">
+                                        @foreach (var template in user.Templates)
+                                        {
+                                            <li>
+                                                @template.TemplateName
+                                                @if (template.IsLive)
+                                                {
+                                                    <strong class="govuk-tag govuk-tag--green govuk-!-margin-left-1">Live</strong>
+                                                }
+                                                else
+                                                {
+                                                    <strong class="govuk-tag govuk-tag--grey govuk-!-margin-left-1">Not live</strong>
+                                                }
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                            </td>
+                            <td class="govuk-table__cell">
+                                <div class="govuk-button-group">
+                                    <a asp-page="/Admin/UserManagerEdit" asp-route-userId="@user.UserId" class="govuk-link">Edit</a>
+                                    <form method="post" asp-page-handler="Remove" style="display: inline;" onsubmit="return confirm('Remove this user from the tenant? Their form access for this tenant will be cleared.');">
+                                        <input type="hidden" name="userId" value="@user.UserId" />
+                                        <button type="submit" class="govuk-button govuk-button--warning govuk-!-margin-bottom-0">Remove</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>

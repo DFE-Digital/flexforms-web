@@ -16,7 +16,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GovUK.Dfe.FlexForms.Web.Uni
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GovUK.Dfe.FlexForms.Infrastructure.UnitTests", "src\Tests\GovUK.Dfe.FlexForms.Infrastructure.UnitTests\GovUK.Dfe.FlexForms.Infrastructure.UnitTests.csproj", "{FB4D1E39-01AB-47D4-8394-270993A56B0D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GovUK.Dfe.FlexForms.Api.Client", "..\external-applications-api\src\GovUK.Dfe.FlexForms.Api.Client\GovUK.Dfe.FlexForms.Api.Client.csproj", "{518DBBC2-B55A-A715-E4C5-0B3354D0BFC7}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GovUK.Dfe.FlexForms.Api.Client", "..\flexforms-api\src\GovUK.Dfe.FlexForms.Api.Client\GovUK.Dfe.FlexForms.Api.Client.csproj", "{518DBBC2-B55A-A715-E4C5-0B3354D0BFC7}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

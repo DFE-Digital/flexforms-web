@@ -239,6 +239,10 @@
                         </button>
                     </form>
 
+                    <a asp-page="/Admin/UserManager" class="govuk-button" data-module="govuk-button" id="go-to-user-manager-button">
+                        User Manager
+                    </a>
+
                     <form method="post" asp-page-handler="GoToCustomStatusLabelOverrides" style="display: inline;">
                         <button type="submit" class="govuk-button" data-module="govuk-button" id="go-to-custom-status-button">
                             Override Custom Status Labels
@@ -261,6 +265,10 @@
                     <p class="govuk-body">
                         <strong>Template Manager:</strong> Navigate to the template manager to create new template versions 
                         or view template schemas.
+                    </p>
+                    <p class="govuk-body">
+                        <strong>User Manager:</strong> View users with form access in this tenant, add or remove form access,
+                        or register a new user with a role.
                     </p>
                 </div>
             </div>

@@ -14,7 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\external-applications-api\src\GovUK.Dfe.FlexForms.Api.Client\GovUK.Dfe.FlexForms.Api.Client.csproj" />
+    <ProjectReference Include="..\..\..\flexforms-api\src\GovUK.Dfe.FlexForms.Api.Client\GovUK.Dfe.FlexForms.Api.Client.csproj" />
     <ProjectReference Include="..\GovUK.Dfe.FlexForms.Domain\GovUK.Dfe.FlexForms.Domain.csproj" />
   </ItemGroup>
 
