@@ -8,8 +8,8 @@ using System.Diagnostics.CodeAnalysis;
 namespace GovUK.Dfe.FlexForms.Web.Pages.Templates;
 
 /// <summary>
-/// Lets the user choose which tenant template dashboard to open.
-/// Admins also see non-live templates for preview.
+/// Lets the user choose which form dashboard to open.
+/// Admins also see non-live forms for preview.
 /// </summary>
 [ExcludeFromCodeCoverage]
 [Authorize]
@@ -17,7 +17,7 @@ public sealed class IndexModel(
     ITemplateSelectionService templateSelectionService,
     ILogger<IndexModel> logger) : PageModel
 {
-    /// <summary>Templates available to the current user.</summary>
+    /// <summary>Forms available to the current user.</summary>
     public IReadOnlyList<TemplateDto> Templates { get; private set; } = [];
 
     /// <summary>Optional return URL after selection.</summary>
@@ -25,10 +25,14 @@ public sealed class IndexModel(
     public string? ReturnUrl { get; set; }
 
     /// <summary>
-    /// When true, only live templates are shown for post-login selection.
+    /// When true, only live forms are shown for post-login selection.
     /// </summary>
     [BindProperty(SupportsGet = true)]
     public bool LiveOnly { get; set; }
+
+    /// <summary>Selected form id from the radio list.</summary>
+    [BindProperty]
+    public Guid? SelectedTemplateId { get; set; }
 
     /// <summary>True when the caller is an Admin.</summary>
     public bool IsAdmin { get; private set; }
@@ -51,10 +55,17 @@ public sealed class IndexModel(
             return Redirect(GetSafeReturnUrl());
         }
 
+        var currentSelection = templateSelectionService.GetSelectedTemplateId(HttpContext);
+        if (Guid.TryParse(currentSelection, out var selectedId) &&
+            Templates.Any(template => template.TemplateId == selectedId))
+        {
+            SelectedTemplateId = selectedId;
+        }
+
         return Page();
     }
 
-    public async Task<IActionResult> OnPostSelectAsync(Guid templateId, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostSelectAsync(CancellationToken cancellationToken)
     {
         IsAdmin = User.IsInRole("Admin");
         Templates = await templateSelectionService.GetSelectableTemplatesAsync(cancellationToken);
@@ -63,14 +74,20 @@ public sealed class IndexModel(
             Templates = Templates.Where(template => template.IsLive).ToList();
         }
 
-        if (Templates.All(t => t.TemplateId != templateId))
+        if (SelectedTemplateId is null)
         {
-            ErrorMessage = "You do not have access to that template.";
-            logger.LogWarning("User attempted to select inaccessible template {TemplateId}", templateId);
+            ErrorMessage = "Select a form.";
             return Page();
         }
 
-        var template = Templates.First(item => item.TemplateId == templateId);
+        if (Templates.All(t => t.TemplateId != SelectedTemplateId.Value))
+        {
+            ErrorMessage = "You do not have access to that form.";
+            logger.LogWarning("User attempted to select inaccessible form {TemplateId}", SelectedTemplateId);
+            return Page();
+        }
+
+        var template = Templates.First(item => item.TemplateId == SelectedTemplateId.Value);
         templateSelectionService.SelectTemplate(HttpContext, template);
         return Redirect(GetSafeReturnUrl());
     }

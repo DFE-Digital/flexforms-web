@@ -1,12 +1,12 @@
 @page "/templates"
 @model GovUK.Dfe.FlexForms.Web.Pages.Templates.IndexModel
 @{
-    ViewData["Title"] = "Choose a template";
+    ViewData["Title"] = "Choose a form";
 }
 
 <div class="govuk-grid-row">
     <div class="govuk-grid-column-two-thirds">
-        <h1 class="govuk-heading-xl">Choose a template</h1>
+        <h1 class="govuk-heading-xl">Choose a form</h1>
 
         @if (!string.IsNullOrEmpty(Model.ErrorMessage))
         {
@@ -23,10 +23,10 @@
         @if (Model.Templates.Count == 0)
         {
             <p class="govuk-body">
-                There are no templates available for you yet.
+                There are no forms available for you yet.
                 @if (Model.IsAdmin)
                 {
-                    <text>Create a template and set it to live when you are ready for users.</text>
+                    <text>Create a form and set it to live when you are ready for users.</text>
                 }
                 else
                 {
@@ -42,60 +42,62 @@
         }
         else
         {
-            <p class="govuk-body">
-                Select the application template you want to work with.
-                @if (Model.IsAdmin && !Model.LiveOnly)
-                {
-                    <text>Non-live templates are available to you for preview before going live.</text>
-                }
-            </p>
+            <form method="post" asp-page-handler="Select">
+                <input type="hidden" asp-for="ReturnUrl" />
+                <input type="hidden" asp-for="LiveOnly" />
 
-            <div class="govuk-grid-row">
-                @foreach (var template in Model.Templates)
-                {
-                    <div class="govuk-grid-column-full govuk-!-margin-bottom-4">
-                        <div class="govuk-summary-card">
-                            <div class="govuk-summary-card__title-wrapper">
-                                <h2 class="govuk-summary-card__title">@template.Name</h2>
-                                @if (Model.IsAdmin)
-                                {
-                                    <ul class="govuk-summary-card__actions">
-                                        <li class="govuk-summary-card__action">
-                                            @if (template.IsLive)
-                                            {
-                                                <strong class="govuk-tag govuk-tag--green">Live</strong>
-                                            }
-                                            else
-                                            {
-                                                <strong class="govuk-tag govuk-tag--grey">Not live</strong>
-                                            }
-                                        </li>
-                                    </ul>
-                                }
+                <div class="govuk-form-group @(string.IsNullOrEmpty(Model.ErrorMessage) ? "" : "govuk-form-group--error")">
+                    <fieldset class="govuk-fieldset">
+                        <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">
+                            Select the form you want to work with
+                        </legend>
+                        @if (Model.IsAdmin && !Model.LiveOnly)
+                        {
+                            <div class="govuk-hint">
+                                Non-live forms are available to you for preview before going live.
                             </div>
-                            <div class="govuk-summary-card__content">
-                                <dl class="govuk-summary-list">
+                        }
+                        @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+                        {
+                            <p class="govuk-error-message">
+                                <span class="govuk-visually-hidden">Error:</span> @Model.ErrorMessage
+                            </p>
+                        }
+                        <div class="govuk-radios" data-module="govuk-radios">
+                            @foreach (var template in Model.Templates)
+                            {
+                                var inputId = $"form-{template.TemplateId}";
+                                var isChecked = Model.SelectedTemplateId == template.TemplateId;
+                                <div class="govuk-radios__item">
+                                    <input class="govuk-radios__input"
+                                           id="@inputId"
+                                           name="SelectedTemplateId"
+                                           type="radio"
+                                           value="@template.TemplateId"
+                                           @(isChecked ? "checked" : null) />
+                                    <label class="govuk-label govuk-radios__label" for="@inputId">
+                                        @template.Name
+                                        @if (Model.IsAdmin)
+                                        {
+                                            <text> (@(template.IsLive ? "Live" : "Not live"))</text>
+                                        }
+                                    </label>
                                     @if (!string.IsNullOrWhiteSpace(template.LatestVersionNumber))
                                     {
-                                        <div class="govuk-summary-list__row">
-                                            <dt class="govuk-summary-list__key">Version</dt>
-                                            <dd class="govuk-summary-list__value">@template.LatestVersionNumber</dd>
+                                        <div class="govuk-hint govuk-radios__hint">
+                                            Version @template.LatestVersionNumber
                                         </div>
                                     }
-                                </dl>
-                                <form method="post" asp-page-handler="Select">
-                                    <input type="hidden" name="templateId" value="@template.TemplateId" />
-                                    <input type="hidden" asp-for="ReturnUrl" />
-                                    <input type="hidden" asp-for="LiveOnly" />
-                                    <button type="submit" class="govuk-button govuk-!-margin-bottom-0">
-                                        @(template.IsLive ? "Open dashboard" : "Preview dashboard")
-                                    </button>
-                                </form>
-                            </div>
+                                </div>
+                            }
                         </div>
-                    </div>
-                }
-            </div>
+                    </fieldset>
+                </div>
+
+                <button type="submit" class="govuk-button" data-module="govuk-button">
+                    Go to dashboard
+                </button>
+            </form>
         }
     </div>
 </div>

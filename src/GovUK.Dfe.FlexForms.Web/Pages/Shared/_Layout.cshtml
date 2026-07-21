@@ -123,11 +123,32 @@
             Context.Request.Path.StartsWithSegments("/applications", StringComparison.OrdinalIgnoreCase) &&
             TemplateSelectionService.IsPreviewSelection(Context);
         var previewTemplateName = TemplateSelectionService.GetSelectedTemplateName(Context);
+
+        var showFormsNav = false;
+        if (User?.Identity?.IsAuthenticated == true)
+        {
+            if (User.IsInRole("Admin"))
+            {
+                showFormsNav = true;
+            }
+            else
+            {
+                try
+                {
+                    var selectableForms = await TemplateSelectionService.GetSelectableTemplatesAsync();
+                    showFormsNav = selectableForms.Count(form => form.IsLive) > 1;
+                }
+                catch
+                {
+                    showFormsNav = false;
+                }
+            }
+        }
     }
     @if (isTemplatePreview && !string.IsNullOrWhiteSpace(previewTemplateName))
     {
         <div class="environment-banner govuk-link govuk-link--no-underline govuk-!-font-weight-regular govuk-!-font-size-19"
-             style="background-color: #FFE3AA; color: black; text-align: left; padding: 8px;">
+             style="background-color: #f47738; color: white; text-align: left; padding: 8px;">
             <div class="govuk-width-container">
                 THIS IS A PREVIEW OF @previewTemplateName
             </div>
@@ -194,6 +215,14 @@
                             Menu
                         </button>
                         <ul class="govuk-service-navigation__list" id="navigation">
+                            @if (showFormsNav)
+                            {
+                                <li class="govuk-service-navigation__item">
+                                    <a class="govuk-service-navigation__link" href="/templates">
+                                        Forms
+                                    </a>
+                                </li>
+                            }
                             @if (User.IsInRole("Admin"))
                             {
                                 <li class="govuk-service-navigation__item">
