@@ -60,7 +60,7 @@ jobs:
           environment: ${{ needs.set-env.outputs.environment }}
 
   build-import-deploy:
-    name: Deploy ${{ needs.set-env.outputs.application }} to ${{ needs.set-env.outputs.environment }}
+    name: Deploy to ${{ needs.set-env.outputs.environment }}
     runs-on: ubuntu-24.04
     needs: [ set-env ]
     environment: ${{ needs.set-env.outputs.environment }}
@@ -79,7 +79,6 @@ jobs:
           image-name: ${{ needs.set-env.outputs.image-name }}
           build-args: |
             CI=true
-            APPLICATION=${{ needs.set-env.outputs.application }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Import
