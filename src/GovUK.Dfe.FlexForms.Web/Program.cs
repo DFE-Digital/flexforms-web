@@ -491,7 +491,8 @@ builder.Services.AddScoped<IAuthenticationSchemeStrategy, CompositeAuthenticatio
 // Register activity-based token refresh services
 builder.Services.AddScoped<IUserActivityTracker, UserActivityTracker>();
 
-builder.Services.AddGovUkFrontend(options => options.Rebrand = true);
+// Rebrand is always on in GovUk.Frontend.AspNetCore 4.x (Rebrand option removed)
+builder.Services.AddGovUkFrontend();
 builder.Services.AddSingleton<IActionContextAccessor, ActionContextAccessor>();
 builder.Services.AddScoped<IHtmlHelper, HtmlHelper>();
 builder.Services.AddWebLayerServices();
