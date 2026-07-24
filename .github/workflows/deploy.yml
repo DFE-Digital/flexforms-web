@@ -41,7 +41,7 @@ jobs:
           INPUT="${{ github.event.inputs.environment }}"
           ENVIRONMENT=${INPUT:-"development"}
           CHECKED_OUT_SHA="$(git log -1 '--format=format:%H')"
-          echo "environment=${GITHUB_ENVIRONMENT}" >> $GITHUB_OUTPUT
+          echo "environment=${ENVIRONMENT}" >> $GITHUB_OUTPUT
           echo "environment-lower=${ENVIRONMENT,,}" >> $GITHUB_OUTPUT
           echo "branch=$GIT_BRANCH" >> $GITHUB_OUTPUT
           echo "checked-out-sha=${CHECKED_OUT_SHA}" >> $GITHUB_OUTPUT
