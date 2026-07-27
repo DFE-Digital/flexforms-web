@@ -467,6 +467,12 @@ builder.Services
             opts.ClaimType = "permission";
         });
 
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(AdminAccessHelper.CanManageTemplatesPolicy, policy =>
+        policy.RequireAssertion(ctx => AdminAccessHelper.CanManageTemplates(ctx.User)));
+});
+
 builder.Services.AddScoped<ICustomClaimProvider, PermissionsClaimProvider>();
 
 builder.Services.AddTokenRefreshWithOidc(configuration, "DfESignIn", "TokenRefresh");

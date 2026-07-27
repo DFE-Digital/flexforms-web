@@ -17,7 +17,7 @@ using GovUK.Dfe.CoreLibs.Caching.Helpers;
 
 namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 
-[Authorize(Roles = AdminAccessHelper.AuthorizeRoles)]
+[Authorize(Policy = AdminAccessHelper.CanManageTemplatesPolicy)]
 [RequestSizeLimit(52_428_800)]
 [RequestFormLimits(ValueLengthLimit = 52_428_800, ValueCountLimit = 1000)]
 public class TemplateManagerModel(

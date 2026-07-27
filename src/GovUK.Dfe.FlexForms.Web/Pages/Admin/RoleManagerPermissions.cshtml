@@ -20,11 +20,18 @@
 
         <h1 class="govuk-heading-xl">Manage permissions</h1>
         <p class="govuk-body">
-            Add resource and access combinations for role <strong>@Model.RoleName</strong>.
-            Grants use resource key <code class="govuk-!-font-size-16">Any</code> (tenant-wide).
+            Add permissions for role <strong>@Model.RoleName</strong>. Each grant is a resource type,
+            resource key, and access type.
         </p>
         <p class="govuk-hint">
-            Users with this role receive these permissions unless they have a user-level override for the same resource.
+            Use a specific resource id (application GUID, template GUID, or user email) where needed.
+            Special keys:
+            <code class="govuk-!-font-size-16">Any</code> is allowed for
+            <strong>Application — Read</strong>, <strong>ApplicationFiles — Read</strong>
+            (CaseReader-style tenant-wide read), and <strong>Template — Write</strong>
+            (create applications on any template).
+            Use <code class="govuk-!-font-size-16">Manage</code> with <strong>Template — Write</strong>
+            for TemplateManager (create, edit, and publish templates).
         </p>
 
         <form method="post">
@@ -48,6 +55,21 @@
                                 <option value="@resourceType">@resourceType</option>
                             }
                         </select>
+                    </div>
+
+                    <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.NewResourceKey)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                        <label class="govuk-label" asp-for="NewResourceKey">Resource key</label>
+                        <div class="govuk-hint">
+                            Application or ApplicationFiles: application id, or <code class="govuk-!-font-size-16">Any</code> with Read.
+                            Template: template id, <code class="govuk-!-font-size-16">Any</code> with Write (create apps),
+                            or <code class="govuk-!-font-size-16">Manage</code> with Write (administer templates).
+                            User or Notifications: user email.
+                        </div>
+                        @if (ViewData.ModelState[nameof(Model.NewResourceKey)]?.Errors.FirstOrDefault() is { } keyError)
+                        {
+                            <p class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @keyError.ErrorMessage</p>
+                        }
+                        <input class="govuk-input" asp-for="NewResourceKey" autocomplete="off" spellcheck="false" />
                     </div>
 
                     <div class="govuk-form-group">
@@ -80,7 +102,9 @@
                 <table class="govuk-table">
                     <thead class="govuk-table__head">
                         <tr class="govuk-table__row">
-                            <th scope="col" class="govuk-table__header">Permission</th>
+                            <th scope="col" class="govuk-table__header">Resource type</th>
+                            <th scope="col" class="govuk-table__header">Resource key</th>
+                            <th scope="col" class="govuk-table__header">Access</th>
                             <th scope="col" class="govuk-table__header">
                                 <span class="govuk-visually-hidden">Actions</span>
                             </th>
@@ -89,8 +113,11 @@
                     <tbody class="govuk-table__body">
                         @foreach (var grant in Model.SelectedGrants)
                         {
+                            var parts = grant.Split('|', 3);
                             <tr class="govuk-table__row">
-                                <td class="govuk-table__cell">@RoleManagerPermissionsModel.FormatGrant(grant)</td>
+                                <td class="govuk-table__cell">@(parts.Length > 0 ? parts[0] : grant)</td>
+                                <td class="govuk-table__cell"><code class="govuk-!-font-size-16">@(parts.Length > 1 ? parts[1] : "")</code></td>
+                                <td class="govuk-table__cell">@(parts.Length > 2 ? parts[2] : "")</td>
                                 <td class="govuk-table__cell">
                                     <button type="submit"
                                             class="govuk-button govuk-button--warning govuk-!-margin-bottom-0"

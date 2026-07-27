@@ -19,7 +19,7 @@ using GovUK.Dfe.FlexForms.Api.Client.Security;
 namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
 {
     [ExcludeFromCodeCoverage]
-    [Authorize(Roles = AdminAccessHelper.AuthorizeRoles)]
+    [Authorize(Policy = AdminAccessHelper.CanManageTemplatesPolicy)]
     public class AdminModel(
         IFormTemplateProvider templateProvider,
         ITemplatesClient templatesClient,
@@ -44,6 +44,8 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
         public string? DsiToken { get; set; }
         public string? UserToken { get; set; }
         public IReadOnlyList<TemplateDto> TenantTemplates { get; private set; } = [];
+
+        public bool IsFullAdmin => AdminAccessHelper.IsAdmin(User);
 
         public async Task<IActionResult> OnGetAsync()
         {

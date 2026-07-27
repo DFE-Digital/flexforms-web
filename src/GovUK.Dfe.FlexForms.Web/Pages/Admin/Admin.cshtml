@@ -239,13 +239,16 @@
                         </button>
                     </form>
 
-                    <a asp-page="/Admin/UserManager" class="govuk-button" data-module="govuk-button" id="go-to-user-manager-button">
-                        User Manager
-                    </a>
+                    @if (Model.IsFullAdmin)
+                    {
+                        <a asp-page="/Admin/UserManager" class="govuk-button" data-module="govuk-button" id="go-to-user-manager-button">
+                            User Manager
+                        </a>
 
-                    <a asp-page="/Admin/RoleManager" class="govuk-button" data-module="govuk-button" id="go-to-role-manager-button">
-                        Role Manager
-                    </a>
+                        <a asp-page="/Admin/RoleManager" class="govuk-button" data-module="govuk-button" id="go-to-role-manager-button">
+                            Role Manager
+                        </a>
+                    }
 
                     <form method="post" asp-page-handler="GoToCustomStatusLabelOverrides" style="display: inline;">
                         <button type="submit" class="govuk-button" data-module="govuk-button" id="go-to-custom-status-button">
@@ -270,13 +273,16 @@
                         <strong>Template Manager:</strong> Navigate to the template manager to create new template versions 
                         or view template schemas.
                     </p>
-                    <p class="govuk-body">
-                        <strong>User Manager:</strong> View users with form access in this tenant, add or remove form access,
-                        or register a new user with a role.
-                    </p>
-                    <p class="govuk-body">
-                        <strong>Role Manager:</strong> Create custom tenant roles and set which resource permissions each role grants.
-                    </p>
+                    @if (Model.IsFullAdmin)
+                    {
+                        <p class="govuk-body">
+                            <strong>User Manager:</strong> View users with form access in this tenant, add or remove form access,
+                            or register a new user with a role.
+                        </p>
+                        <p class="govuk-body">
+                            <strong>Role Manager:</strong> Create custom tenant roles and set which resource permissions each role grants.
+                        </p>
+                    }
                 </div>
             </div>
         </div>

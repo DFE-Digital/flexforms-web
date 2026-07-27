@@ -13,7 +13,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 /// <summary>
 /// Creates a draft template owned by the current tenant.
 /// </summary>
-[Authorize(Roles = AdminAccessHelper.AuthorizeRoles)]
+[Authorize(Policy = AdminAccessHelper.CanManageTemplatesPolicy)]
 public sealed class CreateTemplateModel(
     ITemplatesClient templatesClient,
     ITemplateSelectionService templateSelectionService,

@@ -43,7 +43,7 @@ public sealed class IndexModel(
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
-        IsAdmin = AdminAccessHelper.IsAdmin(User);
+        IsAdmin = AdminAccessHelper.CanManageTemplates(User);
         Templates = await templateSelectionService.GetSelectableTemplatesAsync(cancellationToken);
         if (LiveOnly)
         {
@@ -68,7 +68,7 @@ public sealed class IndexModel(
 
     public async Task<IActionResult> OnPostSelectAsync(CancellationToken cancellationToken)
     {
-        IsAdmin = AdminAccessHelper.IsAdmin(User);
+        IsAdmin = AdminAccessHelper.CanManageTemplates(User);
         Templates = await templateSelectionService.GetSelectableTemplatesAsync(cancellationToken);
         if (LiveOnly)
         {

@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 
 /// <summary>
-/// Sets RolePermissions for a custom tenant role (ResourceType × AccessType, ResourceKey = Any).
+/// Sets RolePermissions for a custom tenant role (ResourceType + ResourceKey + AccessType).
 /// </summary>
 [Authorize(Roles = AdminAccessHelper.AuthorizeRoles)]
 public sealed class RoleManagerPermissionsModel(
@@ -26,13 +26,16 @@ public sealed class RoleManagerPermissionsModel(
     public bool IsSystemRole { get; private set; }
 
     /// <summary>
-    /// Selected grants encoded as "{ResourceType}|{AccessType}".
+    /// Selected grants encoded as "{ResourceType}|{ResourceKey}|{AccessType}".
     /// </summary>
     [BindProperty]
     public List<string> SelectedGrants { get; set; } = [];
 
     [BindProperty]
     public ResourceType NewResourceType { get; set; } = ResourceType.Application;
+
+    [BindProperty]
+    public string NewResourceKey { get; set; } = string.Empty;
 
     [BindProperty]
     public AccessType NewAccessType { get; set; } = AccessType.Read;
@@ -59,14 +62,33 @@ public sealed class RoleManagerPermissionsModel(
         }
 
         SelectedGrants = NormalizeGrants(SelectedGrants);
-        var key = EncodeGrantKey(NewResourceType, NewAccessType);
+
+        var resourceKey = NewResourceKey?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(resourceKey))
+        {
+            ModelState.AddModelError(nameof(NewResourceKey), "Enter a resource key.");
+            return Page();
+        }
+
+        var validationError = ValidateGrant(NewResourceType, resourceKey, NewAccessType);
+        if (validationError is not null)
+        {
+            ModelState.AddModelError(nameof(NewResourceKey), validationError);
+            return Page();
+        }
+
+        var key = EncodeGrantKey(NewResourceType, resourceKey, NewAccessType);
         if (SelectedGrants.Contains(key, StringComparer.OrdinalIgnoreCase))
         {
-            ModelState.AddModelError(string.Empty, $"{NewResourceType} — {NewAccessType} is already in the list.");
+            ModelState.AddModelError(
+                string.Empty,
+                $"{NewResourceType} / {resourceKey} / {NewAccessType} is already in the list.");
         }
         else
         {
             SelectedGrants.Add(key);
+            SelectedGrants = NormalizeGrants(SelectedGrants);
+            NewResourceKey = string.Empty;
         }
 
         return Page();
@@ -101,6 +123,16 @@ public sealed class RoleManagerPermissionsModel(
 
         SelectedGrants = NormalizeGrants(SelectedGrants);
 
+        foreach (var grant in SelectedGrants.Select(ParseGrantKey).Where(g => g is not null))
+        {
+            var error = ValidateGrant(grant!.Value.ResourceType, grant.Value.ResourceKey, grant.Value.AccessType);
+            if (error is not null)
+            {
+                ModelState.AddModelError(string.Empty, error);
+                return Page();
+            }
+        }
+
         try
         {
             var grants = SelectedGrants
@@ -110,7 +142,7 @@ public sealed class RoleManagerPermissionsModel(
                 .Select(g => new RolePermissionGrantDto
                 {
                     ResourceType = g.Value.ResourceType,
-                    ResourceKey = AnyResourceKey,
+                    ResourceKey = g.Value.ResourceKey,
                     AccessType = g.Value.AccessType
                 })
                 .ToList();
@@ -147,8 +179,7 @@ public sealed class RoleManagerPermissionsModel(
             var existing = await rolesClient.GetPermissionsAsync(RoleId, cancellationToken);
             SelectedGrants = NormalizeGrants(
                 existing?
-                    .Where(p => string.Equals(p.ResourceKey, AnyResourceKey, StringComparison.OrdinalIgnoreCase))
-                    .Select(p => EncodeGrantKey(p.ResourceType, p.AccessType))
+                    .Select(p => EncodeGrantKey(p.ResourceType, p.ResourceKey, p.AccessType))
                     .ToList() ?? []);
 
             return true;
@@ -185,41 +216,90 @@ public sealed class RoleManagerPermissionsModel(
         }
     }
 
-    public static string EncodeGrantKey(ResourceType resourceType, AccessType accessType) =>
-        $"{resourceType}|{accessType}";
+    public static string EncodeGrantKey(ResourceType resourceType, string resourceKey, AccessType accessType) =>
+        $"{resourceType}|{resourceKey.Trim()}|{accessType}";
 
     public static string FormatGrant(string key)
     {
         var parsed = ParseGrantKey(key);
         return parsed is null
             ? key
-            : $"{parsed.Value.ResourceType} — {parsed.Value.AccessType}";
+            : $"{parsed.Value.ResourceType} / {parsed.Value.ResourceKey} / {parsed.Value.AccessType}";
+    }
+
+    /// <summary>
+    /// Mirrors API <c>RolePermissionGrantRules</c>.
+    /// </summary>
+    public static string? ValidateGrant(ResourceType resourceType, string resourceKey, AccessType accessType)
+    {
+        var key = resourceKey.Trim();
+        var isAny = string.Equals(key, AnyResourceKey, StringComparison.OrdinalIgnoreCase);
+        if (isAny)
+        {
+            if ((resourceType == ResourceType.Template && accessType == AccessType.Write)
+                || (resourceType == ResourceType.Application && accessType == AccessType.Read)
+                || (resourceType == ResourceType.ApplicationFiles && accessType == AccessType.Read))
+            {
+                return null;
+            }
+
+            return $"Resource key '{AnyResourceKey}' is only allowed for Template — Write, " +
+                   "Application — Read, or ApplicationFiles — Read. " +
+                   "For other combinations, use a specific resource id or email.";
+        }
+
+        if (string.Equals(key, "Manage", StringComparison.OrdinalIgnoreCase))
+        {
+            if (resourceType == ResourceType.Template && accessType == AccessType.Write)
+                return null;
+
+            return "Resource key 'Manage' is only allowed for Template — Write " +
+                   "(lets the role create, edit, and publish templates).";
+        }
+
+        return resourceType switch
+        {
+            ResourceType.Application or ResourceType.ApplicationFiles or ResourceType.Template
+                or ResourceType.File or ResourceType.Task or ResourceType.TaskGroup
+                or ResourceType.Page or ResourceType.Field
+                when !Guid.TryParse(key, out var id) || id == Guid.Empty
+                => $"{resourceType} resource key must be a valid non-empty GUID (the resource id), 'Any' (where allowed), or 'Manage' for Template administration.",
+
+            ResourceType.User or ResourceType.Notifications
+                when !key.Contains('@', StringComparison.Ordinal) && !Guid.TryParse(key, out _)
+                => $"{resourceType} resource key must be a user email (or a service client id).",
+
+            _ => null
+        };
     }
 
     private static List<string> NormalizeGrants(IEnumerable<string>? grants) =>
         (grants ?? [])
             .Select(ParseGrantKey)
             .Where(g => g is not null)
-            .Select(g => EncodeGrantKey(g!.Value.ResourceType, g.Value.AccessType))
+            .Select(g => EncodeGrantKey(g!.Value.ResourceType, g.Value.ResourceKey, g.Value.AccessType))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(g => g, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-    private static (ResourceType ResourceType, AccessType AccessType)? ParseGrantKey(string? key)
+    private static (ResourceType ResourceType, string ResourceKey, AccessType AccessType)? ParseGrantKey(string? key)
     {
         if (string.IsNullOrWhiteSpace(key))
             return null;
 
-        var parts = key.Split('|', 2);
-        if (parts.Length != 2)
+        var parts = key.Split('|', 3);
+        if (parts.Length != 3)
             return null;
 
         if (!Enum.TryParse<ResourceType>(parts[0], ignoreCase: true, out var resourceType))
             return null;
 
-        if (!Enum.TryParse<AccessType>(parts[1], ignoreCase: true, out var accessType))
+        if (string.IsNullOrWhiteSpace(parts[1]))
             return null;
 
-        return (resourceType, accessType);
+        if (!Enum.TryParse<AccessType>(parts[2], ignoreCase: true, out var accessType))
+            return null;
+
+        return (resourceType, parts[1].Trim(), accessType);
     }
 }

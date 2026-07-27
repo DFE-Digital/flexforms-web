@@ -19,7 +19,7 @@ using Task = System.Threading.Tasks.Task;
 namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
 {
     [ExcludeFromCodeCoverage]
-    [Authorize(Roles = AdminAccessHelper.AuthorizeRoles)]
+    [Authorize(Policy = AdminAccessHelper.CanManageTemplatesPolicy)]
     public class CustomStatusLabelOverridesModel(
         IApplicationStatusService applicationStatusService,
         IFormTemplateProvider formTemplateProvider,
