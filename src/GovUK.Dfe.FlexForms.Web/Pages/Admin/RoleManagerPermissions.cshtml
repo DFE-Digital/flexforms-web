@@ -1,5 +1,4 @@
 @page "/admin/role-manager/permissions"
-@using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums
 @model GovUK.Dfe.FlexForms.Web.Pages.Admin.RoleManagerPermissionsModel
 @{
     ViewData["Title"] = $"Permissions – {Model.RoleName}";
@@ -21,43 +20,100 @@
 
         <h1 class="govuk-heading-xl">Manage permissions</h1>
         <p class="govuk-body">
-            Choose which resource and access combinations role <strong>@Model.RoleName</strong> should grant.
+            Add resource and access combinations for role <strong>@Model.RoleName</strong>.
             Grants use resource key <code class="govuk-!-font-size-16">Any</code> (tenant-wide).
+        </p>
+        <p class="govuk-hint">
+            Users with this role receive these permissions unless they have a user-level override for the same resource.
         </p>
 
         <form method="post">
             <input type="hidden" asp-for="RoleId" />
+            @foreach (var grant in Model.SelectedGrants)
+            {
+                <input type="hidden" name="SelectedGrants" value="@grant" />
+            }
 
             <div class="govuk-form-group">
                 <fieldset class="govuk-fieldset">
                     <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">
-                        Permissions
+                        Add a permission
                     </legend>
-                    <div class="govuk-hint">
-                        Users with this role receive these permissions unless they have a user-level override for the same resource.
+
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="NewResourceType">Resource type</label>
+                        <select class="govuk-select" asp-for="NewResourceType">
+                            @foreach (var resourceType in Model.ResourceTypes)
+                            {
+                                <option value="@resourceType">@resourceType</option>
+                            }
+                        </select>
                     </div>
-                    <div class="govuk-checkboxes" data-module="govuk-checkboxes">
-                        @foreach (var option in Model.GrantOptions)
-                        {
-                            var isChecked = Model.SelectedGrants.Contains(option.Key);
-                            <div class="govuk-checkboxes__item">
-                                <input class="govuk-checkboxes__input"
-                                       id="grant-@option.Key"
-                                       name="SelectedGrants"
-                                       type="checkbox"
-                                       value="@option.Key"
-                                       @(isChecked ? "checked" : null) />
-                                <label class="govuk-label govuk-checkboxes__label" for="grant-@option.Key">
-                                    @option.ResourceType — @option.AccessType
-                                </label>
-                            </div>
-                        }
+
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="NewAccessType">Access type</label>
+                        <select class="govuk-select" asp-for="NewAccessType">
+                            @foreach (var accessType in Model.AccessTypes)
+                            {
+                                <option value="@accessType">@accessType</option>
+                            }
+                        </select>
                     </div>
+
+                    <button type="submit"
+                            class="govuk-button govuk-button--secondary"
+                            asp-page-handler="Add"
+                            data-module="govuk-button">
+                        Add
+                    </button>
                 </fieldset>
             </div>
 
+            <h2 class="govuk-heading-m">Permissions for this role</h2>
+
+            @if (Model.SelectedGrants.Count == 0)
+            {
+                <p class="govuk-body">No permissions added yet.</p>
+            }
+            else
+            {
+                <table class="govuk-table">
+                    <thead class="govuk-table__head">
+                        <tr class="govuk-table__row">
+                            <th scope="col" class="govuk-table__header">Permission</th>
+                            <th scope="col" class="govuk-table__header">
+                                <span class="govuk-visually-hidden">Actions</span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="govuk-table__body">
+                        @foreach (var grant in Model.SelectedGrants)
+                        {
+                            <tr class="govuk-table__row">
+                                <td class="govuk-table__cell">@RoleManagerPermissionsModel.FormatGrant(grant)</td>
+                                <td class="govuk-table__cell">
+                                    <button type="submit"
+                                            class="govuk-button govuk-button--warning govuk-!-margin-bottom-0"
+                                            asp-page-handler="Remove"
+                                            name="grantKey"
+                                            value="@grant"
+                                            data-module="govuk-button">
+                                        Remove
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+
             <div class="govuk-button-group">
-                <button type="submit" class="govuk-button" data-module="govuk-button">Save permissions</button>
+                <button type="submit"
+                        class="govuk-button"
+                        asp-page-handler="Save"
+                        data-module="govuk-button">
+                    Save permissions
+                </button>
                 <a asp-page="/Admin/RoleManager" class="govuk-link">Cancel</a>
             </div>
         </form>

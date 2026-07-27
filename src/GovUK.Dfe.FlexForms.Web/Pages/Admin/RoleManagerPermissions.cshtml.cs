@@ -1,6 +1,5 @@
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
-using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Web.Security;
 using Microsoft.AspNetCore.Authorization;
@@ -32,8 +31,15 @@ public sealed class RoleManagerPermissionsModel(
     [BindProperty]
     public List<string> SelectedGrants { get; set; } = [];
 
-    public IReadOnlyList<(ResourceType ResourceType, AccessType AccessType, string Key)> GrantOptions { get; private set; }
-        = BuildGrantOptions();
+    [BindProperty]
+    public ResourceType NewResourceType { get; set; } = ResourceType.Application;
+
+    [BindProperty]
+    public AccessType NewAccessType { get; set; } = AccessType.Read;
+
+    public IReadOnlyList<ResourceType> ResourceTypes { get; } = Enum.GetValues<ResourceType>().ToArray();
+
+    public IReadOnlyList<AccessType> AccessTypes { get; } = Enum.GetValues<AccessType>().ToArray();
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -41,7 +47,7 @@ public sealed class RoleManagerPermissionsModel(
         return loaded ? Page() : RedirectToPage("/Admin/RoleManager");
     }
 
-    public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostAddAsync(CancellationToken cancellationToken)
     {
         if (!await LoadRoleMetaAsync(cancellationToken))
             return RedirectToPage("/Admin/RoleManager");
@@ -52,9 +58,52 @@ public sealed class RoleManagerPermissionsModel(
             return RedirectToPage("/Admin/RoleManager");
         }
 
+        SelectedGrants = NormalizeGrants(SelectedGrants);
+        var key = EncodeGrantKey(NewResourceType, NewAccessType);
+        if (SelectedGrants.Contains(key, StringComparer.OrdinalIgnoreCase))
+        {
+            ModelState.AddModelError(string.Empty, $"{NewResourceType} — {NewAccessType} is already in the list.");
+        }
+        else
+        {
+            SelectedGrants.Add(key);
+        }
+
+        return Page();
+    }
+
+    public async Task<IActionResult> OnPostRemoveAsync(string grantKey, CancellationToken cancellationToken)
+    {
+        if (!await LoadRoleMetaAsync(cancellationToken))
+            return RedirectToPage("/Admin/RoleManager");
+
+        if (IsSystemRole)
+        {
+            TempData["RoleManagerError"] = "System role permissions cannot be changed.";
+            return RedirectToPage("/Admin/RoleManager");
+        }
+
+        SelectedGrants = NormalizeGrants(SelectedGrants);
+        SelectedGrants.RemoveAll(g => string.Equals(g, grantKey, StringComparison.OrdinalIgnoreCase));
+        return Page();
+    }
+
+    public async Task<IActionResult> OnPostSaveAsync(CancellationToken cancellationToken)
+    {
+        if (!await LoadRoleMetaAsync(cancellationToken))
+            return RedirectToPage("/Admin/RoleManager");
+
+        if (IsSystemRole)
+        {
+            TempData["RoleManagerError"] = "System role permissions cannot be changed.";
+            return RedirectToPage("/Admin/RoleManager");
+        }
+
+        SelectedGrants = NormalizeGrants(SelectedGrants);
+
         try
         {
-            var grants = (SelectedGrants ?? [])
+            var grants = SelectedGrants
                 .Select(ParseGrantKey)
                 .Where(g => g is not null)
                 .Select(g => g!)
@@ -78,7 +127,6 @@ public sealed class RoleManagerPermissionsModel(
         {
             logger.LogError(ex, "Failed to set permissions for role {RoleId}", RoleId);
             ModelState.AddModelError(string.Empty, RoleManagerModel.GetErrorMessage(ex, "Could not save permissions."));
-            GrantOptions = BuildGrantOptions();
             return Page();
         }
     }
@@ -97,13 +145,12 @@ public sealed class RoleManagerPermissionsModel(
         try
         {
             var existing = await rolesClient.GetPermissionsAsync(RoleId, cancellationToken);
-            SelectedGrants = existing?
-                .Where(p => string.Equals(p.ResourceKey, AnyResourceKey, StringComparison.OrdinalIgnoreCase))
-                .Select(p => EncodeGrantKey(p.ResourceType, p.AccessType))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList() ?? [];
+            SelectedGrants = NormalizeGrants(
+                existing?
+                    .Where(p => string.Equals(p.ResourceKey, AnyResourceKey, StringComparison.OrdinalIgnoreCase))
+                    .Select(p => EncodeGrantKey(p.ResourceType, p.AccessType))
+                    .ToList() ?? []);
 
-            GrantOptions = BuildGrantOptions();
             return true;
         }
         catch (Exception ex)
@@ -141,6 +188,23 @@ public sealed class RoleManagerPermissionsModel(
     public static string EncodeGrantKey(ResourceType resourceType, AccessType accessType) =>
         $"{resourceType}|{accessType}";
 
+    public static string FormatGrant(string key)
+    {
+        var parsed = ParseGrantKey(key);
+        return parsed is null
+            ? key
+            : $"{parsed.Value.ResourceType} — {parsed.Value.AccessType}";
+    }
+
+    private static List<string> NormalizeGrants(IEnumerable<string>? grants) =>
+        (grants ?? [])
+            .Select(ParseGrantKey)
+            .Where(g => g is not null)
+            .Select(g => EncodeGrantKey(g!.Value.ResourceType, g.Value.AccessType))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(g => g, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
     private static (ResourceType ResourceType, AccessType AccessType)? ParseGrantKey(string? key)
     {
         if (string.IsNullOrWhiteSpace(key))
@@ -157,19 +221,5 @@ public sealed class RoleManagerPermissionsModel(
             return null;
 
         return (resourceType, accessType);
-    }
-
-    private static IReadOnlyList<(ResourceType ResourceType, AccessType AccessType, string Key)> BuildGrantOptions()
-    {
-        var options = new List<(ResourceType, AccessType, string)>();
-        foreach (ResourceType resourceType in Enum.GetValues<ResourceType>())
-        {
-            foreach (AccessType accessType in Enum.GetValues<AccessType>())
-            {
-                options.Add((resourceType, accessType, EncodeGrantKey(resourceType, accessType)));
-            }
-        }
-
-        return options;
     }
 }
