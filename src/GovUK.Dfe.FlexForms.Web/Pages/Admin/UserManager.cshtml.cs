@@ -1,6 +1,7 @@
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.CoreLibs.Http.Models;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
+using GovUK.Dfe.FlexForms.Web.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -10,7 +11,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 /// <summary>
 /// Lists users with form access in the current tenant.
 /// </summary>
-[Authorize(Roles = "Admin")]
+[Authorize(Roles = AdminAccessHelper.AuthorizeRoles)]
 public sealed class UserManagerModel(
     IUsersClient usersClient,
     ILogger<UserManagerModel> logger) : PageModel

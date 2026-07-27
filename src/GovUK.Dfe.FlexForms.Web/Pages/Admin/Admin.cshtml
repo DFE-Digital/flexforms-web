@@ -243,6 +243,10 @@
                         User Manager
                     </a>
 
+                    <a asp-page="/Admin/RoleManager" class="govuk-button" data-module="govuk-button" id="go-to-role-manager-button">
+                        Role Manager
+                    </a>
+
                     <form method="post" asp-page-handler="GoToCustomStatusLabelOverrides" style="display: inline;">
                         <button type="submit" class="govuk-button" data-module="govuk-button" id="go-to-custom-status-button">
                             Override Custom Status Labels
@@ -269,6 +273,9 @@
                     <p class="govuk-body">
                         <strong>User Manager:</strong> View users with form access in this tenant, add or remove form access,
                         or register a new user with a role.
+                    </p>
+                    <p class="govuk-body">
+                        <strong>Role Manager:</strong> Create custom tenant roles and set which resource permissions each role grants.
                     </p>
                 </div>
             </div>

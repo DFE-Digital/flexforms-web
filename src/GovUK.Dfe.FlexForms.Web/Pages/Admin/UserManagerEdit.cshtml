@@ -1,7 +1,7 @@
 @page "/admin/user-manager/edit"
 @model GovUK.Dfe.FlexForms.Web.Pages.Admin.UserManagerEditModel
 @{
-    ViewData["Title"] = "Edit user form access";
+    ViewData["Title"] = "Edit user";
 }
 
 <div class="govuk-grid-row">
@@ -18,7 +18,7 @@
             }
         </govuk-error-summary>
 
-        <h1 class="govuk-heading-xl">Edit form access</h1>
+        <h1 class="govuk-heading-xl">Edit user</h1>
 
         <dl class="govuk-summary-list">
             <div class="govuk-summary-list__row">
@@ -29,20 +29,34 @@
                 <dt class="govuk-summary-list__key">Email</dt>
                 <dd class="govuk-summary-list__value">@Model.UserEmail</dd>
             </div>
-            <div class="govuk-summary-list__row">
-                <dt class="govuk-summary-list__key">Role</dt>
-                <dd class="govuk-summary-list__value">@Model.UserRole</dd>
-            </div>
         </dl>
 
         <form method="post">
             <input type="hidden" asp-for="UserId" />
+
+            <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.Role)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                <label class="govuk-label govuk-label--m" asp-for="Role">Role</label>
+                <div class="govuk-hint">Roles are managed in Role Manager. Create a custom role there before assigning it.</div>
+                @if (ViewData.ModelState[nameof(Model.Role)]?.Errors.FirstOrDefault() is { } roleError)
+                {
+                    <p class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @roleError.ErrorMessage</p>
+                }
+                <select class="govuk-select" asp-for="Role">
+                    @foreach (var role in Model.AssignableRoles)
+                    {
+                        <option value="@role">@role</option>
+                    }
+                </select>
+            </div>
 
             <div class="govuk-form-group">
                 <fieldset class="govuk-fieldset">
                     <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">
                         Forms this user can access
                     </legend>
+                    <div class="govuk-hint">
+                        Optional for custom roles that already grant Application access via Role Manager.
+                    </div>
                     <div class="govuk-checkboxes" data-module="govuk-checkboxes">
                         @if (Model.AvailableTemplates.Count == 0)
                         {

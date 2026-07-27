@@ -12,7 +12,7 @@ using static GovUK.Dfe.FlexForms.Web.Pages.Applications.DashboardModel;
 
 namespace GovUK.Dfe.FlexForms.Web.Pages.Applications;
 
-[Authorize(Roles = "Admin, Caseworker")]
+[Authorize]
 public class IndexModel(
     IApplicationsClient applicationsClient,
     IApplicationStatusService applicationStatusService,

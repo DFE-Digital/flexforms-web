@@ -1,3 +1,4 @@
+using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using GovUK.Dfe.FlexForms.Web.Services;
@@ -18,7 +19,7 @@ using Task = System.Threading.Tasks.Task;
 namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
 {
     [ExcludeFromCodeCoverage]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = AdminAccessHelper.AuthorizeRoles)]
     public class CustomStatusLabelOverridesModel(
         IApplicationStatusService applicationStatusService,
         IFormTemplateProvider formTemplateProvider,

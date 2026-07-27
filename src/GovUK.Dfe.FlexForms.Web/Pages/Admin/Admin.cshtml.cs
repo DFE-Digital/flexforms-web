@@ -1,3 +1,4 @@
+using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.CoreLibs.Caching.Helpers;
 using GovUK.Dfe.CoreLibs.Caching.Interfaces;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
@@ -18,7 +19,7 @@ using GovUK.Dfe.FlexForms.Api.Client.Security;
 namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
 {
     [ExcludeFromCodeCoverage]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = AdminAccessHelper.AuthorizeRoles)]
     public class AdminModel(
         IFormTemplateProvider templateProvider,
         ITemplatesClient templatesClient,

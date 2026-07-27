@@ -1,3 +1,4 @@
+using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using GovUK.Dfe.FlexForms.Web.Services;
@@ -16,7 +17,7 @@ using GovUK.Dfe.CoreLibs.Caching.Helpers;
 
 namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 
-[Authorize(Roles = "Admin")]
+[Authorize(Roles = AdminAccessHelper.AuthorizeRoles)]
 [RequestSizeLimit(52_428_800)]
 [RequestFormLimits(ValueLengthLimit = 52_428_800, ValueCountLimit = 1000)]
 public class TemplateManagerModel(

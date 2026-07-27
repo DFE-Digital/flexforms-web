@@ -1,0 +1,65 @@
+@page "/admin/role-manager/permissions"
+@using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums
+@model GovUK.Dfe.FlexForms.Web.Pages.Admin.RoleManagerPermissionsModel
+@{
+    ViewData["Title"] = $"Permissions – {Model.RoleName}";
+}
+
+<div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+        <a asp-page="/Admin/RoleManager" class="govuk-back-link">Back to Role Manager</a>
+
+        <govuk-error-summary>
+            @foreach (var modelError in ViewData.ModelState.Where(item => item.Value?.Errors.Count > 0))
+            {
+                foreach (var error in modelError.Value!.Errors)
+                {
+                    <govuk-error-summary-item href="#">@error.ErrorMessage</govuk-error-summary-item>
+                }
+            }
+        </govuk-error-summary>
+
+        <h1 class="govuk-heading-xl">Manage permissions</h1>
+        <p class="govuk-body">
+            Choose which resource and access combinations role <strong>@Model.RoleName</strong> should grant.
+            Grants use resource key <code class="govuk-!-font-size-16">Any</code> (tenant-wide).
+        </p>
+
+        <form method="post">
+            <input type="hidden" asp-for="RoleId" />
+
+            <div class="govuk-form-group">
+                <fieldset class="govuk-fieldset">
+                    <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">
+                        Permissions
+                    </legend>
+                    <div class="govuk-hint">
+                        Users with this role receive these permissions unless they have a user-level override for the same resource.
+                    </div>
+                    <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+                        @foreach (var option in Model.GrantOptions)
+                        {
+                            var isChecked = Model.SelectedGrants.Contains(option.Key);
+                            <div class="govuk-checkboxes__item">
+                                <input class="govuk-checkboxes__input"
+                                       id="grant-@option.Key"
+                                       name="SelectedGrants"
+                                       type="checkbox"
+                                       value="@option.Key"
+                                       @(isChecked ? "checked" : null) />
+                                <label class="govuk-label govuk-checkboxes__label" for="grant-@option.Key">
+                                    @option.ResourceType — @option.AccessType
+                                </label>
+                            </div>
+                        }
+                    </div>
+                </fieldset>
+            </div>
+
+            <div class="govuk-button-group">
+                <button type="submit" class="govuk-button" data-module="govuk-button">Save permissions</button>
+                <a asp-page="/Admin/RoleManager" class="govuk-link">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>

@@ -32,7 +32,7 @@ public sealed class TemplateSelectionMiddleware(
                 : null;
 
             var isExplicitAdminPreview =
-                context.User.IsInRole("Admin") &&
+                GovUK.Dfe.FlexForms.Web.Security.AdminAccessHelper.IsAdmin(context.User) &&
                 selectedTemplate is { IsLive: false } &&
                 templateSelectionService.IsPreviewSelection(context);
 
