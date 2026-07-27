@@ -37,14 +37,17 @@ public sealed class TenantIdResolver(
         var forwardedHost = httpContext.Request.Headers["X-Forwarded-Host"].ToString();
         var originalHost = httpContext.Request.Headers["X-Original-Host"].ToString();
         var requestHost = httpContext.Request.Host.Value;
+        var requestHostHost = httpContext.Request.Host.Host;
 
         var host = ResolvePublicHostname(httpContext);
 
         logger.LogInformation(
-            "Tenant hostname resolution headers: X-Forwarded-Host={ForwardedHost}, X-Original-Host={OriginalHost}, Request.Host={RequestHost}, ChosenHost={ChosenHost}",
+            "Tenant hostname resolution headers: X-Forwarded-Host={ForwardedHost}, X-Original-Host={OriginalHost}, Request.Host={RequestHost}, Request.Host.Host={RequestHostHost}, ChosenHost={ChosenHost}",
             string.IsNullOrWhiteSpace(forwardedHost) ? "(empty)" : forwardedHost,
             string.IsNullOrWhiteSpace(originalHost) ? "(empty)" : originalHost,
             string.IsNullOrWhiteSpace(requestHost) ? "(empty)" : requestHost,
+            string.IsNullOrWhiteSpace(requestHostHost) ? "(empty)" : requestHostHost,
+
             string.IsNullOrWhiteSpace(host) ? "(none)" : host);
 
         if (string.IsNullOrWhiteSpace(host))
