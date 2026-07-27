@@ -649,7 +649,17 @@ else
     app.UseExceptionHandler("/Error/ServerError");
 }
 
-app.UseHttpsRedirection();
+// Health probes (App Gateway / ACA) often use HTTP; do not redirect them to HTTPS.
+app.UseWhen(
+    static context =>
+    {
+        var path = context.Request.Path;
+        return !(path.Equals("/health", StringComparison.OrdinalIgnoreCase)
+                 || path.Equals("/healthz", StringComparison.OrdinalIgnoreCase)
+                 || path.Equals("/liveness", StringComparison.OrdinalIgnoreCase)
+                 || path.Equals("/readiness", StringComparison.OrdinalIgnoreCase));
+    },
+    static branch => branch.UseHttpsRedirection());
 app.UseResponseCompression();
 
 app.UseStaticFiles();
@@ -692,6 +702,14 @@ app.UseTemplateSelection();
 
 app.MapRazorPages();
 app.MapControllers();
+
+// Liveness probe: no tenant resolution, no auth. Used by App Gateway / Container Apps probes.
+app.MapGet("/health", () => Results.Text("Healthy", "text/plain"))
+    .AllowAnonymous();
+app.MapGet("/healthz", () => Results.Text("Healthy", "text/plain"))
+    .AllowAnonymous();
+app.MapGet("/liveness", () => Results.Text("Healthy", "text/plain"))
+    .AllowAnonymous();
 
 // Landing goes through template selection gate (middleware) then dashboard.
 app.MapGet("/", context =>
