@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="GovUK.Dfe.FlexForms.Api.Client" Version="0.0.2" />
     <PackageReference Include="Microsoft.AspNetCore.Http.Features" Version="5.0.17" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Abstractions" Version="2.3.11" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.10" />
@@ -14,7 +15,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\flexforms-api\src\GovUK.Dfe.FlexForms.Api.Client\GovUK.Dfe.FlexForms.Api.Client.csproj" />
     <ProjectReference Include="..\GovUK.Dfe.FlexForms.Domain\GovUK.Dfe.FlexForms.Domain.csproj" />
   </ItemGroup>
 
