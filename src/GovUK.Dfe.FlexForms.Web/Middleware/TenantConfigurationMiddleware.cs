@@ -106,6 +106,8 @@ public sealed class TenantConfigurationMiddleware(
                || value.Equals("/health", StringComparison.OrdinalIgnoreCase)
                || value.Equals("/healthz", StringComparison.OrdinalIgnoreCase)
                || value.Equals("/liveness", StringComparison.OrdinalIgnoreCase)
-               || value.Equals("/readiness", StringComparison.OrdinalIgnoreCase);
+               || value.Equals("/readiness", StringComparison.OrdinalIgnoreCase)
+               || value.StartsWith("/Error", StringComparison.OrdinalIgnoreCase)
+               || value.Equals("/favicon.ico", StringComparison.OrdinalIgnoreCase);
     }
 }
