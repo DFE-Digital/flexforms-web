@@ -1,5 +1,6 @@
 @page "/admin/template-manager"
 @model GovUK.Dfe.FlexForms.Web.Pages.Admin.TemplateManagerModel
+@using GovUK.Dfe.FlexForms.Domain.Templates
 @{
     ViewData["Title"] = "Template Manager";
 
@@ -45,7 +46,11 @@
                 </div>
                 <div class="govuk-notification-banner__content">
                     <h3 class="govuk-notification-banner__heading">Template created</h3>
-                    <p class="govuk-body">The template is not live. Add its first version below.</p>
+                    <p class="govuk-body">
+                        A starter version (@(Model.CurrentVersionNumber ?? StarterFormTemplateSchema.DefaultVersionNumber))
+                        was added with a sample task group, task, page, and text field.
+                        The template is not live. You can edit the schema below and save a new version.
+                    </p>
                 </div>
             </div>
         }
