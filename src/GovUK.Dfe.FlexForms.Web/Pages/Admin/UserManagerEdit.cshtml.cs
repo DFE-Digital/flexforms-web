@@ -1,11 +1,14 @@
 using System.ComponentModel.DataAnnotations;
+using System.Security.Claims;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
+using GovUK.Dfe.FlexForms.Api.Client.Security;
 using GovUK.Dfe.FlexForms.Web.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 
@@ -17,6 +20,8 @@ public sealed class UserManagerEditModel(
     IUsersClient usersClient,
     ITemplatesClient templatesClient,
     IRolesClient rolesClient,
+    IInternalUserTokenStore tokenStore,
+    IMemoryCache memoryCache,
     ILogger<UserManagerEditModel> logger) : PageModel
 {
     [BindProperty(SupportsGet = true)]
@@ -83,6 +88,16 @@ public sealed class UserManagerEditModel(
                 UserId,
                 new UpdateUserTemplateAccessRequest { TemplateIds = SelectedTemplateIds ?? [] },
                 cancellationToken);
+
+            // If the admin edited their own role, drop the cached OBO JWT and web permission claims
+            // immediately so the next request re-exchanges with the new membership.
+            var actingEmail = User.FindFirstValue(ClaimTypes.Email);
+            if (!string.IsNullOrWhiteSpace(actingEmail)
+                && string.Equals(actingEmail, UserEmail, StringComparison.OrdinalIgnoreCase))
+            {
+                tokenStore.ClearToken();
+                UserPermissionsCache.Invalidate(memoryCache, User);
+            }
 
             TempData["UserManagerSuccess"] = "User role and form access updated.";
             return RedirectToPage("/Admin/UserManager");
