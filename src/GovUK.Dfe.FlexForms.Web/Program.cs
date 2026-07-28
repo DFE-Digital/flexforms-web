@@ -250,6 +250,11 @@ builder.Services.Configure<Microsoft.AspNetCore.Mvc.MvcOptions>(options =>
 
 // Add hybrid caching (Memory + Redis) with automatic session support
 builder.Services.AddHybridCaching(builder.Configuration);
+builder.Services.PostConfigure<GovUK.Dfe.CoreLibs.Caching.Settings.CacheSettings>(settings =>
+{
+    settings.Redis ??= new GovUK.Dfe.CoreLibs.Caching.Settings.RedisCacheSettings();
+    settings.Redis.KeyPrefix = GovUK.Dfe.FlexForms.Domain.Caching.FlexFormsCacheKeys.RedisKeyPrefix;
+});
 
 // Configure session with timeout settings to prevent hanging/blocking
 builder.Services.AddSession(options =>

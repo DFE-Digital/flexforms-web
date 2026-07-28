@@ -8,6 +8,7 @@ using GovUK.Dfe.CoreLibs.Messaging.Contracts.Messages.Events;
 using GovUK.Dfe.CoreLibs.Messaging.MassTransit.Helpers;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Api.Client.Security;
+using GovUK.Dfe.FlexForms.Domain.Caching;
 using MassTransit;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -441,7 +442,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Consumers
                 var server = redis.GetServer(redis.GetEndPoints().First());
 
                 // Clear cache keys
-                var cacheKeys = server.Keys(pattern: $"DfE:Cache:*{applicationId}*").ToList();
+                var cacheKeys = server.Keys(pattern: $"{FlexFormsCacheKeys.RedisKeyPrefix}*{applicationId}*").ToList();
 
                 logger.LogInformation(
                     "Found {Count} Redis cache key(s) to clear for application {ApplicationId}",
@@ -456,7 +457,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Consumers
 
                 // CRITICAL: Store the infected file ID in a blacklist for 24 hours
                 // This ensures the file is filtered out EVERYWHERE it appears, even in cached data
-                var infectedFileKey = $"DfE:InfectedFile:{fileId}";
+                var infectedFileKey = $"{FlexFormsCacheKeys.InfectedFilePrefix}{fileId}";
                 var infectedFileData = JsonSerializer.Serialize(new
                 {
                     FileId = fileId,
@@ -537,7 +538,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Consumers
             {
                 var db = redis.GetDatabase();
                 
-                var infectedFileKey = $"DfE:InfectedFile:{fileId}";
+                var infectedFileKey = $"{FlexFormsCacheKeys.InfectedFilePrefix}{fileId}";
                 var infectedFileData = JsonSerializer.Serialize(new
                 {
                     FileId = fileId,
@@ -582,7 +583,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Consumers
                 
                 // Create a key based on filename + application ID
                 // This allows the web app to filter by original filename
-                var blacklistKey = $"DfE:InfectedFileName:{applicationId}:{originalFileName}";
+                var blacklistKey = $"{FlexFormsCacheKeys.InfectedFileNamePrefix}{applicationId}:{originalFileName}";
                 var blacklistData = JsonSerializer.Serialize(new
                 {
                     OriginalFileName = originalFileName,
