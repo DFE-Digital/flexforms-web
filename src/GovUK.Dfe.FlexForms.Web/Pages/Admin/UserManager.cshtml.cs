@@ -11,7 +11,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 /// <summary>
 /// Lists users with form access in the current tenant.
 /// </summary>
-[Authorize(Roles = AdminAccessHelper.AuthorizeRoles)]
+[Authorize(Policy = AdminAccessHelper.CanManageUsersPolicy)]
 public sealed class UserManagerModel(
     IUsersClient usersClient,
     ILogger<UserManagerModel> logger) : PageModel

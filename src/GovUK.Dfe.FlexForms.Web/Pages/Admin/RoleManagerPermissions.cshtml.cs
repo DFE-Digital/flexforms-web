@@ -233,10 +233,21 @@ public sealed class RoleManagerPermissionsModel(
     public static string? ValidateGrant(ResourceType resourceType, string resourceKey, AccessType accessType)
     {
         var key = resourceKey.Trim();
-        var isAny = string.Equals(key, AnyResourceKey, StringComparison.OrdinalIgnoreCase);
-        if (isAny)
+        if (accessType == AccessType.Manage)
+        {
+            if (resourceType != ResourceType.Template && resourceType != ResourceType.User)
+            {
+                return "Access type 'Manage' is only allowed for Template or User permissions.";
+            }
+
+            if (string.Equals(key, AnyResourceKey, StringComparison.OrdinalIgnoreCase))
+                return null;
+        }
+        else if (string.Equals(key, AnyResourceKey, StringComparison.OrdinalIgnoreCase))
         {
             if ((resourceType == ResourceType.Template && accessType == AccessType.Write)
+                || (resourceType == ResourceType.Template && accessType == AccessType.Manage)
+                || (resourceType == ResourceType.User && accessType == AccessType.Manage)
                 || (resourceType == ResourceType.Application && accessType == AccessType.Read)
                 || (resourceType == ResourceType.ApplicationFiles && accessType == AccessType.Read))
             {
@@ -244,17 +255,8 @@ public sealed class RoleManagerPermissionsModel(
             }
 
             return $"Resource key '{AnyResourceKey}' is only allowed for Template — Write, " +
-                   "Application — Read, or ApplicationFiles — Read. " +
-                   "For other combinations, use a specific resource id or email.";
-        }
-
-        if (string.Equals(key, "Manage", StringComparison.OrdinalIgnoreCase))
-        {
-            if (resourceType == ResourceType.Template && accessType == AccessType.Write)
-                return null;
-
-            return "Resource key 'Manage' is only allowed for Template — Write " +
-                   "(lets the role create, edit, and publish templates).";
+                   "Template — Manage, User — Manage, Application — Read, " +
+                   "or ApplicationFiles — Read. For other combinations, use a specific resource id or email.";
         }
 
         return resourceType switch
@@ -263,7 +265,7 @@ public sealed class RoleManagerPermissionsModel(
                 or ResourceType.File or ResourceType.Task or ResourceType.TaskGroup
                 or ResourceType.Page or ResourceType.Field
                 when !Guid.TryParse(key, out var id) || id == Guid.Empty
-                => $"{resourceType} resource key must be a valid non-empty GUID (the resource id), 'Any' (where allowed), or 'Manage' for Template administration.",
+                => $"{resourceType} resource key must be a valid non-empty GUID (the resource id) or 'Any' (where allowed).",
 
             ResourceType.User or ResourceType.Notifications
                 when !key.Contains('@', StringComparison.Ordinal) && !Guid.TryParse(key, out _)

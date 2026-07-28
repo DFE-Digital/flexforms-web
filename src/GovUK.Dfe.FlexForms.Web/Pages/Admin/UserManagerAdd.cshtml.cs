@@ -12,7 +12,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 /// <summary>
 /// Registers a user into the tenant with a role and optional form access.
 /// </summary>
-[Authorize(Roles = AdminAccessHelper.AuthorizeRoles)]
+[Authorize(Policy = AdminAccessHelper.CanManageUsersPolicy)]
 public sealed class UserManagerAddModel(
     IUsersClient usersClient,
     ITemplatesClient templatesClient,

@@ -12,7 +12,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 /// <summary>
 /// Edits a tenant user's role and form access.
 /// </summary>
-[Authorize(Roles = AdminAccessHelper.AuthorizeRoles)]
+[Authorize(Policy = AdminAccessHelper.CanManageUsersPolicy)]
 public sealed class UserManagerEditModel(
     IUsersClient usersClient,
     ITemplatesClient templatesClient,

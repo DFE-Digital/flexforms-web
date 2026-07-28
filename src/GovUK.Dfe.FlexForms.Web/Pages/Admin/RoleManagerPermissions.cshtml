@@ -28,10 +28,9 @@
             Special keys:
             <code class="govuk-!-font-size-16">Any</code> is allowed for
             <strong>Application — Read</strong>, <strong>ApplicationFiles — Read</strong>
-            (CaseReader-style tenant-wide read), and <strong>Template — Write</strong>
-            (create applications on any template).
-            Use <code class="govuk-!-font-size-16">Manage</code> with <strong>Template — Write</strong>
-            for TemplateManager (create, edit, and publish templates).
+            (CaseReader-style tenant-wide read), <strong>Template — Write</strong>
+            (create applications on any template), and tenant-wide
+            <strong>Template — Manage</strong> or <strong>User — Manage</strong>.
         </p>
 
         <form method="post">
@@ -61,9 +60,9 @@
                         <label class="govuk-label" asp-for="NewResourceKey">Resource key</label>
                         <div class="govuk-hint">
                             Application or ApplicationFiles: application id, or <code class="govuk-!-font-size-16">Any</code> with Read.
-                            Template: template id, <code class="govuk-!-font-size-16">Any</code> with Write (create apps),
-                            or <code class="govuk-!-font-size-16">Manage</code> with Write (administer templates).
-                            User or Notifications: user email.
+                            Template: template id, or <code class="govuk-!-font-size-16">Any</code> with Write (create apps) or Manage (administer templates).
+                            User: user email, or <code class="govuk-!-font-size-16">Any</code> with Manage (User Manager access).
+                            Notifications: user email.
                         </div>
                         @if (ViewData.ModelState[nameof(Model.NewResourceKey)]?.Errors.FirstOrDefault() is { } keyError)
                         {

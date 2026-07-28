@@ -469,8 +469,12 @@ builder.Services
 
 builder.Services.AddAuthorization(options =>
 {
+    options.AddPolicy(AdminAccessHelper.CanAccessAdminAreaPolicy, policy =>
+        policy.RequireAssertion(ctx => AdminAccessHelper.CanAccessAdminArea(ctx.User)));
     options.AddPolicy(AdminAccessHelper.CanManageTemplatesPolicy, policy =>
         policy.RequireAssertion(ctx => AdminAccessHelper.CanManageTemplates(ctx.User)));
+    options.AddPolicy(AdminAccessHelper.CanManageUsersPolicy, policy =>
+        policy.RequireAssertion(ctx => AdminAccessHelper.CanManageUsers(ctx.User)));
 });
 
 builder.Services.AddScoped<ICustomClaimProvider, PermissionsClaimProvider>();
