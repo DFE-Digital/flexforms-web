@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using GovUK.Dfe.FlexForms.Domain.Templates;
 using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.FlexForms.Web.Services;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
@@ -30,7 +31,7 @@ public sealed class CreateTemplateModel(
     public string Name { get; set; } = string.Empty;
 
     /// <summary>
-    /// Creates and selects the new draft template.
+    /// Creates and selects the new draft template with a starter schema version.
     /// </summary>
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
     {
@@ -41,10 +42,26 @@ public sealed class CreateTemplateModel(
 
         try
         {
+            var name = Name.Trim();
+
+            // Create the template shell first so the starter schema can use the real template id.
             var template = await templatesClient.CreateTemplateAsync(
-                new CreateTemplateRequest(Name.Trim()),
+                new CreateTemplateRequest(name),
                 cancellationToken);
 
+            var starterSchema = StarterFormTemplateSchema.CreateBase64Json(
+                template.TemplateId.ToString(),
+                name);
+
+            await templatesClient.CreateTemplateVersionAsync(
+                template.TemplateId,
+                new CreateTemplateVersionRequest(
+                    VersionNumber: StarterFormTemplateSchema.DefaultVersionNumber,
+                    JsonSchema: starterSchema),
+                cancellationToken);
+
+            // Refresh DTO version info used by template selection / nav.
+            template.LatestVersionNumber = StarterFormTemplateSchema.DefaultVersionNumber;
             templateSelectionService.SelectTemplate(HttpContext, template);
 
             // CreateTemplate grants the admin template permission and invalidates API caches.
@@ -58,7 +75,7 @@ public sealed class CreateTemplateModel(
 
             return RedirectToPage(
                 "/Admin/TemplateManager",
-                new { showForm = true, created = true, suggestedVersion = "1.0.0" });
+                new { showForm = true, created = true, suggestedVersion = "1.0.1" });
         }
         catch (Exception ex)
         {
