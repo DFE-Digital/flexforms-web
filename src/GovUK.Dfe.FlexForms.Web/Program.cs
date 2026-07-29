@@ -448,6 +448,13 @@ builder.Services.PostConfigure<Microsoft.AspNetCore.Authentication.OpenIdConnect
         {
             options.SignedOutCallbackPath = "/signout-callback-oidc";
         }
+
+        // Seed a stub Configuration so the handler skips that initial fetch; the tenant-aware
+        // events (TenantAwareOpenIdConnectConfigurator) replace it with the real tenant config.
+        if (platformBootstrapEnabled && options.Configuration is null)
+        {
+            options.Configuration = new OpenIdConnectConfiguration();
+        }
     });
 
 builder.Services.PostConfigure<Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectOptions>(
