@@ -38,6 +38,7 @@ using MassTransit;
 using GovUK.Dfe.CoreLibs.Messaging.Contracts.Exceptions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using GovUK.Dfe.FlexForms.Web.Telemetry;
 using GovUK.Dfe.FlexForms.Web.Configuration;
@@ -449,12 +450,15 @@ builder.Services.PostConfigure<Microsoft.AspNetCore.Authentication.OpenIdConnect
             options.SignedOutCallbackPath = "/signout-callback-oidc";
         }
 
-        // Null out ConfigurationManager and seed a stub Configuration so the handler
-        // skips discovery; the tenant-aware events replace both with the real tenant config.
+        // Under platform bootstrap the DfESignIn section contains placeholder values.
+        // The OIDC handler calls ConfigurationManager.GetConfigurationAsync *before*
+        // OnRedirectToIdentityProvider, which fails with IDX20803 against the placeholder.
+        // Replace with a StaticConfigurationManager returning a stub; the tenant-aware
+        // events (TenantAwareOpenIdConnectConfigurator) replace it per-request.
         if (platformBootstrapEnabled)
         {
-            options.ConfigurationManager = null;
-            options.Configuration ??= new OpenIdConnectConfiguration();
+            options.ConfigurationManager = new StaticConfigurationManager<OpenIdConnectConfiguration>(
+                new OpenIdConnectConfiguration());
         }
     });
 
