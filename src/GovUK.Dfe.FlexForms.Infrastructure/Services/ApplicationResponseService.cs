@@ -72,10 +72,12 @@ public class ApplicationResponseService(
                 var statusKey = $"ApplicationStatus_{applicationId}";
                 var currentStatus = session.GetString(statusKey);
                 
-                // Only update if not already submitted
-                if (string.IsNullOrEmpty(currentStatus) || currentStatus.Equals("InProgress", StringComparison.OrdinalIgnoreCase))
+                // Promote Created/empty session status to InProgress once data is saved.
+                // Do not overwrite Submitted (or other terminal statuses).
+                if (string.IsNullOrEmpty(currentStatus)
+                    || currentStatus.Equals("Created", StringComparison.OrdinalIgnoreCase)
+                    || currentStatus.Equals("InProgress", StringComparison.OrdinalIgnoreCase))
                 {
-                    // Update session status to InProgress
                     session.SetString(statusKey, "InProgress");
                     logger.LogInformation("Updated application {ApplicationId} status to InProgress due to form data being saved", applicationId);
                 }

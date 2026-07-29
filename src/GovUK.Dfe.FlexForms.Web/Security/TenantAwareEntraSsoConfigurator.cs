@@ -35,10 +35,11 @@ public static class TenantAwareEntraSsoConfigurator
         if (!string.IsNullOrWhiteSpace(tenantId))
         {
             var authority = $"{instance.TrimEnd('/')}/{tenantId}/v2.0";
-            if (!string.Equals(options.Authority, authority, StringComparison.OrdinalIgnoreCase))
+            var metadataAddress = $"{authority}/.well-known/openid-configuration";
+            if (NeedsOidcDiscoveryRefresh(options, authority, metadataAddress))
             {
                 options.Authority = authority;
-                options.MetadataAddress = $"{authority}/.well-known/openid-configuration";
+                options.MetadataAddress = metadataAddress;
                 // Reset discovery cache so a previous host/placeholder tenant is not reused.
                 options.Configuration = null;
                 options.ConfigurationManager = new ConfigurationManager<OpenIdConnectConfiguration>(
@@ -138,7 +139,9 @@ public static class TenantAwareEntraSsoConfigurator
         var section = GetTenantEntraSection(context.HttpContext);
         if (section?.Exists() != true)
         {
-            return;
+            throw new InvalidOperationException(
+                "Tenant EntraSso configuration is missing. " +
+                "Map this hostname in TenantConfig and ensure EntraSso:Enabled and TenantId are set.");
         }
 
         if (!string.IsNullOrWhiteSpace(section["ClientId"]))
@@ -191,6 +194,41 @@ public static class TenantAwareEntraSsoConfigurator
                 context.ProtocolMessage.IssuerAddress = configuration.AuthorizationEndpoint;
             }
         }
+
+        if (!isLogout && string.IsNullOrWhiteSpace(context.ProtocolMessage.IssuerAddress))
+        {
+            throw new InvalidOperationException(
+                "Cannot redirect to the Entra authorization endpoint. " +
+                "Check the tenant's EntraSso:TenantId / Instance settings.");
+        }
+    }
+
+    /// <summary>
+    /// True when OIDC discovery must be (re)bound — authority/metadata changed, or discovery
+    /// is missing / still a non-authoritative stub.
+    /// </summary>
+    internal static bool NeedsOidcDiscoveryRefresh(
+        AspNetOpenIdConnectOptions options,
+        string authority,
+        string metadataAddress)
+    {
+        if (!string.Equals(options.Authority, authority, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (!string.Equals(options.MetadataAddress, metadataAddress, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (options.ConfigurationManager is null)
+            return true;
+
+        if (options.ConfigurationManager is StaticConfigurationManager<OpenIdConnectConfiguration>)
+            return true;
+
+        if (options.Configuration is not null
+            && string.IsNullOrWhiteSpace(options.Configuration.AuthorizationEndpoint))
+            return true;
+
+        return false;
     }
 
     /// <summary>

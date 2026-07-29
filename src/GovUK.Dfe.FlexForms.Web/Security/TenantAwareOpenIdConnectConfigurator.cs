@@ -28,10 +28,11 @@ public static class TenantAwareOpenIdConnectConfigurator
         if (!string.IsNullOrWhiteSpace(section["Authority"]))
         {
             var authority = section["Authority"]!.TrimEnd('/');
-            if (!string.Equals(options.Authority, authority, StringComparison.OrdinalIgnoreCase))
+            var metadataAddress = $"{authority}/.well-known/openid-configuration";
+            if (NeedsOidcDiscoveryRefresh(options, authority, metadataAddress))
             {
                 options.Authority = authority;
-                options.MetadataAddress = $"{authority}/.well-known/openid-configuration";
+                options.MetadataAddress = metadataAddress;
                 options.Configuration = null;
                 options.ConfigurationManager = new ConfigurationManager<OpenIdConnectConfiguration>(
                     options.MetadataAddress,
@@ -84,7 +85,10 @@ public static class TenantAwareOpenIdConnectConfigurator
         var section = GetTenantSignInSection(context.HttpContext);
         if (section is null)
         {
-            return;
+            throw new InvalidOperationException(
+                "Tenant DfESignIn configuration is missing. " +
+                "Map this hostname in TenantConfig and ensure the DfESignIn category is present. " +
+                "Locally prefer the Lsrp-https or Visits-https launch profile (lsrp.localhost / rgvisits.localhost).");
         }
 
         if (!string.IsNullOrWhiteSpace(section["ClientId"]))
@@ -136,6 +140,14 @@ public static class TenantAwareOpenIdConnectConfigurator
                 context.ProtocolMessage.IssuerAddress = configuration.AuthorizationEndpoint;
             }
         }
+
+        if (!isLogout && string.IsNullOrWhiteSpace(context.ProtocolMessage.IssuerAddress))
+        {
+            throw new InvalidOperationException(
+                "Cannot redirect to the DfE Sign-In authorization endpoint. " +
+                "Check the tenant's DfESignIn:Authority setting (and that discovery is reachable). " +
+                "Locally use lsrp.localhost / rgvisits.localhost launch profiles rather than plain localhost unless localhost is mapped in TenantConfig.");
+        }
     }
 
     /// <summary>
@@ -146,6 +158,35 @@ public static class TenantAwareOpenIdConnectConfigurator
         var tenantContext = httpContext.RequestServices.GetService<Tenancy.ITenantRequestContext>();
         var section = tenantContext?.TenantConfiguration?.GetSection("DfESignIn");
         return section?.Exists() == true ? section : null;
+    }
+
+    /// <summary>
+    /// True when OIDC discovery must be (re)bound — authority/metadata changed, or the
+    /// bootstrap <see cref="StaticConfigurationManager{T}"/> stub is still installed
+    /// (it has no AuthorizationEndpoint and causes challenge failures).
+    /// </summary>
+    internal static bool NeedsOidcDiscoveryRefresh(
+        AspNetOpenIdConnectOptions options,
+        string authority,
+        string metadataAddress)
+    {
+        if (!string.Equals(options.Authority, authority, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (!string.Equals(options.MetadataAddress, metadataAddress, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (options.ConfigurationManager is null)
+            return true;
+
+        if (options.ConfigurationManager is StaticConfigurationManager<OpenIdConnectConfiguration>)
+            return true;
+
+        if (options.Configuration is not null
+            && string.IsNullOrWhiteSpace(options.Configuration.AuthorizationEndpoint))
+            return true;
+
+        return false;
     }
 
     private static PathString ExtractCallbackPath(string redirectUri)

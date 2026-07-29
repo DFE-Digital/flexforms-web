@@ -69,6 +69,18 @@ public class ApplicationStateServiceTests
         Assert.Equal(reference, exception.ApplicationReference);
     }
 
+    [Theory]
+    [InlineData("Created", true)]
+    [InlineData("InProgress", true)]
+    [InlineData("Submitted", false)]
+    [InlineData("Deleted", false)]
+    public void IsApplicationEditable_AllowsCreatedAndInProgress(string status, bool expected)
+    {
+        var service = CreateService();
+
+        Assert.Equal(expected, service.IsApplicationEditable(status));
+    }
+
     [Fact]
     public async Task EnsureApplicationIdAsync_ThrowsApplicationAccessException_WhenApiReturns403()
     {

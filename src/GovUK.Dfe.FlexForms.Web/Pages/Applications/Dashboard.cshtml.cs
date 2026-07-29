@@ -25,6 +25,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
         ILogger<DashboardModel> logger,
         IApplicationStatusService applicationStatusService,
         IApplicationsClient applicationsClient,
+        IUsersClient usersClient,
         IHttpContextAccessor httpContextAccessor,
         IApplicationResponseService applicationResponseService,
         IContributorPatternService contributorPatternService,
@@ -188,7 +189,8 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
 
             if (User.Identity?.IsAuthenticated == true)
             {
-                UserPermissionsCache.Invalidate(memoryCache, User);
+                await UserPermissionsCache.RefreshAsync(memoryCache, usersClient, User, logger, CancellationToken.None);
+                UserPermissionsCache.RemovePermissionClaims(User);
             }
 
             logger.LogInformation("Created new application {ApplicationId} and cleared accumulated form data", response.ApplicationId);
