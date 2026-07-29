@@ -114,192 +114,164 @@
                 </div>
             </div>
 
-            @if (!string.IsNullOrEmpty(Model.TemplateId))
-            {
-                <div class="govuk-summary-card">
-                    <div class="govuk-summary-card__title-wrapper">
-                        <h2 class="govuk-summary-card__title">Current Template Information</h2>
-                    </div>
-                    <div class="govuk-summary-card__content">
-                        <dl class="govuk-summary-list">
-                            <div class="govuk-summary-list__row">
-                                <dt class="govuk-summary-list__key">Template ID</dt>
-                                <dd class="govuk-summary-list__value">
-                                    <code class="govuk-body">@Model.TemplateId</code>
-                                </dd>
-                            </div>
-                            <div class="govuk-summary-list__row">
-                                <dt class="govuk-summary-list__key">Template Name</dt>
-                                <dd class="govuk-summary-list__value">@Model.TemplateName</dd>
-                            </div>
-                            <div class="govuk-summary-list__row">
-                                <dt class="govuk-summary-list__key">Description</dt>
-                                <dd class="govuk-summary-list__value">@Model.TemplateDescription</dd>
-                            </div>
-                            <div class="govuk-summary-list__row">
-                                <dt class="govuk-summary-list__key">Current Version</dt>
-                                <dd class="govuk-summary-list__value">
-                                    <strong class="govuk-tag govuk-tag--blue">@Model.CurrentTemplateVersion</strong>
-                                </dd>
-                            </div>
-                            <div class="govuk-summary-list__row">
-                                <dt class="govuk-summary-list__key">Task Groups</dt>
-                                <dd class="govuk-summary-list__value">@Model.TaskGroupCount</dd>
-                            </div>
-                        </dl>
-                    </div>
-                </div>
-
-                <div class="govuk-summary-card">
-                    <div class="govuk-summary-card__title-wrapper">
-                        <h2 class="govuk-summary-card__title">Cache Information</h2>
-                    </div>
-                    <div class="govuk-summary-card__content">
-                        <dl class="govuk-summary-list">
-                            <div class="govuk-summary-list__row">
-                                <dt class="govuk-summary-list__key">Template Cache Key</dt>
-                                <dd class="govuk-summary-list__value">
-                                    <code class="govuk-body govuk-!-font-size-16">@Model.TemplateCacheKey</code>
-                                </dd>
-                            </div>
-                            <div class="govuk-summary-list__row">
-                                <dt class="govuk-summary-list__key">Cache Status</dt>
-                                <dd class="govuk-summary-list__value">
-                                    @{
-                                        var cacheStatus = await Model.GetCacheStatusAsync();
-                                        var cacheTagClass = cacheStatus.Contains("cached") ? "govuk-tag--green" : "govuk-tag--grey";
-                                    }
-                                    <strong class="govuk-tag @cacheTagClass">@cacheStatus</strong>
-                                </dd>
-                            </div>
-                        </dl>
-                    </div>
-                </div>
-
-                <div class="govuk-summary-card">
-                    <div class="govuk-summary-card__title-wrapper">
-                        <h2 class="govuk-summary-card__title">Session Information</h2>
-                    </div>
-                    <div class="govuk-summary-card__content">
-                        <dl class="govuk-summary-list">
-                            <div class="govuk-summary-list__row">
-                                <dt class="govuk-summary-list__key">Active Session Keys</dt>
-                                <dd class="govuk-summary-list__value">
-                                    <code class="govuk-body govuk-!-font-size-14">@Model.GetSessionKeysInfo()</code>
-                                </dd>
-                            </div>
-                            <div class="govuk-summary-list__row">
-                                <dt class="govuk-summary-list__key">Test Token</dt>
-                                <dd class="govuk-summary-list__value">
-                                    <code class="govuk-body govuk-!-font-size-14">@Model.TestToken</code>
-                                </dd>
-                            </div>
-                            <div class="govuk-summary-list__row">
-                                <dt class="govuk-summary-list__key">DfE-SignIn Token</dt>
-                                <dd class="govuk-summary-list__value">
-                                    <code class="govuk-body govuk-!-font-size-14">@Model.DsiToken</code>
-                                </dd>
-                            </div>
-                            <div class="govuk-summary-list__row">
-                                <dt class="govuk-summary-list__key">Internal User Token</dt>
-                                <dd class="govuk-summary-list__value">
-                                    <code class="govuk-body govuk-!-font-size-14">@Model.UserToken</code>
-                                </dd>
-                            </div>
-                        </dl>
-                    </div>
-                </div>
-            }
         }
 
-        <div class="govuk-summary-card">
-            <div class="govuk-summary-card__title-wrapper">
-                <h2 class="govuk-summary-card__title">Administrative Actions</h2>
+        @if (Model.CanManageTemplates)
+        {
+            <div class="govuk-summary-card">
+                <div class="govuk-summary-card__title-wrapper">
+                    <h2 class="govuk-summary-card__title">Template Management</h2>
+                </div>
+                <div class="govuk-summary-card__content">
+                    <p class="govuk-body">Create, edit and publish form templates for this tenant.</p>
+                    <div class="govuk-button-group">
+                        <a asp-page="/Admin/CreateTemplate" class="govuk-button" data-module="govuk-button" id="create-template-button">
+                            Create a new template
+                        </a>
+                        <form method="post" asp-page-handler="GoToTemplateManager" style="display: inline;">
+                            <button type="submit" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="go-to-template-manager-button">
+                                Template Manager
+                            </button>
+                        </form>
+                        <a href="/templates" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="go-to-templates-button">
+                            Choose / preview templates
+                        </a>
+                        <a asp-page="/Admin/CustomStatusLabelOverrides" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="go-to-custom-status-button">
+                            Custom Status Labels
+                        </a>
+                    </div>
+                </div>
             </div>
-            <div class="govuk-summary-card__content">
-                <div class="govuk-button-group">
-                    @if (Model.CanManageTemplates)
-                    {
+        }
+
+        @if (Model.CanManageUsers || Model.CanManageRoles)
+        {
+            <div class="govuk-summary-card">
+                <div class="govuk-summary-card__title-wrapper">
+                    <h2 class="govuk-summary-card__title">Users &amp; Roles</h2>
+                </div>
+                <div class="govuk-summary-card__content">
+                    <p class="govuk-body">Manage user access, roles and permissions for this tenant.</p>
+                    <div class="govuk-button-group">
+                        @if (Model.CanManageUsers)
+                        {
+                            <a asp-page="/Admin/UserManager" class="govuk-button" data-module="govuk-button" id="go-to-user-manager-button">
+                                User Manager
+                            </a>
+                        }
+                        @if (Model.CanManageRoles)
+                        {
+                            <a asp-page="/Admin/RoleManager" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="go-to-role-manager-button">
+                                Role Manager
+                            </a>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (Model.CanManageTemplates)
+        {
+            <div class="govuk-summary-card">
+                <div class="govuk-summary-card__title-wrapper">
+                    <h2 class="govuk-summary-card__title">System</h2>
+                </div>
+                <div class="govuk-summary-card__content">
+                    <p class="govuk-body">Clear cached data and session state. You may need to re-select a template afterwards.</p>
+                    <div class="govuk-button-group">
                         <form method="post" asp-page-handler="ClearAll" style="display: inline;">
                             <button type="submit" class="govuk-button govuk-button--warning" data-module="govuk-button" id="clear-all-sessions-button">
                                 Clear All Sessions &amp; Caches
                             </button>
                         </form>
+                    </div>
 
-                        <a href="/templates" class="govuk-button" data-module="govuk-button" id="go-to-templates-button">
-                            Choose / preview templates
-                        </a>
-
-                        <a asp-page="/Admin/CreateTemplate" class="govuk-button" data-module="govuk-button" id="create-template-button">
-                            Create a new template
-                        </a>
-
-                        <form method="post" asp-page-handler="GoToTemplateManager" style="display: inline;">
-                            <button type="submit" class="govuk-button" data-module="govuk-button" id="go-to-template-manager-button">
-                                Go to Template Manager
-                            </button>
-                        </form>
-                    }
-
-                    @if (Model.CanManageUsers)
+                    @if (!string.IsNullOrEmpty(Model.TemplateId))
                     {
-                        <a asp-page="/Admin/UserManager" class="govuk-button" data-module="govuk-button" id="go-to-user-manager-button">
-                            User Manager
-                        </a>
-                    }
+                        <details class="govuk-details govuk-!-margin-top-4" data-module="govuk-details">
+                            <summary class="govuk-details__summary">
+                                <span class="govuk-details__summary-text">Diagnostics</span>
+                            </summary>
+                            <div class="govuk-details__text">
+                                <h3 class="govuk-heading-s">Active Template</h3>
+                                <dl class="govuk-summary-list govuk-summary-list--no-border">
+                                    <div class="govuk-summary-list__row">
+                                        <dt class="govuk-summary-list__key">Template</dt>
+                                        <dd class="govuk-summary-list__value">@Model.TemplateName</dd>
+                                    </div>
+                                    <div class="govuk-summary-list__row">
+                                        <dt class="govuk-summary-list__key">ID</dt>
+                                        <dd class="govuk-summary-list__value"><code>@Model.TemplateId</code></dd>
+                                    </div>
+                                    <div class="govuk-summary-list__row">
+                                        <dt class="govuk-summary-list__key">Version</dt>
+                                        <dd class="govuk-summary-list__value">
+                                            <strong class="govuk-tag govuk-tag--blue">@Model.CurrentTemplateVersion</strong>
+                                        </dd>
+                                    </div>
+                                    <div class="govuk-summary-list__row">
+                                        <dt class="govuk-summary-list__key">Description</dt>
+                                        <dd class="govuk-summary-list__value">@Model.TemplateDescription</dd>
+                                    </div>
+                                    <div class="govuk-summary-list__row">
+                                        <dt class="govuk-summary-list__key">Task Groups</dt>
+                                        <dd class="govuk-summary-list__value">@Model.TaskGroupCount</dd>
+                                    </div>
+                                </dl>
 
-                    @if (Model.CanManageRoles)
-                    {
-                        <a asp-page="/Admin/RoleManager" class="govuk-button" data-module="govuk-button" id="go-to-role-manager-button">
-                            Role Manager
-                        </a>
-                    }
+                                <h3 class="govuk-heading-s govuk-!-margin-top-4">Cache</h3>
+                                <dl class="govuk-summary-list govuk-summary-list--no-border">
+                                    <div class="govuk-summary-list__row">
+                                        <dt class="govuk-summary-list__key">Cache Key</dt>
+                                        <dd class="govuk-summary-list__value">
+                                            <code class="govuk-!-font-size-14">@Model.TemplateCacheKey</code>
+                                        </dd>
+                                    </div>
+                                    <div class="govuk-summary-list__row">
+                                        <dt class="govuk-summary-list__key">Status</dt>
+                                        <dd class="govuk-summary-list__value">
+                                            @{
+                                                var cacheStatus = await Model.GetCacheStatusAsync();
+                                                var cacheTagClass = cacheStatus.Contains("cached") ? "govuk-tag--green" : "govuk-tag--grey";
+                                            }
+                                            <strong class="govuk-tag @cacheTagClass">@cacheStatus</strong>
+                                        </dd>
+                                    </div>
+                                </dl>
 
-                    @if (Model.CanManageTemplates)
-                    {
-                        <form method="post" asp-page-handler="GoToCustomStatusLabelOverrides" style="display: inline;">
-                            <button type="submit" class="govuk-button" data-module="govuk-button" id="go-to-custom-status-button">
-                                Override Custom Status Labels
-                            </button>
-                        </form>
-                    }
-                </div>
-
-                <div class="govuk-inset-text">
-                    @if (Model.CanManageTemplates)
-                    {
-                        <p class="govuk-body">
-                            <strong>Clear All Sessions &amp; Caches:</strong> This will remove all session data and template caches.
-                            You may need to navigate back to the main application and select a template to continue working.
-                        </p>
-                        <p class="govuk-body">
-                            <strong>Choose / preview templates:</strong> Open the template chooser to switch between this tenant's
-                            live and non-live templates.
-                        </p>
-                        <p class="govuk-body">
-                            <strong>Create a new template:</strong> Create a draft template for this tenant, then add its first version.
-                        </p>
-                        <p class="govuk-body">
-                            <strong>Template Manager:</strong> Navigate to the template manager to create new template versions
-                            or view template schemas.
-                        </p>
-                    }
-                    @if (Model.CanManageUsers)
-                    {
-                        <p class="govuk-body">
-                            <strong>User Manager:</strong> View users with form access in this tenant, add or remove form access,
-                            or register a new user with a role.
-                        </p>
-                    }
-                    @if (Model.CanManageRoles)
-                    {
-                        <p class="govuk-body">
-                            <strong>Role Manager:</strong> Create custom tenant roles and set which resource permissions each role grants.
-                        </p>
+                                <h3 class="govuk-heading-s govuk-!-margin-top-4">Session</h3>
+                                <dl class="govuk-summary-list govuk-summary-list--no-border">
+                                    <div class="govuk-summary-list__row">
+                                        <dt class="govuk-summary-list__key">Session Keys</dt>
+                                        <dd class="govuk-summary-list__value">
+                                            <code class="govuk-!-font-size-14">@Model.GetSessionKeysInfo()</code>
+                                        </dd>
+                                    </div>
+                                    <div class="govuk-summary-list__row">
+                                        <dt class="govuk-summary-list__key">Test Token</dt>
+                                        <dd class="govuk-summary-list__value">
+                                            <code class="govuk-!-font-size-14">@Model.TestToken</code>
+                                        </dd>
+                                    </div>
+                                    <div class="govuk-summary-list__row">
+                                        <dt class="govuk-summary-list__key">DfE-SignIn Token</dt>
+                                        <dd class="govuk-summary-list__value">
+                                            <code class="govuk-!-font-size-14">@Model.DsiToken</code>
+                                        </dd>
+                                    </div>
+                                    <div class="govuk-summary-list__row">
+                                        <dt class="govuk-summary-list__key">Internal User Token</dt>
+                                        <dd class="govuk-summary-list__value">
+                                            <code class="govuk-!-font-size-14">@Model.UserToken</code>
+                                        </dd>
+                                    </div>
+                                </dl>
+                            </div>
+                        </details>
                     }
                 </div>
             </div>
-        </div>
+        }
 
         <div class="govuk-!-margin-top-6">
             <a href="javascript:history.back()" class="govuk-link">← Go back</a>
