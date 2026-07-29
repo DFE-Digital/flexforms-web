@@ -25,67 +25,97 @@
                 </div>
             </div>
         }
-        <dl class="govuk-summary-list">
-            <div class="govuk-summary-list__row">
-                <dt class="govuk-summary-list__key">
-                    Template ID
-                </dt>
-                <dd class="govuk-summary-list__value">
-                    @Model.CurrentTemplate?.TemplateId
-                </dd>
-            </div>
-            <div class="govuk-summary-list__row">
-                <dt class="govuk-summary-list__key">
-                    Template Name
-                </dt>
-                <dd class="govuk-summary-list__value">
-                    @Model.CurrentTemplate?.TemplateName
-                </dd>
-            </div>
-            <div class="govuk-summary-list__row">
-                <dt class="govuk-summary-list__key">
-                    Current Version
-                </dt>
-                <dd class="govuk-summary-list__value">
-                    @Model.CurrentVersionNumber
-                </dd>
-            </div>
-        </dl>
-        <form method="post" novalidate="">
-            <div class="govuk-form-group">
-                <label class="govuk-label govuk-label--m" for="base-status">
-                    Base Status
-                </label>
-                <select class="govuk-select" id="base-status" asp-for="SelectedBaseStatus" onchange="this.form.submit()">
-                    @foreach(var status in Model.BaseStatuses)
-                    {
-                        <option value="@status.Key">@status.Value</option>
-                    }
-                </select>
-            </div>
-            <div class="govuk-form-group ">
-                <label class="govuk-label govuk-label--m" for="BaseStatusOverrideValue">
-                    Custom Status Value
-                </label>
-                @if (ViewData.ModelState["BaseStatusOverrideValue"]?.Errors.Any() == true)
-                {
-                    <p id="version-error" class="govuk-error-message">
-                        <span class="govuk-visually-hidden">Error:</span> @ViewData.ModelState["BaseStatusOverrideValue"]?.Errors.First().ErrorMessage
-                    </p>
-                }
-                <input class="govuk-input govuk-input @(ViewData.ModelState["BaseStatusOverrideValue"]?.Errors.Any() == true ? "govuk-input--error" : "")"
-                       asp-for="BaseStatusOverrideValue" type="text" />
-            </div>
 
-            <div class="govuk-button-group">
-                <button class="govuk-button" type="submit" id="save-new-version-button">Save Overrides</button>
-                <button class="govuk-button govuk-button--secondary" type="submit" id="cancel-add-version-button" asp-page-handler="CancelOverride">Cancel</button>
+        <div class="govuk-form-group">
+            <label class="govuk-label govuk-label--m" for="template-selector">
+                Template
+            </label>
+            <p class="govuk-hint">Select the template whose status labels you want to override</p>
+            <select class="govuk-select" id="template-selector" name="selectedTemplateId"
+                    onchange="window.location.href='?selectedTemplateId=' + this.value">
+                <option value="">-- Select a template --</option>
+                @foreach (var template in Model.AvailableTemplates)
+                {
+                    <option value="@template.TemplateId"
+                            selected="@(Model.SelectedTemplateId == template.TemplateId)">
+                        @template.Name
+                    </option>
+                }
+            </select>
+        </div>
+
+        @if (Model.SelectedTemplateId.HasValue && Model.CurrentTemplate != null)
+        {
+            <dl class="govuk-summary-list govuk-!-margin-bottom-6">
+                <div class="govuk-summary-list__row">
+                    <dt class="govuk-summary-list__key">
+                        Template ID
+                    </dt>
+                    <dd class="govuk-summary-list__value">
+                        @Model.CurrentTemplate.TemplateId
+                    </dd>
+                </div>
+                <div class="govuk-summary-list__row">
+                    <dt class="govuk-summary-list__key">
+                        Template Name
+                    </dt>
+                    <dd class="govuk-summary-list__value">
+                        @Model.CurrentTemplate.TemplateName
+                    </dd>
+                </div>
+                <div class="govuk-summary-list__row">
+                    <dt class="govuk-summary-list__key">
+                        Current Version
+                    </dt>
+                    <dd class="govuk-summary-list__value">
+                        @Model.CurrentVersionNumber
+                    </dd>
+                </div>
+            </dl>
+
+            <form method="post" novalidate="">
+                <input type="hidden" name="selectedTemplateId" value="@Model.SelectedTemplateId" />
+                <div class="govuk-form-group">
+                    <label class="govuk-label govuk-label--m" for="base-status">
+                        Base Status
+                    </label>
+                    <select class="govuk-select" id="base-status" asp-for="SelectedBaseStatus" onchange="this.form.submit()">
+                        @foreach(var status in Model.BaseStatuses)
+                        {
+                            <option value="@status.Key">@status.Value</option>
+                        }
+                    </select>
+                </div>
+                <div class="govuk-form-group">
+                    <label class="govuk-label govuk-label--m" for="BaseStatusOverrideValue">
+                        Custom Status Value
+                    </label>
+                    @if (ViewData.ModelState["BaseStatusOverrideValue"]?.Errors.Any() == true)
+                    {
+                        <p id="version-error" class="govuk-error-message">
+                            <span class="govuk-visually-hidden">Error:</span> @ViewData.ModelState["BaseStatusOverrideValue"]?.Errors.First().ErrorMessage
+                        </p>
+                    }
+                    <input class="govuk-input @(ViewData.ModelState["BaseStatusOverrideValue"]?.Errors.Any() == true ? "govuk-input--error" : "")"
+                           asp-for="BaseStatusOverrideValue" type="text" />
+                </div>
+
+                <div class="govuk-button-group">
+                    <button class="govuk-button" type="submit" id="save-new-version-button">Save Overrides</button>
+                    <button class="govuk-button govuk-button--secondary" type="submit" id="cancel-add-version-button" asp-page-handler="CancelOverride">Cancel</button>
+                </div>
+            </form>
+        }
+        else if (!Model.SelectedTemplateId.HasValue)
+        {
+            <div class="govuk-inset-text">
+                Select a template above to manage its custom status labels.
             </div>
-        </form>
+        }
 
         <!-- Navigation -->
         <div class="govuk-!-margin-top-6">
             <a href="javascript:history.back()" class="govuk-link">← Go back</a>
         </div>
     </div>
-</div> 
+</div>
