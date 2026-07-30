@@ -1,0 +1,149 @@
+@page "/admin/user-manager/permissions"
+@model GovUK.Dfe.FlexForms.Web.Pages.Admin.UserManagerPermissionsModel
+@{
+    ViewData["Title"] = $"Permissions – {Model.UserName}";
+}
+
+<div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+        <a asp-page="/Admin/UserManager" class="govuk-back-link">Back to User Manager</a>
+
+        <govuk-error-summary>
+            @foreach (var modelError in ViewData.ModelState.Where(item => item.Value?.Errors.Count > 0))
+            {
+                foreach (var error in modelError.Value!.Errors)
+                {
+                    <govuk-error-summary-item href="#">@error.ErrorMessage</govuk-error-summary-item>
+                }
+            }
+        </govuk-error-summary>
+
+        <h1 class="govuk-heading-xl">Manage permissions</h1>
+        <p class="govuk-body">
+            Add user-level permissions for <strong>@Model.UserName</strong>
+            (<span class="govuk-!-font-size-16">@Model.UserEmail</span>).
+            Each grant is a resource type, resource key, and access type.
+            These override or supplement permissions inherited from the user's role.
+        </p>
+        <p class="govuk-hint">
+            Use a specific resource id (application GUID, template GUID, or user email) where needed.
+            Special keys:
+            <code class="govuk-!-font-size-16">Any</code> is allowed for
+            <strong>Application — Read</strong>, <strong>ApplicationFiles — Read</strong>
+            (CaseReader-style tenant-wide read), <strong>Template — Write</strong>
+            (create applications on any template), and tenant-wide
+            <strong>Template — Manage</strong> or <strong>User — Manage</strong>.
+        </p>
+
+        <form method="post">
+            <input type="hidden" asp-for="UserId" />
+            @foreach (var grant in Model.SelectedGrants)
+            {
+                <input type="hidden" name="SelectedGrants" value="@grant" />
+            }
+
+            <div class="govuk-form-group">
+                <fieldset class="govuk-fieldset">
+                    <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">
+                        Add a permission
+                    </legend>
+
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="NewResourceType">Resource type</label>
+                        <select class="govuk-select" asp-for="NewResourceType">
+                            @foreach (var resourceType in Model.ResourceTypes)
+                            {
+                                <option value="@resourceType">@resourceType</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.NewResourceKey)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                        <label class="govuk-label" asp-for="NewResourceKey">Resource key</label>
+                        <div class="govuk-hint">
+                            Application or ApplicationFiles: application id, or <code class="govuk-!-font-size-16">Any</code> with Read.
+                            Template: template id, or <code class="govuk-!-font-size-16">Any</code> with Write (create apps) or Manage (administer templates).
+                            User: user email, or <code class="govuk-!-font-size-16">Any</code> with Manage (User Manager access).
+                            Notifications: user email.
+                        </div>
+                        @if (ViewData.ModelState[nameof(Model.NewResourceKey)]?.Errors.FirstOrDefault() is { } keyError)
+                        {
+                            <p class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @keyError.ErrorMessage</p>
+                        }
+                        <input class="govuk-input" asp-for="NewResourceKey" autocomplete="off" spellcheck="false" />
+                    </div>
+
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="NewAccessType">Access type</label>
+                        <select class="govuk-select" asp-for="NewAccessType">
+                            @foreach (var accessType in Model.AccessTypes)
+                            {
+                                <option value="@accessType">@accessType</option>
+                            }
+                        </select>
+                    </div>
+
+                    <button type="submit"
+                            class="govuk-button govuk-button--secondary"
+                            asp-page-handler="Add"
+                            data-module="govuk-button">
+                        Add
+                    </button>
+                </fieldset>
+            </div>
+
+            <h2 class="govuk-heading-m">Permissions for this user</h2>
+
+            @if (Model.SelectedGrants.Count == 0)
+            {
+                <p class="govuk-body">No user-level permissions added yet.</p>
+            }
+            else
+            {
+                <table class="govuk-table">
+                    <thead class="govuk-table__head">
+                        <tr class="govuk-table__row">
+                            <th scope="col" class="govuk-table__header">Resource type</th>
+                            <th scope="col" class="govuk-table__header">Resource key</th>
+                            <th scope="col" class="govuk-table__header">Access</th>
+                            <th scope="col" class="govuk-table__header">
+                                <span class="govuk-visually-hidden">Actions</span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="govuk-table__body">
+                        @foreach (var grant in Model.SelectedGrants)
+                        {
+                            var parts = grant.Split('|', 3);
+                            <tr class="govuk-table__row">
+                                <td class="govuk-table__cell">@(parts.Length > 0 ? parts[0] : grant)</td>
+                                <td class="govuk-table__cell"><code class="govuk-!-font-size-16">@(parts.Length > 1 ? parts[1] : "")</code></td>
+                                <td class="govuk-table__cell">@(parts.Length > 2 ? parts[2] : "")</td>
+                                <td class="govuk-table__cell">
+                                    <button type="submit"
+                                            class="govuk-button govuk-button--warning govuk-!-margin-bottom-0"
+                                            asp-page-handler="Remove"
+                                            name="grantKey"
+                                            value="@grant"
+                                            data-module="govuk-button">
+                                        Remove
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+
+            <div class="govuk-button-group">
+                <button type="submit"
+                        class="govuk-button"
+                        asp-page-handler="Save"
+                        data-module="govuk-button">
+                    Save permissions
+                </button>
+                <a asp-page="/Admin/UserManager" class="govuk-link">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>

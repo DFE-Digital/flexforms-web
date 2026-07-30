@@ -92,6 +92,7 @@
                             <td class="govuk-table__cell">
                                 <div class="govuk-button-group">
                                     <a asp-page="/Admin/UserManagerEdit" asp-route-userId="@user.UserId" class="govuk-link">Edit</a>
+                                    <a asp-page="/Admin/UserManagerPermissions" asp-route-userId="@user.UserId" class="govuk-link">Permissions</a>
                                     <form method="post" asp-page-handler="Remove" style="display: inline;" onsubmit="return confirm('Remove this user from the tenant? Their form access for this tenant will be cleared.');">
                                         <input type="hidden" name="userId" value="@user.UserId" />
                                         <button type="submit" class="govuk-button govuk-button--warning govuk-!-margin-bottom-0">Remove</button>
