@@ -1,3 +1,4 @@
+using System.Text;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.CoreLibs.Http.Models;
@@ -96,7 +97,7 @@ public sealed class TenantSettingsModel(
         {
             await tenantAdminClient.UpsertTenantSettingAsync(
                 TenantId,
-                new UpsertTenantSettingRequest(category, target, settingsJson, isSecret),
+                new UpsertTenantSettingRequest(category, target, ToBase64SettingsJson(settingsJson), isSecret),
                 cancellationToken);
 
             await RefreshCachesAsync(cancellationToken);
@@ -152,7 +153,7 @@ public sealed class TenantSettingsModel(
         {
             await tenantAdminClient.UpsertTenantSettingAsync(
                 TenantId,
-                new UpsertTenantSettingRequest(NewCategory, NewTarget, NewSettingsJson, NewIsSecret),
+                new UpsertTenantSettingRequest(NewCategory, NewTarget, ToBase64SettingsJson(NewSettingsJson), NewIsSecret),
                 cancellationToken);
 
             await RefreshCachesAsync(cancellationToken);
@@ -242,12 +243,32 @@ public sealed class TenantSettingsModel(
         }
     }
 
+    /// <summary>
+    /// Encodes settings JSON as Base64 for the API (WAF-safe; mirrors template schema transport).
+    /// </summary>
+    internal static string ToBase64SettingsJson(string settingsJson) =>
+        Convert.ToBase64String(Encoding.UTF8.GetBytes(settingsJson));
+
     internal static string GetErrorMessage(Exception ex, string fallback)
     {
         if (ex is ExternalApplicationsException<ExceptionResponse> apiEx
             && !string.IsNullOrWhiteSpace(apiEx.Result?.Message))
         {
             return apiEx.Result.Message;
+        }
+
+        if (ex is ExternalApplicationsException clientEx)
+        {
+            var body = clientEx.Response?.TrimStart() ?? string.Empty;
+            if (clientEx.StatusCode == 403 && body.StartsWith('<'))
+            {
+                return "Save was blocked with HTTP 403 (HTML response). "
+                    + "This usually means an Azure gateway/WAF rejected the request before the API. "
+                    + "Check Front Door / App Gateway logs for /v1/admin/tenants/.../settings.";
+            }
+
+            if (clientEx.StatusCode > 0)
+                return $"{fallback} (HTTP {clientEx.StatusCode})";
         }
 
         return fallback;
