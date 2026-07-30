@@ -158,6 +158,8 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
                     var userId = context.HttpContext.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "Anonymous";
 
                     page.TempData["ApiErrorId"] = r.ErrorId;
+                    if (!string.IsNullOrWhiteSpace(r.Message))
+                        page.TempData["AccessDeniedReason"] = r.Message;
 
                     // Treat forbidden application view access the same as not found
                     if (IsApplicationRequest(context.HttpContext.Request.Path)

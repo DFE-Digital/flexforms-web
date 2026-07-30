@@ -1,3 +1,4 @@
+using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.CoreLibs.Caching.Helpers;
 using GovUK.Dfe.CoreLibs.Caching.Interfaces;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
@@ -18,7 +19,7 @@ using GovUK.Dfe.FlexForms.Api.Client.Security;
 namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
 {
     [ExcludeFromCodeCoverage]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Policy = AdminAccessHelper.CanAccessAdminAreaPolicy)]
     public class AdminModel(
         IFormTemplateProvider templateProvider,
         ITemplatesClient templatesClient,
@@ -43,6 +44,16 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
         public string? DsiToken { get; set; }
         public string? UserToken { get; set; }
         public IReadOnlyList<TemplateDto> TenantTemplates { get; private set; } = [];
+
+        public bool IsFullAdmin => AdminAccessHelper.IsAdmin(User);
+
+        public bool CanManageTemplates => AdminAccessHelper.CanManageTemplates(User);
+
+        public bool CanManageUsers => AdminAccessHelper.CanManageUsers(User);
+
+        public bool CanManageRoles => AdminAccessHelper.CanManageRoles(User);
+
+        public bool CanManageTenantSettings => AdminAccessHelper.CanManageTenantSettings(User);
 
         public async Task<IActionResult> OnGetAsync()
         {
@@ -69,6 +80,9 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
 
         public async Task<IActionResult> OnPostClearAllAsync()
         {
+            if (!CanManageTemplates)
+                return Forbid();
+
             try
             {
                 HttpContext.Session.Clear();
@@ -97,11 +111,17 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
 
         public IActionResult OnPostGoToTemplateManager()
         {
+            if (!CanManageTemplates)
+                return Forbid();
+
             return RedirectToPage("/Admin/TemplateManager");
         }
 
         public IActionResult OnPostGoToCustomStatusLabelOverrides()
         {
+            if (!CanManageTemplates)
+                return Forbid();
+
             return RedirectToPage("/Admin/CustomStatusLabelOverrides");
         }
 
@@ -113,6 +133,9 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
 
         private async Task<IActionResult> SetTemplateLiveAsync(Guid templateId, bool isLive)
         {
+            if (!CanManageTemplates)
+                return Forbid();
+
             try
             {
                 logger.LogInformation(
@@ -143,6 +166,9 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
 
         public async Task<IActionResult> OnPostOpenTemplateAsync(Guid templateId)
         {
+            if (!CanManageTemplates)
+                return Forbid();
+
             try
             {
                 var templates = await templateSelectionService.GetSelectableTemplatesAsync();

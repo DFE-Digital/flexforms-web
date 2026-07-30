@@ -1,6 +1,7 @@
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
+using GovUK.Dfe.FlexForms.Domain.Caching;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
@@ -71,10 +72,12 @@ public class ApplicationResponseService(
                 var statusKey = $"ApplicationStatus_{applicationId}";
                 var currentStatus = session.GetString(statusKey);
                 
-                // Only update if not already submitted
-                if (string.IsNullOrEmpty(currentStatus) || currentStatus.Equals("InProgress", StringComparison.OrdinalIgnoreCase))
+                // Promote Created/empty session status to InProgress once data is saved.
+                // Do not overwrite Submitted (or other terminal statuses).
+                if (string.IsNullOrEmpty(currentStatus)
+                    || currentStatus.Equals("Created", StringComparison.OrdinalIgnoreCase)
+                    || currentStatus.Equals("InProgress", StringComparison.OrdinalIgnoreCase))
                 {
-                    // Update session status to InProgress
                     session.SetString(statusKey, "InProgress");
                     logger.LogInformation("Updated application {ApplicationId} status to InProgress due to form data being saved", applicationId);
                 }
@@ -264,7 +267,7 @@ public class ApplicationResponseService(
                                 Guid.TryParse(idProp.GetString(), out var fileId))
                             {
                                 // Check by file ID
-                                var fileIdBlacklistKey = $"DfE:InfectedFile:{fileId}";
+                                var fileIdBlacklistKey = $"{FlexFormsCacheKeys.InfectedFilePrefix}{fileId}";
                                 if (db.KeyExists(fileIdBlacklistKey))
                                 {
                                     isInfected = true;
@@ -280,7 +283,7 @@ public class ApplicationResponseService(
                                     
                                     if (!string.IsNullOrEmpty(originalFileName))
                                     {
-                                        var filenameBlacklistKey = $"DfE:InfectedFileName:{applicationId}:{originalFileName}";
+                                        var filenameBlacklistKey = $"{FlexFormsCacheKeys.InfectedFileNamePrefix}{applicationId}:{originalFileName}";
                                         if (db.KeyExists(filenameBlacklistKey))
                                         {
                                             isInfected = true;

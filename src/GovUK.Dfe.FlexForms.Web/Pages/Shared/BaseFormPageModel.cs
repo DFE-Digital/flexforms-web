@@ -148,7 +148,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Shared
         /// </summary>
         public bool IsUserAdmin()
         {
-            return HttpContext?.User?.IsInRole("Admin") == true
+            return GovUK.Dfe.FlexForms.Web.Security.AdminAccessHelper.IsAdmin(HttpContext?.User)
                 && !IsServiceAuthenticated();
         }
 

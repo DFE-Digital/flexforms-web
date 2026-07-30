@@ -1,0 +1,144 @@
+@page "/admin/role-manager"
+@model GovUK.Dfe.FlexForms.Web.Pages.Admin.RoleManagerModel
+@{
+    ViewData["Title"] = "Role Manager";
+}
+
+<div class="govuk-grid-row">
+    <div class="govuk-grid-column-full">
+        <a asp-page="/Admin/Admin" class="govuk-back-link">Back to Admin</a>
+
+        <h1 class="govuk-heading-xl">Role Manager</h1>
+        <p class="govuk-body">
+            Create custom roles for this tenant and manage the permissions each role grants.
+            System roles cannot be renamed or deleted.
+        </p>
+
+        @if (Model.HasError)
+        {
+            <div class="govuk-error-summary" data-module="govuk-error-summary">
+                <div role="alert">
+                    <h2 class="govuk-error-summary__title">There is a problem</h2>
+                    <div class="govuk-error-summary__body">
+                        <p class="govuk-body">@Model.ErrorMessage</p>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (!ViewData.ModelState.IsValid)
+        {
+            <govuk-error-summary>
+                @foreach (var modelError in ViewData.ModelState.Where(item => item.Value?.Errors.Count > 0))
+                {
+                    foreach (var error in modelError.Value!.Errors)
+                    {
+                        <govuk-error-summary-item href="#">@error.ErrorMessage</govuk-error-summary-item>
+                    }
+                }
+            </govuk-error-summary>
+        }
+
+        @if (Model.ShowSuccess)
+        {
+            <div class="govuk-notification-banner govuk-notification-banner--success" role="alert" data-module="govuk-notification-banner">
+                <div class="govuk-notification-banner__header">
+                    <h2 class="govuk-notification-banner__title">Success</h2>
+                </div>
+                <div class="govuk-notification-banner__content">
+                    <p class="govuk-notification-banner__heading">@Model.SuccessMessage</p>
+                </div>
+            </div>
+        }
+
+        <div class="govuk-summary-card">
+            <div class="govuk-summary-card__title-wrapper">
+                <h2 class="govuk-summary-card__title">Create a role</h2>
+            </div>
+            <div class="govuk-summary-card__content">
+                <form method="post" asp-page-handler="Create">
+                    <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.NewRoleName)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                        <label class="govuk-label govuk-label--m" asp-for="NewRoleName">Role name</label>
+                        <div class="govuk-hint">Do not use reserved names such as SuperAdmin or Admin.</div>
+                        @if (ViewData.ModelState[nameof(Model.NewRoleName)]?.Errors.FirstOrDefault() is { } nameError)
+                        {
+                            <p class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @nameError.ErrorMessage</p>
+                        }
+                        <input class="govuk-input govuk-!-width-one-half @(ViewData.ModelState[nameof(Model.NewRoleName)]?.Errors.Any() == true ? "govuk-input--error" : "")"
+                               asp-for="NewRoleName" />
+                    </div>
+                    <button type="submit" class="govuk-button" data-module="govuk-button">Create role</button>
+                </form>
+            </div>
+        </div>
+
+        <h2 class="govuk-heading-l">Roles in this tenant</h2>
+
+        @if (Model.Roles.Count == 0)
+        {
+            <p class="govuk-body">No roles found for this tenant.</p>
+        }
+        else
+        {
+            <table class="govuk-table">
+                <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                        <th scope="col" class="govuk-table__header">Name</th>
+                        <th scope="col" class="govuk-table__header">Type</th>
+                        <th scope="col" class="govuk-table__header">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                    @foreach (var role in Model.Roles)
+                    {
+                        <tr class="govuk-table__row">
+                            <td class="govuk-table__cell">
+                                @if (role.IsSystem)
+                                {
+                                    @role.Name
+                                }
+                                else
+                                {
+                                    <form method="post" asp-page-handler="Rename" class="govuk-!-margin-bottom-0">
+                                        <input type="hidden" name="roleId" value="@role.RoleId" />
+                                        <div class="govuk-input__wrapper">
+                                            <input class="govuk-input govuk-!-width-one-half" name="name" value="@role.Name" aria-label="Rename @role.Name" />
+                                            <button type="submit" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0 govuk-!-margin-left-2">Rename</button>
+                                        </div>
+                                    </form>
+                                }
+                            </td>
+                            <td class="govuk-table__cell">
+                                @if (role.IsSystem)
+                                {
+                                    <strong class="govuk-tag govuk-tag--blue">System</strong>
+                                }
+                                else
+                                {
+                                    <strong class="govuk-tag govuk-tag--grey">Custom</strong>
+                                }
+                            </td>
+                            <td class="govuk-table__cell">
+                                <div class="govuk-button-group">
+                                    @if (!role.IsSystem)
+                                    {
+                                        <a asp-page="/Admin/RoleManagerPermissions" asp-route-roleId="@role.RoleId" class="govuk-link">Manage permissions</a>
+                                        <form method="post" asp-page-handler="Delete" style="display: inline;"
+                                              onsubmit="return confirm('Delete role @role.Name? Users must be unassigned first.');">
+                                            <input type="hidden" name="roleId" value="@role.RoleId" />
+                                            <button type="submit" class="govuk-button govuk-button--warning govuk-!-margin-bottom-0">Delete</button>
+                                        </form>
+                                    }
+                                    else
+                                    {
+                                        <span class="govuk-hint">Permissions are fixed for system roles</span>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>

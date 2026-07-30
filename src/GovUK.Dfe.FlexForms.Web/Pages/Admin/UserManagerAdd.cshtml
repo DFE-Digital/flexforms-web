@@ -44,6 +44,11 @@
 
             <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.Role)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
                 <label class="govuk-label govuk-label--m" asp-for="Role">Role</label>
+                <div class="govuk-hint">Includes the system User role and any custom roles from Role Manager.</div>
+                @if (ViewData.ModelState[nameof(Model.Role)]?.Errors.FirstOrDefault() is { } roleError)
+                {
+                    <p class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @roleError.ErrorMessage</p>
+                }
                 <select class="govuk-select" asp-for="Role">
                     @foreach (var role in Model.AssignableRoles)
                     {
@@ -58,7 +63,7 @@
                         Forms
                     </legend>
                     <div id="templates-hint" class="govuk-hint">
-                        Required for User and Caseworker. Optional for Admin.
+                        Required for the User role. Optional for custom roles that get Application access from Role Manager.
                     </div>
                     @if (ViewData.ModelState[nameof(Model.SelectedTemplateIds)]?.Errors.FirstOrDefault() is { } templatesError)
                     {

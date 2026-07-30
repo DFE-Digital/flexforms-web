@@ -1,3 +1,4 @@
+using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using GovUK.Dfe.FlexForms.Web.Services;
@@ -7,7 +8,6 @@ using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -18,104 +18,101 @@ using Task = System.Threading.Tasks.Task;
 namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
 {
     [ExcludeFromCodeCoverage]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Policy = AdminAccessHelper.CanManageTemplatesPolicy)]
     public class CustomStatusLabelOverridesModel(
         IApplicationStatusService applicationStatusService,
         IFormTemplateProvider formTemplateProvider,
         ICacheService<IMemoryCacheType> cacheService,
         ITemplatesClient templatesClient,
+        ITemplateSelectionService templateSelectionService,
         ILogger<CustomStatusLabelOverridesModel> logger)
         : PageModel
     {
-        private readonly ILogger<CustomStatusLabelOverridesModel> _logger = logger;
-        private readonly IApplicationStatusService _applicationStatusService = applicationStatusService;
-        private readonly ICacheService<IMemoryCacheType> _cacheService = cacheService;
-        private readonly IFormTemplateProvider _formTemplateProvider = formTemplateProvider;
-        private readonly ITemplatesClient _templatesClient = templatesClient;
-
         public bool ShowSuccess { get; set; }
         public bool HasError { get; set; }
         public FormTemplate? CurrentTemplate { get; set; }
         public string? CurrentVersionNumber { get; set; }
+        public IReadOnlyList<TemplateDto> AvailableTemplates { get; set; } = [];
+
+        [BindProperty(SupportsGet = true)]
+        public Guid? SelectedTemplateId { get; set; }
+
         [BindProperty]
         [Required(ErrorMessage = "A custom override value is required")]
-        public string BaseStatusOverrideValue { get; set; }
-        public IEnumerable<KeyValuePair<ApplicationStatus, string>> BaseStatuses { get; set; }
+        public string BaseStatusOverrideValue { get; set; } = string.Empty;
+
+        public IEnumerable<KeyValuePair<ApplicationStatus, string>> BaseStatuses { get; set; } =
+            Enumerable.Empty<KeyValuePair<ApplicationStatus, string>>();
+
         [BindProperty(SupportsGet = true)]
         public ApplicationStatus SelectedBaseStatus { get; set; }
 
-        public async Task<IActionResult> OnGetAsync(bool success = false, ApplicationStatus status = ApplicationStatus.Created)
+        public async Task<IActionResult> OnGetAsync(
+            bool success = false,
+            ApplicationStatus status = ApplicationStatus.Created)
         {
             ShowSuccess = success;
+            await LoadAvailableTemplatesAsync();
 
-            bool templateParsed = Guid.TryParse(HttpContext.Session.GetString("TemplateId"), out Guid templateId);
-
-            if (!templateParsed)
+            var templateId = ResolveTemplateId();
+            if (templateId == null)
             {
-                _logger.LogWarning("TemplateId not found in session, or is not a valid Guid");
+                return Page();
             }
 
-            await LoadTemplateDataAsync(templateId);
+            SelectedTemplateId = templateId.Value;
+            await LoadTemplateDataAsync(templateId.Value);
             SelectedBaseStatus = status;
-            BaseStatuses = _applicationStatusService.GetBaseApplicationStatuses().OrderBy(x => x.Key);
-            var statuses = await _applicationStatusService.GetCustomApplicationStatusesAsync(templateId);
-            BaseStatusOverrideValue = _applicationStatusService.GetStatusLabel(status, statuses);
+            BaseStatuses = applicationStatusService.GetBaseApplicationStatuses().OrderBy(x => x.Key);
+            var statuses = await applicationStatusService.GetCustomApplicationStatusesAsync(templateId.Value);
+            BaseStatusOverrideValue = applicationStatusService.GetStatusLabel(status, statuses);
             return Page();
         }
 
         public async Task<IActionResult> OnPostAsync()
         {
+            await LoadAvailableTemplatesAsync();
+
+            var templateId = ResolveTemplateId();
+            if (templateId == null)
+            {
+                ModelState.AddModelError(nameof(SelectedTemplateId), "Please select a template.");
+                return Page();
+            }
+
+            SelectedTemplateId = templateId.Value;
+
             ApplicationStatus appStatus = ApplicationStatus.Created;
             var query = HttpContext.Request.Query;
-            var queryHasStatus = query.TryGetValue("status", out var queryStatus);
-            if(queryHasStatus)
+            if (query.TryGetValue("status", out var queryStatus))
             {
                 Enum.TryParse(queryStatus, out appStatus);
             }
 
             if (appStatus != SelectedBaseStatus)
             {
-                return RedirectToPage(new { status = SelectedBaseStatus });
-            }
-
-            bool templateParsed = Guid.TryParse(HttpContext.Session.GetString("TemplateId"), out Guid templateId);
-            if (!templateParsed)
-            {
-                _logger.LogWarning("TemplateId not found in session during post.");
-                return RedirectToPage("/Applications/Dashboard");
+                return RedirectToPage(new { selectedTemplateId = templateId, status = SelectedBaseStatus });
             }
 
             if (!ValidateInput())
             {
-                await LoadTemplateDataAsync(templateId);
-                BaseStatuses = _applicationStatusService.GetBaseApplicationStatuses().OrderBy(x => x.Key);
+                await LoadTemplateDataAsync(templateId.Value);
+                BaseStatuses = applicationStatusService.GetBaseApplicationStatuses().OrderBy(x => x.Key);
                 return Page();
             }
 
-            await _applicationStatusService.OverrideApplicationStatusLabels(templateId,
+            await applicationStatusService.OverrideApplicationStatusLabels(templateId.Value,
                 new CustomApplicationStatusRequest
                 {
                     Label = BaseStatusOverrideValue,
                     ApplicationStatus = SelectedBaseStatus
                 });
-            
-            _logger.LogInformation("Successfully overriden submitted application status for {TemplateId}", templateId);
-            _cacheService.Remove($"CustomApplicationStatuses_{CacheKeyHelper.GenerateHashedCacheKey(templateId.ToString())}");
 
-            return RedirectToPage(new { success = true, status = appStatus });
-        }
+            logger.LogInformation("Successfully overridden application status for {TemplateId}", templateId);
+            cacheService.Remove(
+                $"CustomApplicationStatuses_{CacheKeyHelper.GenerateHashedCacheKey(templateId.Value.ToString())}");
 
-        private bool ValidateInput()
-        {
-            var isValid = true;
-
-            if (string.IsNullOrWhiteSpace(BaseStatusOverrideValue))
-            {
-                ModelState.AddModelError(nameof(BaseStatusOverrideValue), "An override value for \"In Progress\" is required and cannot be empty");
-                isValid = false;
-            }
-
-            return isValid;
+            return RedirectToPage(new { selectedTemplateId = templateId, success = true, status = appStatus });
         }
 
         public IActionResult OnPostCancelOverride()
@@ -123,11 +120,52 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
             return new RedirectToPageResult("/Admin/Admin");
         }
 
+        private Guid? ResolveTemplateId()
+        {
+            if (SelectedTemplateId.HasValue && SelectedTemplateId.Value != Guid.Empty)
+            {
+                return SelectedTemplateId.Value;
+            }
+
+            if (Guid.TryParse(HttpContext.Session.GetString("TemplateId"), out var sessionId)
+                && sessionId != Guid.Empty)
+            {
+                return sessionId;
+            }
+
+            return null;
+        }
+
+        private bool ValidateInput()
+        {
+            if (string.IsNullOrWhiteSpace(BaseStatusOverrideValue))
+            {
+                ModelState.AddModelError(nameof(BaseStatusOverrideValue),
+                    "An override value is required and cannot be empty");
+                return false;
+            }
+
+            return true;
+        }
+
+        private async Task LoadAvailableTemplatesAsync()
+        {
+            try
+            {
+                AvailableTemplates = await templateSelectionService.GetSelectableTemplatesAsync();
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to load available templates for custom status page");
+                AvailableTemplates = [];
+            }
+        }
+
         private async Task LoadTemplateDataAsync(Guid templateId)
         {
-            var apiResponse = await _templatesClient.GetLatestTemplateSchemaAsync(templateId);
+            var apiResponse = await templatesClient.GetLatestTemplateSchemaAsync(templateId);
             CurrentVersionNumber = apiResponse.VersionNumber;
-            CurrentTemplate = await _formTemplateProvider.GetTemplateAsync(templateId.ToString());
+            CurrentTemplate = await formTemplateProvider.GetTemplateAsync(templateId.ToString());
         }
     }
 }

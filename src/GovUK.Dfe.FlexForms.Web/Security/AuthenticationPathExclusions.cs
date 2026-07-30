@@ -12,7 +12,11 @@ internal static class AuthenticationPathExclusions
         "/signout-callback-oidc",
         "/signin-entra",
         "/signout-callback-entra",
-        "/Logout"
+        "/Logout",
+        "/health",
+        "/healthz",
+        "/liveness",
+        "/readiness"
     ];
 
     /// <summary>

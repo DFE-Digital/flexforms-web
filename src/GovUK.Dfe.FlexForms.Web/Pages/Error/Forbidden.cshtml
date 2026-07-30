@@ -8,7 +8,11 @@
     <div class="govuk-grid-column-two-thirds">
         <h1 class="govuk-heading-xl">You do not have permission</h1>
         
-        <p class="govuk-body">Sorry, you don't have permission to view this page.</p>
+        <p class="govuk-body">
+            @(string.IsNullOrWhiteSpace(Model.DenialReason)
+                ? "Sorry, you don't have permission to view this page."
+                : Model.DenialReason)
+        </p>
         
         @if (!string.IsNullOrEmpty(Model.ErrorId))
         {

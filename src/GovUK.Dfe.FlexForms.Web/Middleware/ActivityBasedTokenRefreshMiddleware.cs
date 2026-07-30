@@ -31,6 +31,9 @@ public class ActivityBasedTokenRefreshMiddleware(
     private static readonly string[] SkipPaths =
     [
         "/health",
+        "/healthz",
+        "/liveness",
+        "/readiness",
         "/favicon",
         "/css",
         "/js",

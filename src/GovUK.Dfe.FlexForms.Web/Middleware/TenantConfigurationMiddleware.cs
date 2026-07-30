@@ -102,6 +102,12 @@ public sealed class TenantConfigurationMiddleware(
                || value.StartsWith("/assets", StringComparison.OrdinalIgnoreCase)
                || value.StartsWith("/govuk", StringComparison.OrdinalIgnoreCase)
                || value.StartsWith("/favicon", StringComparison.OrdinalIgnoreCase)
-               || value.StartsWith("/_framework", StringComparison.OrdinalIgnoreCase);
+               || value.StartsWith("/_framework", StringComparison.OrdinalIgnoreCase)
+               || value.Equals("/health", StringComparison.OrdinalIgnoreCase)
+               || value.Equals("/healthz", StringComparison.OrdinalIgnoreCase)
+               || value.Equals("/liveness", StringComparison.OrdinalIgnoreCase)
+               || value.Equals("/readiness", StringComparison.OrdinalIgnoreCase)
+               || value.StartsWith("/Error", StringComparison.OrdinalIgnoreCase)
+               || value.Equals("/favicon.ico", StringComparison.OrdinalIgnoreCase);
     }
 }

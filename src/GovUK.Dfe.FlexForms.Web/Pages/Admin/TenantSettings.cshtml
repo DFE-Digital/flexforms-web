@@ -1,0 +1,181 @@
+@page "/admin/tenant-settings"
+@model GovUK.Dfe.FlexForms.Web.Pages.Admin.TenantSettingsModel
+@{
+    ViewData["Title"] = "Tenant Settings";
+}
+
+<div class="govuk-grid-row">
+    <div class="govuk-grid-column-full">
+        <a asp-page="/Admin/Admin" class="govuk-back-link">Back to Admin</a>
+
+        @if (Model.HasError)
+        {
+            <div class="govuk-error-summary" data-module="govuk-error-summary">
+                <div role="alert">
+                    <h2 class="govuk-error-summary__title">There is a problem</h2>
+                    <div class="govuk-error-summary__body">
+                        <p class="govuk-body">@Model.ErrorMessage</p>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (Model.ShowSuccess)
+        {
+            <div class="govuk-notification-banner govuk-notification-banner--success" role="alert" data-module="govuk-notification-banner">
+                <div class="govuk-notification-banner__header">
+                    <h2 class="govuk-notification-banner__title">Success</h2>
+                </div>
+                <div class="govuk-notification-banner__content">
+                    <p class="govuk-notification-banner__heading">@Model.SuccessMessage</p>
+                </div>
+            </div>
+        }
+
+        <h1 class="govuk-heading-xl">Tenant settings</h1>
+        <p class="govuk-body">
+            Manage TenantConfig app settings for
+            <strong>@(string.IsNullOrWhiteSpace(Model.TenantName) ? Model.TenantId.ToString() : Model.TenantName)</strong>.
+            Secret values are shown decrypted here and encrypted when saved with Secret checked.
+        </p>
+
+        <div class="govuk-button-group">
+            <form method="post" asp-page-handler="Refresh">
+                <button type="submit" class="govuk-button govuk-button--secondary" data-module="govuk-button">
+                    Refresh settings
+                </button>
+            </form>
+        </div>
+
+        <h2 class="govuk-heading-m">Existing settings</h2>
+
+        @if (Model.Settings.Count == 0)
+        {
+            <p class="govuk-body">No settings found for this tenant.</p>
+        }
+        else
+        {
+            <table class="govuk-table">
+                <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                        <th scope="col" class="govuk-table__header">Category</th>
+                        <th scope="col" class="govuk-table__header">Target</th>
+                        <th scope="col" class="govuk-table__header">Value / Secret / Update</th>
+                    </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                    @foreach (var setting in Model.Settings)
+                    {
+                        var rowId = $"{setting.Category}-{setting.Target}".Replace(" ", "-");
+                        <tr class="govuk-table__row">
+                            <td class="govuk-table__cell">
+                                <code class="govuk-!-font-size-16">@setting.Category</code>
+                            </td>
+                            <td class="govuk-table__cell">@setting.Target</td>
+                            <td class="govuk-table__cell">
+                                <form method="post" asp-page-handler="Update">
+                                    <input type="hidden" name="category" value="@setting.Category" />
+                                    <input type="hidden" name="target" value="@setting.Target" />
+
+                                    <div class="govuk-form-group govuk-!-margin-bottom-2">
+                                        <label class="govuk-visually-hidden" for="value-@rowId">Value for @setting.Category</label>
+                                        <textarea class="govuk-textarea tenant-setting-value"
+                                                  id="value-@rowId"
+                                                  name="settingsJson"
+                                                  rows="4"
+                                                  data-secret-masked="true"
+                                                  style="-webkit-text-security: disc; text-security: disc;">@setting.SettingsJson</textarea>
+                                        <button type="button"
+                                                class="govuk-button govuk-button--secondary govuk-!-margin-top-1 govuk-!-margin-bottom-0 js-toggle-setting-value"
+                                                data-target="value-@rowId"
+                                                data-module="govuk-button">
+                                            Show value
+                                        </button>
+                                    </div>
+
+                                    <div class="govuk-checkboxes govuk-checkboxes--small govuk-!-margin-bottom-2" data-module="govuk-checkboxes">
+                                        <div class="govuk-checkboxes__item">
+                                            <input class="govuk-checkboxes__input"
+                                                   id="secret-@rowId"
+                                                   name="isSecret"
+                                                   type="checkbox"
+                                                   value="true"
+                                                   @(setting.IsSecret ? "checked" : null) />
+                                            <label class="govuk-label govuk-checkboxes__label" for="secret-@rowId">
+                                                Secret
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <button type="submit" class="govuk-button govuk-!-margin-bottom-0" data-module="govuk-button">
+                                        Update
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+
+        <h2 class="govuk-heading-m">Add a setting</h2>
+        <form method="post" asp-page-handler="Add">
+            <div class="govuk-form-group">
+                <label class="govuk-label" asp-for="NewCategory">Category</label>
+                <div class="govuk-hint">For example ConnectionStrings, AzureAd, Layout</div>
+                <input class="govuk-input govuk-!-width-one-half" asp-for="NewCategory" autocomplete="off" />
+            </div>
+
+            <div class="govuk-form-group">
+                <label class="govuk-label" asp-for="NewTarget">Target</label>
+                <select class="govuk-select" asp-for="NewTarget">
+                    @foreach (var target in TenantSettingsModel.ValidTargets)
+                    {
+                        <option value="@target">@target</option>
+                    }
+                </select>
+            </div>
+
+            <div class="govuk-form-group">
+                <label class="govuk-label" asp-for="NewSettingsJson">Settings JSON</label>
+                <textarea class="govuk-textarea" asp-for="NewSettingsJson" rows="6"></textarea>
+            </div>
+
+            <div class="govuk-form-group">
+                <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+                    <div class="govuk-checkboxes__item">
+                        <input class="govuk-checkboxes__input" asp-for="NewIsSecret" />
+                        <label class="govuk-label govuk-checkboxes__label" asp-for="NewIsSecret">
+                            Secret (encrypt at rest)
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" class="govuk-button" data-module="govuk-button">
+                Add setting
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+    document.querySelectorAll('.js-toggle-setting-value').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var textarea = document.getElementById(button.getAttribute('data-target'));
+            if (!textarea) return;
+            var masked = textarea.getAttribute('data-secret-masked') === 'true';
+            if (masked) {
+                textarea.style.webkitTextSecurity = 'none';
+                textarea.style.textSecurity = 'none';
+                textarea.setAttribute('data-secret-masked', 'false');
+                button.textContent = 'Hide value';
+            } else {
+                textarea.style.webkitTextSecurity = 'disc';
+                textarea.style.textSecurity = 'disc';
+                textarea.setAttribute('data-secret-masked', 'true');
+                button.textContent = 'Show value';
+            }
+        });
+    });
+</script>

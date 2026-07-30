@@ -1,12 +1,12 @@
 @page "/admin"
 @model GovUK.Dfe.FlexForms.Web.Pages.Admin.AdminModel
 @{
-    ViewData["Title"] = "Admin - Template Management";
+    ViewData["Title"] = "Admin";
 }
 
 <div class="govuk-grid-row">
     <div class="govuk-grid-column-full">
-        <h1 class="govuk-heading-xl">Admin - Template Management</h1>
+        <h1 class="govuk-heading-xl">Admin</h1>
 
         @if (Model.HasError)
         {
@@ -32,251 +32,269 @@
             </div>
         }
 
-        <div class="govuk-summary-card">
-            <div class="govuk-summary-card__title-wrapper">
-                <h2 class="govuk-summary-card__title">Tenant templates</h2>
-            </div>
-            <div class="govuk-summary-card__content">
-                <p class="govuk-body">
-                    Set which templates are live for end users. You can open non-live templates to preview them before going live.
-                </p>
-                @if (Model.TenantTemplates.Count == 0)
-                {
-                    <p class="govuk-body">No templates found in this tenant.</p>
-                }
-                else
-                {
-                    <table class="govuk-table">
-                        <thead class="govuk-table__head">
-                            <tr class="govuk-table__row">
-                                <th scope="col" class="govuk-table__header">Name</th>
-                                <th scope="col" class="govuk-table__header">Status</th>
-                                <th scope="col" class="govuk-table__header">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody class="govuk-table__body">
-                            @foreach (var template in Model.TenantTemplates)
-                            {
+        @if (Model.CanManageTemplates)
+        {
+            <div class="govuk-summary-card">
+                <div class="govuk-summary-card__title-wrapper">
+                    <h2 class="govuk-summary-card__title">Tenant templates</h2>
+                </div>
+                <div class="govuk-summary-card__content">
+                    <p class="govuk-body">
+                        Set which templates are live for end users. You can open non-live templates to preview them before going live.
+                    </p>
+                    @if (Model.TenantTemplates.Count == 0)
+                    {
+                        <p class="govuk-body">No templates found in this tenant.</p>
+                    }
+                    else
+                    {
+                        <table class="govuk-table">
+                            <thead class="govuk-table__head">
                                 <tr class="govuk-table__row">
-                                    <td class="govuk-table__cell">
-                                        @template.Name
-                                        @if (!string.IsNullOrWhiteSpace(template.LatestVersionNumber))
-                                        {
-                                            <br />
-                                            <span class="govuk-hint govuk-!-margin-bottom-0">Version @template.LatestVersionNumber</span>
-                                        }
-                                    </td>
-                                    <td class="govuk-table__cell">
-                                        @if (template.IsLive)
-                                        {
-                                            <strong class="govuk-tag govuk-tag--green">Live</strong>
-                                        }
-                                        else
-                                        {
-                                            <strong class="govuk-tag govuk-tag--grey">Not live</strong>
-                                        }
-                                    </td>
-                                    <td class="govuk-table__cell">
-                                        <div class="govuk-button-group">
-                                            <form method="post" asp-page-handler="OpenTemplate" style="display: inline;">
-                                                <input type="hidden" name="templateId" value="@template.TemplateId" />
-                                                <button type="submit" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0">
-                                                    @(template.IsLive ? "Open" : "Preview")
-                                                </button>
-                                            </form>
+                                    <th scope="col" class="govuk-table__header">Name</th>
+                                    <th scope="col" class="govuk-table__header">Status</th>
+                                    <th scope="col" class="govuk-table__header">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="govuk-table__body">
+                                @foreach (var template in Model.TenantTemplates)
+                                {
+                                    <tr class="govuk-table__row">
+                                        <td class="govuk-table__cell">
+                                            @template.Name
+                                            @if (!string.IsNullOrWhiteSpace(template.LatestVersionNumber))
+                                            {
+                                                <br />
+                                                <span class="govuk-hint govuk-!-margin-bottom-0">Version @template.LatestVersionNumber</span>
+                                            }
+                                        </td>
+                                        <td class="govuk-table__cell">
                                             @if (template.IsLive)
                                             {
-                                                <form method="post" asp-page-handler="MakeNotLive" style="display: inline;">
-                                                    <input type="hidden" name="templateId" value="@template.TemplateId" />
-                                                    <button type="submit" class="govuk-button govuk-button--warning govuk-!-margin-bottom-0">
-                                                        Make not live
-                                                    </button>
-                                                </form>
+                                                <strong class="govuk-tag govuk-tag--green">Live</strong>
                                             }
                                             else
                                             {
-                                                <form method="post" asp-page-handler="MakeLive" style="display: inline;">
+                                                <strong class="govuk-tag govuk-tag--grey">Not live</strong>
+                                            }
+                                        </td>
+                                        <td class="govuk-table__cell">
+                                            <div class="govuk-button-group">
+                                                <form method="post" asp-page-handler="OpenTemplate" style="display: inline;">
                                                     <input type="hidden" name="templateId" value="@template.TemplateId" />
-                                                    <button type="submit" class="govuk-button govuk-!-margin-bottom-0">
-                                                        Make live
+                                                    <button type="submit" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0">
+                                                        @(template.IsLive ? "Open" : "Preview")
                                                     </button>
                                                 </form>
-                                            }
-                                        </div>
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                }
-            </div>
-        </div>
-
-        @if (!string.IsNullOrEmpty(Model.TemplateId))
-        {
-            <!-- Current Template Information -->
-            <div class="govuk-summary-card">
-                <div class="govuk-summary-card__title-wrapper">
-                    <h2 class="govuk-summary-card__title">Current Template Information</h2>
-                </div>
-                <div class="govuk-summary-card__content">
-                    <dl class="govuk-summary-list">
-                        <div class="govuk-summary-list__row">
-                            <dt class="govuk-summary-list__key">Template ID</dt>
-                            <dd class="govuk-summary-list__value">
-                                <code class="govuk-body">@Model.TemplateId</code>
-                            </dd>
-                        </div>
-                        <div class="govuk-summary-list__row">
-                            <dt class="govuk-summary-list__key">Template Name</dt>
-                            <dd class="govuk-summary-list__value">@Model.TemplateName</dd>
-                        </div>
-                        <div class="govuk-summary-list__row">
-                            <dt class="govuk-summary-list__key">Description</dt>
-                            <dd class="govuk-summary-list__value">@Model.TemplateDescription</dd>
-                        </div>
-                        <div class="govuk-summary-list__row">
-                            <dt class="govuk-summary-list__key">Current Version</dt>
-                            <dd class="govuk-summary-list__value">
-                                <strong class="govuk-tag govuk-tag--blue">@Model.CurrentTemplateVersion</strong>
-                            </dd>
-                        </div>
-                        <div class="govuk-summary-list__row">
-                            <dt class="govuk-summary-list__key">Task Groups</dt>
-                            <dd class="govuk-summary-list__value">@Model.TaskGroupCount</dd>
-                        </div>
-                    </dl>
-                </div>
-            </div>
-
-            <!-- Cache Information -->
-            <div class="govuk-summary-card">
-                <div class="govuk-summary-card__title-wrapper">
-                    <h2 class="govuk-summary-card__title">Cache Information</h2>
-                </div>
-                <div class="govuk-summary-card__content">
-                    <dl class="govuk-summary-list">
-                        <div class="govuk-summary-list__row">
-                            <dt class="govuk-summary-list__key">Template Cache Key</dt>
-                            <dd class="govuk-summary-list__value">
-                                <code class="govuk-body govuk-!-font-size-16">@Model.TemplateCacheKey</code>
-                            </dd>
-                        </div>
-                        <div class="govuk-summary-list__row">
-                            <dt class="govuk-summary-list__key">Cache Status</dt>
-                            <dd class="govuk-summary-list__value">
-                                @{
-                                    var cacheStatus = await Model.GetCacheStatusAsync();
-                                    var cacheTagClass = cacheStatus.Contains("cached") ? "govuk-tag--green" : "govuk-tag--grey";
+                                                @if (template.IsLive)
+                                                {
+                                                    <form method="post" asp-page-handler="MakeNotLive" style="display: inline;">
+                                                        <input type="hidden" name="templateId" value="@template.TemplateId" />
+                                                        <button type="submit" class="govuk-button govuk-button--warning govuk-!-margin-bottom-0">
+                                                            Make not live
+                                                        </button>
+                                                    </form>
+                                                }
+                                                else
+                                                {
+                                                    <form method="post" asp-page-handler="MakeLive" style="display: inline;">
+                                                        <input type="hidden" name="templateId" value="@template.TemplateId" />
+                                                        <button type="submit" class="govuk-button govuk-!-margin-bottom-0">
+                                                            Make live
+                                                        </button>
+                                                    </form>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
                                 }
-                                <strong class="govuk-tag @cacheTagClass">@cacheStatus</strong>
-                            </dd>
-                        </div>
-                    </dl>
+                            </tbody>
+                        </table>
+                    }
                 </div>
             </div>
 
-            <!-- Session Information -->
+        }
+
+        @if (Model.CanManageTemplates)
+        {
             <div class="govuk-summary-card">
                 <div class="govuk-summary-card__title-wrapper">
-                    <h2 class="govuk-summary-card__title">Session Information</h2>
+                    <h2 class="govuk-summary-card__title">Template Management</h2>
                 </div>
                 <div class="govuk-summary-card__content">
-                    <dl class="govuk-summary-list">
-                        <div class="govuk-summary-list__row">
-                            <dt class="govuk-summary-list__key">Active Session Keys</dt>
-                            <dd class="govuk-summary-list__value">
-                                <code class="govuk-body govuk-!-font-size-14">@Model.GetSessionKeysInfo()</code>
-                            </dd>
-                        </div>
-                        <div class="govuk-summary-list__row">
-                            <dt class="govuk-summary-list__key">Test Token</dt>
-                            <dd class="govuk-summary-list__value">
-                                <code class="govuk-body govuk-!-font-size-14">@Model.TestToken</code>
-                            </dd>
-                        </div>
-                        <div class="govuk-summary-list__row">
-                            <dt class="govuk-summary-list__key">DfE-SignIn Token</dt>
-                            <dd class="govuk-summary-list__value">
-                                <code class="govuk-body govuk-!-font-size-14">@Model.DsiToken</code>
-                            </dd>
-                        </div>
-                        <div class="govuk-summary-list__row">
-                            <dt class="govuk-summary-list__key">Internal User Token</dt>
-                            <dd class="govuk-summary-list__value">
-                                <code class="govuk-body govuk-!-font-size-14">@Model.UserToken</code>
-                            </dd>
-                        </div>
-                    </dl>
+                    <p class="govuk-body">Create, edit and publish form templates for this tenant.</p>
+                    <div class="govuk-button-group">
+                        <a asp-page="/Admin/CreateTemplate" class="govuk-button" data-module="govuk-button" id="create-template-button">
+                            Create a new template
+                        </a>
+                        <form method="post" asp-page-handler="GoToTemplateManager" style="display: inline;">
+                            <button type="submit" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="go-to-template-manager-button">
+                                Template Manager
+                            </button>
+                        </form>
+                        <a href="/templates" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="go-to-templates-button">
+                            Choose / preview templates
+                        </a>
+                        <a asp-page="/Admin/CustomStatusLabelOverrides" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="go-to-custom-status-button">
+                            Custom Status Labels
+                        </a>
+                    </div>
                 </div>
             </div>
         }
 
-        <!-- Administrative Actions -->
-        <div class="govuk-summary-card">
-            <div class="govuk-summary-card__title-wrapper">
-                <h2 class="govuk-summary-card__title">Administrative Actions</h2>
-            </div>
-            <div class="govuk-summary-card__content">
-                <div class="govuk-button-group">
-                    <form method="post" asp-page-handler="ClearAll" style="display: inline;">
-                        <button type="submit" class="govuk-button govuk-button--warning" data-module="govuk-button" id="clear-all-sessions-button">
-                            Clear All Sessions & Caches
-                        </button>
-                    </form>
-
-                    <a href="/templates" class="govuk-button" data-module="govuk-button" id="go-to-templates-button">
-                        Choose / preview templates
-                    </a>
-
-                    <a asp-page="/Admin/CreateTemplate" class="govuk-button" data-module="govuk-button" id="create-template-button">
-                        Create a new template
-                    </a>
-                    
-                    <form method="post" asp-page-handler="GoToTemplateManager" style="display: inline;">
-                        <button type="submit" class="govuk-button" data-module="govuk-button" id="go-to-template-manager-button">
-                            Go to Template Manager
-                        </button>
-                    </form>
-
-                    <a asp-page="/Admin/UserManager" class="govuk-button" data-module="govuk-button" id="go-to-user-manager-button">
-                        User Manager
-                    </a>
-
-                    <form method="post" asp-page-handler="GoToCustomStatusLabelOverrides" style="display: inline;">
-                        <button type="submit" class="govuk-button" data-module="govuk-button" id="go-to-custom-status-button">
-                            Override Custom Status Labels
-                        </button>
-                    </form>
+        @if (Model.CanManageUsers || Model.CanManageRoles)
+        {
+            <div class="govuk-summary-card">
+                <div class="govuk-summary-card__title-wrapper">
+                    <h2 class="govuk-summary-card__title">Users &amp; Roles</h2>
                 </div>
-                
-                <div class="govuk-inset-text">
-                    <p class="govuk-body">
-                        <strong>Clear All Sessions & Caches:</strong> This will remove all session data and template caches. 
-                        You may need to navigate back to the main application and select a template to continue working.
-                    </p>
-                    <p class="govuk-body">
-                        <strong>Choose / preview templates:</strong> Open the template chooser to switch between this tenant's
-                        live and non-live templates.
-                    </p>
-                    <p class="govuk-body">
-                        <strong>Create a new template:</strong> Create a draft template for this tenant, then add its first version.
-                    </p>
-                    <p class="govuk-body">
-                        <strong>Template Manager:</strong> Navigate to the template manager to create new template versions 
-                        or view template schemas.
-                    </p>
-                    <p class="govuk-body">
-                        <strong>User Manager:</strong> View users with form access in this tenant, add or remove form access,
-                        or register a new user with a role.
-                    </p>
+                <div class="govuk-summary-card__content">
+                    <p class="govuk-body">Manage user access, roles and permissions for this tenant.</p>
+                    <div class="govuk-button-group">
+                        @if (Model.CanManageUsers)
+                        {
+                            <a asp-page="/Admin/UserManager" class="govuk-button" data-module="govuk-button" id="go-to-user-manager-button">
+                                User Manager
+                            </a>
+                        }
+                        @if (Model.CanManageRoles)
+                        {
+                            <a asp-page="/Admin/RoleManager" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="go-to-role-manager-button">
+                                Role Manager
+                            </a>
+                        }
+                    </div>
                 </div>
             </div>
-        </div>
+        }
 
-        <!-- Navigation -->
+        @if (Model.CanManageTenantSettings)
+        {
+            <div class="govuk-summary-card">
+                <div class="govuk-summary-card__title-wrapper">
+                    <h2 class="govuk-summary-card__title">Tenant configuration</h2>
+                </div>
+                <div class="govuk-summary-card__content">
+                    <p class="govuk-body">
+                        View and edit TenantConfig app settings for this tenant (SuperAdmin only).
+                        Secret values are encrypted at rest.
+                    </p>
+                    <div class="govuk-button-group">
+                        <a asp-page="/Admin/TenantSettings" class="govuk-button" data-module="govuk-button" id="go-to-tenant-settings-button">
+                            Tenant Settings
+                        </a>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (Model.CanManageTemplates)
+        {
+            <div class="govuk-summary-card">
+                <div class="govuk-summary-card__title-wrapper">
+                    <h2 class="govuk-summary-card__title">System</h2>
+                </div>
+                <div class="govuk-summary-card__content">
+                    <p class="govuk-body">Clear cached data and session state. You may need to re-select a template afterwards.</p>
+                    <div class="govuk-button-group">
+                        <form method="post" asp-page-handler="ClearAll" style="display: inline;">
+                            <button type="submit" class="govuk-button govuk-button--warning" data-module="govuk-button" id="clear-all-sessions-button">
+                                Clear All Sessions &amp; Caches
+                            </button>
+                        </form>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(Model.TemplateId))
+                    {
+                        <details class="govuk-details govuk-!-margin-top-4" data-module="govuk-details">
+                            <summary class="govuk-details__summary">
+                                <span class="govuk-details__summary-text">Diagnostics</span>
+                            </summary>
+                            <div class="govuk-details__text">
+                                <h3 class="govuk-heading-s">Active Template</h3>
+                                <dl class="govuk-summary-list govuk-summary-list--no-border">
+                                    <div class="govuk-summary-list__row">
+                                        <dt class="govuk-summary-list__key">Template</dt>
+                                        <dd class="govuk-summary-list__value">@Model.TemplateName</dd>
+                                    </div>
+                                    <div class="govuk-summary-list__row">
+                                        <dt class="govuk-summary-list__key">ID</dt>
+                                        <dd class="govuk-summary-list__value"><code>@Model.TemplateId</code></dd>
+                                    </div>
+                                    <div class="govuk-summary-list__row">
+                                        <dt class="govuk-summary-list__key">Version</dt>
+                                        <dd class="govuk-summary-list__value">
+                                            <strong class="govuk-tag govuk-tag--blue">@Model.CurrentTemplateVersion</strong>
+                                        </dd>
+                                    </div>
+                                    <div class="govuk-summary-list__row">
+                                        <dt class="govuk-summary-list__key">Description</dt>
+                                        <dd class="govuk-summary-list__value">@Model.TemplateDescription</dd>
+                                    </div>
+                                    <div class="govuk-summary-list__row">
+                                        <dt class="govuk-summary-list__key">Task Groups</dt>
+                                        <dd class="govuk-summary-list__value">@Model.TaskGroupCount</dd>
+                                    </div>
+                                </dl>
+
+                                <h3 class="govuk-heading-s govuk-!-margin-top-4">Cache</h3>
+                                <dl class="govuk-summary-list govuk-summary-list--no-border">
+                                    <div class="govuk-summary-list__row">
+                                        <dt class="govuk-summary-list__key">Cache Key</dt>
+                                        <dd class="govuk-summary-list__value">
+                                            <code class="govuk-!-font-size-14">@Model.TemplateCacheKey</code>
+                                        </dd>
+                                    </div>
+                                    <div class="govuk-summary-list__row">
+                                        <dt class="govuk-summary-list__key">Status</dt>
+                                        <dd class="govuk-summary-list__value">
+                                            @{
+                                                var cacheStatus = await Model.GetCacheStatusAsync();
+                                                var cacheTagClass = cacheStatus.Contains("cached") ? "govuk-tag--green" : "govuk-tag--grey";
+                                            }
+                                            <strong class="govuk-tag @cacheTagClass">@cacheStatus</strong>
+                                        </dd>
+                                    </div>
+                                </dl>
+
+                                <h3 class="govuk-heading-s govuk-!-margin-top-4">Session</h3>
+                                <dl class="govuk-summary-list govuk-summary-list--no-border">
+                                    <div class="govuk-summary-list__row">
+                                        <dt class="govuk-summary-list__key">Session Keys</dt>
+                                        <dd class="govuk-summary-list__value">
+                                            <code class="govuk-!-font-size-14">@Model.GetSessionKeysInfo()</code>
+                                        </dd>
+                                    </div>
+                                    <div class="govuk-summary-list__row">
+                                        <dt class="govuk-summary-list__key">Test Token</dt>
+                                        <dd class="govuk-summary-list__value">
+                                            <code class="govuk-!-font-size-14">@Model.TestToken</code>
+                                        </dd>
+                                    </div>
+                                    <div class="govuk-summary-list__row">
+                                        <dt class="govuk-summary-list__key">DfE-SignIn Token</dt>
+                                        <dd class="govuk-summary-list__value">
+                                            <code class="govuk-!-font-size-14">@Model.DsiToken</code>
+                                        </dd>
+                                    </div>
+                                    <div class="govuk-summary-list__row">
+                                        <dt class="govuk-summary-list__key">Internal User Token</dt>
+                                        <dd class="govuk-summary-list__value">
+                                            <code class="govuk-!-font-size-14">@Model.UserToken</code>
+                                        </dd>
+                                    </div>
+                                </dl>
+                            </div>
+                        </details>
+                    }
+                </div>
+            </div>
+        }
+
         <div class="govuk-!-margin-top-6">
             <a href="javascript:history.back()" class="govuk-link">← Go back</a>
         </div>
     </div>
-</div> 
+</div>

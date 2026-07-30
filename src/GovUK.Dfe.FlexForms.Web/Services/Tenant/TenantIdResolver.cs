@@ -37,14 +37,17 @@ public sealed class TenantIdResolver(
         var forwardedHost = httpContext.Request.Headers["X-Forwarded-Host"].ToString();
         var originalHost = httpContext.Request.Headers["X-Original-Host"].ToString();
         var requestHost = httpContext.Request.Host.Value;
+        var requestHostHost = httpContext.Request.Host.Host;
 
         var host = ResolvePublicHostname(httpContext);
 
         logger.LogInformation(
-            "Tenant hostname resolution headers: X-Forwarded-Host={ForwardedHost}, X-Original-Host={OriginalHost}, Request.Host={RequestHost}, ChosenHost={ChosenHost}",
+            "Tenant hostname resolution headers: X-Forwarded-Host={ForwardedHost}, X-Original-Host={OriginalHost}, Request.Host={RequestHost}, Request.Host.Host={RequestHostHost}, ChosenHost={ChosenHost}",
             string.IsNullOrWhiteSpace(forwardedHost) ? "(empty)" : forwardedHost,
             string.IsNullOrWhiteSpace(originalHost) ? "(empty)" : originalHost,
             string.IsNullOrWhiteSpace(requestHost) ? "(empty)" : requestHost,
+            string.IsNullOrWhiteSpace(requestHostHost) ? "(empty)" : requestHostHost,
+
             string.IsNullOrWhiteSpace(host) ? "(none)" : host);
 
         if (string.IsNullOrWhiteSpace(host))
@@ -88,10 +91,11 @@ public sealed class TenantIdResolver(
     }
 
     /// <summary>
-    /// Prefers public host headers over the container/internal <c>Request.Host</c>
-    /// (Azure often presents a private IP when forwarded host is missing or not applied).
+    /// Prefers a public tenant hostname over Azure Container Apps / private hosts.
+    /// Order: <c>X-Forwarded-Host</c>, then <c>Request.Host</c>, then <c>X-Original-Host</c>.
+    /// ACA often puts its own FQDN in <c>X-Original-Host</c> while <c>Request.Host</c> is already public.
     /// </summary>
-    internal static string? ResolvePublicHostname(HttpContext httpContext)
+    public static string? ResolvePublicHostname(HttpContext httpContext)
     {
         foreach (var candidate in EnumerateHostnameCandidates(httpContext))
         {
@@ -104,11 +108,15 @@ public sealed class TenantIdResolver(
 
     private static IEnumerable<string> EnumerateHostnameCandidates(HttpContext httpContext)
     {
-        // Prefer forwarded values even when ForwardedHeaders middleware did not rewrite Host
-        // (some Azure hops send X-Original-Host / X-Forwarded-Host only).
+        // 1) X-Forwarded-Host — correct when App Gateway rewrite sets the public host.
         yield return FirstHostFromHeader(httpContext.Request.Headers["X-Forwarded-Host"]);
-        yield return FirstHostFromHeader(httpContext.Request.Headers["X-Original-Host"]);
+
+        // 2) Request.Host — often already the public hostname after AGW / ACA (e.g. visits.dev-flexforms...).
+        // Prefer this over X-Original-Host: Azure commonly sets X-Original-Host to the ACA backend FQDN.
         yield return httpContext.Request.Host.Host;
+
+        // 3) X-Original-Host — last resort (may be the container app hostname).
+        yield return FirstHostFromHeader(httpContext.Request.Headers["X-Original-Host"]);
     }
 
     private static string? FirstHostFromHeader(string? headerValue)
@@ -137,6 +145,10 @@ public sealed class TenantIdResolver(
         {
             return true;
         }
+
+        // Container Apps default FQDN is never a tenant hostname mapping.
+        if (host.EndsWith(".azurecontainerapps.io", StringComparison.OrdinalIgnoreCase))
+            return false;
 
         if (!IPAddress.TryParse(host, out var ip))
             return true; // DNS name

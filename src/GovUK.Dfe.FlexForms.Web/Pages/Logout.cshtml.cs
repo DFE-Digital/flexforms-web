@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Options;
 using GovUK.Dfe.CoreLibs.Security.Configurations;
 using GovUK.Dfe.CoreLibs.Security.EntraSso;
+using GovUK.Dfe.FlexForms.Api.Client.Security;
 using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.FlexForms.Web.Services;
 using System.Diagnostics.CodeAnalysis;
@@ -19,6 +20,8 @@ public class LogoutModel(
     IOptions<TestAuthenticationOptions> testAuthOptions,
     IOptions<EntraSsoOptions> entraSsoOptions,
     ILogger<LogoutModel> logger,
+    IInternalUserTokenStore tokenStore,
+    ITokenStateManager tokenStateManager,
     ITestAuthenticationService? testAuthenticationService = null) : PageModel
 {
     public IActionResult OnGet()
@@ -35,6 +38,18 @@ public class LogoutModel(
     {
         try
         {
+            // Clear OBO JWT + logout flags in Redis before signing out the cookie,
+            // otherwise the next login reuses the previous role baked into the cached token.
+            try
+            {
+                await tokenStateManager.ForceCompleteLogoutAsync();
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to clear token caches during logout; clearing local OBO token as fallback");
+                tokenStore.ClearToken();
+            }
+
             if (testAuthOptions.Value.Enabled && testAuthenticationService != null)
             {
                 logger.LogInformation("Signing out from test authentication");

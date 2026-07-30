@@ -1,3 +1,4 @@
+using GovUK.Dfe.FlexForms.Web.Constants;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.Diagnostics.CodeAnalysis;
 
@@ -15,6 +16,7 @@ public class ForbiddenModel : PageModel
     public string EmailSubject { get; private set; } = string.Empty;
     public string EmailBody { get; private set; } = string.Empty;
     public string? ErrorId { get; private set; }
+    public string? DenialReason { get; private set; }
 
     public ForbiddenModel(IConfiguration configuration)
     {
@@ -23,13 +25,12 @@ public class ForbiddenModel : PageModel
 
     public void OnGet()
     {
-        // Get API error ID from TempData (set by ExternalApiExceptionFilter)
         ErrorId = TempData["ApiErrorId"] as string;
-        
-        // Get support email from configuration
+        DenialReason = TempData["AccessDeniedReason"] as string
+            ?? ApplicationAccessMessages.NoAccess;
+
         SupportEmail = _configuration["SupportEmail"] ?? "RegionalServices.RG@education.gov.uk";
-        
-        // Prepare email subject and body
+
         var serviceName = _configuration["Layout:ServiceName"] ?? "External Applications";
         EmailSubject = $"Access Denied - {serviceName}";
         EmailBody = $"I was denied access to a page in the {serviceName} service.\n\n" +

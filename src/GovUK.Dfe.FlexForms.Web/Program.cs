@@ -38,6 +38,7 @@ using MassTransit;
 using GovUK.Dfe.CoreLibs.Messaging.Contracts.Exceptions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using GovUK.Dfe.FlexForms.Web.Telemetry;
 using GovUK.Dfe.FlexForms.Web.Configuration;
@@ -250,6 +251,11 @@ builder.Services.Configure<Microsoft.AspNetCore.Mvc.MvcOptions>(options =>
 
 // Add hybrid caching (Memory + Redis) with automatic session support
 builder.Services.AddHybridCaching(builder.Configuration);
+builder.Services.PostConfigure<GovUK.Dfe.CoreLibs.Caching.Settings.CacheSettings>(settings =>
+{
+    settings.Redis ??= new GovUK.Dfe.CoreLibs.Caching.Settings.RedisCacheSettings();
+    settings.Redis.KeyPrefix = GovUK.Dfe.FlexForms.Domain.Caching.FlexFormsCacheKeys.RedisKeyPrefix;
+});
 
 // Configure session with timeout settings to prevent hanging/blocking
 builder.Services.AddSession(options =>
@@ -443,6 +449,17 @@ builder.Services.PostConfigure<Microsoft.AspNetCore.Authentication.OpenIdConnect
         {
             options.SignedOutCallbackPath = "/signout-callback-oidc";
         }
+
+        // Under platform bootstrap the DfESignIn section contains placeholder values.
+        // The OIDC handler calls ConfigurationManager.GetConfigurationAsync *before*
+        // OnRedirectToIdentityProvider, which fails with IDX20803 against the placeholder.
+        // Replace with a StaticConfigurationManager returning a stub; the tenant-aware
+        // events (TenantAwareOpenIdConnectConfigurator) replace it per-request.
+        if (platformBootstrapEnabled)
+        {
+            options.ConfigurationManager = new StaticConfigurationManager<OpenIdConnectConfiguration>(
+                new OpenIdConnectConfiguration());
+        }
     });
 
 builder.Services.PostConfigure<Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectOptions>(
@@ -466,6 +483,18 @@ builder.Services
             opts.Actions.AddRange(["Read", "Write"]);
             opts.ClaimType = "permission";
         });
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(AdminAccessHelper.CanAccessAdminAreaPolicy, policy =>
+        policy.RequireAssertion(ctx => AdminAccessHelper.CanAccessAdminArea(ctx.User)));
+    options.AddPolicy(AdminAccessHelper.CanManageTemplatesPolicy, policy =>
+        policy.RequireAssertion(ctx => AdminAccessHelper.CanManageTemplates(ctx.User)));
+    options.AddPolicy(AdminAccessHelper.CanManageUsersPolicy, policy =>
+        policy.RequireAssertion(ctx => AdminAccessHelper.CanManageUsers(ctx.User)));
+    options.AddPolicy(AdminAccessHelper.CanManageTenantSettingsPolicy, policy =>
+        policy.RequireAssertion(ctx => AdminAccessHelper.CanManageTenantSettings(ctx.User)));
+});
 
 builder.Services.AddScoped<ICustomClaimProvider, PermissionsClaimProvider>();
 
@@ -643,7 +672,17 @@ else
     app.UseExceptionHandler("/Error/ServerError");
 }
 
-app.UseHttpsRedirection();
+// Health probes (App Gateway / ACA) often use HTTP; do not redirect them to HTTPS.
+app.UseWhen(
+    static context =>
+    {
+        var path = context.Request.Path;
+        return !(path.Equals("/health", StringComparison.OrdinalIgnoreCase)
+                 || path.Equals("/healthz", StringComparison.OrdinalIgnoreCase)
+                 || path.Equals("/liveness", StringComparison.OrdinalIgnoreCase)
+                 || path.Equals("/readiness", StringComparison.OrdinalIgnoreCase));
+    },
+    static branch => branch.UseHttpsRedirection());
 app.UseResponseCompression();
 
 app.UseStaticFiles();
@@ -686,6 +725,14 @@ app.UseTemplateSelection();
 
 app.MapRazorPages();
 app.MapControllers();
+
+// Liveness probe: no tenant resolution, no auth. Used by App Gateway / Container Apps probes.
+app.MapGet("/health", () => Results.Text("Healthy", "text/plain"))
+    .AllowAnonymous();
+app.MapGet("/healthz", () => Results.Text("Healthy", "text/plain"))
+    .AllowAnonymous();
+app.MapGet("/liveness", () => Results.Text("Healthy", "text/plain"))
+    .AllowAnonymous();
 
 // Landing goes through template selection gate (middleware) then dashboard.
 app.MapGet("/", context =>

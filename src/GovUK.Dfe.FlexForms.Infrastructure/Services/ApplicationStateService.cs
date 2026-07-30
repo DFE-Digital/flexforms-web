@@ -221,7 +221,10 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
 
         public bool IsApplicationEditable(string applicationStatus)
         {
-            return applicationStatus.Equals("InProgress", StringComparison.OrdinalIgnoreCase);
+            // New apps start as Created and only move to InProgress after the first response save.
+            // Both must be editable or creators cannot open sections to make that first change.
+            return applicationStatus.Equals("InProgress", StringComparison.OrdinalIgnoreCase)
+                || applicationStatus.Equals("Created", StringComparison.OrdinalIgnoreCase);
         }
 
         public Domain.Models.TaskStatus CalculateTaskStatus(string taskId, FormTemplate template, Dictionary<string, object> formData, Guid? applicationId, ISession session, string applicationStatus)

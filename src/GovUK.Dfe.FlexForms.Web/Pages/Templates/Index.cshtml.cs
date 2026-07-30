@@ -1,3 +1,4 @@
+using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.FlexForms.Web.Services;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using Microsoft.AspNetCore.Authorization;
@@ -42,7 +43,7 @@ public sealed class IndexModel(
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
-        IsAdmin = User.IsInRole("Admin");
+        IsAdmin = AdminAccessHelper.CanManageTemplates(User);
         Templates = await templateSelectionService.GetSelectableTemplatesAsync(cancellationToken);
         if (LiveOnly)
         {
@@ -67,7 +68,7 @@ public sealed class IndexModel(
 
     public async Task<IActionResult> OnPostSelectAsync(CancellationToken cancellationToken)
     {
-        IsAdmin = User.IsInRole("Admin");
+        IsAdmin = AdminAccessHelper.CanManageTemplates(User);
         Templates = await templateSelectionService.GetSelectableTemplatesAsync(cancellationToken);
         if (LiveOnly)
         {

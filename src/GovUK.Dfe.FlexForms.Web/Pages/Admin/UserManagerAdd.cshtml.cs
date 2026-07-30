@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
+using GovUK.Dfe.FlexForms.Web.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -11,10 +12,11 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 /// <summary>
 /// Registers a user into the tenant with a role and optional form access.
 /// </summary>
-[Authorize(Roles = "Admin")]
+[Authorize(Policy = AdminAccessHelper.CanManageUsersPolicy)]
 public sealed class UserManagerAddModel(
     IUsersClient usersClient,
     ITemplatesClient templatesClient,
+    IRolesClient rolesClient,
     ILogger<UserManagerAddModel> logger) : PageModel
 {
     [BindProperty]
@@ -36,24 +38,30 @@ public sealed class UserManagerAddModel(
 
     public IReadOnlyList<TemplateDto> AvailableTemplates { get; private set; } = [];
 
-    public IReadOnlyList<string> AssignableRoles { get; } = ["User", "Caseworker", "Admin"];
+    public IReadOnlyList<string> AssignableRoles { get; private set; } = [];
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
-        await LoadTemplatesAsync(cancellationToken);
+        await LoadLookupsAsync(cancellationToken);
     }
 
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
     {
-        await LoadTemplatesAsync(cancellationToken);
+        await LoadLookupsAsync(cancellationToken);
 
         if (!ModelState.IsValid)
             return Page();
 
-        var roleRequiresTemplates = !string.Equals(Role, "Admin", StringComparison.OrdinalIgnoreCase);
-        if (roleRequiresTemplates && (SelectedTemplateIds is null || SelectedTemplateIds.Count == 0))
+        if (!AssignableRoles.Contains(Role, StringComparer.OrdinalIgnoreCase))
         {
-            ModelState.AddModelError(nameof(SelectedTemplateIds), "Select at least one form for this role.");
+            ModelState.AddModelError(nameof(Role), "Select a valid role for this tenant.");
+            return Page();
+        }
+
+        var isSystemUserRole = string.Equals(Role, "User", StringComparison.OrdinalIgnoreCase);
+        if (isSystemUserRole && (SelectedTemplateIds is null || SelectedTemplateIds.Count == 0))
+        {
+            ModelState.AddModelError(nameof(SelectedTemplateIds), "Select at least one form for the User role.");
             return Page();
         }
 
@@ -69,15 +77,15 @@ public sealed class UserManagerAddModel(
                 },
                 cancellationToken);
 
-            if (created?.UserId is Guid userId)
+            if (created?.UserId is Guid userId && SelectedTemplateIds is { Count: > 0 })
             {
                 await usersClient.UpdateUserTemplateAccessAsync(
                     userId,
-                    new UpdateUserTemplateAccessRequest { TemplateIds = SelectedTemplateIds ?? [] },
+                    new UpdateUserTemplateAccessRequest { TemplateIds = SelectedTemplateIds },
                     cancellationToken);
             }
 
-            TempData["UserManagerSuccess"] = $"User {Email.Trim()} has been added.";
+            TempData["UserManagerSuccess"] = $"User {Email.Trim()} has been added with role {Role}.";
             return RedirectToPage("/Admin/UserManager");
         }
         catch (Exception ex)
@@ -86,6 +94,12 @@ public sealed class UserManagerAddModel(
             ModelState.AddModelError(string.Empty, UserManagerModel.GetErrorMessage(ex, "Could not add the user."));
             return Page();
         }
+    }
+
+    private async Task LoadLookupsAsync(CancellationToken cancellationToken)
+    {
+        await LoadTemplatesAsync(cancellationToken);
+        await LoadRolesAsync(cancellationToken);
     }
 
     private async Task LoadTemplatesAsync(CancellationToken cancellationToken)
@@ -100,6 +114,31 @@ public sealed class UserManagerAddModel(
             logger.LogError(ex, "Failed to load templates for add user");
             ModelState.AddModelError(string.Empty, UserManagerModel.GetErrorMessage(ex, "Could not load available forms."));
             AvailableTemplates = [];
+        }
+    }
+
+    private async Task LoadRolesAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var roles = await rolesClient.ListAsync(cancellationToken);
+            AssignableRoles = roles?
+                .Where(r =>
+                    string.Equals(r.Name, "User", StringComparison.OrdinalIgnoreCase)
+                    || !r.IsSystem)
+                .Select(r => r.Name)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(n => n)
+                .ToList() ?? ["User"];
+
+            if (string.IsNullOrWhiteSpace(Role) || !AssignableRoles.Contains(Role, StringComparer.OrdinalIgnoreCase))
+                Role = AssignableRoles.FirstOrDefault() ?? "User";
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to load roles for add user");
+            ModelState.AddModelError(string.Empty, UserManagerModel.GetErrorMessage(ex, "Could not load available roles."));
+            AssignableRoles = ["User"];
         }
     }
 }

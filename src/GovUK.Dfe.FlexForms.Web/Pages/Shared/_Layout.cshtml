@@ -127,7 +127,7 @@
         var showFormsNav = false;
         if (User?.Identity?.IsAuthenticated == true)
         {
-            if (User.IsInRole("Admin"))
+            if (GovUK.Dfe.FlexForms.Web.Security.AdminAccessHelper.CanManageTemplates(User))
             {
                 showFormsNav = true;
             }
@@ -223,7 +223,7 @@
                                     </a>
                                 </li>
                             }
-                            @if (User.IsInRole("Admin"))
+                            @if (GovUK.Dfe.FlexForms.Web.Security.AdminAccessHelper.CanAccessAdminArea(User))
                             {
                                 <li class="govuk-service-navigation__item">
                                     <a class="govuk-service-navigation__link app-badge-container" href="/admin" style="position: relative;">

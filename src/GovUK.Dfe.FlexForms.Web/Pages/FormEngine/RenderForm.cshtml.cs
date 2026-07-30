@@ -1,5 +1,6 @@
 using GovUK.Dfe.FlexForms.Application.Exceptions;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
+using GovUK.Dfe.FlexForms.Domain.Caching;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using GovUK.Dfe.FlexForms.Infrastructure.Services;
 using GovUK.Dfe.FlexForms.Web.Constants;
@@ -3104,16 +3105,16 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                     appId);
                 
                 // Check each file against BOTH blacklist types:
-                // 1. By file ID (DfE:InfectedFile:{fileId})
-                // 2. By filename (DfE:InfectedFileName:{applicationId}:{originalFileName})
+                // 1. By file ID (FlexForms:InfectedFile:{fileId})
+                // 2. By filename (FlexForms:InfectedFileName:{applicationId}:{originalFileName})
                 foreach (var file in files)
                 {
                     // Check by file ID
-                    var fileIdBlacklistKey = $"DfE:InfectedFile:{file.Id}";
+                    var fileIdBlacklistKey = $"{FlexFormsCacheKeys.InfectedFilePrefix}{file.Id}";
                     var fileIdExists = db.KeyExists(fileIdBlacklistKey);
                     
                     // Check by filename (fallback when file ID doesn't match)
-                    var filenameBlacklistKey = $"DfE:InfectedFileName:{appId}:{file.OriginalFileName}";
+                    var filenameBlacklistKey = $"{FlexFormsCacheKeys.InfectedFileNamePrefix}{appId}:{file.OriginalFileName}";
                     var filenameExists = db.KeyExists(filenameBlacklistKey);
                     
                     _logger.LogInformation(
@@ -3429,7 +3430,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             try
             {
                 var db = _redis.GetDatabase();
-                var filenameBlacklistKey = $"DfE:InfectedFileName:{appId}:{fileName}";
+                var filenameBlacklistKey = $"{FlexFormsCacheKeys.InfectedFileNamePrefix}{appId}:{fileName}";
                 if (db.KeyExists(filenameBlacklistKey))
                 {
                     _logger.LogInformation(

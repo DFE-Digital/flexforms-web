@@ -1,5 +1,7 @@
+using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.Models;
+using GovUK.Dfe.FlexForms.Domain.Templates;
 using GovUK.Dfe.FlexForms.Web.Services;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
@@ -16,7 +18,7 @@ using GovUK.Dfe.CoreLibs.Caching.Helpers;
 
 namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 
-[Authorize(Roles = "Admin")]
+[Authorize(Policy = AdminAccessHelper.CanManageTemplatesPolicy)]
 [RequestSizeLimit(52_428_800)]
 [RequestFormLimits(ValueLengthLimit = 52_428_800, ValueCountLimit = 1000)]
 public class TemplateManagerModel(
@@ -43,6 +45,8 @@ public class TemplateManagerModel(
     public bool ShowSuccess { get; set; }
     public bool ShowCacheCleared { get; set; }
     public bool ShowCreated { get; set; }
+    public bool ShowGrantedToAllUsers { get; set; }
+    public string? GrantToAllUsersSummary { get; set; }
     public IReadOnlyList<TemplateDto> TenantTemplates { get; private set; } = [];
     public TemplateDto? SelectedTemplate { get; private set; }
 
@@ -65,7 +69,9 @@ public class TemplateManagerModel(
         bool success = false,
         bool cleared = false,
         bool created = false,
-        string? suggestedVersion = null)
+        bool granted = false,
+        string? suggestedVersion = null,
+        string? grantSummary = null)
     {
         try
         {
@@ -76,6 +82,8 @@ public class TemplateManagerModel(
             ShowSuccess = success;
             ShowCacheCleared = cleared;
             ShowCreated = created;
+            ShowGrantedToAllUsers = granted;
+            GrantToAllUsersSummary = grantSummary;
 
             await LoadTenantTemplatesAsync();
             var templateId = ResolveSelectedTemplateId();
@@ -92,6 +100,8 @@ public class TemplateManagerModel(
                 NewVersion = suggestedVersion;
                 _logger.LogInformation("Pre-populated NewVersion field with suggested version: {SuggestedVersion}", suggestedVersion);
             }
+
+            PrefillNewSchemaIfEmpty(templateId.Value);
             
             _logger.LogInformation("TemplateManager GET completed successfully. Memory: {MemoryMB} MB", 
                 GC.GetTotalMemory(false) / 1024 / 1024);
@@ -120,6 +130,7 @@ public class TemplateManagerModel(
         {
             ShowAddVersionForm = true;
             await LoadTemplateDataAsync(templateId.Value);
+            PrefillNewSchemaIfEmpty(templateId.Value);
             return Page();
         }
 
@@ -173,6 +184,47 @@ public class TemplateManagerModel(
         }
         
         return RedirectToPage(new { showForm = true });
+    }
+
+    public async Task<IActionResult> OnPostGrantToAllUsersAsync(CancellationToken cancellationToken)
+    {
+        await LoadTenantTemplatesAsync(cancellationToken);
+        var templateId = ResolveSelectedTemplateId();
+        if (templateId is null)
+        {
+            HasError = true;
+            ErrorMessage = "Select a template before granting access to all users.";
+            return Page();
+        }
+
+        try
+        {
+            var result = await _templatesClient.GrantTemplateAccessToAllUsersAsync(
+                templateId.Value,
+                cancellationToken);
+
+            var summary =
+                $"Granted to {result.UsersGranted} user(s). " +
+                $"{result.UsersAlreadyHadAccess} already had access. " +
+                $"Total tenant users checked: {result.TotalUsers}.";
+
+            _logger.LogInformation(
+                "Granted template {TemplateId} to all tenant users. Granted={Granted}, AlreadyHad={AlreadyHad}, Total={Total}",
+                templateId,
+                result.UsersGranted,
+                result.UsersAlreadyHadAccess,
+                result.TotalUsers);
+
+            return RedirectToPage(new { granted = true, grantSummary = summary });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to grant template {TemplateId} to all tenant users", templateId);
+            HasError = true;
+            ErrorMessage = "Failed to grant this template to all users in the tenant.";
+            await LoadTemplateDataAsync(templateId.Value);
+            return Page();
+        }
     }
     
     /// <summary>
@@ -331,6 +383,29 @@ public class TemplateManagerModel(
         return firstTemplate.TemplateId;
     }
 
+    private void PrefillNewSchemaIfEmpty(Guid templateId)
+    {
+        if (!ShowAddVersionForm || !string.IsNullOrWhiteSpace(NewSchema))
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(CurrentTemplateJson))
+        {
+            NewSchema = CurrentTemplateJson;
+        }
+        else
+        {
+            NewSchema = StarterFormTemplateSchema.CreateJson(
+                templateId.ToString(),
+                SelectedTemplate?.Name ?? "New template");
+            NewVersion ??= StarterFormTemplateSchema.DefaultVersionNumber;
+        }
+
+        // Prefill after an empty submit — drop the now-stale required error.
+        ModelState.Remove(nameof(NewSchema));
+    }
+
     private bool ValidateInput()
     {
         var isValid = true;
@@ -343,7 +418,12 @@ public class TemplateManagerModel(
 
         if (string.IsNullOrWhiteSpace(NewSchema))
         {
-            ModelState.AddModelError(nameof(NewSchema), "JSON schema is required");
+            // [Required] already adds this during model binding — avoid a duplicate summary line.
+            if (ModelState[nameof(NewSchema)]?.Errors.Count is null or 0)
+            {
+                ModelState.AddModelError(nameof(NewSchema), "JSON schema is required");
+            }
+
             isValid = false;
         }
         else
