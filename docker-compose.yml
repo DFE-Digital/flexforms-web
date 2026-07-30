@@ -1,0 +1,14 @@
+name: dfe-flexforms-vs
+networks:
+    dfe-flexforms-network:
+      external: true
+
+services:
+  govuk.dfe.flexforms.web:
+    container_name: dfe-flexforms-web-vs
+    image: ${DOCKER_REGISTRY-}govukdfeflexformsweb
+    build:
+      context: .
+      dockerfile: src/GovUK.Dfe.FlexForms.Web/Dockerfile
+    networks:
+      - dfe-flexforms-network

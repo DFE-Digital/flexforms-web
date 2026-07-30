@@ -34,13 +34,26 @@ public sealed class TenantIdResolver(
             return tenantFromQuery;
         }
 
+        var forwardedHost = httpContext.Request.Headers["X-Forwarded-Host"].ToString();
+        var originalHost = httpContext.Request.Headers["X-Original-Host"].ToString();
+        var requestHost = httpContext.Request.Host.Value;
+
         var host = ResolvePublicHostname(httpContext);
+
+        logger.LogInformation(
+            "Tenant hostname resolution headers: X-Forwarded-Host={ForwardedHost}, X-Original-Host={OriginalHost}, Request.Host={RequestHost}, ChosenHost={ChosenHost}",
+            string.IsNullOrWhiteSpace(forwardedHost) ? "(empty)" : forwardedHost,
+            string.IsNullOrWhiteSpace(originalHost) ? "(empty)" : originalHost,
+            string.IsNullOrWhiteSpace(requestHost) ? "(empty)" : requestHost,
+            string.IsNullOrWhiteSpace(host) ? "(none)" : host);
+
         if (string.IsNullOrWhiteSpace(host))
         {
             logger.LogWarning(
-                "Could not resolve a public hostname for tenant lookup (Request.Host={RequestHost}, X-Forwarded-Host={ForwardedHost})",
-                httpContext.Request.Host.Value,
-                httpContext.Request.Headers["X-Forwarded-Host"].ToString());
+                "Could not resolve a public hostname for tenant lookup (Request.Host={RequestHost}, X-Forwarded-Host={ForwardedHost}, X-Original-Host={OriginalHost})",
+                requestHost,
+                string.IsNullOrWhiteSpace(forwardedHost) ? "(empty)" : forwardedHost,
+                string.IsNullOrWhiteSpace(originalHost) ? "(empty)" : originalHost);
             return null;
         }
 
