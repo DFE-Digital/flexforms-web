@@ -43,7 +43,8 @@ public sealed class UserManagerPermissionsModel(
 
     public IReadOnlyList<ResourceType> ResourceTypes { get; } = Enum.GetValues<ResourceType>().ToArray();
 
-    public IReadOnlyList<AccessType> AccessTypes { get; } = Enum.GetValues<AccessType>().ToArray();
+    public IReadOnlyList<AccessType> AccessTypes { get; } =
+        Enum.GetValues<AccessType>().Where(a => a != AccessType.Manage).ToArray();
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
@@ -65,7 +66,7 @@ public sealed class UserManagerPermissionsModel(
             return Page();
         }
 
-        var validationError = RoleManagerPermissionsModel.ValidateGrant(NewResourceType, resourceKey, NewAccessType);
+        var validationError = ValidateUserGrant(NewResourceType, resourceKey, NewAccessType);
         if (validationError is not null)
         {
             ModelState.AddModelError(nameof(NewResourceKey), validationError);
@@ -108,7 +109,7 @@ public sealed class UserManagerPermissionsModel(
 
         foreach (var grant in SelectedGrants.Select(ParseGrantKey).Where(g => g is not null))
         {
-            var error = RoleManagerPermissionsModel.ValidateGrant(
+            var error = ValidateUserGrant(
                 grant!.Value.ResourceType,
                 grant.Value.ResourceKey,
                 grant.Value.AccessType);
@@ -227,5 +228,19 @@ public sealed class UserManagerPermissionsModel(
             return null;
 
         return (resourceType, parts[1].Trim(), accessType);
+    }
+
+    /// <summary>
+    /// Same shape rules as role grants, but Manage is never allowed on an individual user.
+    /// </summary>
+    internal static string? ValidateUserGrant(ResourceType resourceType, string resourceKey, AccessType accessType)
+    {
+        if (accessType == AccessType.Manage)
+        {
+            return "Access type 'Manage' cannot be granted to an individual user. " +
+                   "Assign Manage via a tenant role instead.";
+        }
+
+        return RoleManagerPermissionsModel.ValidateGrant(resourceType, resourceKey, accessType);
     }
 }
