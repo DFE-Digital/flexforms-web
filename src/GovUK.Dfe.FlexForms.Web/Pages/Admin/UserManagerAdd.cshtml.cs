@@ -122,14 +122,9 @@ public sealed class UserManagerAddModel(
         try
         {
             var roles = await rolesClient.ListAsync(cancellationToken);
-            AssignableRoles = roles?
-                .Where(r =>
-                    string.Equals(r.Name, "User", StringComparison.OrdinalIgnoreCase)
-                    || !r.IsSystem)
-                .Select(r => r.Name)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(n => n)
-                .ToList() ?? ["User"];
+            AssignableRoles = AdminAccessHelper.GetUserManagerAssignableRoles(
+                User,
+                roles?.Select(r => (r.Name, r.IsSystem)));
 
             if (string.IsNullOrWhiteSpace(Role) || !AssignableRoles.Contains(Role, StringComparer.OrdinalIgnoreCase))
                 Role = AssignableRoles.FirstOrDefault() ?? "User";
@@ -138,7 +133,7 @@ public sealed class UserManagerAddModel(
         {
             logger.LogError(ex, "Failed to load roles for add user");
             ModelState.AddModelError(string.Empty, UserManagerModel.GetErrorMessage(ex, "Could not load available roles."));
-            AssignableRoles = ["User"];
+            AssignableRoles = AdminAccessHelper.GetUserManagerAssignableRoles(User, null);
         }
     }
 }

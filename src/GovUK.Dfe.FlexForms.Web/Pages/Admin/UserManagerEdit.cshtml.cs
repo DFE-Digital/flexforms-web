@@ -164,20 +164,15 @@ public sealed class UserManagerEditModel(
         try
         {
             var roles = await rolesClient.ListAsync(cancellationToken);
-            AssignableRoles = roles?
-                .Where(r =>
-                    string.Equals(r.Name, "User", StringComparison.OrdinalIgnoreCase)
-                    || !r.IsSystem)
-                .Select(r => r.Name)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(n => n)
-                .ToList() ?? ["User"];
+            AssignableRoles = AdminAccessHelper.GetUserManagerAssignableRoles(
+                User,
+                roles?.Select(r => (r.Name, r.IsSystem)));
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to load roles for edit user");
             ModelState.AddModelError(string.Empty, UserManagerModel.GetErrorMessage(ex, "Could not load available roles."));
-            AssignableRoles = ["User"];
+            AssignableRoles = AdminAccessHelper.GetUserManagerAssignableRoles(User, null);
         }
     }
 }
