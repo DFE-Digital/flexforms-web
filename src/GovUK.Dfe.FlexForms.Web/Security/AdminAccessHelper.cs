@@ -14,6 +14,7 @@ public static class AdminAccessHelper
     public const string CanAccessAdminAreaPolicy = "CanAccessAdminArea";
     public const string CanManageTemplatesPolicy = "CanManageTemplates";
     public const string CanManageUsersPolicy = "CanManageUsers";
+    public const string CanManageTenantSettingsPolicy = "CanManageTenantSettings";
 
     public const string PermissionClaimType = "permission";
 
@@ -22,6 +23,10 @@ public static class AdminAccessHelper
 
     /// <summary>Claim value for tenant-wide user manager custom roles.</summary>
     public const string UserManageAnyClaim = "User:Any:Manage";
+
+    /// <summary>True for SuperAdmin only.</summary>
+    public static bool IsSuperAdmin(ClaimsPrincipal? user) =>
+        user is not null && user.IsInRole("SuperAdmin");
 
     /// <summary>True for SuperAdmin or tenant Admin.</summary>
     public static bool IsAdmin(ClaimsPrincipal? user) =>
@@ -57,6 +62,12 @@ public static class AdminAccessHelper
     /// </summary>
     public static bool CanManageRoles(ClaimsPrincipal? user) =>
         IsAdmin(user);
+
+    /// <summary>
+    /// TenantConfig settings editor — SuperAdmin only (decrypted secrets).
+    /// </summary>
+    public static bool CanManageTenantSettings(ClaimsPrincipal? user) =>
+        IsSuperAdmin(user);
 
     public static bool HasPermissionClaim(ClaimsPrincipal? user, string permissionClaimValue) =>
         user is not null

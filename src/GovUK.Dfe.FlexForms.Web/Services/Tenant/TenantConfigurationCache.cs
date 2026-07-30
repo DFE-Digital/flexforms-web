@@ -27,5 +27,8 @@ public sealed class TenantConfigurationCache(IOptions<PlatformBootstrapOptions> 
         return loaded;
     }
 
+    /// <inheritdoc />
+    public void Invalidate(Guid tenantId) => _cache.TryRemove(tenantId, out _);
+
     private sealed record CacheEntry(PlatformTenantConfigurationResponse Value, DateTimeOffset ExpiresAt);
 }

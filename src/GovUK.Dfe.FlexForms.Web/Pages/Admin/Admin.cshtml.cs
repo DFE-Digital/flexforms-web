@@ -53,6 +53,8 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
 
         public bool CanManageRoles => AdminAccessHelper.CanManageRoles(User);
 
+        public bool CanManageTenantSettings => AdminAccessHelper.CanManageTenantSettings(User);
+
         public async Task<IActionResult> OnGetAsync()
         {
             if (TempData["AdminSuccess"] is string successMessage)

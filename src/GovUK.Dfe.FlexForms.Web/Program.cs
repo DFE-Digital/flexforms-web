@@ -492,6 +492,8 @@ builder.Services.AddAuthorization(options =>
         policy.RequireAssertion(ctx => AdminAccessHelper.CanManageTemplates(ctx.User)));
     options.AddPolicy(AdminAccessHelper.CanManageUsersPolicy, policy =>
         policy.RequireAssertion(ctx => AdminAccessHelper.CanManageUsers(ctx.User)));
+    options.AddPolicy(AdminAccessHelper.CanManageTenantSettingsPolicy, policy =>
+        policy.RequireAssertion(ctx => AdminAccessHelper.CanManageTenantSettings(ctx.User)));
 });
 
 builder.Services.AddScoped<ICustomClaimProvider, PermissionsClaimProvider>();

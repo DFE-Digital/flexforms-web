@@ -170,6 +170,26 @@
             </div>
         }
 
+        @if (Model.CanManageTenantSettings)
+        {
+            <div class="govuk-summary-card">
+                <div class="govuk-summary-card__title-wrapper">
+                    <h2 class="govuk-summary-card__title">Tenant configuration</h2>
+                </div>
+                <div class="govuk-summary-card__content">
+                    <p class="govuk-body">
+                        View and edit TenantConfig app settings for this tenant (SuperAdmin only).
+                        Secret values are encrypted at rest.
+                    </p>
+                    <div class="govuk-button-group">
+                        <a asp-page="/Admin/TenantSettings" class="govuk-button" data-module="govuk-button" id="go-to-tenant-settings-button">
+                            Tenant Settings
+                        </a>
+                    </div>
+                </div>
+            </div>
+        }
+
         @if (Model.CanManageTemplates)
         {
             <div class="govuk-summary-card">

@@ -40,6 +40,8 @@ namespace GovUK.Dfe.FlexForms.Web.Extensions
                 configuration, enableTokenExchange: enableTokenExchange);
             services.AddExternalApplicationsApiClient<IUserFeedbackClient, UserFeedbackClient>(
                 configuration, enableTokenExchange: enableTokenExchange);
+            services.AddExternalApplicationsApiClient<ITenantAdminClient, TenantAdminClient>(
+                configuration, enableTokenExchange: enableTokenExchange);
             return services;
         }
 
