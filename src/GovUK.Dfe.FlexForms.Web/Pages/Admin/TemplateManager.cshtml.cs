@@ -45,6 +45,8 @@ public class TemplateManagerModel(
     public bool ShowSuccess { get; set; }
     public bool ShowCacheCleared { get; set; }
     public bool ShowCreated { get; set; }
+    public bool ShowGrantedToAllUsers { get; set; }
+    public string? GrantToAllUsersSummary { get; set; }
     public IReadOnlyList<TemplateDto> TenantTemplates { get; private set; } = [];
     public TemplateDto? SelectedTemplate { get; private set; }
 
@@ -67,7 +69,9 @@ public class TemplateManagerModel(
         bool success = false,
         bool cleared = false,
         bool created = false,
-        string? suggestedVersion = null)
+        bool granted = false,
+        string? suggestedVersion = null,
+        string? grantSummary = null)
     {
         try
         {
@@ -78,6 +82,8 @@ public class TemplateManagerModel(
             ShowSuccess = success;
             ShowCacheCleared = cleared;
             ShowCreated = created;
+            ShowGrantedToAllUsers = granted;
+            GrantToAllUsersSummary = grantSummary;
 
             await LoadTenantTemplatesAsync();
             var templateId = ResolveSelectedTemplateId();
@@ -178,6 +184,47 @@ public class TemplateManagerModel(
         }
         
         return RedirectToPage(new { showForm = true });
+    }
+
+    public async Task<IActionResult> OnPostGrantToAllUsersAsync(CancellationToken cancellationToken)
+    {
+        await LoadTenantTemplatesAsync(cancellationToken);
+        var templateId = ResolveSelectedTemplateId();
+        if (templateId is null)
+        {
+            HasError = true;
+            ErrorMessage = "Select a template before granting access to all users.";
+            return Page();
+        }
+
+        try
+        {
+            var result = await _templatesClient.GrantTemplateAccessToAllUsersAsync(
+                templateId.Value,
+                cancellationToken);
+
+            var summary =
+                $"Granted to {result.UsersGranted} user(s). " +
+                $"{result.UsersAlreadyHadAccess} already had access. " +
+                $"Total tenant users checked: {result.TotalUsers}.";
+
+            _logger.LogInformation(
+                "Granted template {TemplateId} to all tenant users. Granted={Granted}, AlreadyHad={AlreadyHad}, Total={Total}",
+                templateId,
+                result.UsersGranted,
+                result.UsersAlreadyHadAccess,
+                result.TotalUsers);
+
+            return RedirectToPage(new { granted = true, grantSummary = summary });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to grant template {TemplateId} to all tenant users", templateId);
+            HasError = true;
+            ErrorMessage = "Failed to grant this template to all users in the tenant.";
+            await LoadTemplateDataAsync(templateId.Value);
+            return Page();
+        }
     }
     
     /// <summary>

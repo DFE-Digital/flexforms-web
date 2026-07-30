@@ -55,6 +55,21 @@
             </div>
         }
 
+        @if (Model.ShowGrantedToAllUsers)
+        {
+            <div class="govuk-notification-banner govuk-notification-banner--success" role="alert">
+                <div class="govuk-notification-banner__header">
+                    <h2 class="govuk-notification-banner__title">Success</h2>
+                </div>
+                <div class="govuk-notification-banner__content">
+                    <h3 class="govuk-notification-banner__heading">Template access granted</h3>
+                    <p class="govuk-body">
+                        @(Model.GrantToAllUsersSummary ?? "All active users in this tenant now have read and write access to this template.")
+                    </p>
+                </div>
+            </div>
+        }
+
         @if (Model.ShowSuccess)
         {
             <div class="govuk-notification-banner govuk-notification-banner--success" role="alert" aria-labelledby="govuk-notification-banner-title" data-module="govuk-notification-banner">
@@ -141,9 +156,19 @@
                 </div>
             </dl>
 
-            <form method="post" asp-page-handler="ShowAddForm">
-                <button class="govuk-button govuk-!-margin-bottom-6" type="submit" id="add-new-template-version-button">Add New Template Version</button>
-            </form>
+            <div class="govuk-button-group govuk-!-margin-bottom-6">
+                <form method="post" asp-page-handler="ShowAddForm">
+                    <button class="govuk-button" type="submit" id="add-new-template-version-button">Add New Template Version</button>
+                </form>
+                <form method="post" asp-page-handler="GrantToAllUsers">
+                    <button class="govuk-button govuk-button--secondary"
+                            type="submit"
+                            id="grant-template-to-all-users-button"
+                            onclick="return confirm('Grant read and write access for this template to every active user in this tenant?')">
+                        Grant to all users
+                    </button>
+                </form>
+            </div>
             
             @if (Model.CurrentTemplate != null)
             {
