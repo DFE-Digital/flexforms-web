@@ -36,7 +36,10 @@ public sealed class TemplateSelectionService(
         => httpContext.Session.GetString(TemplateIdSessionKey);
 
     /// <inheritdoc />
-    public void SelectTemplate(HttpContext httpContext, TemplateDto template)
+    public async Task SelectTemplateAsync(
+        HttpContext httpContext,
+        TemplateDto template,
+        CancellationToken cancellationToken = default)
     {
         var previous = httpContext.Session.GetString(TemplateIdSessionKey);
         var next = template.TemplateId.ToString();
@@ -49,6 +52,12 @@ public sealed class TemplateSelectionService(
         httpContext.Session.SetString(TemplateIdSessionKey, next);
         httpContext.Session.SetString(TemplateNameSessionKey, template.Name);
         httpContext.Session.SetString(TemplateIsLiveSessionKey, template.IsLive.ToString());
+
+        // Commit before any redirect so the next request (middleware / dashboard)
+        // can read the selection immediately — otherwise the first attempt bounces
+        // back to the chooser until a later request sees the flushed session.
+        await httpContext.Session.CommitAsync(cancellationToken);
+
         logger.LogInformation(
             "Selected template {TemplateId} ({TemplateName}, IsLive={IsLive}) for session",
             next,

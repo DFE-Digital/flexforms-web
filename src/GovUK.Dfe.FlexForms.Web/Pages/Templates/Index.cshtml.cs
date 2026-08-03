@@ -52,7 +52,10 @@ public sealed class IndexModel(
 
         if (Templates.Count == 1 && (LiveOnly || !IsAdmin))
         {
-            templateSelectionService.SelectTemplate(HttpContext, Templates[0]);
+            await templateSelectionService.SelectTemplateAsync(
+                HttpContext,
+                Templates[0],
+                cancellationToken);
             return Redirect(GetSafeReturnUrl());
         }
 
@@ -89,7 +92,7 @@ public sealed class IndexModel(
         }
 
         var template = Templates.First(item => item.TemplateId == SelectedTemplateId.Value);
-        templateSelectionService.SelectTemplate(HttpContext, template);
+        await templateSelectionService.SelectTemplateAsync(HttpContext, template, cancellationToken);
         return Redirect(GetSafeReturnUrl());
     }
 

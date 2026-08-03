@@ -182,7 +182,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
                 }
 
                 var template = templates.First(t => t.TemplateId == templateId);
-                templateSelectionService.SelectTemplate(HttpContext, template);
+                await templateSelectionService.SelectTemplateAsync(HttpContext, template);
                 return RedirectToPage("/Applications/Dashboard");
             }
             catch (Exception ex)

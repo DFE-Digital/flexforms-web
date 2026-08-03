@@ -86,7 +86,7 @@ public class TemplateManagerModel(
             GrantToAllUsersSummary = grantSummary;
 
             await LoadTenantTemplatesAsync();
-            var templateId = ResolveSelectedTemplateId();
+            var templateId = await ResolveSelectedTemplateIdAsync();
             if (templateId is null)
             {
                 return Page();
@@ -119,7 +119,7 @@ public class TemplateManagerModel(
     public async Task<IActionResult> OnPostAsync()
     {
         await LoadTenantTemplatesAsync();
-        var templateId = ResolveSelectedTemplateId();
+        var templateId = await ResolveSelectedTemplateIdAsync();
         if (templateId is null)
         {
             ModelState.AddModelError(string.Empty, "Select a template.");
@@ -136,16 +136,13 @@ public class TemplateManagerModel(
 
         await CreateNewTemplateVersionAsync(templateId.Value.ToString());
 
-        await Task.Delay(2000);
-
         await InvalidateTemplateCacheAsync(templateId.Value.ToString());
 
         _logger.LogInformation("Successfully created template version {NewVersion} for {TemplateId}",
             NewVersion, templateId);
 
         return RedirectToPage(new { success = true });
-
-}
+    }
 
     public async Task<IActionResult> OnPostSelectTemplateAsync(CancellationToken cancellationToken)
     {
@@ -159,7 +156,7 @@ public class TemplateManagerModel(
         }
 
         var template = TenantTemplates.First(item => item.TemplateId == SelectedTemplateId.Value);
-        _templateSelectionService.SelectTemplate(HttpContext, template);
+        await _templateSelectionService.SelectTemplateAsync(HttpContext, template, cancellationToken);
         return RedirectToPage();
     }
 
@@ -167,7 +164,7 @@ public class TemplateManagerModel(
     {
         // Pre-populate the NewVersion field with auto-incremented version
         await LoadTenantTemplatesAsync();
-        var templateId = ResolveSelectedTemplateId();
+        var templateId = await ResolveSelectedTemplateIdAsync();
         if (templateId is not null)
         {
             await LoadTemplateDataAsync(templateId.Value);
@@ -189,7 +186,7 @@ public class TemplateManagerModel(
     public async Task<IActionResult> OnPostGrantToAllUsersAsync(CancellationToken cancellationToken)
     {
         await LoadTenantTemplatesAsync(cancellationToken);
-        var templateId = ResolveSelectedTemplateId();
+        var templateId = await ResolveSelectedTemplateIdAsync(cancellationToken);
         if (templateId is null)
         {
             HasError = true;
@@ -360,7 +357,7 @@ public class TemplateManagerModel(
         TenantTemplates = await _templateSelectionService.GetSelectableTemplatesAsync(cancellationToken);
     }
 
-    private Guid? ResolveSelectedTemplateId()
+    private async Task<Guid?> ResolveSelectedTemplateIdAsync(CancellationToken cancellationToken = default)
     {
         var sessionTemplateId = _templateSelectionService.GetSelectedTemplateId(HttpContext);
         if (Guid.TryParse(sessionTemplateId, out var selectedId) &&
@@ -377,7 +374,7 @@ public class TemplateManagerModel(
             return null;
         }
 
-        _templateSelectionService.SelectTemplate(HttpContext, firstTemplate);
+        await _templateSelectionService.SelectTemplateAsync(HttpContext, firstTemplate, cancellationToken);
         SelectedTemplateId = firstTemplate.TemplateId;
         SelectedTemplate = firstTemplate;
         return firstTemplate.TemplateId;

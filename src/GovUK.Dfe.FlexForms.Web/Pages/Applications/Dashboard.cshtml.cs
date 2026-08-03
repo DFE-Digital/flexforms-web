@@ -1,3 +1,4 @@
+using GovUK.Dfe.FlexForms.Application.Dashboard;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Application.Options;
 using GovUK.Dfe.FlexForms.Web.Models.Applications;
@@ -29,6 +30,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
         IHttpContextAccessor httpContextAccessor,
         IApplicationResponseService applicationResponseService,
         IContributorPatternService contributorPatternService,
+        IFormTemplateProvider formTemplateProvider,
         IMemoryCache memoryCache,
         IOptions<DashboardOptions> dashboardOptions)
         : PageModel
@@ -39,6 +41,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
         public string? OrganisationName { get; private set; }
         public IReadOnlyList<ApplicationWithCalculatedStatus> Applications { get; private set; } = Array.Empty<ApplicationWithCalculatedStatus>();
         public IReadOnlyList<CustomApplicationStatusDto> CustomStatuses { get; private set; } = [];
+        public IReadOnlyList<DashboardColumn> Columns { get; private set; } = DashboardColumnResolver.DefaultColumns;
         public bool HasError { get; private set; }
         public string? ErrorMessage { get; private set; }
 
@@ -89,8 +92,9 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
         {
             public ApplicationDto Application { get; set; } = null!;
             public KeyValuePair<ApplicationStatus, string> CalculatedStatus { get; set; }
+            public IReadOnlyDictionary<string, string> CustomColumnValues { get; set; } =
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-            // Convenience properties to access original application properties
             public Guid ApplicationId => Application.ApplicationId;
             public string ApplicationReference => Application.ApplicationReference;
             public string TemplateName => Application.TemplateName;
@@ -111,6 +115,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
             StatusFilters = statusFilters.OrderBy(x => x.Key).ToList();
             SelectedStatusFilter = status;
             ValidateSearchFilters();
+            await LoadDashboardColumnsAsync();
             await LoadUserDetailsAsync();
             await LoadApplicationsAsync();
         }
@@ -205,6 +210,26 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
             return RedirectToPage("/FormEngine/RenderForm", new { referenceNumber = response.ApplicationReference });
         }
 
+        private async SystemTask LoadDashboardColumnsAsync()
+        {
+            Columns = DashboardColumnResolver.DefaultColumns;
+
+            var templateGuid = ResolveTemplateId();
+            if (!templateGuid.HasValue)
+                return;
+
+            try
+            {
+                var template = await formTemplateProvider.GetTemplateAsync(templateGuid.Value.ToString());
+                Columns = DashboardColumnResolver.Resolve(template);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to load dashboard columns from latest template {TemplateId}; using defaults", templateGuid);
+                Columns = DashboardColumnResolver.DefaultColumns;
+            }
+        }
+
         private async SystemTask LoadApplicationsAsync()
         {
             if (!ModelState.IsValid)
@@ -238,10 +263,22 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
             TotalPages = result.TotalPages;
             CurrentPage = Math.Clamp(CurrentPage, 1, Math.Max(1, TotalPages));
 
-            var applicationTasks = result.Items.AsEnumerable().Select(async app => new ApplicationWithCalculatedStatus
+            var fieldColumns = Columns.Where(c => c.Kind == DashboardColumnKind.Field).ToList();
+
+            var applicationTasks = result.Items.AsEnumerable().Select(async app =>
             {
-                Application = app,
-                CalculatedStatus = applicationStatusService.GetCalculatedApplicationStatusAsync(app, CustomStatuses)
+                var formData = DashboardAnswerReader.ParseFormData(app.LatestResponse?.ResponseBody);
+                var customValues = fieldColumns.ToDictionary(
+                    c => c.Key,
+                    c => DashboardAnswerReader.GetDisplayValue(c.FieldId!, formData),
+                    StringComparer.OrdinalIgnoreCase);
+
+                return new ApplicationWithCalculatedStatus
+                {
+                    Application = app,
+                    CalculatedStatus = applicationStatusService.GetCalculatedApplicationStatusAsync(app, CustomStatuses),
+                    CustomColumnValues = customValues
+                };
             });
 
             Applications = [..(await SystemTask.WhenAll(applicationTasks))

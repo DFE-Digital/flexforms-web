@@ -61,7 +61,10 @@ In Transfer: “Trust details” uses a collection; “Reason and benefits” us
   "conditionalLogic": [ ],
   "defaultFieldRequirementPolicy": "required",
   "hideFieldLabelWhenOnlyOneField": true,
-  "contributorPattern": true
+  "contributorPattern": true,
+  "dashboard": {
+    "columns": [ ]
+  }
 }
 ```
 
@@ -75,6 +78,68 @@ In Transfer: “Trust details” uses a collection; “Reason and benefits” us
 | `defaultFieldRequirementPolicy` | `"required"` or `"optional"`. If a field has no `required` validation and no `required` flag, this policy applies. Transfer uses `"required"`. |
 | `hideFieldLabelWhenOnlyOneField` | When `true` (default), a page with **exactly one** normal field hides that field’s label so the **page title** is the question. Complex fields are excluded from this behaviour. |
 | `contributorPattern` | When `true` (default), invite-contributor features are available. Set `false` to hide them. |
+| `dashboard` | Optional. Configures applications-dashboard columns (see §3.1). |
+
+### 3.1 Dashboard columns (`dashboard`)
+
+The applications dashboard always uses column **headings** from the **latest published** template. Cell values come from each application’s own answers, looked up by stable **`fieldId`**. Older applications on earlier versions show blank cells when a field is missing.
+
+```json
+"dashboard": {
+  "columns": [
+    { "type": "system", "id": "reference", "order": 10 },
+    { "type": "field", "fieldId": "incomingTrustName", "header": "Trust name", "order": 20 },
+    { "type": "system", "id": "dateStarted", "order": 30 },
+    { "type": "system", "id": "dateSubmitted", "order": 40 },
+    { "type": "field", "fieldId": "proposedTransferDate", "header": "Proposed date", "order": 45 },
+    { "type": "system", "id": "status", "order": 50 },
+    { "type": "system", "id": "action", "order": 60 }
+  ]
+}
+```
+
+| Property | Purpose |
+|----------|---------|
+| `columns` | Ordered list of columns. When omitted, the default system columns are used. |
+| `type` | `"system"` or `"field"`. If omitted and `fieldId` is set, treated as `"field"`. |
+| `id` | System column id: `reference`, `dateStarted`, `dateSubmitted`, `status`, `action`. |
+| `fieldId` | Stable answer key for a field column. **Do not rename casually** — it is the contract across versions. |
+| `header` | Column heading. Required for field columns (falls back to `fieldId` if blank). Optional override for system columns. |
+| `order` | Lower first. If omitted, array order is used (`10`, `20`, …). |
+
+**Rules**
+
+- Maximum **3** `field` columns (extras are ignored).
+- If you only list field columns, default system columns are merged in automatically.
+- An `action` column is always kept so users can open an application.
+- Prefer scalar fields (text, date, radios, select). Uploads are a poor fit for a table cell.
+
+**Collection-flow fields**
+
+Answers inside a `multiCollectionFlow` are stored under the **flow** `fieldId` as an array of items (e.g. `detailsOfIncomingTrust`), not as top-level keys. Dashboard lookup still accepts the **inner** field id:
+
+| `fieldId` | Result |
+|-----------|--------|
+| `incomingTrustsSearch-field-flow` | Finds that field in each collection item; complex search JSON uses `.name` (or title/label) for display. Multiple items are joined with `, `. |
+| `incomingTrustsSearch-field-flow.name` | Same, but forces a nested property (same pattern as `itemTitleBinding`). Use this for any child of a complex/autocomplete object (`ukprn`, `companiesHouseNumber`, etc.). |
+| `detailsOfIncomingTrust.incomingTrustsSearch-field-flow` | Explicit path: collection → nested field. |
+
+Example (trust search inside “Trust details” flow):
+
+```json
+{ "type": "field", "fieldId": "incomingTrustsSearch-field-flow", "header": "Trust name", "order": 20 }
+```
+
+**Minimal custom-columns-only example** (inserted among defaults by `order`):
+
+```json
+"dashboard": {
+  "columns": [
+    { "fieldId": "incomingTrustName", "header": "Trust name", "order": 15 },
+    { "fieldId": "proposedTransferDate", "header": "Proposed date", "order": 25 }
+  ]
+}
+```
 
 ---
 

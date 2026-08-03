@@ -42,5 +42,12 @@ namespace GovUK.Dfe.FlexForms.Domain.Models
         /// </summary>
         [JsonPropertyName("contributorPattern")]
         public bool ContributorPattern { get; set; } = true;
+
+        /// <summary>
+        /// Optional applications-dashboard column layout. When omitted, only the default
+        /// system columns are shown. See <see cref="DashboardConfiguration"/>.
+        /// </summary>
+        [JsonPropertyName("dashboard")]
+        public DashboardConfiguration? Dashboard { get; set; }
     }
 }
