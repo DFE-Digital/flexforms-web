@@ -64,6 +64,7 @@ public static class TenantAwareServiceCollectionExtensions
         AddTenantOptions<ApplicationSubmissionOptions>(services, "ApplicationSubmission");
         AddTenantOptions<TokenRefreshSettings>(services, "TokenRefresh");
         AddTenantOptions<InternalServiceAuthOptions>(services, InternalServiceAuthOptions.SectionName);
+        AddTenantOptions<TestAuthenticationOptions>(services, TestAuthenticationOptions.SectionName);
 
         return services;
     }

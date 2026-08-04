@@ -20,10 +20,9 @@ public class ActivityBasedTokenRefreshMiddleware(
     RequestDelegate next,
     ILogger<ActivityBasedTokenRefreshMiddleware> logger,
     IOptions<TokenRefreshSettings> tokenRefreshSettings,
-    IOptions<TestAuthenticationOptions> testAuthOptions)
+    IOptions<TestAuthenticationOptions> testAuthOptions,
+    IOptions<EntraSsoOptions> entraSsoOptions)
 {
-    private readonly TestAuthenticationOptions _testAuthOptions = testAuthOptions.Value;
-
     private static readonly string[] SkipPaths =
     [
         "/health",
@@ -45,7 +44,10 @@ public class ActivityBasedTokenRefreshMiddleware(
 
     public async Task InvokeAsync(HttpContext context)
     {
-        if (_testAuthOptions.Enabled)
+        if (TenantAuthSchemeSelector.IsTestAuthenticationActive(
+                context,
+                testAuthOptions,
+                entraSsoOptions))
         {
             await next(context);
             return;

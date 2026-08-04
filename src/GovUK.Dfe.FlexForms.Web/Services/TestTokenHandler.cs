@@ -1,4 +1,5 @@
 using GovUK.Dfe.CoreLibs.Security.Configurations;
+using GovUK.Dfe.FlexForms.Web.Security;
 using Microsoft.Extensions.Options;
 using System.Diagnostics.CodeAnalysis;
 
@@ -8,7 +9,8 @@ namespace GovUK.Dfe.FlexForms.Web.Services;
 public class TestTokenHandler : DelegatingHandler
 {
     private readonly IHttpContextAccessor _httpContextAccessor;
-    private readonly TestAuthenticationOptions _options;
+    private readonly IOptions<TestAuthenticationOptions> _options;
+    private readonly IOptions<EntraSsoOptions> _entraSsoOptions;
     private readonly ILogger<TestTokenHandler> _logger;
 
     private static class SessionKeys
@@ -19,10 +21,12 @@ public class TestTokenHandler : DelegatingHandler
     public TestTokenHandler(
         IHttpContextAccessor httpContextAccessor,
         IOptions<TestAuthenticationOptions> options,
+        IOptions<EntraSsoOptions> entraSsoOptions,
         ILogger<TestTokenHandler> logger)
     {
         _httpContextAccessor = httpContextAccessor;
-        _options = options.Value;
+        _options = options;
+        _entraSsoOptions = entraSsoOptions;
         _logger = logger;
     }
 
@@ -30,32 +34,22 @@ public class TestTokenHandler : DelegatingHandler
         HttpRequestMessage request, 
         CancellationToken cancellationToken)
     {
-        var userId = _httpContextAccessor.HttpContext?.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "Anonymous";
-        
-        // Only modify requests if test authentication is enabled
-        if (_options.Enabled && _httpContextAccessor.HttpContext is not null)
+        var httpContext = _httpContextAccessor.HttpContext;
+        if (httpContext is not null
+            && TenantAuthSchemeSelector.IsTestAuthenticationActive(
+                httpContext,
+                _options,
+                _entraSsoOptions))
         {
-            var testToken = _httpContextAccessor.HttpContext.Session.GetString(SessionKeys.Token);
+            var testToken = httpContext.Session.GetString(SessionKeys.Token);
 
             if (!string.IsNullOrEmpty(testToken))
             {
-                // Replace the authorization header with the test token
-                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", testToken);
-            }
-            else
-            {
+                request.Headers.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", testToken);
             }
         }
-        else
-        {
-        }
 
-        var response = await base.SendAsync(request, cancellationToken);
-            
-        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized || response.StatusCode == System.Net.HttpStatusCode.Forbidden)
-        {
-        }
-
-        return response;
+        return await base.SendAsync(request, cancellationToken);
     }
-} 
+}

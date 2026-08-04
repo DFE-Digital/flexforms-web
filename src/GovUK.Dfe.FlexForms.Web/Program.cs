@@ -221,12 +221,10 @@ builder.Services.AddRazorPages(options =>
         options.Conventions.AllowAnonymousToPage("/TestError");
     }
     
-    // Allow anonymous access to test login page when test auth is enabled
-    if (isTestAuthEnabled)
-    {
-        options.Conventions.AllowAnonymousToPage("/TestLogin");
-        options.Conventions.AllowAnonymousToPage("/TestLogout");
-    }
+    // Always allow anonymous access; pages return 404 unless the current tenant
+    // (or host) selects Test Authentication via TenantAuthSchemeSelector.
+    options.Conventions.AllowAnonymousToPage("/TestLogin");
+    options.Conventions.AllowAnonymousToPage("/TestLogout");
 })
 .AddSessionStateTempDataProvider();
 
@@ -557,11 +555,9 @@ builder.Services.AddScoped<IComplexFieldRenderer, UploadComplexFieldRenderer>();
 builder.Services.AddSingleton<ITemplateStore, ApiTemplateStore>(); 
 builder.Services.AddUserTokenService(configuration);
 
-// Add test token handler and services when test authentication or Cypress is enabled
-if (isTestAuthEnabled)
-{
-    builder.Services.AddScoped<ITestAuthenticationService, TestAuthenticationService>();
-}
+// Always register Test Auth services so tenants can enable TestAuthentication in
+// Tenant Settings without restarting the platform. Access is gated per-request.
+builder.Services.AddScoped<ITestAuthenticationService, TestAuthenticationService>();
 
 // Configure Internal Service Auth settings
 builder.Services.Configure<InternalServiceAuthOptions>(

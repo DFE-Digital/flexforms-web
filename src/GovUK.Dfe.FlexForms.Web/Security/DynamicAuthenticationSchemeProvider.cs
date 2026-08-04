@@ -12,9 +12,8 @@ namespace GovUK.Dfe.FlexForms.Web.Security;
 /// Selects the active authentication scheme per request with forwarder pattern.
 /// Priority order:
 /// 1. If X-Service-Email header present: Uses Internal Service Auth (header-based forwarder)
-/// 2. If TestAuthentication.Enabled is true: Uses Test scheme for all
-/// 3. If tenant (or host) EntraSso.Enabled is true: Uses Entra SSO scheme
-/// 4. Otherwise: Uses DfE Sign-In OIDC (Cookies + OIDC challenge/sign-out)
+/// 2. Else tenant/host interactive scheme via <see cref="TenantAuthSchemeSelector"/>
+///    (explicit Authentication:Scheme, else Test / Entra / DfE Sign-In)
 /// </summary>
 public class DynamicAuthenticationSchemeProvider(
     IOptions<AuthenticationOptions> options,
@@ -23,10 +22,11 @@ public class DynamicAuthenticationSchemeProvider(
     IOptions<EntraSsoOptions> entraSsoOptions)
     : AuthenticationSchemeProvider(options)
 {
-    private bool IsTestAuthGloballyEnabled() => testAuthOptions.Value.Enabled;
-
-    private bool IsEntraSsoEnabled()
-        => TenantAuthSchemeSelector.IsEntraSsoEnabled(httpContextAccessor.HttpContext, entraSsoOptions);
+    private InteractiveAuthScheme ResolveInteractiveScheme()
+        => TenantAuthSchemeSelector.Resolve(
+            httpContextAccessor.HttpContext,
+            testAuthOptions,
+            entraSsoOptions);
 
     private bool IsInternalServiceRequest()
     {
@@ -38,9 +38,11 @@ public class DynamicAuthenticationSchemeProvider(
 
     private string GetDefaultIdpScheme()
     {
-        return IsEntraSsoEnabled()
-            ? EntraSsoDefaults.AuthenticationScheme
-            : OpenIdConnectDefaults.AuthenticationScheme;
+        return ResolveInteractiveScheme() switch
+        {
+            InteractiveAuthScheme.EntraSso => EntraSsoDefaults.AuthenticationScheme,
+            _ => OpenIdConnectDefaults.AuthenticationScheme
+        };
     }
 
     public override Task<AuthenticationScheme?> GetDefaultAuthenticateSchemeAsync()
@@ -50,7 +52,7 @@ public class DynamicAuthenticationSchemeProvider(
             return GetSchemeAsync(InternalServiceAuthenticationHandler.SchemeName);
         }
 
-        if (IsTestAuthGloballyEnabled())
+        if (ResolveInteractiveScheme() == InteractiveAuthScheme.TestAuthentication)
         {
             return GetSchemeAsync(TestAuthenticationHandler.SchemeName);
         }
@@ -65,7 +67,7 @@ public class DynamicAuthenticationSchemeProvider(
             return GetSchemeAsync(InternalServiceAuthenticationHandler.SchemeName);
         }
 
-        if (IsTestAuthGloballyEnabled())
+        if (ResolveInteractiveScheme() == InteractiveAuthScheme.TestAuthentication)
         {
             return GetSchemeAsync(TestAuthenticationHandler.SchemeName);
         }
@@ -80,7 +82,7 @@ public class DynamicAuthenticationSchemeProvider(
             return GetSchemeAsync(InternalServiceAuthenticationHandler.SchemeName);
         }
 
-        if (IsTestAuthGloballyEnabled())
+        if (ResolveInteractiveScheme() == InteractiveAuthScheme.TestAuthentication)
         {
             return GetSchemeAsync(TestAuthenticationHandler.SchemeName);
         }

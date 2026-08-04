@@ -124,7 +124,12 @@ public class SessionController(
             logger.LogWarning(ex, "Failed to clear token caches during session sign-out");
         }
 
-        if (testAuthOptions.Value.Enabled && testAuthenticationService != null)
+        var interactiveScheme = TenantAuthSchemeSelector.Resolve(
+            HttpContext,
+            testAuthOptions,
+            entraSsoOptions);
+
+        if (interactiveScheme == InteractiveAuthScheme.TestAuthentication && testAuthenticationService != null)
         {
             HttpContext.Session.Clear();
             await testAuthenticationService.SignOutAsync(HttpContext);
@@ -136,7 +141,7 @@ public class SessionController(
         var homeUrl = DfESignInOidcPublicUrls.BuildAbsoluteUrl(HttpContext, "/");
         var signOutProperties = new AuthenticationProperties { RedirectUri = homeUrl };
 
-        if (TenantAuthSchemeSelector.IsEntraSsoEnabled(HttpContext, entraSsoOptions))
+        if (interactiveScheme == InteractiveAuthScheme.EntraSso)
         {
             logger.LogInformation("Session timeout sign-out via Entra SSO");
             return SignOut(

@@ -1,4 +1,5 @@
 using GovUK.Dfe.CoreLibs.Security.Configurations;
+using GovUK.Dfe.FlexForms.Web.Security;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -12,63 +13,54 @@ namespace GovUK.Dfe.FlexForms.Web.Middleware
     {
         private readonly RequestDelegate _next;
         private readonly ILogger<TokenExpiryMiddleware> _logger;
-        private readonly TestAuthenticationOptions _testAuthOptions;
+        private readonly IOptions<TestAuthenticationOptions> _testAuthOptions;
+        private readonly IOptions<EntraSsoOptions> _entraSsoOptions;
         private static readonly TimeSpan ExpiryThreshold = TimeSpan.FromMinutes(10);
 
         public TokenExpiryMiddleware(
             RequestDelegate next, 
             ILogger<TokenExpiryMiddleware> logger,
-            IOptions<TestAuthenticationOptions> testAuthOptions)
+            IOptions<TestAuthenticationOptions> testAuthOptions,
+            IOptions<EntraSsoOptions> entraSsoOptions)
         {
             _next = next;
             _logger = logger;
-            _testAuthOptions = testAuthOptions.Value;
+            _testAuthOptions = testAuthOptions;
+            _entraSsoOptions = entraSsoOptions;
         }
 
         public async Task InvokeAsync(HttpContext context)
         {
             var userId = context.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "Anonymous";
             var requestPath = context.Request.Path;
-            var userAgent = context.Request.Headers["User-Agent"].FirstOrDefault() ?? "Unknown";
-            
 
-            
-            // Skip token expiry checks when test authentication is enabled
-            if (_testAuthOptions.Enabled)
+            // Skip token expiry checks when test authentication is the active interactive scheme
+            if (TenantAuthSchemeSelector.IsTestAuthenticationActive(
+                    context,
+                    _testAuthOptions,
+                    _entraSsoOptions))
             {
-
                 await _next(context);
                 return;
             }
-
 
             var result = await context.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             
             if (result.Succeeded)
             {
-
-                
                 var expiresUtc = result.Properties?.ExpiresUtc;
                 
                 if (expiresUtc.HasValue)
                 {
                     var remaining = expiresUtc.Value - DateTimeOffset.UtcNow;
                     
-                    // Log token status for debugging
-
-                    
                     if (remaining <= TimeSpan.Zero)
                     {
-
-
-                        // Token already expired - force logout immediately
                         context.Response.Redirect("/Logout?reason=token_expired");
                         return;
                     }
                     else if (remaining <= ExpiryThreshold)
                     {
-
-
                         await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
                         await context.ChallengeAsync(OpenIdConnectDefaults.AuthenticationScheme);
                         return;

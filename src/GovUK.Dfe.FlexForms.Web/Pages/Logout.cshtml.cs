@@ -50,7 +50,12 @@ public class LogoutModel(
                 tokenStore.ClearToken();
             }
 
-            if (testAuthOptions.Value.Enabled && testAuthenticationService != null)
+            var interactiveScheme = TenantAuthSchemeSelector.Resolve(
+                HttpContext,
+                testAuthOptions,
+                entraSsoOptions);
+
+            if (interactiveScheme == InteractiveAuthScheme.TestAuthentication && testAuthenticationService != null)
             {
                 logger.LogInformation("Signing out from test authentication");
                 HttpContext.Session.Clear();
@@ -66,7 +71,7 @@ public class LogoutModel(
             var homeUrl = DfESignInOidcPublicUrls.BuildAbsoluteUrl(HttpContext, "/");
             var signOutProperties = new AuthenticationProperties { RedirectUri = homeUrl };
 
-            if (TenantAuthSchemeSelector.IsEntraSsoEnabled(HttpContext, entraSsoOptions))
+            if (interactiveScheme == InteractiveAuthScheme.EntraSso)
             {
                 logger.LogInformation("Signing out from Entra SSO authentication");
 
