@@ -1,21 +1,19 @@
-using GovUK.Dfe.FlexForms.Web.Security;
+using System.Diagnostics.CodeAnalysis;
 using GovUK.Dfe.CoreLibs.Security.Configurations;
 using GovUK.Dfe.FlexForms.Api.Client.Security;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
+using GovUK.Dfe.FlexForms.Web.Security;
 using Microsoft.Extensions.Options;
-using System.Diagnostics.CodeAnalysis;
 
 namespace GovUK.Dfe.FlexForms.Web.Middleware;
 
 /// <summary>
-/// Middleware that implements simplified session and token management:
-/// 
-/// 1. IDLE TIMEOUT: If user inactive for 30 min → force logout
-/// 2. ABSOLUTE TIMEOUT: If session exceeds 8 hours → force logout  
-/// 3. TOKEN REFRESH: If token within 30 min of expiry → refresh automatically
-/// 
-/// This provides a clean, understandable security model aligned with UK government standards.
+/// Server-side backstop for session and token management:
+/// 1. IDLE TIMEOUT: If user inactive for configured minutes → force IDP logout
+/// 2. ABSOLUTE TIMEOUT: If session exceeds configured hours → force IDP logout
+/// 3. TOKEN REFRESH: If token within lead time of expiry → refresh when the IDP supports it
+///
+/// The UI warning overlay is driven client-side (SessionTimeoutBanner). This middleware
+/// enforces limits on the next authenticated request.
 /// </summary>
 [ExcludeFromCodeCoverage]
 public class ActivityBasedTokenRefreshMiddleware(
@@ -24,10 +22,8 @@ public class ActivityBasedTokenRefreshMiddleware(
     IOptions<TokenRefreshSettings> tokenRefreshSettings,
     IOptions<TestAuthenticationOptions> testAuthOptions)
 {
-    private readonly TokenRefreshSettings _settings = tokenRefreshSettings.Value;
     private readonly TestAuthenticationOptions _testAuthOptions = testAuthOptions.Value;
 
-    // Paths to skip (static assets, auth endpoints, etc.)
     private static readonly string[] SkipPaths =
     [
         "/health",
@@ -43,26 +39,24 @@ public class ActivityBasedTokenRefreshMiddleware(
         "/signin-oidc",
         "/signout-callback-oidc",
         "/Logout",
-        "/Error"
+        "/Error",
+        "/session" // stay-signed-in / timeout sign-out must not be blocked by idle checks
     ];
 
     public async Task InvokeAsync(HttpContext context)
     {
-        // Skip if test authentication is enabled
         if (_testAuthOptions.Enabled)
         {
             await next(context);
             return;
         }
 
-        // Skip for paths that shouldn't trigger session management
         if (ShouldSkipPath(context.Request.Path))
         {
             await next(context);
             return;
         }
 
-        // Skip if user is not authenticated
         if (context.User?.Identity?.IsAuthenticated != true)
         {
             await next(context);
@@ -73,28 +67,23 @@ public class ActivityBasedTokenRefreshMiddleware(
         {
             var shouldContinue = await ProcessSessionManagementAsync(context);
             if (!shouldContinue)
-            {
-                return; // User was logged out, response already set
-            }
+                return;
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error in session management middleware");
-            // Continue to next middleware even if session management fails
         }
 
         await next(context);
     }
 
-    /// <summary>
-    /// Process session management logic. Returns false if user was logged out.
-    /// </summary>
     private async Task<bool> ProcessSessionManagementAsync(HttpContext context)
     {
+        var settings = tokenRefreshSettings.Value;
         var activityTracker = context.RequestServices.GetService<IUserActivityTracker>();
         var authStrategy = context.RequestServices.GetService<IAuthenticationSchemeStrategy>();
 
-        if (activityTracker == null || authStrategy == null)
+        if (activityTracker is null || authStrategy is null)
         {
             logger.LogDebug("Activity tracker or auth strategy not available, skipping session management");
             return true;
@@ -102,118 +91,101 @@ public class ActivityBasedTokenRefreshMiddleware(
 
         var userId = authStrategy.GetUserId(context) ?? "Unknown";
 
-        // CHECK 1: ABSOLUTE TIMEOUT (8 hours)
-        // Force re-authentication regardless of activity
-        if (activityTracker.HasSessionExpired(context, _settings.AbsoluteTimeoutHours))
+        if (activityTracker.HasSessionExpired(context, settings.AbsoluteTimeoutHours))
         {
             logger.LogInformation(
                 "Forcing logout for user {UserId}: Session exceeded absolute timeout of {Hours} hours",
                 userId,
-                _settings.AbsoluteTimeoutHours);
-            
-            await ForceLogoutAsync(context, "session_expired");
+                settings.AbsoluteTimeoutHours);
+
+            ForceLogout(context, "session_expired");
             return false;
         }
 
-        // CHECK 2: IDLE TIMEOUT (30 minutes)
-        // Force re-authentication if user was inactive
-        if (activityTracker.IsUserInactive(context, _settings.InactivityThresholdMinutes))
+        if (activityTracker.IsUserInactive(context, settings.InactivityThresholdMinutes))
         {
             logger.LogInformation(
                 "Forcing logout for user {UserId}: Inactive for {Minutes} minutes",
                 userId,
-                _settings.InactivityThresholdMinutes);
-            
-            await ForceLogoutAsync(context, "idle_timeout");
+                settings.InactivityThresholdMinutes);
+
+            ForceLogout(context, "idle_timeout");
             return false;
         }
 
-        // CHECK 3: TOKEN REFRESH (when within 30 min of expiry)
-        // Keep active users logged in by refreshing their token
-        await TryRefreshTokenIfNeededAsync(context, authStrategy, userId);
+        var refreshedOk = await TryRefreshTokenIfNeededAsync(context, authStrategy, userId, settings);
+        if (!refreshedOk)
+            return false;
 
-        // RECORD ACTIVITY
-        // Update last activity timestamp for idle timeout tracking
-        // Skip if this is a timeout-check refresh (indicated by _tc query param)
-        var isTimeoutCheck = context.Request.Query.ContainsKey("_tc");
-        if (!isTimeoutCheck)
-        {
-            activityTracker.RecordActivity(context);
-        }
+        // Record activity for server-side idle enforcement.
+        // Client-side warning uses its own activity listeners and does not depend on this.
+        activityTracker.RecordActivity(context);
 
         return true;
     }
 
-    /// <summary>
-    /// Attempt to refresh token if it's within the refresh lead time window
-    /// </summary>
-    private async Task TryRefreshTokenIfNeededAsync(
-        HttpContext context, 
-        IAuthenticationSchemeStrategy authStrategy, 
-        string userId)
+    /// <returns>False when the user was forced to sign out.</returns>
+    private async Task<bool> TryRefreshTokenIfNeededAsync(
+        HttpContext context,
+        IAuthenticationSchemeStrategy authStrategy,
+        string userId,
+        TokenRefreshSettings settings)
     {
         try
         {
-            // Check if token needs refresh (within RefreshLeadTimeMinutes of expiry)
             var canRefresh = await authStrategy.CanRefreshTokenAsync(context);
-            
             if (!canRefresh)
-            {
-                // Token has plenty of time left, no refresh needed
-                return;
-            }
+                return true;
 
             logger.LogInformation(
                 "Refreshing token for user {UserId}: Token within {Minutes} minutes of expiry",
                 userId,
-                _settings.RefreshLeadTimeMinutes);
+                settings.RefreshLeadTimeMinutes);
 
             var refreshed = await authStrategy.RefreshExternalIdpTokenAsync(context);
-
             if (refreshed)
             {
                 logger.LogInformation("Successfully refreshed token for user {UserId}", userId);
+                return true;
             }
-            else
-            {
-                logger.LogWarning(
-                    "Failed to refresh token for user {UserId}. Token may expire soon.",
-                    userId);
-                
-                // Check if we're critically low on time
-                await HandleRefreshFailureAsync(context, authStrategy, userId);
-            }
+
+            logger.LogWarning(
+                "Failed to refresh token for user {UserId}. Token may expire soon.",
+                userId);
+
+            return await HandleRefreshFailureAsync(context, authStrategy, userId, settings);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error attempting token refresh for user {UserId}", userId);
+            return true;
         }
     }
 
-    /// <summary>
-    /// Handle the case where token refresh failed and we're close to expiry
-    /// </summary>
-    private async Task HandleRefreshFailureAsync(
-        HttpContext context, 
-        IAuthenticationSchemeStrategy authStrategy, 
-        string userId)
+    /// <returns>False when the user was forced to sign out.</returns>
+    private async Task<bool> HandleRefreshFailureAsync(
+        HttpContext context,
+        IAuthenticationSchemeStrategy authStrategy,
+        string userId,
+        TokenRefreshSettings settings)
     {
         try
         {
             var tokenInfo = await authStrategy.GetExternalIdpTokenAsync(context);
-            
+
             if (tokenInfo.IsPresent && tokenInfo.ExpiryTime.HasValue)
             {
                 var minutesRemaining = (tokenInfo.ExpiryTime.Value - DateTime.UtcNow).TotalMinutes;
-                
-                if (minutesRemaining <= _settings.ForceLogoutAtMinutesRemaining)
+
+                if (minutesRemaining <= settings.ForceLogoutAtMinutesRemaining)
                 {
                     logger.LogWarning(
                         "Token for user {UserId} expires in {Minutes:F1} minutes and refresh failed. Forcing re-authentication.",
                         userId,
                         minutesRemaining);
-                    
-                    await ForceLogoutAsync(context, "token_expiring");
+
+                    ForceLogout(context, "token_expiring");
+                    return false;
                 }
             }
         }
@@ -221,21 +193,24 @@ public class ActivityBasedTokenRefreshMiddleware(
         {
             logger.LogError(ex, "Error handling refresh failure for user {UserId}", userId);
         }
+
+        return true;
     }
 
     /// <summary>
-    /// Sign out the user and redirect to home page
+    /// Redirect to the session timeout sign-out endpoint so cookie + IDP end_session run
+    /// (DfE Sign-In OIDC and Entra SSO). Avoids cookie-only logout that SSO bounce-backs.
     /// </summary>
-    private async Task ForceLogoutAsync(HttpContext context, string reason)
+    private void ForceLogout(HttpContext context, string reason)
     {
         try
         {
-            await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            context.Response.Redirect($"/?reason={reason}");
+            var url = $"/session/timeout-sign-out?reason={Uri.EscapeDataString(reason)}";
+            context.Response.Redirect(url);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error during forced logout");
+            logger.LogError(ex, "Error during forced logout redirect");
             context.Response.Redirect("/");
         }
     }
@@ -243,21 +218,16 @@ public class ActivityBasedTokenRefreshMiddleware(
     private static bool ShouldSkipPath(PathString path)
     {
         if (!path.HasValue)
-        {
             return false;
-        }
 
-        var pathValue = path.Value;
-        
+        var pathValue = path.Value!;
+
         foreach (var skipPath in SkipPaths)
         {
             if (pathValue.StartsWith(skipPath, StringComparison.OrdinalIgnoreCase))
-            {
                 return true;
-            }
         }
 
-        // Skip static file extensions
         if (pathValue.EndsWith(".css", StringComparison.OrdinalIgnoreCase) ||
             pathValue.EndsWith(".js", StringComparison.OrdinalIgnoreCase) ||
             pathValue.EndsWith(".ico", StringComparison.OrdinalIgnoreCase) ||
@@ -274,19 +244,12 @@ public class ActivityBasedTokenRefreshMiddleware(
     }
 }
 
-/// <summary>
-/// Extension methods for registering the ActivityBasedTokenRefreshMiddleware
-/// </summary>
 [ExcludeFromCodeCoverage]
 public static class ActivityBasedTokenRefreshMiddlewareExtensions
 {
     /// <summary>
-    /// Adds session management middleware to the pipeline.
-    /// Handles idle timeout, absolute timeout, and token refresh.
-    /// Should be added after UseAuthentication() and before UseAuthorization().
+    /// Adds session management middleware after UseAuthentication().
     /// </summary>
     public static IApplicationBuilder UseActivityBasedTokenRefresh(this IApplicationBuilder app)
-    {
-        return app.UseMiddleware<ActivityBasedTokenRefreshMiddleware>();
-    }
+        => app.UseMiddleware<ActivityBasedTokenRefreshMiddleware>();
 }

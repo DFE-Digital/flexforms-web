@@ -260,7 +260,9 @@ builder.Services.PostConfigure<GovUK.Dfe.CoreLibs.Caching.Settings.CacheSettings
 // Configure session with timeout settings to prevent hanging/blocking
 builder.Services.AddSession(options =>
 {
-    options.IdleTimeout = TimeSpan.FromMinutes(30);
+    // Keep ASP.NET session alive longer than the inactivity logout threshold (30 min)
+    // so LastActivity timestamps survive until the idle warning / force logout runs.
+    options.IdleTimeout = TimeSpan.FromMinutes(45);
     options.Cookie.HttpOnly = true;
     options.Cookie.IsEssential = true;
     options.IOTimeout = TimeSpan.FromSeconds(5); // Prevent indefinite blocking on session I/O
