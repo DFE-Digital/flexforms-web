@@ -29,12 +29,27 @@ public class SessionController(
     ITestAuthenticationService? testAuthenticationService = null) : Controller
 {
     /// <summary>
-    /// "Stay signed in" from the inactivity warning.
+    /// "Stay signed in" from the inactivity warning (POST from the banner form / fetch).
     /// Resets idle activity and best-effort refreshes tokens (OIDC). Always succeeds for idle reset.
     /// </summary>
     [HttpPost("stay-signed-in")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> StaySignedIn(string? returnUrl = null)
+    public Task<IActionResult> StaySignedInPost(string? returnUrl = null)
+        => StaySignedInCoreAsync(returnUrl, allowJson: true);
+
+    /// <summary>
+    /// Safe landing after an IDP challenge. Cookie auth / Entra often re-issue a <c>GET</c> to the
+    /// original URL after login; a POST-only action would return 405. This resets activity and
+    /// sends the user back to their page (or the dashboard).
+    /// </summary>
+    [HttpGet("stay-signed-in")]
+    public IActionResult StaySignedInGet(string? returnUrl = null)
+    {
+        activityTracker.RecordActivity(HttpContext);
+        return RedirectAfterStaySignedIn(returnUrl);
+    }
+
+    private async Task<IActionResult> StaySignedInCoreAsync(string? returnUrl, bool allowJson)
     {
         activityTracker.RecordActivity(HttpContext);
 
@@ -56,14 +71,19 @@ public class SessionController(
             logger.LogWarning(ex, "API token refresh failed during stay-signed-in; idle timer was still reset.");
         }
 
-        // AJAX / fetch from the timeout banner
-        if (IsAjaxRequest())
-        {
+        if (allowJson && IsAjaxRequest())
             return Ok(new { ok = true });
-        }
 
-        if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
+        return RedirectAfterStaySignedIn(returnUrl);
+    }
+
+    private IActionResult RedirectAfterStaySignedIn(string? returnUrl)
+    {
+        if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl)
+            && !returnUrl.StartsWith("/session/", StringComparison.OrdinalIgnoreCase))
+        {
             return LocalRedirect(returnUrl);
+        }
 
         return Redirect("/applications/dashboard");
     }

@@ -164,17 +164,18 @@
 
             stayBtn.addEventListener('click', function (e) {
                 e.preventDefault();
+                e.stopPropagation();
                 if (signingOut) return;
 
                 stayBtn.disabled = true;
                 clearTimers();
 
+                var returnUrlInput = form.querySelector('input[name="returnUrl"]');
+                var returnUrl = (returnUrlInput && returnUrlInput.value) ? returnUrlInput.value : '/applications/dashboard';
+
                 var body = new URLSearchParams();
                 body.set('__RequestVerificationToken', getAntiForgeryToken());
-                var returnUrlInput = form.querySelector('input[name="returnUrl"]');
-                if (returnUrlInput && returnUrlInput.value) {
-                    body.set('returnUrl', returnUrlInput.value);
-                }
+                body.set('returnUrl', returnUrl);
 
                 fetch(stayUrl, {
                     method: 'POST',
@@ -184,15 +185,21 @@
                         'X-Requested-With': 'XMLHttpRequest'
                     },
                     body: body.toString(),
-                    credentials: 'same-origin'
+                    credentials: 'same-origin',
+                    redirect: 'manual'
                 }).then(function (response) {
+                    // 0 / opaqueredirect: browser followed an auth challenge — finish via GET keep-alive.
+                    if (response.type === 'opaqueredirect' || response.status === 0) {
+                        throw new Error('redirect');
+                    }
                     if (!response.ok) throw new Error('Stay signed in failed');
                     stayBtn.disabled = false;
+                    hideWarning();
                     armTimers();
                 }).catch(function () {
-                    // Fallback to full form post if fetch fails (e.g. auth expired)
-                    stayBtn.disabled = false;
-                    form.submit();
+                    // Prefer GET keep-alive so Entra/OIDC post-login redirects do not 405 on POST-only.
+                    var dest = stayUrl + '?returnUrl=' + encodeURIComponent(returnUrl);
+                    window.location.assign(dest);
                 });
             });
 
