@@ -56,6 +56,8 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
 
         public bool CanManageRoles => AdminAccessHelper.CanManageRoles(User);
 
+        public bool CanManageOrganisationSettings => AdminAccessHelper.CanManageOrganisationSettings(User);
+
         public bool CanManageTenantSettings => AdminAccessHelper.CanManageTenantSettings(User);
 
         public bool CanViewTenantConfigurationSummary => AdminAccessHelper.CanViewTenantConfigurationSummary(User);

@@ -1,0 +1,162 @@
+@page "/admin/organisation-settings"
+@model GovUK.Dfe.FlexForms.Web.Pages.Admin.OrganisationSettingsModel
+@{
+    ViewData["Title"] = "Organisation settings";
+}
+
+<div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+        <a asp-page="/Admin/Admin" class="govuk-back-link">Back to Admin</a>
+
+        @if (Model.HasError)
+        {
+            <div class="govuk-error-summary" data-module="govuk-error-summary">
+                <div role="alert">
+                    <h2 class="govuk-error-summary__title">There is a problem</h2>
+                    <div class="govuk-error-summary__body">
+                        <p class="govuk-body">@Model.ErrorMessage</p>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (!ViewData.ModelState.IsValid)
+        {
+            <div class="govuk-error-summary" data-module="govuk-error-summary">
+                <div role="alert">
+                    <h2 class="govuk-error-summary__title">There is a problem</h2>
+                    <div class="govuk-error-summary__body">
+                        <ul class="govuk-list govuk-error-summary__list">
+                            @foreach (var modelError in ViewData.ModelState.Where(item => item.Value?.Errors.Count > 0))
+                            {
+                                foreach (var error in modelError.Value!.Errors)
+                                {
+                                    <li><a href="#@modelError.Key">@error.ErrorMessage</a></li>
+                                }
+                            }
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (Model.ShowSuccess)
+        {
+            <div class="govuk-notification-banner govuk-notification-banner--success" role="alert" data-module="govuk-notification-banner">
+                <div class="govuk-notification-banner__header">
+                    <h2 class="govuk-notification-banner__title">Success</h2>
+                </div>
+                <div class="govuk-notification-banner__content">
+                    <p class="govuk-notification-banner__heading">@Model.SuccessMessage</p>
+                </div>
+            </div>
+        }
+
+        <h1 class="govuk-heading-xl">Organisation settings</h1>
+        <p class="govuk-body">
+            Update display terminology, the site-wide notification banner, and dashboard listing options for
+            <strong>@(string.IsNullOrWhiteSpace(Model.TenantName) ? Model.TenantId.ToString() : Model.TenantName)</strong>.
+        </p>
+        <p class="govuk-hint">
+            Changes apply after save. You may need to refresh the page to see banner or terminology updates.
+        </p>
+
+        <form method="post">
+            <div class="govuk-summary-card">
+                <div class="govuk-summary-card__title-wrapper">
+                    <h2 class="govuk-summary-card__title">Application terminology</h2>
+                </div>
+                <div class="govuk-summary-card__content">
+                    <p class="govuk-body">Customise how “application” is labelled across the service.</p>
+
+                    <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.TerminologySingular)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                        <label class="govuk-label" asp-for="TerminologySingular">Singular</label>
+                        <div class="govuk-hint">For example application, reform plan</div>
+                        @if (ViewData.ModelState[nameof(Model.TerminologySingular)]?.Errors.FirstOrDefault() is { } singularError)
+                        {
+                            <p class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @singularError.ErrorMessage</p>
+                        }
+                        <input class="govuk-input govuk-!-width-one-half @(ViewData.ModelState[nameof(Model.TerminologySingular)]?.Errors.Any() == true ? "govuk-input--error" : "")"
+                               asp-for="TerminologySingular" id="TerminologySingular" autocomplete="off" />
+                    </div>
+
+                    <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.TerminologyPlural)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                        <label class="govuk-label" asp-for="TerminologyPlural">Plural</label>
+                        <div class="govuk-hint">For example applications, reform plans</div>
+                        @if (ViewData.ModelState[nameof(Model.TerminologyPlural)]?.Errors.FirstOrDefault() is { } pluralError)
+                        {
+                            <p class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @pluralError.ErrorMessage</p>
+                        }
+                        <input class="govuk-input govuk-!-width-one-half @(ViewData.ModelState[nameof(Model.TerminologyPlural)]?.Errors.Any() == true ? "govuk-input--error" : "")"
+                               asp-for="TerminologyPlural" id="TerminologyPlural" autocomplete="off" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="govuk-summary-card">
+                <div class="govuk-summary-card__title-wrapper">
+                    <h2 class="govuk-summary-card__title">Notification banner</h2>
+                </div>
+                <div class="govuk-summary-card__content">
+                    <p class="govuk-body">Show a site-wide GOV.UK notification banner on every page.</p>
+
+                    <div class="govuk-form-group">
+                        <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+                            <div class="govuk-checkboxes__item">
+                                <input class="govuk-checkboxes__input" asp-for="BannerEnabled" id="BannerEnabled" />
+                                <label class="govuk-label govuk-checkboxes__label" asp-for="BannerEnabled">
+                                    Enabled
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="BannerHeading">Heading</label>
+                        <input class="govuk-input govuk-!-width-one-half" asp-for="BannerHeading" id="BannerHeading" autocomplete="off" />
+                    </div>
+
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="BannerMessage">Message</label>
+                        <textarea class="govuk-textarea" asp-for="BannerMessage" id="BannerMessage" rows="4"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="govuk-summary-card">
+                <div class="govuk-summary-card__title-wrapper">
+                    <h2 class="govuk-summary-card__title">Dashboard</h2>
+                </div>
+                <div class="govuk-summary-card__content">
+                    <p class="govuk-body">Control listing page size and whether application filters are shown.</p>
+
+                    <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.DashboardPageSize)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                        <label class="govuk-label" asp-for="DashboardPageSize">Page size</label>
+                        <div class="govuk-hint">Number of applications per page (1 to 500)</div>
+                        @if (ViewData.ModelState[nameof(Model.DashboardPageSize)]?.Errors.FirstOrDefault() is { } pageSizeError)
+                        {
+                            <p class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @pageSizeError.ErrorMessage</p>
+                        }
+                        <input class="govuk-input govuk-input--width-5 @(ViewData.ModelState[nameof(Model.DashboardPageSize)]?.Errors.Any() == true ? "govuk-input--error" : "")"
+                               asp-for="DashboardPageSize" id="DashboardPageSize" inputmode="numeric" />
+                    </div>
+
+                    <div class="govuk-form-group">
+                        <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+                            <div class="govuk-checkboxes__item">
+                                <input class="govuk-checkboxes__input" asp-for="DashboardEnableFilters" id="DashboardEnableFilters" />
+                                <label class="govuk-label govuk-checkboxes__label" asp-for="DashboardEnableFilters">
+                                    Enable application filters
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" class="govuk-button" data-module="govuk-button">
+                Save settings
+            </button>
+        </form>
+    </div>
+</div>

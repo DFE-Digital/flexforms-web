@@ -1,0 +1,120 @@
+@page "/admin/contributor-management"
+@model GovUK.Dfe.FlexForms.Web.Pages.Admin.ContributorManagementModel
+@{
+    ViewData["Title"] = "Contributor management";
+}
+
+<div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+        <a asp-page="/Admin/Admin" class="govuk-back-link">Back to Admin</a>
+
+        <h1 class="govuk-heading-xl">Contributor management</h1>
+        <p class="govuk-body">
+            Look up contributors for an application by its reference number.
+        </p>
+        <div class="govuk-inset-text">
+            Application owners manage invite and remove from the application task list.
+            Use this page to find who currently has access, then open the full contributors page if needed.
+        </div>
+
+        @if (Model.HasError)
+        {
+            <div class="govuk-error-summary" data-module="govuk-error-summary">
+                <div role="alert">
+                    <h2 class="govuk-error-summary__title">There is a problem</h2>
+                    <div class="govuk-error-summary__body">
+                        <p class="govuk-body">@Model.ErrorMessage</p>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (!ViewData.ModelState.IsValid)
+        {
+            <div class="govuk-error-summary" data-module="govuk-error-summary">
+                <div role="alert">
+                    <h2 class="govuk-error-summary__title">There is a problem</h2>
+                    <div class="govuk-error-summary__body">
+                        <ul class="govuk-list govuk-error-summary__list">
+                            @foreach (var modelError in ViewData.ModelState.Where(item => item.Value?.Errors.Count > 0))
+                            {
+                                foreach (var error in modelError.Value!.Errors)
+                                {
+                                    <li><a href="#@modelError.Key">@error.ErrorMessage</a></li>
+                                }
+                            }
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="govuk-summary-card">
+            <div class="govuk-summary-card__title-wrapper">
+                <h2 class="govuk-summary-card__title">Find an application</h2>
+            </div>
+            <div class="govuk-summary-card__content">
+                <form method="post">
+                    <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.ReferenceNumber)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                        <label class="govuk-label govuk-label--m" asp-for="ReferenceNumber">Application reference number</label>
+                        <div class="govuk-hint">Enter the full reference shown on the application</div>
+                        @if (ViewData.ModelState[nameof(Model.ReferenceNumber)]?.Errors.FirstOrDefault() is { } refError)
+                        {
+                            <p class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @refError.ErrorMessage</p>
+                        }
+                        <input class="govuk-input govuk-!-width-one-half @(ViewData.ModelState[nameof(Model.ReferenceNumber)]?.Errors.Any() == true ? "govuk-input--error" : "")"
+                               asp-for="ReferenceNumber" id="ReferenceNumber" autocomplete="off" />
+                    </div>
+                    <button type="submit" class="govuk-button" data-module="govuk-button">Look up contributors</button>
+                </form>
+            </div>
+        </div>
+
+        @if (Model.LookupPerformed && !Model.HasError)
+        {
+            <h2 class="govuk-heading-l">Contributors</h2>
+            <p class="govuk-body">
+                Reference <strong>@Model.ApplicationReference</strong>
+                @if (!string.IsNullOrWhiteSpace(Model.TemplateName))
+                {
+                    <text> · @Model.TemplateName</text>
+                }
+            </p>
+
+            @if (Model.Contributors.Count == 0)
+            {
+                <p class="govuk-body">No contributors found for this application.</p>
+            }
+            else
+            {
+                <table class="govuk-table">
+                    <thead class="govuk-table__head">
+                        <tr class="govuk-table__row">
+                            <th scope="col" class="govuk-table__header">Name</th>
+                            <th scope="col" class="govuk-table__header">Email</th>
+                        </tr>
+                    </thead>
+                    <tbody class="govuk-table__body">
+                        @foreach (var contributor in Model.Contributors)
+                        {
+                            <tr class="govuk-table__row">
+                                <td class="govuk-table__cell">
+                                    @(string.IsNullOrWhiteSpace(contributor.Name) ? "—" : contributor.Name)
+                                </td>
+                                <td class="govuk-table__cell">
+                                    <a class="govuk-link" href="mailto:@contributor.Email">@contributor.Email</a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+
+            <p class="govuk-body">
+                <a class="govuk-link" href="/applications/@Uri.EscapeDataString(Model.ApplicationReference!)/contributors">
+                    Open full invite and remove UI
+                </a>
+            </p>
+        }
+    </div>
+</div>

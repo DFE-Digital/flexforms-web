@@ -72,6 +72,43 @@
             </div>
         </div>
 
+        <div class="govuk-summary-card">
+            <div class="govuk-summary-card__title-wrapper">
+                <h2 class="govuk-summary-card__title">Create from template</h2>
+            </div>
+            <div class="govuk-summary-card__content">
+                <p class="govuk-body">
+                    Create a custom role with recommended permissions. You can adjust permissions after creation.
+                </p>
+                <div class="govuk-grid-row">
+                    <div class="govuk-grid-column-one-half">
+                        <h3 class="govuk-heading-s">Caseworker</h3>
+                        <p class="govuk-body">
+                            Read all applications/files; create applications on any template.
+                        </p>
+                        <form method="post" asp-page-handler="CreateFromTemplate">
+                            <input type="hidden" name="templateKey" value="Caseworker" />
+                            <button type="submit" class="govuk-button govuk-button--secondary" data-module="govuk-button">
+                                Create Caseworker role
+                            </button>
+                        </form>
+                    </div>
+                    <div class="govuk-grid-column-one-half">
+                        <h3 class="govuk-heading-s">Reviewer</h3>
+                        <p class="govuk-body">
+                            Read-only access to all applications and files.
+                        </p>
+                        <form method="post" asp-page-handler="CreateFromTemplate">
+                            <input type="hidden" name="templateKey" value="Reviewer" />
+                            <button type="submit" class="govuk-button govuk-button--secondary" data-module="govuk-button">
+                                Create Reviewer role
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <h2 class="govuk-heading-l">Roles in this tenant</h2>
 
         @if (Model.Roles.Count == 0)

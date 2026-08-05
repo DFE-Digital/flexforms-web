@@ -186,5 +186,43 @@
                 </div>
             }
         }
+
+        <h2 class="govuk-heading-l govuk-!-margin-top-8">Access audit trail</h2>
+        <p class="govuk-body">Recent role assignment and access changes in this tenant (last 50).</p>
+
+        @if (Model.AccessAuditEntries.Count == 0)
+        {
+            <p class="govuk-body">No access audit entries found.</p>
+        }
+        else
+        {
+            <table class="govuk-table">
+                <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                        <th scope="col" class="govuk-table__header">When</th>
+                        <th scope="col" class="govuk-table__header">Subject email</th>
+                        <th scope="col" class="govuk-table__header">Action</th>
+                        <th scope="col" class="govuk-table__header">Role</th>
+                        <th scope="col" class="govuk-table__header">Actor email</th>
+                        <th scope="col" class="govuk-table__header">Details</th>
+                    </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                    @foreach (var entry in Model.AccessAuditEntries)
+                    {
+                        <tr class="govuk-table__row">
+                            <td class="govuk-table__cell">@entry.OccurredAtUtc.ToString("yyyy-MM-dd HH:mm:ss") UTC</td>
+                            <td class="govuk-table__cell">@entry.SubjectEmail</td>
+                            <td class="govuk-table__cell">
+                                <strong class="govuk-tag govuk-tag--blue">@entry.Action</strong>
+                            </td>
+                            <td class="govuk-table__cell">@(entry.RoleName ?? "—")</td>
+                            <td class="govuk-table__cell">@entry.ActorEmail</td>
+                            <td class="govuk-table__cell">@(entry.Details ?? "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
     </div>
 </div>

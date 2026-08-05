@@ -64,6 +64,12 @@ public static class AdminAccessHelper
         IsAdmin(user);
 
     /// <summary>
+    /// Organisation settings (non-secret delegated TenantConfig) — Admin or SuperAdmin.
+    /// </summary>
+    public static bool CanManageOrganisationSettings(ClaimsPrincipal? user) =>
+        IsAdmin(user);
+
+    /// <summary>
     /// TenantConfig settings editor — SuperAdmin only (decrypted secrets).
     /// </summary>
     public static bool CanManageTenantSettings(ClaimsPrincipal? user) =>
