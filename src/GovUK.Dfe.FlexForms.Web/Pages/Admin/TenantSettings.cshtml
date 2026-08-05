@@ -51,77 +51,211 @@
                     Refresh settings
                 </button>
             </form>
+            <a asp-page="/Admin/PlatformTenants" class="govuk-button govuk-button--secondary" data-module="govuk-button">
+                Platform tenants
+            </a>
         </div>
 
-        @if (Model.EffectiveConfig is not null)
+        @if (Model.TenantHealth is not null)
+        {
+            var overallTag = Model.TenantHealth.OverallStatus switch
+            {
+                "Pass" => "govuk-tag--green",
+                "Warn" => "govuk-tag--yellow",
+                _ => "govuk-tag--red"
+            };
+            <div class="govuk-summary-card govuk-!-margin-bottom-6">
+                <div class="govuk-summary-card__title-wrapper">
+                    <h2 class="govuk-summary-card__title">
+                        Tenant health
+                        <strong class="govuk-tag @overallTag govuk-!-margin-left-2">@Model.TenantHealth.OverallStatus</strong>
+                    </h2>
+                </div>
+                <div class="govuk-summary-card__content">
+                    <table class="govuk-table">
+                        <thead class="govuk-table__head">
+                            <tr class="govuk-table__row">
+                                <th scope="col" class="govuk-table__header">Check</th>
+                                <th scope="col" class="govuk-table__header">Status</th>
+                                <th scope="col" class="govuk-table__header">Detail</th>
+                            </tr>
+                        </thead>
+                        <tbody class="govuk-table__body">
+                            @foreach (var check in Model.TenantHealth.Checks)
+                            {
+                                var tag = check.Status switch
+                                {
+                                    "Pass" => "govuk-tag--green",
+                                    "Warn" => "govuk-tag--yellow",
+                                    _ => "govuk-tag--red"
+                                };
+                                <tr class="govuk-table__row">
+                                    <td class="govuk-table__cell">@check.Label</td>
+                                    <td class="govuk-table__cell"><strong class="govuk-tag @tag">@check.Status</strong></td>
+                                    <td class="govuk-table__cell">@check.Detail</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+
+                    @{
+                        var effective = Model.TenantHealth.EffectiveConfiguration;
+                    }
+                    <details class="govuk-details govuk-!-margin-top-4" data-module="govuk-details">
+                        <summary class="govuk-details__summary">
+                            <span class="govuk-details__summary-text">Effective runtime configuration</span>
+                        </summary>
+                        <div class="govuk-details__text">
+                            <dl class="govuk-summary-list govuk-summary-list--no-border">
+                                <div class="govuk-summary-list__row">
+                                    <dt class="govuk-summary-list__key">Config source</dt>
+                                    <dd class="govuk-summary-list__value">@effective.ConfigSource</dd>
+                                </div>
+                                <div class="govuk-summary-list__row">
+                                    <dt class="govuk-summary-list__key">Active tenants</dt>
+                                    <dd class="govuk-summary-list__value">@effective.ActiveTenantCount</dd>
+                                </div>
+                                <div class="govuk-summary-list__row">
+                                    <dt class="govuk-summary-list__key">Last catalogue refresh</dt>
+                                    <dd class="govuk-summary-list__value">
+                                        @(effective.LastCatalogueRefreshUtc?.ToString("yyyy-MM-dd HH:mm:ss") ?? "Never")
+                                    </dd>
+                                </div>
+                                <div class="govuk-summary-list__row">
+                                    <dt class="govuk-summary-list__key">Auth scheme</dt>
+                                    <dd class="govuk-summary-list__value">
+                                        <strong class="govuk-tag govuk-tag--blue">@(effective.InteractiveAuthScheme ?? "Not set")</strong>
+                                    </dd>
+                                </div>
+                                <div class="govuk-summary-list__row">
+                                    <dt class="govuk-summary-list__key">Auth providers</dt>
+                                    <dd class="govuk-summary-list__value">
+                                        @(effective.TestAuthenticationEnabled ? "TestAuth " : "")
+                                        @(effective.EntraSsoEnabled ? "EntraSSO " : "")
+                                        @(effective.DfESignInConfigured ? "DfESignIn " : "")
+                                        (@effective.RegisteredAuthProviderCount registered)
+                                    </dd>
+                                </div>
+                                <div class="govuk-summary-list__row">
+                                    <dt class="govuk-summary-list__key">Hostnames</dt>
+                                    <dd class="govuk-summary-list__value">
+                                        @(effective.Hostnames?.Count > 0 ? string.Join(", ", effective.Hostnames) : "None")
+                                    </dd>
+                                </div>
+                                <div class="govuk-summary-list__row">
+                                    <dt class="govuk-summary-list__key">CORS origins</dt>
+                                    <dd class="govuk-summary-list__value">
+                                        @(effective.FrontendOrigins?.Count > 0 ? string.Join(", ", effective.FrontendOrigins) : "None")
+                                    </dd>
+                                </div>
+                            </dl>
+                        </div>
+                    </details>
+                </div>
+            </div>
+        }
+
+        @if (Model.ValidationPreview is not null)
+        {
+            <div class="govuk-notification-banner @(Model.ValidationPreview.IsValid ? "" : "govuk-notification-banner--error")" role="region" data-module="govuk-notification-banner">
+                <div class="govuk-notification-banner__header">
+                    <h2 class="govuk-notification-banner__title">
+                        @(Model.ValidationPreview.IsValid ? "Validation passed" : "Validation failed")
+                    </h2>
+                </div>
+                <div class="govuk-notification-banner__content">
+                    <p class="govuk-notification-banner__heading">
+                        @Model.ValidationCategory / @Model.ValidationTarget — @Model.ValidationPreview.DiffSummary
+                    </p>
+                    @if (!Model.ValidationPreview.IsValid)
+                    {
+                        <ul class="govuk-list govuk-list--bullet">
+                            @foreach (var err in Model.ValidationPreview.Errors)
+                            {
+                                <li>@err</li>
+                            }
+                        </ul>
+                    }
+                    <div class="govuk-grid-row">
+                        <div class="govuk-grid-column-one-half">
+                            <h3 class="govuk-heading-s">Current</h3>
+                            <pre class="govuk-body" style="white-space: pre-wrap; word-break: break-word;">@(Model.ValidationPreview.CurrentSettingsJson ?? "(none — new setting)")</pre>
+                        </div>
+                        <div class="govuk-grid-column-one-half">
+                            <h3 class="govuk-heading-s">Proposed</h3>
+                            <pre class="govuk-body" style="white-space: pre-wrap; word-break: break-word;">@Model.ValidationPreview.ProposedSettingsJson</pre>
+                        </div>
+                    </div>
+                    @if (Model.ValidationPreview.IsValid)
+                    {
+                        <form method="post" asp-page-handler="@(Model.ValidationPreview.SettingExists ? "Update" : "Add")" class="govuk-!-margin-top-4">
+                            @if (Model.ValidationPreview.SettingExists)
+                            {
+                                <input type="hidden" name="category" value="@Model.ValidationCategory" />
+                                <input type="hidden" name="target" value="@Model.ValidationTarget" />
+                                <input type="hidden" name="settingsJson" value="@Model.ValidationPreview.ProposedSettingsJson" />
+                                <input type="hidden" name="isSecret" value="@(Model.ValidationIsSecret ? "true" : "false")" />
+                            }
+                            else
+                            {
+                                <input type="hidden" name="NewCategory" value="@Model.ValidationCategory" />
+                                <input type="hidden" name="NewTarget" value="@Model.ValidationTarget" />
+                                <input type="hidden" name="NewSettingsJson" value="@Model.ValidationPreview.ProposedSettingsJson" />
+                                <input type="hidden" name="NewIsSecret" value="@(Model.ValidationIsSecret ? "true" : "false")" />
+                            }
+                            <button type="submit"
+                                    class="govuk-button"
+                                    data-module="govuk-button"
+                                    onclick="return confirm('Apply validated changes to @Model.ValidationCategory (@Model.ValidationTarget)?');">
+                                @(Model.ValidationPreview.SettingExists ? "Apply update" : "Apply add")
+                            </button>
+                        </form>
+                    }
+                </div>
+            </div>
+        }
+
+        @if (Model.Cookbook.Count > 0)
         {
             <details class="govuk-details govuk-!-margin-bottom-6" data-module="govuk-details">
                 <summary class="govuk-details__summary">
-                    <span class="govuk-details__summary-text">Effective runtime configuration</span>
+                    <span class="govuk-details__summary-text">Category cookbook</span>
                 </summary>
                 <div class="govuk-details__text">
-                    <p class="govuk-body govuk-hint">
-                        Auth scheme is resolved from Web-target tenant settings (same rules as interactive login).
-                        Set an explicit <code>Authentication</code> category with <code>{"Scheme":"DfESignIn"}</code>
-                        when multiple providers are enabled.
-                    </p>
-                    <dl class="govuk-summary-list govuk-summary-list--no-border">
-                        <div class="govuk-summary-list__row">
-                            <dt class="govuk-summary-list__key">Config source</dt>
-                            <dd class="govuk-summary-list__value">@Model.EffectiveConfig.ConfigSource</dd>
-                        </div>
-                        <div class="govuk-summary-list__row">
-                            <dt class="govuk-summary-list__key">Active tenants</dt>
-                            <dd class="govuk-summary-list__value">@Model.EffectiveConfig.ActiveTenantCount</dd>
-                        </div>
-                        <div class="govuk-summary-list__row">
-                            <dt class="govuk-summary-list__key">Last catalogue refresh</dt>
-                            <dd class="govuk-summary-list__value">
-                                @(Model.EffectiveConfig.LastCatalogueRefreshUtc?.ToString("yyyy-MM-dd HH:mm:ss") ?? "Never")
-                            </dd>
-                        </div>
-                        <div class="govuk-summary-list__row">
-                            <dt class="govuk-summary-list__key">Auth scheme</dt>
-                            <dd class="govuk-summary-list__value">
-                                <strong class="govuk-tag govuk-tag--blue">@(Model.EffectiveConfig.InteractiveAuthScheme ?? "Not set")</strong>
-                            </dd>
-                        </div>
-                        <div class="govuk-summary-list__row">
-                            <dt class="govuk-summary-list__key">Auth providers</dt>
-                            <dd class="govuk-summary-list__value">
-                                @(Model.EffectiveConfig.TestAuthenticationEnabled ? "TestAuth " : "")
-                                @(Model.EffectiveConfig.EntraSsoEnabled ? "EntraSSO " : "")
-                                @(Model.EffectiveConfig.DfESignInConfigured ? "DfESignIn " : "")
-                                (@Model.EffectiveConfig.RegisteredAuthProviderCount registered)
-                            </dd>
-                        </div>
-                        <div class="govuk-summary-list__row">
-                            <dt class="govuk-summary-list__key">Hostnames</dt>
-                            <dd class="govuk-summary-list__value">
-                                @if (Model.EffectiveConfig.Hostnames?.Count > 0)
+                    <p class="govuk-body">Examples and notes for known TenantConfig categories.</p>
+                    @foreach (var entry in Model.Cookbook)
+                    {
+                        <h3 class="govuk-heading-s">
+                            <code>@entry.Category</code>
+                            @if (entry.IsSecretCategory)
+                            {
+                                <strong class="govuk-tag govuk-tag--red govuk-!-margin-left-1">Secret</strong>
+                            }
+                        </h3>
+                        <p class="govuk-body">@entry.Description</p>
+                        <p class="govuk-body">Targets: @string.Join(", ", entry.TypicalTargets)</p>
+                        <pre class="govuk-body" style="white-space: pre-wrap; word-break: break-word;">@entry.ExampleJson</pre>
+                        <p class="govuk-body">
+                            <button type="button"
+                                    class="govuk-button govuk-button--secondary govuk-!-margin-bottom-2 js-use-cookbook-example"
+                                    data-category="@entry.Category"
+                                    data-target="@(entry.TypicalTargets.FirstOrDefault() ?? "Shared")"
+                                    data-json="@entry.ExampleJson"
+                                    data-secret="@(entry.IsSecretCategory ? "true" : "false")"
+                                    data-module="govuk-button">
+                                Use this example in Add form
+                            </button>
+                        </p>
+                        @if (entry.Notes.Count > 0)
+                        {
+                            <ul class="govuk-list govuk-list--bullet">
+                                @foreach (var note in entry.Notes)
                                 {
-                                    @string.Join(", ", Model.EffectiveConfig.Hostnames)
+                                    <li>@note</li>
                                 }
-                                else
-                                {
-                                    <span class="govuk-hint">None</span>
-                                }
-                            </dd>
-                        </div>
-                        <div class="govuk-summary-list__row">
-                            <dt class="govuk-summary-list__key">CORS origins</dt>
-                            <dd class="govuk-summary-list__value">
-                                @if (Model.EffectiveConfig.FrontendOrigins?.Count > 0)
-                                {
-                                    @string.Join(", ", Model.EffectiveConfig.FrontendOrigins)
-                                }
-                                else
-                                {
-                                    <span class="govuk-hint">None</span>
-                                }
-                            </dd>
-                        </div>
-                    </dl>
+                            </ul>
+                        }
+                    }
                 </div>
             </details>
         }
@@ -186,8 +320,29 @@
                                         </div>
                                     </div>
 
-                                    <button type="submit" class="govuk-button govuk-!-margin-bottom-0" data-module="govuk-button">
-                                        Update
+                                    <div class="govuk-button-group">
+                                        <button type="submit"
+                                                formaction="@Url.Page("/Admin/TenantSettings", "Validate")"
+                                                class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0"
+                                                data-module="govuk-button">
+                                            Validate / diff
+                                        </button>
+                                        <button type="submit"
+                                                class="govuk-button govuk-!-margin-bottom-0"
+                                                data-module="govuk-button"
+                                                onclick="return confirm('Save changes to @setting.Category (@setting.Target)?');">
+                                            Update
+                                        </button>
+                                    </div>
+                                </form>
+                                <form method="post"
+                                      asp-page-handler="Delete"
+                                      class="govuk-!-margin-top-2"
+                                      onsubmit="return confirm('Delete setting @setting.Category (@setting.Target)? This cannot be undone.');">
+                                    <input type="hidden" name="category" value="@setting.Category" />
+                                    <input type="hidden" name="target" value="@setting.Target" />
+                                    <button type="submit" class="govuk-button govuk-button--warning govuk-!-margin-bottom-0" data-module="govuk-button">
+                                        Delete
                                     </button>
                                 </form>
                             </td>
@@ -198,16 +353,16 @@
         }
 
         <h2 class="govuk-heading-m">Add a setting</h2>
-        <form method="post" asp-page-handler="Add">
+        <form method="post" asp-page-handler="Add" id="add-setting-form">
             <div class="govuk-form-group">
                 <label class="govuk-label" asp-for="NewCategory">Category</label>
-                <div class="govuk-hint">For example ConnectionStrings, AzureAd, Layout</div>
-                <input class="govuk-input govuk-!-width-one-half" asp-for="NewCategory" autocomplete="off" />
+                <div class="govuk-hint">For example ConnectionStrings, AzureAd, Layout — or pick from the cookbook above</div>
+                <input class="govuk-input govuk-!-width-one-half" asp-for="NewCategory" id="NewCategory" autocomplete="off" />
             </div>
 
             <div class="govuk-form-group">
                 <label class="govuk-label" asp-for="NewTarget">Target</label>
-                <select class="govuk-select" asp-for="NewTarget">
+                <select class="govuk-select" asp-for="NewTarget" id="NewTarget">
                     @foreach (var target in TenantSettingsModel.ValidTargets)
                     {
                         <option value="@target">@target</option>
@@ -217,13 +372,13 @@
 
             <div class="govuk-form-group">
                 <label class="govuk-label" asp-for="NewSettingsJson">Settings JSON</label>
-                <textarea class="govuk-textarea" asp-for="NewSettingsJson" rows="6"></textarea>
+                <textarea class="govuk-textarea" asp-for="NewSettingsJson" id="NewSettingsJson" rows="6"></textarea>
             </div>
 
             <div class="govuk-form-group">
                 <div class="govuk-checkboxes" data-module="govuk-checkboxes">
                     <div class="govuk-checkboxes__item">
-                        <input class="govuk-checkboxes__input" asp-for="NewIsSecret" />
+                        <input class="govuk-checkboxes__input" asp-for="NewIsSecret" id="NewIsSecret" />
                         <label class="govuk-label govuk-checkboxes__label" asp-for="NewIsSecret">
                             Secret (encrypt at rest)
                         </label>
@@ -231,9 +386,20 @@
                 </div>
             </div>
 
-            <button type="submit" class="govuk-button" data-module="govuk-button">
-                Add setting
-            </button>
+            <div class="govuk-button-group">
+                <button type="submit"
+                        formaction="@Url.Page("/Admin/TenantSettings", "ValidateNew")"
+                        class="govuk-button govuk-button--secondary"
+                        data-module="govuk-button">
+                    Validate / diff
+                </button>
+                <button type="submit"
+                        class="govuk-button"
+                        data-module="govuk-button"
+                        onclick="return confirm('Add this setting?');">
+                    Add setting
+                </button>
+            </div>
         </form>
         <h2 class="govuk-heading-m govuk-!-margin-top-6">Export / Import</h2>
         <p class="govuk-body">Export settings to JSON for promotion to another environment, or import a previously exported bundle.</p>
@@ -277,7 +443,7 @@
                         <tr class="govuk-table__row">
                             <td class="govuk-table__cell">@entry.ChangedAtUtc.ToString("yyyy-MM-dd HH:mm:ss")</td>
                             <td class="govuk-table__cell">
-                                <strong class="govuk-tag @(entry.Action == "Created" ? "govuk-tag--green" : entry.Action == "Updated" ? "govuk-tag--blue" : "govuk-tag--grey")">
+                                <strong class="govuk-tag @(entry.Action == "Created" ? "govuk-tag--green" : entry.Action == "Updated" ? "govuk-tag--blue" : entry.Action == "Deleted" ? "govuk-tag--red" : "govuk-tag--grey")">
                                     @entry.Action
                                 </strong>
                             </td>
@@ -309,6 +475,27 @@
                 textarea.setAttribute('data-secret-masked', 'true');
                 button.textContent = 'Show value';
             }
+        });
+    });
+
+    document.querySelectorAll('.js-use-cookbook-example').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var category = button.getAttribute('data-category') || '';
+            var target = button.getAttribute('data-target') || 'Shared';
+            var json = button.getAttribute('data-json') || '{}';
+            var secret = button.getAttribute('data-secret') === 'true';
+
+            var categoryInput = document.getElementById('NewCategory');
+            var targetInput = document.getElementById('NewTarget');
+            var jsonInput = document.getElementById('NewSettingsJson');
+            var secretInput = document.getElementById('NewIsSecret');
+
+            if (categoryInput) categoryInput.value = category;
+            if (targetInput) targetInput.value = target;
+            if (jsonInput) jsonInput.value = json;
+            if (secretInput) secretInput.checked = secret;
+
+            document.getElementById('add-setting-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
     });
 </script>

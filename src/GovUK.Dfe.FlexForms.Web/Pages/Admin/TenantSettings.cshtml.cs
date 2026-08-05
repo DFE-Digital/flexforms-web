@@ -33,7 +33,19 @@ public sealed class TenantSettingsModel(
 
     public TenantEffectiveConfigurationDto? EffectiveConfig { get; private set; }
 
+    public TenantHealthDto? TenantHealth { get; private set; }
+
+    public IReadOnlyList<TenantSettingCategoryCookbookEntryDto> Cookbook { get; private set; } = [];
+
     public IReadOnlyList<TenantSettingAuditEntryDto> AuditEntries { get; private set; } = [];
+
+    public ValidateTenantSettingResponse? ValidationPreview { get; private set; }
+
+    public string? ValidationCategory { get; private set; }
+
+    public string? ValidationTarget { get; private set; }
+
+    public bool ValidationIsSecret { get; private set; }
 
     public bool HasError { get; private set; }
 
@@ -66,9 +78,93 @@ public sealed class TenantSettingsModel(
         }
 
         await LoadSettingsAsync(cancellationToken);
-        await LoadEffectiveConfigAsync(cancellationToken);
+        await LoadHealthAsync(cancellationToken);
+        await LoadCookbookAsync(cancellationToken);
         await LoadAuditLogAsync(cancellationToken);
         return Page();
+    }
+
+    public async Task<IActionResult> OnPostValidateAsync(
+        string category,
+        string target,
+        string settingsJson,
+        bool isSecret,
+        CancellationToken cancellationToken)
+    {
+        ApplyTempData();
+        if (!TryResolveTenant(out var error))
+        {
+            HasError = true;
+            ErrorMessage = error;
+            return Page();
+        }
+
+        category = category?.Trim() ?? string.Empty;
+        target = target?.Trim() ?? string.Empty;
+        settingsJson = settingsJson?.Trim() ?? string.Empty;
+        ValidationCategory = category;
+        ValidationTarget = target;
+        ValidationIsSecret = isSecret;
+
+        await LoadSettingsAsync(cancellationToken);
+        await LoadHealthAsync(cancellationToken);
+        await LoadCookbookAsync(cancellationToken);
+        await LoadAuditLogAsync(cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(category) || string.IsNullOrWhiteSpace(settingsJson))
+        {
+            HasError = true;
+            ErrorMessage = "Category and settings JSON are required to validate.";
+            return Page();
+        }
+
+        try
+        {
+            ValidationPreview = await tenantAdminClient.ValidateTenantSettingAsync(
+                TenantId,
+                new ValidateTenantSettingRequest(category, target, ToBase64SettingsJson(settingsJson), isSecret),
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to validate tenant setting {Category}/{Target}", category, target);
+            HasError = true;
+            ErrorMessage = GetErrorMessage(ex, "Could not validate setting.");
+        }
+
+        return Page();
+    }
+
+    public Task<IActionResult> OnPostValidateNewAsync(CancellationToken cancellationToken)
+        => OnPostValidateAsync(NewCategory, NewTarget, NewSettingsJson, NewIsSecret, cancellationToken);
+
+    public async Task<IActionResult> OnPostDeleteAsync(
+        string category,
+        string target,
+        CancellationToken cancellationToken)
+    {
+        if (!TryResolveTenant(out var error))
+        {
+            TempData["TenantSettingsError"] = error;
+            return RedirectToPage();
+        }
+
+        category = category?.Trim() ?? string.Empty;
+        target = target?.Trim() ?? string.Empty;
+
+        try
+        {
+            await tenantAdminClient.DeleteTenantSettingAsync(TenantId, category, target, cancellationToken);
+            await RefreshCachesAsync(cancellationToken);
+            TempData["TenantSettingsSuccess"] = $"Deleted '{category}' ({target}).";
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to delete tenant setting {Category}/{Target}", category, target);
+            TempData["TenantSettingsError"] = GetErrorMessage(ex, "Could not delete setting.");
+        }
+
+        return RedirectToPage();
     }
 
     public async Task<IActionResult> OnPostUpdateAsync(
@@ -333,15 +429,37 @@ public sealed class TenantSettingsModel(
     internal static string ToBase64SettingsJson(string settingsJson) =>
         Convert.ToBase64String(Encoding.UTF8.GetBytes(settingsJson));
 
-    private async Task LoadEffectiveConfigAsync(CancellationToken cancellationToken)
+    private async Task LoadHealthAsync(CancellationToken cancellationToken)
     {
         try
         {
-            EffectiveConfig = await tenantAdminClient.GetEffectiveConfigurationAsync(TenantId, cancellationToken);
+            TenantHealth = await tenantAdminClient.GetTenantHealthAsync(TenantId, cancellationToken);
+            EffectiveConfig = TenantHealth.EffectiveConfiguration;
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Failed to load effective configuration for {TenantId}", TenantId);
+            logger.LogWarning(ex, "Failed to load tenant health for {TenantId}", TenantId);
+            try
+            {
+                EffectiveConfig = await tenantAdminClient.GetEffectiveConfigurationAsync(TenantId, cancellationToken);
+            }
+            catch (Exception inner)
+            {
+                logger.LogWarning(inner, "Failed to load effective configuration for {TenantId}", TenantId);
+            }
+        }
+    }
+
+    private async Task LoadCookbookAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await tenantAdminClient.GetCategoryCookbookAsync(cancellationToken);
+            Cookbook = response.Categories?.ToList() ?? [];
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to load category cookbook");
         }
     }
 
