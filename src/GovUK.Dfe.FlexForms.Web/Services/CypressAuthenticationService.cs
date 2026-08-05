@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Options;
 using GovUK.Dfe.CoreLibs.Security.Configurations;
 using GovUK.Dfe.CoreLibs.Security.Interfaces;
+using GovUK.Dfe.FlexForms.Web.Security;
 using System.Diagnostics.CodeAnalysis;
 
 namespace GovUK.Dfe.FlexForms.Web.Services;
@@ -24,15 +25,17 @@ public interface ICypressAuthenticationService
 [ExcludeFromCodeCoverage]
 public class CypressAuthenticationService(
     IOptions<TestAuthenticationOptions> testAuthOptions,
+    IOptions<EntraSsoOptions> entraSsoOptions,
     [FromKeyedServices("cypress")] ICustomRequestChecker requestChecker)
     : ICypressAuthenticationService
 {
-    private readonly TestAuthenticationOptions _testAuthOptions = testAuthOptions.Value;
-
     public bool ShouldEnableTestAuthentication(HttpContext? httpContext)
     {
-        // First check if test authentication is already enabled globally
-        if (_testAuthOptions.Enabled)
+        if (TenantAuthSchemeSelector.IsTestAuthenticationActive(
+                httpContext,
+                testAuthOptions,
+                entraSsoOptions)
+            || TenantAuthSchemeSelector.IsTestAuthenticationEnabled(httpContext, testAuthOptions))
         {
             return true;
         }
@@ -46,4 +49,3 @@ public class CypressAuthenticationService(
         return false;
     }
 }
-

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Options;
 using GovUK.Dfe.FlexForms.Web.Services;
+using GovUK.Dfe.FlexForms.Web.Security;
 using System.Diagnostics.CodeAnalysis;
 using GovUK.Dfe.CoreLibs.Security.Configurations;
 
@@ -12,21 +13,23 @@ namespace GovUK.Dfe.FlexForms.Web.Pages;
 [AllowAnonymous]
 public class TestLogoutModel : PageModel
 {
-    private readonly TestAuthenticationOptions _testAuthOptions;
+    private readonly IOptions<TestAuthenticationOptions> _testAuthOptions;
+    private readonly IOptions<EntraSsoOptions> _entraSsoOptions;
     private readonly ITestAuthenticationService _testAuthenticationService;
 
     public TestLogoutModel(
         IOptions<TestAuthenticationOptions> testAuthOptions,
+        IOptions<EntraSsoOptions> entraSsoOptions,
         ITestAuthenticationService testAuthenticationService)
     {
-        _testAuthOptions = testAuthOptions.Value;
+        _testAuthOptions = testAuthOptions;
+        _entraSsoOptions = entraSsoOptions;
         _testAuthenticationService = testAuthenticationService;
     }
 
     public IActionResult OnGet()
     {
-        // Only allow access if test authentication is enabled
-        if (!_testAuthOptions.Enabled)
+        if (!IsTestAuthActive())
         {
             return NotFound();
         }
@@ -36,15 +39,18 @@ public class TestLogoutModel : PageModel
 
     public async Task<IActionResult> OnPostAsync()
     {
-        // Only allow access if test authentication is enabled
-        if (!_testAuthOptions.Enabled)
+        if (!IsTestAuthActive())
         {
             return NotFound();
         }
 
         await _testAuthenticationService.SignOutAsync(HttpContext);
-
-        // Redirect to home page
         return Redirect("/");
     }
-} 
+
+    private bool IsTestAuthActive()
+        => TenantAuthSchemeSelector.IsTestAuthenticationActive(
+            HttpContext,
+            _testAuthOptions,
+            _entraSsoOptions);
+}

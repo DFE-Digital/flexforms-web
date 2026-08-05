@@ -1,5 +1,6 @@
 @page "/admin/user-manager/add"
 @model GovUK.Dfe.FlexForms.Web.Pages.Admin.UserManagerAddModel
+@using GovUK.Dfe.FlexForms.Web.Security
 @{
     ViewData["Title"] = "Add user";
 }
@@ -44,7 +45,13 @@
 
             <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.Role)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
                 <label class="govuk-label govuk-label--m" asp-for="Role">Role</label>
-                <div class="govuk-hint">Includes the system User role and any custom roles from Role Manager.</div>
+                <div class="govuk-hint">
+                    Includes the system User role and any custom roles from Role Manager.
+                    @if (AdminAccessHelper.IsSuperAdmin(User))
+                    {
+                        <text> SuperAdmins can also assign the tenant Admin role.</text>
+                    }
+                </div>
                 @if (ViewData.ModelState[nameof(Model.Role)]?.Errors.FirstOrDefault() is { } roleError)
                 {
                     <p class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @roleError.ErrorMessage</p>

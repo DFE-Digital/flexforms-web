@@ -19,9 +19,13 @@ public interface ITemplateSelectionService
 
     /// <summary>
     /// Sets the active template and its preview metadata in session, clearing
-    /// application-scoped state when the template changes.
+    /// application-scoped state when the template changes, then commits so a
+    /// following redirect can read the selection on the next request.
     /// </summary>
-    void SelectTemplate(HttpContext httpContext, TemplateDto template);
+    Task SelectTemplateAsync(
+        HttpContext httpContext,
+        TemplateDto template,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Returns true when the session template is present in <paramref name="templates"/>.

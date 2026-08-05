@@ -1,0 +1,128 @@
+@page "/admin/duplicate-tenant"
+@model GovUK.Dfe.FlexForms.Web.Pages.Admin.DuplicateTenantModel
+@{
+    ViewData["Title"] = "Duplicate tenant";
+}
+
+<div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+        <a asp-page="/Admin/Admin" class="govuk-back-link">Back to Admin</a>
+
+        @if (Model.HasError)
+        {
+            <div class="govuk-error-summary" data-module="govuk-error-summary">
+                <div role="alert">
+                    <h2 class="govuk-error-summary__title">There is a problem</h2>
+                    <div class="govuk-error-summary__body">
+                        <p class="govuk-body">@Model.ErrorMessage</p>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <govuk-error-summary />
+
+        <h1 class="govuk-heading-xl">Duplicate tenant</h1>
+        <p class="govuk-body">
+            Create a new TenantConfig tenant by copying all app settings from
+            <strong>@(string.IsNullOrWhiteSpace(Model.SourceTenantName) ? Model.SourceTenantId.ToString() : Model.SourceTenantName)</strong>
+            (<code>@Model.SourceTenantId</code>).
+        </p>
+        <p class="govuk-body">
+            Hostname and frontend origin must be unique. Principals (managed identities / service principals) are not copied.
+            Authorization and InternalServiceAuth secrets below are applied on save. InternalServiceAuth (root SecretKey and every Services ApiKey) is generated once and written identically to both API and Web.
+        </p>
+
+        <form method="post" novalidate>
+            <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.NewTenantId)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                <label class="govuk-label" asp-for="NewTenantId"></label>
+                <div class="govuk-hint">A new GUID is suggested. You can replace it with a known id.</div>
+                <span asp-validation-for="NewTenantId" class="govuk-error-message"></span>
+                <input class="govuk-input" asp-for="NewTenantId" type="text" spellcheck="false" autocomplete="off" />
+            </div>
+
+            <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.NewTenantName)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                <label class="govuk-label" asp-for="NewTenantName"></label>
+                <span asp-validation-for="NewTenantName" class="govuk-error-message"></span>
+                <input class="govuk-input govuk-!-width-two-thirds" asp-for="NewTenantName" type="text" autocomplete="off" />
+            </div>
+
+            <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.Hostname)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                <label class="govuk-label" asp-for="Hostname"></label>
+                <div class="govuk-hint">Host only, for example <code>newservice.dev-flexforms.education.gov.uk</code></div>
+                <span asp-validation-for="Hostname" class="govuk-error-message"></span>
+                <input class="govuk-input" asp-for="Hostname" type="text" spellcheck="false" autocomplete="off" />
+            </div>
+
+            <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.FrontendOrigin)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                <label class="govuk-label" asp-for="FrontendOrigin"></label>
+                <div class="govuk-hint">Absolute origin, for example <code>https://newservice.dev-flexforms.education.gov.uk</code></div>
+                <span asp-validation-for="FrontendOrigin" class="govuk-error-message"></span>
+                <input class="govuk-input" asp-for="FrontendOrigin" type="url" spellcheck="false" autocomplete="off" />
+            </div>
+
+            <h2 class="govuk-heading-m">Secrets</h2>
+            <p class="govuk-body">
+                Prefilled with cryptographically strong values. Edit if needed, or regenerate.
+                All InternalServiceAuth values below are applied identically to API and Web.
+            </p>
+
+            <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.AuthorizationApiSecretKey)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                <label class="govuk-label" asp-for="AuthorizationApiSecretKey"></label>
+                <div class="govuk-hint">Applied to <code>Authorization:TokenSettings:SecretKey</code> (API target).</div>
+                <span asp-validation-for="AuthorizationApiSecretKey" class="govuk-error-message"></span>
+                <input class="govuk-input" asp-for="AuthorizationApiSecretKey" type="text" spellcheck="false" autocomplete="off" />
+            </div>
+
+            <h3 class="govuk-heading-s">InternalServiceAuth</h3>
+
+            <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.InternalServiceAuthSecretKey)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                <label class="govuk-label" asp-for="InternalServiceAuthSecretKey"></label>
+                <div class="govuk-hint">Root <code>SecretKey</code> — same on API and Web.</div>
+                <span asp-validation-for="InternalServiceAuthSecretKey" class="govuk-error-message"></span>
+                <input class="govuk-input" asp-for="InternalServiceAuthSecretKey" type="text" spellcheck="false" autocomplete="off" />
+            </div>
+
+            @if (Model.InternalServiceAuthServiceApiKeys.Count == 0)
+            {
+                <p class="govuk-hint">No <code>Services</code> entries found on the source tenant InternalServiceAuth setting.</p>
+            }
+            else
+            {
+                @for (var i = 0; i < Model.InternalServiceAuthServiceApiKeys.Count; i++)
+                {
+                    var apiKeyField = $"{nameof(Model.InternalServiceAuthServiceApiKeys)}[{i}].{nameof(DuplicateTenantModel.InternalServiceAuthServiceSecretInput.ApiKey)}";
+                    <div class="govuk-form-group @(ViewData.ModelState[apiKeyField]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                        <label class="govuk-label" for="InternalServiceAuthServiceApiKeys_@(i)__ApiKey">
+                            Services[@i] ApiKey
+                        </label>
+                        <div class="govuk-hint">
+                            For <code>@Model.InternalServiceAuthServiceApiKeys[i].Email</code> — same on API and Web.
+                        </div>
+                        <input type="hidden" asp-for="InternalServiceAuthServiceApiKeys[i].Email" />
+                        <span class="govuk-error-message" asp-validation-for="InternalServiceAuthServiceApiKeys[i].ApiKey"></span>
+                        <input class="govuk-input"
+                               asp-for="InternalServiceAuthServiceApiKeys[i].ApiKey"
+                               type="text"
+                               spellcheck="false"
+                               autocomplete="off" />
+                    </div>
+                }
+            }
+
+            <div class="govuk-button-group">
+                <button type="submit" class="govuk-button" data-module="govuk-button" id="duplicate-tenant-button">
+                    Duplicate tenant
+                </button>
+                <button type="submit"
+                        class="govuk-button govuk-button--secondary"
+                        data-module="govuk-button"
+                        asp-page-handler="RegenerateSecrets"
+                        id="regenerate-secrets-button">
+                    Regenerate secrets
+                </button>
+                <a asp-page="/Admin/Admin" class="govuk-link govuk-link--no-visited-state">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>

@@ -62,7 +62,7 @@ public sealed class CreateTemplateModel(
 
             // Refresh DTO version info used by template selection / nav.
             template.LatestVersionNumber = StarterFormTemplateSchema.DefaultVersionNumber;
-            templateSelectionService.SelectTemplate(HttpContext, template);
+            await templateSelectionService.SelectTemplateAsync(HttpContext, template, cancellationToken);
 
             // CreateTemplate grants the admin template permission and invalidates API caches.
             // Refresh the Web permissions claims so subsequent admin actions stay authorized.

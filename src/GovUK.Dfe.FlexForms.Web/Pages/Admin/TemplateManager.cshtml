@@ -148,13 +148,45 @@
                 </div>
                 <div class="govuk-summary-list__row">
                     <dt class="govuk-summary-list__key">
-                        Current Version
+                        Latest Version
                     </dt>
                     <dd class="govuk-summary-list__value">
-                        @(Model.CurrentVersionNumber ?? "No versions")
+                        @(Model.LatestVersionNumber ?? "No versions")
                     </dd>
                 </div>
             </dl>
+
+            @if (Model.AvailableVersions.Count > 0)
+            {
+                <form method="post" asp-page-handler="SelectVersion" class="govuk-!-margin-bottom-6">
+                    <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.SelectedVersionNumber)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                        <label class="govuk-label govuk-label--m" asp-for="SelectedVersionNumber">
+                            Choose a version to view or edit
+                        </label>
+                        <div class="govuk-hint">
+                            The schema below shows the selected version. Adding a new version starts from this content; the suggested version number increments from the latest.
+                        </div>
+                        @if (ViewData.ModelState[nameof(Model.SelectedVersionNumber)]?.Errors.FirstOrDefault() is { } versionError)
+                        {
+                            <p class="govuk-error-message">
+                                <span class="govuk-visually-hidden">Error:</span> @versionError.ErrorMessage
+                            </p>
+                        }
+                        <select class="govuk-select" asp-for="SelectedVersionNumber" id="SelectedVersionNumber">
+                            @foreach (var version in Model.AvailableVersions)
+                            {
+                                var label = version.VersionNumber;
+                                if (string.Equals(version.VersionNumber, Model.LatestVersionNumber, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    label += " (latest)";
+                                }
+                                <option value="@version.VersionNumber">@label</option>
+                            }
+                        </select>
+                    </div>
+                    <button class="govuk-button govuk-button--secondary" type="submit">Open version</button>
+                </form>
+            }
 
             <div class="govuk-button-group govuk-!-margin-bottom-6">
                 <form method="post" asp-page-handler="ShowAddForm">
@@ -170,9 +202,9 @@
                 </form>
             </div>
             
-            @if (Model.CurrentTemplate != null)
+            @if (Model.CurrentTemplateJson != null)
             {
-                <h2 class="govuk-heading-m">Current Schema</h2>
+                <h2 class="govuk-heading-m">Schema for version @(Model.CurrentVersionNumber)</h2>
                 <div class="govuk-form-group">
                     <textarea class="govuk-textarea" id="current-schema" name="current-schema" rows="20" readonly>@Model.CurrentTemplateJson</textarea>
                 </div>
@@ -232,7 +264,7 @@
                         JSON Schema
                     </label>
                     <div id="schema-hint" class="govuk-hint">
-                        Paste the complete JSON schema for the new template version
+                        Prefilled from the version you selected on Template Manager. Edit as needed before saving.
                     </div>
                     @if (ViewData.ModelState["NewSchema"]?.Errors.Any() == true)
                     {

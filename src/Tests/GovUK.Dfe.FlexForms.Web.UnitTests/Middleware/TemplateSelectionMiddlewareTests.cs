@@ -27,7 +27,10 @@ public sealed class TemplateSelectionMiddlewareTests
         await middleware.InvokeAsync(context, service);
 
         Assert.True(nextCalled);
-        service.Received(1).SelectTemplate(context, liveTemplate);
+        await service.Received(1).SelectTemplateAsync(
+            context,
+            liveTemplate,
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -42,7 +45,10 @@ public sealed class TemplateSelectionMiddlewareTests
 
         Assert.Equal(StatusCodes.Status302Found, context.Response.StatusCode);
         Assert.Equal("/applications/dashboard", context.Response.Headers.Location.ToString());
-        service.Received(1).SelectTemplate(context, liveTemplate);
+        await service.Received(1).SelectTemplateAsync(
+            context,
+            liveTemplate,
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -62,6 +68,29 @@ public sealed class TemplateSelectionMiddlewareTests
     }
 
     [Fact]
+    public async Task InvokeAsync_AllowsDashboard_WhenMultipleLiveTemplatesAndValidSelection()
+    {
+        var one = CreateTemplate("One", isLive: true);
+        var two = CreateTemplate("Two", isLive: true);
+        var service = CreateService(one, two);
+        service.GetSelectedTemplateId(Arg.Any<HttpContext>())
+            .Returns(two.TemplateId.ToString());
+
+        var nextCalled = false;
+        var middleware = CreateMiddleware(() => nextCalled = true);
+        var context = CreateAuthenticatedContext("/applications/dashboard");
+
+        await middleware.InvokeAsync(context, service);
+
+        Assert.True(nextCalled);
+        Assert.NotEqual(StatusCodes.Status302Found, context.Response.StatusCode);
+        await service.Received(1).SelectTemplateAsync(
+            context,
+            two,
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task InvokeAsync_AllowsExplicitNonLivePreview_ForAdmin()
     {
         var liveTemplate = CreateTemplate("Live", isLive: true);
@@ -78,7 +107,10 @@ public sealed class TemplateSelectionMiddlewareTests
         await middleware.InvokeAsync(context, service);
 
         Assert.True(nextCalled);
-        service.Received(1).SelectTemplate(context, draftTemplate);
+        await service.Received(1).SelectTemplateAsync(
+            context,
+            draftTemplate,
+            Arg.Any<CancellationToken>());
     }
 
     private static TemplateSelectionMiddleware CreateMiddleware(Action? onNext = null)
@@ -95,6 +127,11 @@ public sealed class TemplateSelectionMiddlewareTests
         var service = Substitute.For<ITemplateSelectionService>();
         service.GetSelectableTemplatesAsync(Arg.Any<CancellationToken>())
             .Returns(templates.ToList());
+        service.SelectTemplateAsync(
+                Arg.Any<HttpContext>(),
+                Arg.Any<TemplateDto>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
         return service;
     }
 

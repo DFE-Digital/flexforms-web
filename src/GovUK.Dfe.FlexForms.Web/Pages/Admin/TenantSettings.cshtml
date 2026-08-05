@@ -38,6 +38,12 @@
             <strong>@(string.IsNullOrWhiteSpace(Model.TenantName) ? Model.TenantId.ToString() : Model.TenantName)</strong>.
             Secret values are shown decrypted here and encrypted when saved with Secret checked.
         </p>
+        <p class="govuk-body">
+            To switch interactive login without a platform restart, set Web
+            <code>TestAuthentication:Enabled</code>, <code>EntraSso:Enabled</code>, and/or an explicit
+            <code>Authentication</code> category with <code>{"Scheme":"TestAuthentication"}</code>
+            (or <code>DfESignIn</code> / <code>EntraSso</code>). Save updates refresh the config cache automatically.
+        </p>
 
         <div class="govuk-button-group">
             <form method="post" asp-page-handler="Refresh">

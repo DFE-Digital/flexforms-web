@@ -221,12 +221,10 @@ builder.Services.AddRazorPages(options =>
         options.Conventions.AllowAnonymousToPage("/TestError");
     }
     
-    // Allow anonymous access to test login page when test auth is enabled
-    if (isTestAuthEnabled)
-    {
-        options.Conventions.AllowAnonymousToPage("/TestLogin");
-        options.Conventions.AllowAnonymousToPage("/TestLogout");
-    }
+    // Always allow anonymous access; pages return 404 unless the current tenant
+    // (or host) selects Test Authentication via TenantAuthSchemeSelector.
+    options.Conventions.AllowAnonymousToPage("/TestLogin");
+    options.Conventions.AllowAnonymousToPage("/TestLogout");
 })
 .AddSessionStateTempDataProvider();
 
@@ -260,7 +258,9 @@ builder.Services.PostConfigure<GovUK.Dfe.CoreLibs.Caching.Settings.CacheSettings
 // Configure session with timeout settings to prevent hanging/blocking
 builder.Services.AddSession(options =>
 {
-    options.IdleTimeout = TimeSpan.FromMinutes(30);
+    // Keep ASP.NET session alive longer than the inactivity logout threshold (30 min)
+    // so LastActivity timestamps survive until the idle warning / force logout runs.
+    options.IdleTimeout = TimeSpan.FromMinutes(45);
     options.Cookie.HttpOnly = true;
     options.Cookie.IsEssential = true;
     options.IOTimeout = TimeSpan.FromSeconds(5); // Prevent indefinite blocking on session I/O
@@ -555,11 +555,9 @@ builder.Services.AddScoped<IComplexFieldRenderer, UploadComplexFieldRenderer>();
 builder.Services.AddSingleton<ITemplateStore, ApiTemplateStore>(); 
 builder.Services.AddUserTokenService(configuration);
 
-// Add test token handler and services when test authentication or Cypress is enabled
-if (isTestAuthEnabled)
-{
-    builder.Services.AddScoped<ITestAuthenticationService, TestAuthenticationService>();
-}
+// Always register Test Auth services so tenants can enable TestAuthentication in
+// Tenant Settings without restarting the platform. Access is gated per-request.
+builder.Services.AddScoped<ITestAuthenticationService, TestAuthenticationService>();
 
 // Configure Internal Service Auth settings
 builder.Services.Configure<InternalServiceAuthOptions>(

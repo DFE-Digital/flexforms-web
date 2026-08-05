@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Extensions.Options;
-using GovUK.Dfe.CoreLibs.Security.Interfaces;
 using GovUK.Dfe.CoreLibs.Security.Configurations;
+using GovUK.Dfe.FlexForms.Web.Security;
 using System.Security.Claims;
 using System.Diagnostics.CodeAnalysis;
 
@@ -11,8 +11,7 @@ namespace GovUK.Dfe.FlexForms.Web.Services;
 [ExcludeFromCodeCoverage]
 public class TestAuthenticationService : ITestAuthenticationService
 {
-    private readonly IUserTokenService _userTokenService;
-    private readonly TestAuthenticationOptions _options;
+    private readonly IOptions<TestAuthenticationOptions> _options;
     private readonly ILogger<TestAuthenticationService> _logger;
     
     private static class SessionKeys
@@ -22,12 +21,10 @@ public class TestAuthenticationService : ITestAuthenticationService
     }
 
     public TestAuthenticationService(
-        IUserTokenService userTokenService,
         IOptions<TestAuthenticationOptions> options,
         ILogger<TestAuthenticationService> logger)
     {
-        _userTokenService = userTokenService;
-        _options = options.Value;
+        _options = options;
         _logger = logger;
     }
 
@@ -43,9 +40,9 @@ public class TestAuthenticationService : ITestAuthenticationService
             var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
             var principal = new ClaimsPrincipal(identity);
 
-            // Generate test token using the existing UserTokenService
+            // Mint with tenant/host TestAuthentication keys so API exchange validates them.
             _logger.LogDebug("Generating test token for {Email}", email);
-            var testToken = await _userTokenService.GetUserTokenAsync(principal);
+            var testToken = TestAuthJwtFactory.CreateToken(principal, _options.Value);
             
             _logger.LogDebug("Test token generated successfully. Storing in session for {Email}", email);
 
@@ -79,19 +76,12 @@ public class TestAuthenticationService : ITestAuthenticationService
 
     public async Task SignOutAsync(HttpContext httpContext)
     {
-        var userId = httpContext.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "Unknown";
-
-        
         // Clear test authentication session data
         httpContext.Session.Remove(SessionKeys.Email);
         httpContext.Session.Remove(SessionKeys.Token);
-        
-
 
         // Sign out from cookie authentication if signed in
         await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-
-
     }
 
     private static IEnumerable<Claim> CreateUserClaims(string email)
@@ -105,4 +95,4 @@ public class TestAuthenticationService : ITestAuthenticationService
             new Claim("email", email)
         };
     }
-} 
+}

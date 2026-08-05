@@ -7,7 +7,8 @@ namespace GovUK.Dfe.FlexForms.Web.Security;
 
 /// <summary>
 /// Chooses the appropriate authentication strategy per-request.
-/// Priority: Internal Auth > Test Auth > Entra SSO (when tenant/host enabled) > DfE Sign-In OIDC
+/// Priority: Internal Auth > tenant/host interactive scheme
+/// (explicit Authentication:Scheme, else Test / Entra / DfE Sign-In).
 /// </summary>
 public class CompositeAuthenticationSchemeStrategy(
     ILogger<CompositeAuthenticationSchemeStrategy> logger,
@@ -21,10 +22,11 @@ public class CompositeAuthenticationSchemeStrategy(
     [FromKeyedServices("internal")] ICustomRequestChecker internalRequestChecker)
     : IAuthenticationSchemeStrategy
 {
-    private bool IsTestEnabled() => testAuthOptions.Value.Enabled;
-
-    private bool IsEntraSsoEnabled()
-        => TenantAuthSchemeSelector.IsEntraSsoEnabled(httpContextAccessor.HttpContext, entraSsoOptions);
+    private InteractiveAuthScheme ResolveInteractiveScheme()
+        => TenantAuthSchemeSelector.Resolve(
+            httpContextAccessor.HttpContext,
+            testAuthOptions,
+            entraSsoOptions);
 
     private bool IsInternalAuthRequest()
     {
@@ -44,20 +46,18 @@ public class CompositeAuthenticationSchemeStrategy(
             return internalStrategy;
         }
 
-        if (IsTestEnabled())
+        return ResolveInteractiveScheme() switch
         {
-            logger.LogDebug("Selecting TestAuthenticationStrategy for {Path}.", path);
-            return testStrategy;
-        }
+            InteractiveAuthScheme.TestAuthentication => LogAndReturn(testStrategy, path),
+            InteractiveAuthScheme.EntraSso => LogAndReturn(entraSsoStrategy, path),
+            _ => LogAndReturn(oidcStrategy, path)
+        };
+    }
 
-        if (IsEntraSsoEnabled())
-        {
-            logger.LogDebug("Selecting EntraSsoAuthenticationStrategy for {Path}.", path);
-            return entraSsoStrategy;
-        }
-
-        logger.LogDebug("Selecting OidcAuthenticationStrategy for {Path}", path);
-        return oidcStrategy;
+    private IAuthenticationSchemeStrategy LogAndReturn(IAuthenticationSchemeStrategy strategy, string path)
+    {
+        logger.LogDebug("Selecting {Strategy} for {Path}.", strategy.GetType().Name, path);
+        return strategy;
     }
 
     public string SchemeName => Select().SchemeName;

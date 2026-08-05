@@ -1,5 +1,6 @@
 @page "/applications/dashboard"
 @using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums
+@using GovUK.Dfe.FlexForms.Application.Dashboard
 @using Microsoft.AspNetCore.Authorization
 @model GovUK.Dfe.FlexForms.Web.Pages.Applications.DashboardModel
 @inject IAuthorizationService AuthService
@@ -189,11 +190,10 @@
             <table class="govuk-table">
                 <thead class="govuk-table__head">
                     <tr class="govuk-table__row">
-                        <th scope="col" class="govuk-table__header">Reference number</th>
-                        <th scope="col" class="govuk-table__header">Date started</th>
-                        <th scope="col" class="govuk-table__header">Date submitted</th>
-                        <th scope="col" class="govuk-table__header">Status</th>
-                        <th scope="col" class="govuk-table__header">Action</th>
+                        @foreach (var column in Model.Columns)
+                        {
+                            <th scope="col" class="govuk-table__header">@column.Header</th>
+                        }
                     </tr>
                 </thead>
                 <tbody class="govuk-table__body">
@@ -204,22 +204,37 @@
                             app.CalculatedStatus.Key == ApplicationStatus.InProgress ? "govuk-tag--blue" : "govuk-tag--grey";
 
                         <tr class="govuk-table__row">
-                            <td class="govuk-table__cell">@app.ApplicationReference</td>
-                            <td class="govuk-table__cell">@app.DateCreated.ToString("d MMMM yyyy")</td>
-                            <td class="govuk-table__cell">
-                                @(app.DateSubmitted?.ToString("d MMMM yyyy") ?? "Not submitted")
-                            </td>
-                            <td class="govuk-table__cell">
-                                <strong class="govuk-tag @statusClass">
-                                    @app.CalculatedStatus.Value
-                                </strong>
-                            </td>
-                            <td class="govuk-table__cell">
-                                <a href="/applications/@app.ApplicationReference" class="govuk-link">
-                                    @action
-                                    <span class=govuk-visually-hidden>@app.ApplicationReference</span>
-                                </a>
-                            </td>
+                            @foreach (var column in Model.Columns)
+                            {
+                                <td class="govuk-table__cell">
+                                    @switch (column.Key)
+                                    {
+                                        case DashboardColumnResolver.SystemReference:
+                                            @app.ApplicationReference
+                                            break;
+                                        case DashboardColumnResolver.SystemDateStarted:
+                                            @app.DateCreated.ToString("d MMMM yyyy")
+                                            break;
+                                        case DashboardColumnResolver.SystemDateSubmitted:
+                                            @(app.DateSubmitted?.ToString("d MMMM yyyy") ?? "Not submitted")
+                                            break;
+                                        case DashboardColumnResolver.SystemStatus:
+                                            <strong class="govuk-tag @statusClass">
+                                                @app.CalculatedStatus.Value
+                                            </strong>
+                                            break;
+                                        case DashboardColumnResolver.SystemAction:
+                                            <a href="/applications/@app.ApplicationReference" class="govuk-link">
+                                                @action
+                                                <span class="govuk-visually-hidden">@app.ApplicationReference</span>
+                                            </a>
+                                            break;
+                                        default:
+                                            @(app.CustomColumnValues.TryGetValue(column.Key, out var customValue) ? customValue : string.Empty)
+                                            break;
+                                    }
+                                </td>
+                            }
                         </tr>
                     }
                 </tbody>

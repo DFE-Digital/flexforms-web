@@ -69,6 +69,41 @@ public static class AdminAccessHelper
     public static bool CanManageTenantSettings(ClaimsPrincipal? user) =>
         IsSuperAdmin(user);
 
+    /// <summary>
+    /// Roles shown in User Manager add/edit.
+    /// Always includes <c>User</c> and non-system (custom) roles.
+    /// Tenant <c>Admin</c> is included only for SuperAdmin operators
+    /// (injected even if the tenant Admin role row is not yet listed).
+    /// </summary>
+    public static IReadOnlyList<string> GetUserManagerAssignableRoles(
+        ClaimsPrincipal? actor,
+        IEnumerable<(string Name, bool IsSystem)>? roles)
+    {
+        var includeTenantAdmin = IsSuperAdmin(actor);
+        var names = (roles ?? [])
+            .Where(r =>
+                string.Equals(r.Name, "User", StringComparison.OrdinalIgnoreCase)
+                || (includeTenantAdmin
+                    && string.Equals(r.Name, "Admin", StringComparison.OrdinalIgnoreCase))
+                || !r.IsSystem)
+            .Select(r => r.Name)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (!names.Any(n => string.Equals(n, "User", StringComparison.OrdinalIgnoreCase)))
+            names.Add("User");
+
+        if (includeTenantAdmin
+            && !names.Any(n => string.Equals(n, "Admin", StringComparison.OrdinalIgnoreCase)))
+        {
+            names.Add("Admin");
+        }
+
+        return names
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
     public static bool HasPermissionClaim(ClaimsPrincipal? user, string permissionClaimValue) =>
         user is not null
         && user.Claims.Any(c =>

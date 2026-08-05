@@ -1,5 +1,4 @@
 using GovUK.Dfe.CoreLibs.Security.Configurations;
-using GovUK.Dfe.CoreLibs.Security.Interfaces;
 using GovUK.Dfe.FlexForms.Web.Authentication;
 using GovUK.Dfe.FlexForms.Api.Client.Security;
 using Microsoft.AspNetCore.Authentication;
@@ -11,16 +10,13 @@ using System.Security.Claims;
 namespace GovUK.Dfe.FlexForms.Web.Security;
 
 /// <summary>
-/// Authentication strategy for Test authentication scheme
-/// Can always "refresh" by generating new tokens using consuming app's services
+/// Authentication strategy for Test authentication scheme.
+/// Can always "refresh" by generating new tokens from tenant TestAuthentication options.
 /// </summary>
 public class TestAuthenticationStrategy(
     ILogger<TestAuthenticationStrategy> logger,
-    IUserTokenService userTokenService,
     IOptions<TestAuthenticationOptions> testAuthOptions) : IAuthenticationSchemeStrategy
 {
-    private readonly TestAuthenticationOptions _testAuthOptions = testAuthOptions.Value;
-    
     /// <summary>
     /// Matches the actual scheme name from TestAuthenticationHandler
     /// </summary>
@@ -47,15 +43,13 @@ public class TestAuthenticationStrategy(
             var handler = new JwtSecurityTokenHandler();
             var jsonToken = handler.ReadJwtToken(token);
             
-            var tokenInfo = new TokenInfo
+            return new TokenInfo
             {
                 Value = token,
                 ExpiryTime = jsonToken.ValidTo
             };
-
-            return tokenInfo;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return new TokenInfo();
         }
@@ -65,7 +59,6 @@ public class TestAuthenticationStrategy(
     {
         try
         {
-            // Get current token to check its expiry
             var tokenInfo = await GetExternalIdpTokenAsync(context);
             
             if (!tokenInfo.IsPresent || !tokenInfo.ExpiryTime.HasValue)
@@ -76,20 +69,13 @@ public class TestAuthenticationStrategy(
             var timeUntilExpiry = tokenInfo.ExpiryTime.Value - DateTime.UtcNow;
             var minutesRemaining = timeUntilExpiry.TotalMinutes;
 
-            // Allow refresh when remaining time is within the configured lead window
-            var settings = context.RequestServices.GetService(typeof(Microsoft.Extensions.Options.IOptions<TokenRefreshSettings>)) as Microsoft.Extensions.Options.IOptions<TokenRefreshSettings>;
+            var settings = context.RequestServices.GetService(typeof(IOptions<TokenRefreshSettings>)) as IOptions<TokenRefreshSettings>;
             var lead = settings?.Value.RefreshLeadTimeMinutes ?? 10;
             var forceLogoutAt = settings?.Value.ForceLogoutAtMinutesRemaining ?? 5;
 
-            if (minutesRemaining > forceLogoutAt && minutesRemaining <= lead)
-            {
-                return true;
-            }
-            
-            
-            return false;
+            return minutesRemaining > forceLogoutAt && minutesRemaining <= lead;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return false;
         }
@@ -99,45 +85,37 @@ public class TestAuthenticationStrategy(
     {
         try
         {
-            if (!_testAuthOptions.Enabled)
+            if (!testAuthOptions.Value.Enabled
+                && !TenantAuthSchemeSelector.IsTestAuthenticationActive(context, testAuthOptions))
             {
                 return false;
             }
 
-            // Get user ID
             var userId = GetUserId(context);
             if (string.IsNullOrEmpty(userId))
             {
                 return false;
             }
 
-            // Generate a new token using the proper consuming app services
-            var newToken = await GenerateNewTestTokenAsync(userId, context);
+            var newToken = GenerateNewTestToken(userId);
             if (string.IsNullOrEmpty(newToken))
             {
                 return false;
             }
 
-            // Update the authentication context with the new token
             await UpdateAuthenticationTokenAsync(context, newToken);
-            
             return true;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return false;
         }
     }
 
-    /// <summary>
-    /// Generate new test token using the consuming app's UserTokenService
-    /// This ensures consistent token generation with the rest of the application
-    /// </summary>
-    private async Task<string?> GenerateNewTestTokenAsync(string userId, HttpContext context)
+    private string? GenerateNewTestToken(string userId)
     {
         try
         {
-            // Create claims for the user (same as TestAuthenticationService does)
             var claims = new[]
             {
                 new Claim(ClaimTypes.Email, userId),
@@ -149,59 +127,44 @@ public class TestAuthenticationStrategy(
             var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
             var principal = new ClaimsPrincipal(identity);
 
-            // Use the consuming app's UserTokenService to generate the token
-            // This ensures consistency with how tokens are generated during login
-            var newToken = await userTokenService.GetUserTokenAsync(principal);
-            
-            return newToken;
+            return TestAuthJwtFactory.CreateToken(principal, testAuthOptions.Value);
         }
         catch (Exception ex)
         {
+            logger.LogWarning(ex, "Failed to mint refreshed test authentication token");
             return null;
         }
     }
 
     /// <summary>
-    /// Update authentication context with new token
+    /// Update authentication context with new token.
     /// For TestAuth we keep tokens ONLY in session to avoid large cookies; do not store tokens in auth properties.
     /// </summary>
-    private async Task UpdateAuthenticationTokenAsync(HttpContext context, string newToken)
+    private static async Task UpdateAuthenticationTokenAsync(HttpContext context, string newToken)
     {
-        try
-        {
-            // Update session first (primary storage for TestAuth)
-            context.Session.SetString("TestAuth:Token", newToken);
+        context.Session.SetString("TestAuth:Token", newToken);
 
-            // Get current authentication result
-            var authResult = await context.AuthenticateAsync();
-            if (authResult.Succeeded && authResult.Properties != null)
-            {
-                var tokens = new[]
-                {
-                    new AuthenticationToken { Name = "id_token", Value = newToken },
-                    new AuthenticationToken { Name = "access_token", Value = newToken }
-                };
-                authResult.Properties.StoreTokens(tokens);
-
-                // Re-sign in with updated properties (cookie remains small due to server-side ticket store)
-                await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, authResult.Principal, authResult.Properties);
-            }
-            else
-            {
-            }
-        }
-        catch (Exception ex)
+        var authResult = await context.AuthenticateAsync();
+        if (authResult.Succeeded && authResult.Properties != null)
         {
-            throw;
+            var tokens = new[]
+            {
+                new AuthenticationToken { Name = "id_token", Value = newToken },
+                new AuthenticationToken { Name = "access_token", Value = newToken }
+            };
+            authResult.Properties.StoreTokens(tokens);
+
+            await context.SignInAsync(
+                CookieAuthenticationDefaults.AuthenticationScheme,
+                authResult.Principal!,
+                authResult.Properties);
         }
     }
 
     public string? GetUserId(HttpContext context)
     {
-        var userId = context.User?.FindFirst(ClaimTypes.Email)?.Value 
+        return context.User?.FindFirst(ClaimTypes.Email)?.Value 
                     ?? context.User?.FindFirst("sub")?.Value
                     ?? context.User?.Identity?.Name;
-        
-        return userId;
     }
 }

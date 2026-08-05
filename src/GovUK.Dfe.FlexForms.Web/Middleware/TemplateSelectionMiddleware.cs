@@ -38,14 +38,20 @@ public sealed class TemplateSelectionMiddleware(
 
             if (isExplicitAdminPreview)
             {
-                templateSelectionService.SelectTemplate(context, selectedTemplate!);
+                await templateSelectionService.SelectTemplateAsync(
+                    context,
+                    selectedTemplate!,
+                    context.RequestAborted);
                 await next(context);
                 return;
             }
 
             if (liveTemplates.Count == 1)
             {
-                templateSelectionService.SelectTemplate(context, liveTemplates[0]);
+                await templateSelectionService.SelectTemplateAsync(
+                    context,
+                    liveTemplates[0],
+                    context.RequestAborted);
                 logger.LogDebug(
                     "Auto-selected sole live template {TemplateId}",
                     liveTemplates[0].TemplateId);
@@ -64,7 +70,10 @@ public sealed class TemplateSelectionMiddleware(
                 selectedTemplate is { IsLive: true } &&
                 !IsRoot(context.Request.Path))
             {
-                templateSelectionService.SelectTemplate(context, selectedTemplate);
+                await templateSelectionService.SelectTemplateAsync(
+                    context,
+                    selectedTemplate,
+                    context.RequestAborted);
                 await next(context);
                 return;
             }
