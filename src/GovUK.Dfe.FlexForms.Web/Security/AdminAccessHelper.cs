@@ -70,6 +70,13 @@ public static class AdminAccessHelper
         IsSuperAdmin(user);
 
     /// <summary>
+    /// Read-only tenant configuration summary (auth scheme, hostnames) for tenant Admins.
+    /// SuperAdmins use <see cref="CanManageTenantSettings"/> for the full editor.
+    /// </summary>
+    public static bool CanViewTenantConfigurationSummary(ClaimsPrincipal? user) =>
+        IsAdmin(user) && !IsSuperAdmin(user);
+
+    /// <summary>
     /// Roles shown in User Manager add/edit.
     /// Always includes <c>User</c> and non-system (custom) roles.
     /// Tenant <c>Admin</c> is included only for SuperAdmin operators

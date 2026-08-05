@@ -192,6 +192,48 @@
                 </div>
             </div>
         }
+        else if (Model.CanViewTenantConfigurationSummary && Model.TenantConfigurationSummary is not null)
+        {
+            <div class="govuk-summary-card">
+                <div class="govuk-summary-card__title-wrapper">
+                    <h2 class="govuk-summary-card__title">Tenant configuration</h2>
+                </div>
+                <div class="govuk-summary-card__content">
+                    <p class="govuk-body">Read-only summary of this tenant's runtime configuration.</p>
+                    <dl class="govuk-summary-list govuk-summary-list--no-border">
+                        <div class="govuk-summary-list__row">
+                            <dt class="govuk-summary-list__key">Auth scheme</dt>
+                            <dd class="govuk-summary-list__value">
+                                <strong class="govuk-tag govuk-tag--blue">
+                                    @(Model.TenantConfigurationSummary.InteractiveAuthScheme ?? "Not set")
+                                </strong>
+                            </dd>
+                        </div>
+                        <div class="govuk-summary-list__row">
+                            <dt class="govuk-summary-list__key">Auth providers</dt>
+                            <dd class="govuk-summary-list__value">
+                                @(Model.TenantConfigurationSummary.TestAuthenticationEnabled ? "TestAuth " : "")
+                                @(Model.TenantConfigurationSummary.EntraSsoEnabled ? "EntraSSO " : "")
+                                @(Model.TenantConfigurationSummary.DfESignInConfigured ? "DfESignIn" : "")
+                            </dd>
+                        </div>
+                        <div class="govuk-summary-list__row">
+                            <dt class="govuk-summary-list__key">Hostnames</dt>
+                            <dd class="govuk-summary-list__value">
+                                @if (Model.TenantConfigurationSummary.Hostnames?.Count > 0)
+                                {
+                                    @string.Join(", ", Model.TenantConfigurationSummary.Hostnames)
+                                }
+                                else
+                                {
+                                    <span class="govuk-hint">None</span>
+                                }
+                            </dd>
+                        </div>
+                    </dl>
+                </div>
+            </div>
+        }
 
         @if (Model.CanManageTemplates)
         {

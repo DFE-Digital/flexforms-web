@@ -53,6 +53,79 @@
             </form>
         </div>
 
+        @if (Model.EffectiveConfig is not null)
+        {
+            <details class="govuk-details govuk-!-margin-bottom-6" data-module="govuk-details">
+                <summary class="govuk-details__summary">
+                    <span class="govuk-details__summary-text">Effective runtime configuration</span>
+                </summary>
+                <div class="govuk-details__text">
+                    <p class="govuk-body govuk-hint">
+                        Auth scheme is resolved from Web-target tenant settings (same rules as interactive login).
+                        Set an explicit <code>Authentication</code> category with <code>{"Scheme":"DfESignIn"}</code>
+                        when multiple providers are enabled.
+                    </p>
+                    <dl class="govuk-summary-list govuk-summary-list--no-border">
+                        <div class="govuk-summary-list__row">
+                            <dt class="govuk-summary-list__key">Config source</dt>
+                            <dd class="govuk-summary-list__value">@Model.EffectiveConfig.ConfigSource</dd>
+                        </div>
+                        <div class="govuk-summary-list__row">
+                            <dt class="govuk-summary-list__key">Active tenants</dt>
+                            <dd class="govuk-summary-list__value">@Model.EffectiveConfig.ActiveTenantCount</dd>
+                        </div>
+                        <div class="govuk-summary-list__row">
+                            <dt class="govuk-summary-list__key">Last catalogue refresh</dt>
+                            <dd class="govuk-summary-list__value">
+                                @(Model.EffectiveConfig.LastCatalogueRefreshUtc?.ToString("yyyy-MM-dd HH:mm:ss") ?? "Never")
+                            </dd>
+                        </div>
+                        <div class="govuk-summary-list__row">
+                            <dt class="govuk-summary-list__key">Auth scheme</dt>
+                            <dd class="govuk-summary-list__value">
+                                <strong class="govuk-tag govuk-tag--blue">@(Model.EffectiveConfig.InteractiveAuthScheme ?? "Not set")</strong>
+                            </dd>
+                        </div>
+                        <div class="govuk-summary-list__row">
+                            <dt class="govuk-summary-list__key">Auth providers</dt>
+                            <dd class="govuk-summary-list__value">
+                                @(Model.EffectiveConfig.TestAuthenticationEnabled ? "TestAuth " : "")
+                                @(Model.EffectiveConfig.EntraSsoEnabled ? "EntraSSO " : "")
+                                @(Model.EffectiveConfig.DfESignInConfigured ? "DfESignIn " : "")
+                                (@Model.EffectiveConfig.RegisteredAuthProviderCount registered)
+                            </dd>
+                        </div>
+                        <div class="govuk-summary-list__row">
+                            <dt class="govuk-summary-list__key">Hostnames</dt>
+                            <dd class="govuk-summary-list__value">
+                                @if (Model.EffectiveConfig.Hostnames?.Count > 0)
+                                {
+                                    @string.Join(", ", Model.EffectiveConfig.Hostnames)
+                                }
+                                else
+                                {
+                                    <span class="govuk-hint">None</span>
+                                }
+                            </dd>
+                        </div>
+                        <div class="govuk-summary-list__row">
+                            <dt class="govuk-summary-list__key">CORS origins</dt>
+                            <dd class="govuk-summary-list__value">
+                                @if (Model.EffectiveConfig.FrontendOrigins?.Count > 0)
+                                {
+                                    @string.Join(", ", Model.EffectiveConfig.FrontendOrigins)
+                                }
+                                else
+                                {
+                                    <span class="govuk-hint">None</span>
+                                }
+                            </dd>
+                        </div>
+                    </dl>
+                </div>
+            </details>
+        }
+
         <h2 class="govuk-heading-m">Existing settings</h2>
 
         @if (Model.Settings.Count == 0)
@@ -162,6 +235,60 @@
                 Add setting
             </button>
         </form>
+        <h2 class="govuk-heading-m govuk-!-margin-top-6">Export / Import</h2>
+        <p class="govuk-body">Export settings to JSON for promotion to another environment, or import a previously exported bundle.</p>
+        <div class="govuk-button-group">
+            <form method="post" asp-page-handler="Export">
+                <button type="submit" class="govuk-button govuk-button--secondary" data-module="govuk-button">
+                    Export settings
+                </button>
+            </form>
+            <form method="post" asp-page-handler="Import" enctype="multipart/form-data">
+                <div class="govuk-form-group govuk-!-margin-bottom-2">
+                    <label class="govuk-label" for="importFile">Import JSON file</label>
+                    <input class="govuk-file-upload" type="file" id="importFile" name="importFile" accept=".json" />
+                </div>
+                <button type="submit" class="govuk-button govuk-button--warning" data-module="govuk-button">
+                    Import settings
+                </button>
+            </form>
+        </div>
+
+        <h2 class="govuk-heading-m govuk-!-margin-top-6">Audit log</h2>
+        @if (Model.AuditEntries.Count == 0)
+        {
+            <p class="govuk-body">No audit entries found.</p>
+        }
+        else
+        {
+            <table class="govuk-table">
+                <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                        <th scope="col" class="govuk-table__header">When (UTC)</th>
+                        <th scope="col" class="govuk-table__header">Action</th>
+                        <th scope="col" class="govuk-table__header">Category</th>
+                        <th scope="col" class="govuk-table__header">Target</th>
+                        <th scope="col" class="govuk-table__header">Actor</th>
+                    </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                    @foreach (var entry in Model.AuditEntries)
+                    {
+                        <tr class="govuk-table__row">
+                            <td class="govuk-table__cell">@entry.ChangedAtUtc.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                            <td class="govuk-table__cell">
+                                <strong class="govuk-tag @(entry.Action == "Created" ? "govuk-tag--green" : entry.Action == "Updated" ? "govuk-tag--blue" : "govuk-tag--grey")">
+                                    @entry.Action
+                                </strong>
+                            </td>
+                            <td class="govuk-table__cell"><code class="govuk-!-font-size-16">@entry.Category</code></td>
+                            <td class="govuk-table__cell">@entry.Target</td>
+                            <td class="govuk-table__cell">@entry.ActorEmail</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
     </div>
 </div>
 

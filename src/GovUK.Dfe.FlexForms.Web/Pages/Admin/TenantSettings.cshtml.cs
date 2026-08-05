@@ -20,6 +20,7 @@ public sealed class TenantSettingsModel(
     ITenantAdminClient tenantAdminClient,
     ITenantRequestContext tenantRequestContext,
     ITenantConfigurationCache tenantConfigurationCache,
+    ITenantIdResolver tenantIdResolver,
     ILogger<TenantSettingsModel> logger) : PageModel
 {
     public static readonly string[] ValidTargets = ["Shared", "Api", "Web"];
@@ -29,6 +30,10 @@ public sealed class TenantSettingsModel(
     public string TenantName { get; private set; } = string.Empty;
 
     public IReadOnlyList<TenantSettingDto> Settings { get; private set; } = [];
+
+    public TenantEffectiveConfigurationDto? EffectiveConfig { get; private set; }
+
+    public IReadOnlyList<TenantSettingAuditEntryDto> AuditEntries { get; private set; } = [];
 
     public bool HasError { get; private set; }
 
@@ -61,6 +66,8 @@ public sealed class TenantSettingsModel(
         }
 
         await LoadSettingsAsync(cancellationToken);
+        await LoadEffectiveConfigAsync(cancellationToken);
+        await LoadAuditLogAsync(cancellationToken);
         return Page();
     }
 
@@ -169,6 +176,82 @@ public sealed class TenantSettingsModel(
         return RedirectToPage();
     }
 
+    public async Task<IActionResult> OnPostExportAsync(CancellationToken cancellationToken)
+    {
+        if (!TryResolveTenant(out var error))
+        {
+            TempData["TenantSettingsError"] = error;
+            return RedirectToPage();
+        }
+
+        try
+        {
+            var export = await tenantAdminClient.ExportConfigurationAsync(TenantId, cancellationToken);
+            var json = System.Text.Json.JsonSerializer.Serialize(export,
+                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            var bytes = Encoding.UTF8.GetBytes(json);
+            return File(bytes, "application/json", $"tenant-config-{TenantId:N}-{DateTime.UtcNow:yyyyMMddHHmmss}.json");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to export tenant configuration for {TenantId}", TenantId);
+            TempData["TenantSettingsError"] = GetErrorMessage(ex, "Could not export configuration.");
+            return RedirectToPage();
+        }
+    }
+
+    public async Task<IActionResult> OnPostImportAsync(IFormFile? importFile, CancellationToken cancellationToken)
+    {
+        if (!TryResolveTenant(out var error))
+        {
+            TempData["TenantSettingsError"] = error;
+            return RedirectToPage();
+        }
+
+        if (importFile is null || importFile.Length == 0)
+        {
+            TempData["TenantSettingsError"] = "Select a JSON file to import.";
+            return RedirectToPage();
+        }
+
+        try
+        {
+            using var reader = new StreamReader(importFile.OpenReadStream());
+            var json = await reader.ReadToEndAsync(cancellationToken);
+            var exportBundle = System.Text.Json.JsonSerializer.Deserialize<ExportTenantConfigurationDto>(json,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            if (exportBundle?.Settings is null || exportBundle.Settings.Count == 0)
+            {
+                TempData["TenantSettingsError"] = "The import file contains no settings.";
+                return RedirectToPage();
+            }
+
+            var importItems = exportBundle.Settings
+                .Select(s => new TenantSettingImportItemDto(s.Category, s.Target, s.SettingsJson, s.IsSecret))
+                .ToList();
+
+            var bundle = new ImportTenantConfigurationDto(importItems, SkipSecretPlaceholders: true);
+
+            var result = await tenantAdminClient.ImportConfigurationAsync(TenantId, bundle, cancellationToken);
+            await RefreshCachesAsync(cancellationToken);
+
+            TempData["TenantSettingsSuccess"] =
+                $"Imported {result.AppliedCount} settings ({result.SkippedCount} secret placeholders skipped).";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            TempData["TenantSettingsError"] = "The file is not valid JSON.";
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to import tenant configuration for {TenantId}", TenantId);
+            TempData["TenantSettingsError"] = GetErrorMessage(ex, "Could not import configuration.");
+        }
+
+        return RedirectToPage();
+    }
+
     public async Task<IActionResult> OnPostRefreshAsync(CancellationToken cancellationToken)
     {
         if (!TryResolveTenant(out var error))
@@ -195,6 +278,7 @@ public sealed class TenantSettingsModel(
     {
         await tenantAdminClient.RefreshTenantConfigurationAsync(cancellationToken);
         tenantConfigurationCache.Invalidate(TenantId);
+        tenantIdResolver.InvalidateHostnameCache();
     }
 
     private async Task LoadSettingsAsync(CancellationToken cancellationToken)
@@ -248,6 +332,31 @@ public sealed class TenantSettingsModel(
     /// </summary>
     internal static string ToBase64SettingsJson(string settingsJson) =>
         Convert.ToBase64String(Encoding.UTF8.GetBytes(settingsJson));
+
+    private async Task LoadEffectiveConfigAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            EffectiveConfig = await tenantAdminClient.GetEffectiveConfigurationAsync(TenantId, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to load effective configuration for {TenantId}", TenantId);
+        }
+    }
+
+    private async Task LoadAuditLogAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var log = await tenantAdminClient.GetSettingAuditLogAsync(TenantId, 20, cancellationToken);
+            AuditEntries = log?.Entries?.ToList() ?? [];
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to load audit log for {TenantId}", TenantId);
+        }
+    }
 
     internal static string GetErrorMessage(Exception ex, string fallback)
     {

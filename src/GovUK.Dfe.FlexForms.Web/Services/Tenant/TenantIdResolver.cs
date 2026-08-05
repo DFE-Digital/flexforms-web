@@ -18,6 +18,13 @@ public sealed class TenantIdResolver(
     private readonly ConcurrentDictionary<string, CacheEntry> _hostnameCache = new(StringComparer.OrdinalIgnoreCase);
 
     /// <inheritdoc />
+    public void InvalidateHostnameCache()
+    {
+        _hostnameCache.Clear();
+        logger.LogDebug("Tenant hostname cache cleared.");
+    }
+
+    /// <inheritdoc />
     public async Task<Guid?> ResolveTenantIdAsync(
         HttpContext httpContext,
         CancellationToken cancellationToken = default)
