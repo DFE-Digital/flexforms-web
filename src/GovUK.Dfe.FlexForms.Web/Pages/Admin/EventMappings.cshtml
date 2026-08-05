@@ -54,9 +54,8 @@
 
         <h1 class="govuk-heading-xl">Event mappings</h1>
         <p class="govuk-body">
-            Map form fields to platform event types for
+            Map form fields to platform typed events or tenant schema events for
             <strong>@(string.IsNullOrWhiteSpace(Model.TenantName) ? Model.TenantId.ToString() : Model.TenantName)</strong>.
-            Mappings are stored in TenantConfig (<code>EventMappings</code>). Disk files remain as fallback when no tenant mapping exists.
         </p>
 
         <div class="govuk-summary-card govuk-!-margin-bottom-6">
@@ -64,7 +63,10 @@
                 <h2 class="govuk-summary-card__title">Platform event catalogue</h2>
             </div>
             <div class="govuk-summary-card__content">
-                <p class="govuk-body">Discovered from CoreLibs Messaging.Contracts (assembly scan).</p>
+                <p class="govuk-body">
+                    Source: <strong>@(Model.CatalogueSource ?? "unknown")</strong>.
+                    Tenants may only publish typed events that appear here.
+                </p>
                 @if (Model.Catalogue.Count == 0)
                 {
                     <p class="govuk-body">No event types discovered.</p>
@@ -75,22 +77,84 @@
                         <thead class="govuk-table__head">
                             <tr class="govuk-table__row">
                                 <th scope="col" class="govuk-table__header">Event type</th>
+                                <th scope="col" class="govuk-table__header">Kind</th>
                                 <th scope="col" class="govuk-table__header">Topic</th>
-                                <th scope="col" class="govuk-table__header">CLR type</th>
+                                <th scope="col" class="govuk-table__header">Version</th>
+                                <th scope="col" class="govuk-table__header">Description</th>
                             </tr>
                         </thead>
                         <tbody class="govuk-table__body">
                         @foreach (var row in Model.Catalogue)
                         {
                             <tr class="govuk-table__row">
-                                <td class="govuk-table__cell">@row.EventTypeName</td>
+                                <td class="govuk-table__cell"><code>@row.EventTypeName</code></td>
+                                <td class="govuk-table__cell">@row.Kind</td>
                                 <td class="govuk-table__cell"><code>@row.TopicName</code></td>
-                                <td class="govuk-table__cell"><code>@row.ClrTypeName</code></td>
+                                <td class="govuk-table__cell">@row.Version</td>
+                                <td class="govuk-table__cell">@(row.Description ?? "—")</td>
                             </tr>
                         }
                         </tbody>
                     </table>
                 }
+            </div>
+        </div>
+
+        <div class="govuk-summary-card govuk-!-margin-bottom-6">
+            <div class="govuk-summary-card__title-wrapper">
+                <h2 class="govuk-summary-card__title">Schema events (Phase 3)</h2>
+            </div>
+            <div class="govuk-summary-card__content">
+                <p class="govuk-body">
+                    Define tenant-specific message shapes that are not yet in CoreLibs.
+                    Publish with <code>ApplicationSubmission:PublishEvent:Events</code> entry
+                    <code>EventKind: Schema</code>.
+                </p>
+
+                @if (Model.SchemaEvents.Count > 0)
+                {
+                    <table class="govuk-table">
+                        <thead class="govuk-table__head">
+                            <tr class="govuk-table__row">
+                                <th scope="col" class="govuk-table__header">Message type</th>
+                                <th scope="col" class="govuk-table__header">Topic</th>
+                                <th scope="col" class="govuk-table__header">Version</th>
+                            </tr>
+                        </thead>
+                        <tbody class="govuk-table__body">
+                        @foreach (var row in Model.SchemaEvents)
+                        {
+                            <tr class="govuk-table__row">
+                                <td class="govuk-table__cell">
+                                    <a asp-page="/Admin/EventMappings"
+                                       asp-route-SelectedSchemaEventType="@row.MessageType"
+                                       asp-route-SelectedEventType="@row.MessageType"
+                                       asp-route-SelectedTemplateId="@Model.SelectedTemplateId">@row.MessageType</a>
+                                </td>
+                                <td class="govuk-table__cell"><code>@row.TopicName</code></td>
+                                <td class="govuk-table__cell">@row.Version</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                }
+
+                <form method="post" asp-page-handler="SaveSchema">
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="NewSchemaEventType">Schema event type name</label>
+                        <div class="govuk-hint">Must not collide with a platform typed event name</div>
+                        <input class="govuk-input govuk-!-width-one-half" asp-for="NewSchemaEventType"
+                               value="@(Model.NewSchemaEventType ?? Model.SelectedSchemaEventType)" autocomplete="off" />
+                    </div>
+                    <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.SchemaDefinitionJson)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                        <label class="govuk-label" asp-for="SchemaDefinitionJson">Schema definition JSON</label>
+                        <textarea class="govuk-textarea govuk-!-font-size-16" asp-for="SchemaDefinitionJson" rows="12" spellcheck="false"></textarea>
+                    </div>
+                    <input type="hidden" asp-for="SelectedTemplateId" />
+                    <input type="hidden" asp-for="SelectedEventType" />
+                    <input type="hidden" asp-for="SelectedSchemaEventType" />
+                    <button type="submit" class="govuk-button govuk-button--secondary" data-module="govuk-button">Save schema event</button>
+                </form>
             </div>
         </div>
 
@@ -130,7 +194,7 @@
                     <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
                     <strong class="govuk-warning-text__text">
                         <span class="govuk-visually-hidden">Warning</span>
-                        Some mapping properties do not match the CLR type:
+                        Some mapping properties do not match the catalogue schema:
                         @string.Join(" ", Model.ValidationWarnings)
                     </strong>
                 </div>
@@ -156,11 +220,13 @@
             <form method="post">
                 <input type="hidden" asp-for="SelectedTemplateId" />
                 <input type="hidden" asp-for="SelectedEventType" />
+                <input type="hidden" asp-for="SelectedSchemaEventType" />
 
                 <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.MappingJson)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
                     <label class="govuk-label" asp-for="MappingJson">Mapping JSON</label>
                     <div class="govuk-hint">
-                        Must include mappingId, eventType, and fieldMappings. Saved under EventMappings:@Model.SelectedTemplateId:@Model.SelectedEventType
+                        Saved under EventMappings:@Model.SelectedTemplateId:@Model.SelectedEventType.
+                        For schema events, also set EventKind=Schema in ApplicationSubmission.
                     </div>
                     @if (ViewData.ModelState[nameof(Model.MappingJson)]?.Errors.FirstOrDefault() is { } jsonError)
                     {

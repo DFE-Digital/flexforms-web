@@ -26,7 +26,65 @@ public class EventDataMapper(
         CancellationToken cancellationToken = default) where TEvent : class
     {
         var eventType = typeof(TEvent).Name;
-        
+        var eventData = await BuildEventDataAsync(
+            formData,
+            template,
+            eventType,
+            mappingId,
+            applicationId,
+            applicationReference,
+            cancellationToken);
+
+        var json = JsonSerializer.Serialize(eventData);
+        var eventObject = JsonSerializer.Deserialize<TEvent>(json);
+
+        if (eventObject == null)
+        {
+            throw new InvalidOperationException($"Failed to deserialize event of type {eventType}");
+        }
+
+        logger.LogInformation(
+            "Successfully mapped event {EventType} for application {ApplicationId}",
+            eventType,
+            applicationId);
+
+        return eventObject;
+    }
+
+    /// <inheritdoc />
+    public async Task<Dictionary<string, object?>> MapToDictionaryAsync(
+        Dictionary<string, object> formData,
+        FormTemplate template,
+        string eventTypeName,
+        string mappingId,
+        Guid applicationId,
+        string applicationReference,
+        CancellationToken cancellationToken = default)
+    {
+        var eventData = await BuildEventDataAsync(
+            formData,
+            template,
+            eventTypeName,
+            mappingId,
+            applicationId,
+            applicationReference,
+            cancellationToken);
+
+        return eventData.ToDictionary(
+            kv => kv.Key,
+            kv => (object?)kv.Value,
+            StringComparer.OrdinalIgnoreCase);
+    }
+
+    private async Task<Dictionary<string, object>> BuildEventDataAsync(
+        Dictionary<string, object> formData,
+        FormTemplate template,
+        string eventType,
+        string mappingId,
+        Guid applicationId,
+        string applicationReference,
+        CancellationToken cancellationToken)
+    {
         logger.LogDebug(
             "Starting event mapping: {EventType} using mapping {MappingId} for application {ApplicationId}",
             eventType,
@@ -48,17 +106,14 @@ public class EventDataMapper(
             try
             {
                 var value = ExtractValue(fieldMapping, formData, template, applicationId, applicationReference);
-                
-                // Skip null/empty values for optional properties to allow deserializer to use defaults
-                // This prevents type conversion errors for complex types like Dictionary<string, object>
+
                 if (value == null || (value is string str && string.IsNullOrEmpty(str)))
                 {
                     logger.LogTrace("Skipping property {PropertyName} - null or empty value", propertyName);
                     continue;
                 }
-                
+
                 eventData[propertyName] = value;
-                
                 logger.LogTrace("Mapped property {PropertyName} = {Value}", propertyName, value);
             }
             catch (Exception ex)
@@ -72,21 +127,7 @@ public class EventDataMapper(
             }
         }
 
-        // Serialize and deserialize to get strongly-typed event
-        var json = JsonSerializer.Serialize(eventData);
-        var eventObject = JsonSerializer.Deserialize<TEvent>(json);
-
-        if (eventObject == null)
-        {
-            throw new InvalidOperationException($"Failed to deserialize event of type {eventType}");
-        }
-
-        logger.LogInformation(
-            "Successfully mapped event {EventType} for application {ApplicationId}",
-            eventType,
-            applicationId);
-
-        return eventObject;
+        return eventData;
     }
 
     /// <summary>

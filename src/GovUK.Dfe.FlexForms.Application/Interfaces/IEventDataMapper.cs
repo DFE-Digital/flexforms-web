@@ -10,14 +10,6 @@ public interface IEventDataMapper
     /// <summary>
     /// Maps accumulated form data to a specific event type using the configured mapping
     /// </summary>
-    /// <typeparam name="TEvent">The event type to map to</typeparam>
-    /// <param name="formData">The accumulated form data (already unwrapped by the form engine)</param>
-    /// <param name="template">The form template</param>
-    /// <param name="mappingId">The mapping configuration ID to use</param>
-    /// <param name="applicationId">The application ID</param>
-    /// <param name="applicationReference">The application reference number</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>The mapped event data</returns>
     Task<TEvent> MapToEventAsync<TEvent>(
         Dictionary<string, object> formData,
         FormTemplate template,
@@ -25,5 +17,18 @@ public interface IEventDataMapper
         Guid applicationId,
         string applicationReference,
         CancellationToken cancellationToken = default) where TEvent : class;
+
+    /// <summary>
+    /// Maps form data to a dictionary payload using the mapping for <paramref name="eventTypeName"/>
+    /// (used for schema events that have no CLR contract).
+    /// </summary>
+    Task<Dictionary<string, object?>> MapToDictionaryAsync(
+        Dictionary<string, object> formData,
+        FormTemplate template,
+        string eventTypeName,
+        string mappingId,
+        Guid applicationId,
+        string applicationReference,
+        CancellationToken cancellationToken = default);
 }
 

@@ -588,6 +588,7 @@ builder.Services.AddTenantAwareOptionsAccessors(configuration);
 
 // Event mapping and publishing services (scoped so TenantConfig overlay is request-aware)
 builder.Services.AddScoped<IEventMappingProvider, EventMappingProvider>();
+builder.Services.AddScoped<ISchemaEventDefinitionProvider, SchemaEventDefinitionProvider>();
 builder.Services.AddKeyedScoped<IEventDataMapper, EventDataMapper>("Default");
 builder.Services.AddScoped<IEventDataMapperFactory, EventDataMapperFactory>();
 builder.Services.AddSingleton<IEventTypeRegistry, EventTypeRegistry>();

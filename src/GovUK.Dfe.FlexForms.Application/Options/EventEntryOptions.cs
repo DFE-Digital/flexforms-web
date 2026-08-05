@@ -6,7 +6,12 @@ namespace GovUK.Dfe.FlexForms.Application.Options;
 public class EventEntryOptions
 {
     /// <summary>
-    /// Event type name (e.g. "TransferApplicationSubmittedEvent"). Used to resolve .NET type and mapping file.
+    /// <see cref="EventPublishKind.Typed"/> (default) or <see cref="EventPublishKind.Schema"/>.
+    /// </summary>
+    public string EventKind { get; set; } = EventPublishKind.Typed;
+
+    /// <summary>
+    /// Event type name (e.g. "TransferApplicationSubmittedEvent" or a SchemaEvents key).
     /// </summary>
     public string EventType { get; set; } = string.Empty;
 
