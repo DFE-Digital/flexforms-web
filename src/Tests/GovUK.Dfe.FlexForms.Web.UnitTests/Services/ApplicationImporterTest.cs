@@ -29,14 +29,19 @@ namespace GovUK.Dfe.FlexForms.Web.UnitTests.Services
 
             mockTemplateManagementService.Setup(s => s.LoadTemplateAsync(templateId.ToString())).ReturnsAsync(formTemplate);
 
-            Dictionary<string, string> mapping = new()
+            // TODO get the mapping from an external source, e.g. a JSON file or API (database)
+            SpreadsheetTemplateMapping templateMapping = new()
             {
-                { "B1", "start-year" },
-                { "B2", "end-year" },
-                { "B3", "local-authority" }
+                SheetName = "Sheet1",
+                Maps = new Dictionary<string, string>()
+                {
+                    { "B1", "start-year" },
+                    { "B2", "end-year" },
+                    { "B3", "local-authority" }
+                }
             };
 
-            ApplicationImportResult result = await applicationImporter.ImportSpreadsheet(templateId, fileStream, mapping);
+            ApplicationImportResult result = await applicationImporter.ImportSpreadsheet(templateId, fileStream, templateMapping);
 
             Assert.NotNull(result);
             if (result.Errors != null && result.Errors.Any())

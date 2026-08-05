@@ -9,7 +9,7 @@ namespace GovUK.Dfe.FlexForms.Web.Services;
 
 public class ApplicationImporter(ITemplateManagementService templateManagementService) : IApplicationImporter
 {
-    public async Task<ApplicationImportResult> ImportSpreadsheet(Guid templateId, Stream stream, IDictionary<string, string> mapping)
+    public async Task<ApplicationImportResult> ImportSpreadsheet(Guid templateId, Stream stream, SpreadsheetTemplateMapping mapping)
     {
         Debug.WriteLine($"Importing spreadsheet for templateId: {templateId}, stream length: {stream.Length}.");
 
@@ -19,28 +19,26 @@ public class ApplicationImporter(ITemplateManagementService templateManagementSe
             return new ApplicationImportResult { Errors = [$"Template not found ({templateId})"] };
         }
 
-        Dictionary<string, string?>? fields = GetSpreadsheetFields(stream, "Sheet1", mapping, out IList<string> errors);
+        Dictionary<string, string?>? fields = GetSpreadsheetFields(stream, mapping, out IList<string> spreadsheetErrors);
         if (fields == null || fields.Count == 0)
         {
-            return new ApplicationImportResult { Errors = [$"Failed to get spreadsheet fields: {string.Join(", ", errors)}"] };
+            return new ApplicationImportResult { Errors = [$"Failed to get spreadsheet fields: {string.Join(", ", spreadsheetErrors)}"] };
         }
 
-        ApplicationImport applicationImport = BuildApplicationImport(fields, template);
-        if (applicationImport.Errors != null && applicationImport.Errors.Any())
+        if (!CanImport(fields, template, out IList<string> importErrors))
         {
-            return new ApplicationImportResult { Errors = applicationImport.Errors };
+            return new ApplicationImportResult { Errors = importErrors };
         }
 
-        Dictionary<string, object> data = [];
-        foreach (var field in fields)
-        {
-            data.Add(field.Key, field.Value ?? string.Empty);
-        }
-
-        return new ApplicationImportResult { Success = true, Template = template, Data = data };
+        return new ApplicationImportResult 
+        { 
+            Success = true, 
+            Template = template, 
+            Data = fields.ToDictionary(f => f.Key, f => (object)(f.Value ?? string.Empty)) 
+        };
     }
 
-    private static Dictionary<string, string?>? GetSpreadsheetFields(Stream stream, string sheet, IDictionary<string, string> mapping, out IList<string> errors)
+    private static Dictionary<string, string?>? GetSpreadsheetFields(Stream stream, SpreadsheetTemplateMapping mapping, out IList<string> errors)
     {
         using SpreadsheetDocument document = SpreadsheetDocument.Open(stream, false);
 
@@ -48,10 +46,10 @@ public class ApplicationImporter(ITemplateManagementService templateManagementSe
 
         errors = [];
 
-        Sheet? theSheet = wbPart?.Workbook?.Descendants<Sheet>().Where(s => s.Name == sheet).FirstOrDefault();
+        Sheet? theSheet = wbPart?.Workbook?.Descendants<Sheet>().Where(s => s.Name == mapping.SheetName).FirstOrDefault();
         if (theSheet is null || theSheet.Id is null)
         {
-            errors.Add($"Sheet '{sheet}' not found in the spreadsheet.");
+            errors.Add($"Sheet '{mapping.SheetName}' not found in the spreadsheet.");
             return default;
         }
 
@@ -59,7 +57,13 @@ public class ApplicationImporter(ITemplateManagementService templateManagementSe
 
         Dictionary<string, string?> fields = [];
 
-        foreach (var kvp in mapping)
+        if (mapping.Maps == null || !mapping.Maps.Any())
+        {
+            errors.Add("No mappings found in the template.");
+            return default;
+        }
+
+        foreach (var kvp in mapping.Maps)
         {
             Cell? theCell = wsPart.Worksheet?.Descendants<Cell>()?.Where(c => c.CellReference == kvp.Key).FirstOrDefault();
             if (theCell is null)
@@ -101,13 +105,9 @@ public class ApplicationImporter(ITemplateManagementService templateManagementSe
         return fields;
     }
 
-    private static ApplicationImport BuildApplicationImport(IDictionary<string, string?> fields, FormTemplate template)
+    private static bool CanImport(IDictionary<string, string?> fields, FormTemplate template, out IList<string> errors)
     {
-        Dictionary<string, string> fieldMapping = []; // TODO get from template or external source
-
-        List<string> warnings = [];
-        List<string> errors = [];
-        List<dynamic> responseFields = [];
+        errors = [];
         foreach (var field in fields)
         {
             var matchedField = template.TaskGroups
@@ -115,36 +115,12 @@ public class ApplicationImporter(ITemplateManagementService templateManagementSe
                 .SelectMany(t => t.Pages!)
                 .SelectMany(p => p.Fields)
                 .FirstOrDefault(f => f.FieldId == field.Key);
-
             if (matchedField == null)
             {
                 errors.Add($"No single matching field found in the template for field '{field.Key}'");
                 continue;
             }
-
-            // TODO construct the response field JSON based on the matched field and its value
-            var responseField = new
-            {
-                FieldId = field.Key,
-                Value = field.Value
-            };
-            responseFields.Add(responseField);
         }
-
-        // TODO construct the response body JSON based on the matched fields and their values
-
-        return new ApplicationImport()
-        {
-            Warnings = warnings,
-            Errors = errors,
-            ResponseBody = null
-        };
+        return errors.Count == 0;
     }
-}
-
-internal class ApplicationImport
-{
-    public string? ResponseBody { get; set; }
-    public IEnumerable<string>? Warnings { get; set; }
-    public IEnumerable<string>? Errors { get; set; }
 }

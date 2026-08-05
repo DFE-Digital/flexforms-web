@@ -4,6 +4,6 @@ namespace GovUK.Dfe.FlexForms.Web.Interfaces
 {
     public interface IApplicationImporter
     {
-        Task<ApplicationImportResult> ImportSpreadsheet(Guid templateId, Stream stream, IDictionary<string, string> mapping);
+        Task<ApplicationImportResult> ImportSpreadsheet(Guid templateId, Stream stream, SpreadsheetTemplateMapping mapping);
     }
 }
