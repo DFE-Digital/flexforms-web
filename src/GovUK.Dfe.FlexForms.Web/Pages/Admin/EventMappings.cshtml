@@ -1,0 +1,176 @@
+@page "/admin/event-mappings"
+@model GovUK.Dfe.FlexForms.Web.Pages.Admin.EventMappingsModel
+@{
+    ViewData["Title"] = "Event mappings";
+}
+
+<div class="govuk-grid-row">
+    <div class="govuk-grid-column-full">
+        <a asp-page="/Admin/Admin" class="govuk-back-link">Back to Admin</a>
+
+        @if (Model.HasError)
+        {
+            <div class="govuk-error-summary" data-module="govuk-error-summary">
+                <div role="alert">
+                    <h2 class="govuk-error-summary__title">There is a problem</h2>
+                    <div class="govuk-error-summary__body">
+                        <p class="govuk-body">@Model.ErrorMessage</p>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (!ViewData.ModelState.IsValid)
+        {
+            <div class="govuk-error-summary" data-module="govuk-error-summary">
+                <div role="alert">
+                    <h2 class="govuk-error-summary__title">There is a problem</h2>
+                    <div class="govuk-error-summary__body">
+                        <ul class="govuk-list govuk-error-summary__list">
+                            @foreach (var modelError in ViewData.ModelState.Where(item => item.Value?.Errors.Count > 0))
+                            {
+                                foreach (var error in modelError.Value!.Errors)
+                                {
+                                    <li><a href="#@modelError.Key">@error.ErrorMessage</a></li>
+                                }
+                            }
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (Model.ShowSuccess)
+        {
+            <div class="govuk-notification-banner govuk-notification-banner--success" role="alert" data-module="govuk-notification-banner">
+                <div class="govuk-notification-banner__header">
+                    <h2 class="govuk-notification-banner__title">Success</h2>
+                </div>
+                <div class="govuk-notification-banner__content">
+                    <p class="govuk-notification-banner__heading">@Model.SuccessMessage</p>
+                </div>
+            </div>
+        }
+
+        <h1 class="govuk-heading-xl">Event mappings</h1>
+        <p class="govuk-body">
+            Map form fields to platform event types for
+            <strong>@(string.IsNullOrWhiteSpace(Model.TenantName) ? Model.TenantId.ToString() : Model.TenantName)</strong>.
+            Mappings are stored in TenantConfig (<code>EventMappings</code>). Disk files remain as fallback when no tenant mapping exists.
+        </p>
+
+        <div class="govuk-summary-card govuk-!-margin-bottom-6">
+            <div class="govuk-summary-card__title-wrapper">
+                <h2 class="govuk-summary-card__title">Platform event catalogue</h2>
+            </div>
+            <div class="govuk-summary-card__content">
+                <p class="govuk-body">Discovered from CoreLibs Messaging.Contracts (assembly scan).</p>
+                @if (Model.Catalogue.Count == 0)
+                {
+                    <p class="govuk-body">No event types discovered.</p>
+                }
+                else
+                {
+                    <table class="govuk-table">
+                        <thead class="govuk-table__head">
+                            <tr class="govuk-table__row">
+                                <th scope="col" class="govuk-table__header">Event type</th>
+                                <th scope="col" class="govuk-table__header">Topic</th>
+                                <th scope="col" class="govuk-table__header">CLR type</th>
+                            </tr>
+                        </thead>
+                        <tbody class="govuk-table__body">
+                        @foreach (var row in Model.Catalogue)
+                        {
+                            <tr class="govuk-table__row">
+                                <td class="govuk-table__cell">@row.EventTypeName</td>
+                                <td class="govuk-table__cell"><code>@row.TopicName</code></td>
+                                <td class="govuk-table__cell"><code>@row.ClrTypeName</code></td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+
+        <form method="get" class="govuk-!-margin-bottom-6">
+            <div class="govuk-grid-row">
+                <div class="govuk-grid-column-one-half">
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" for="SelectedTemplateId">Template ID</label>
+                        <div class="govuk-hint">GUID of the form template, or a legacy id such as form-001</div>
+                        <input class="govuk-input" list="template-options" name="SelectedTemplateId" id="SelectedTemplateId"
+                               value="@Model.SelectedTemplateId" autocomplete="off" />
+                        <datalist id="template-options">
+                            @foreach (var opt in Model.TemplateOptions)
+                            {
+                                <option value="@opt.Value">@opt.Text</option>
+                            }
+                        </datalist>
+                    </div>
+                </div>
+                <div class="govuk-grid-column-one-half">
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" for="SelectedEventType">Event type</label>
+                        <select class="govuk-select" name="SelectedEventType" id="SelectedEventType" asp-items="Model.EventTypeOptions">
+                            <option value="">Select an event type</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <button type="submit" class="govuk-button govuk-button--secondary" data-module="govuk-button">Load mapping</button>
+        </form>
+
+        @if (!string.IsNullOrWhiteSpace(Model.SelectedTemplateId) && !string.IsNullOrWhiteSpace(Model.SelectedEventType))
+        {
+            if (Model.ValidationWarnings.Count > 0)
+            {
+                <div class="govuk-warning-text">
+                    <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+                    <strong class="govuk-warning-text__text">
+                        <span class="govuk-visually-hidden">Warning</span>
+                        Some mapping properties do not match the CLR type:
+                        @string.Join(" ", Model.ValidationWarnings)
+                    </strong>
+                </div>
+            }
+
+            @if (Model.ClrPropertyHints.Count > 0)
+            {
+                <details class="govuk-details" data-module="govuk-details">
+                    <summary class="govuk-details__summary">
+                        <span class="govuk-details__summary-text">Expected properties on @Model.SelectedEventType</span>
+                    </summary>
+                    <div class="govuk-details__text">
+                        <ul class="govuk-list govuk-list--bullet">
+                            @foreach (var prop in Model.ClrPropertyHints)
+                            {
+                                <li><code>@prop</code></li>
+                            }
+                        </ul>
+                    </div>
+                </details>
+            }
+
+            <form method="post">
+                <input type="hidden" asp-for="SelectedTemplateId" />
+                <input type="hidden" asp-for="SelectedEventType" />
+
+                <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.MappingJson)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                    <label class="govuk-label" asp-for="MappingJson">Mapping JSON</label>
+                    <div class="govuk-hint">
+                        Must include mappingId, eventType, and fieldMappings. Saved under EventMappings:@Model.SelectedTemplateId:@Model.SelectedEventType
+                    </div>
+                    @if (ViewData.ModelState[nameof(Model.MappingJson)]?.Errors.FirstOrDefault() is { } jsonError)
+                    {
+                        <p class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @jsonError.ErrorMessage</p>
+                    }
+                    <textarea class="govuk-textarea govuk-!-font-size-16" asp-for="MappingJson" id="MappingJson" rows="24" spellcheck="false"></textarea>
+                </div>
+
+                <button type="submit" class="govuk-button" data-module="govuk-button">Save mapping</button>
+            </form>
+        }
+    </div>
+</div>

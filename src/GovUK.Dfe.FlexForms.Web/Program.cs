@@ -30,7 +30,6 @@ using GovUK.Dfe.CoreLibs.Security.EntraSso;
 using GovUK.Dfe.CoreLibs.Security.TokenRefresh.Extensions;
 using System.IO.Compression;
 using GovUK.Dfe.FlexForms.Infrastructure.Consumers;
-using GovUK.Dfe.CoreLibs.Messaging.Contracts.Entities.Topics;
 using GovUK.Dfe.CoreLibs.Messaging.Contracts.Messages.Events;
 using GovUK.Dfe.CoreLibs.Messaging.MassTransit.Extensions;
 using Microsoft.AspNetCore.Authentication;
@@ -587,8 +586,8 @@ builder.Services.Configure<ApplicationSubmissionOptions>(configuration.GetSectio
 
 builder.Services.AddTenantAwareOptionsAccessors(configuration);
 
-// Event mapping and publishing services
-builder.Services.AddSingleton<IEventMappingProvider, EventMappingProvider>();
+// Event mapping and publishing services (scoped so TenantConfig overlay is request-aware)
+builder.Services.AddScoped<IEventMappingProvider, EventMappingProvider>();
 builder.Services.AddKeyedScoped<IEventDataMapper, EventDataMapper>("Default");
 builder.Services.AddScoped<IEventDataMapperFactory, EventDataMapperFactory>();
 builder.Services.AddSingleton<IEventTypeRegistry, EventTypeRegistry>();
@@ -606,9 +605,9 @@ builder.Services.AddDfEMassTransit(
     },
     configureBus: (context, cfg) =>
     {
-        // Configure topic names for message types
-        cfg.Message<ScanResultEvent>(m => m.SetEntityName(TopicNames.ScanResult));
-        cfg.Message<TransferApplicationSubmittedEvent>(m => m.SetEntityName(TopicNames.TransferApplicationSubmitted));
+        // Wire all CoreLibs Messaging.Contracts events to TopicNames (assembly-scanned).
+        GovUK.Dfe.FlexForms.Infrastructure.Messaging.MessagingEventBusConfigurator
+            .ConfigureDiscoveredMessageTopics(cfg);
 
         cfg.UseJsonSerializer();
     },
