@@ -1,4 +1,3 @@
-using System.ComponentModel.DataAnnotations;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -83,11 +82,10 @@ public sealed class EventMappingsModel(
     public string? SelectedSchemaEventType { get; set; }
 
     [BindProperty]
-    [Required(ErrorMessage = "Enter mapping JSON")]
-    public string MappingJson { get; set; } = string.Empty;
+    public string? MappingJson { get; set; }
 
     [BindProperty]
-    public string SchemaDefinitionJson { get; set; } = string.Empty;
+    public string? SchemaDefinitionJson { get; set; }
 
     [BindProperty]
     public string? NewSchemaEventType { get; set; }
@@ -108,17 +106,23 @@ public sealed class EventMappingsModel(
         return Page();
     }
 
-    public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostSaveMappingAsync(CancellationToken cancellationToken)
     {
+        // Ignore schema-form fields when saving a typed/schema field mapping.
+        ModelState.Remove(nameof(SchemaDefinitionJson));
+        ModelState.Remove(nameof(NewSchemaEventType));
+
         if (!TryResolveTenant(out var error))
         {
             HasError = true;
             ErrorMessage = error;
             await LoadPageDataAsync(cancellationToken);
+            LoadSelectedSchemaDefinition();
             return Page();
         }
 
         await LoadPageDataAsync(cancellationToken);
+        LoadSelectedSchemaDefinition();
 
         SelectedTemplateId = SelectedTemplateId?.Trim();
         SelectedEventType = SelectedEventType?.Trim();
@@ -129,13 +133,16 @@ public sealed class EventMappingsModel(
         if (string.IsNullOrWhiteSpace(SelectedEventType))
             ModelState.AddModelError(nameof(SelectedEventType), "Select an event type.");
 
+        if (string.IsNullOrWhiteSpace(MappingJson))
+            ModelState.AddModelError(nameof(MappingJson), "Enter mapping JSON.");
+
         if (!ModelState.IsValid)
             return Page();
 
         EventFieldMapping? mapping;
         try
         {
-            mapping = JsonSerializer.Deserialize<EventFieldMapping>(MappingJson, JsonReadOptions);
+            mapping = JsonSerializer.Deserialize<EventFieldMapping>(MappingJson!, JsonReadOptions);
         }
         catch (JsonException ex)
         {
@@ -209,15 +216,20 @@ public sealed class EventMappingsModel(
 
     public async Task<IActionResult> OnPostSaveSchemaAsync(CancellationToken cancellationToken)
     {
+        // Ignore mapping-form fields when saving a schema event definition.
+        ModelState.Remove(nameof(MappingJson));
+
         if (!TryResolveTenant(out var error))
         {
             HasError = true;
             ErrorMessage = error;
             await LoadPageDataAsync(cancellationToken);
+            await LoadSelectedMappingAsync(cancellationToken);
             return Page();
         }
 
         await LoadPageDataAsync(cancellationToken);
+        await LoadSelectedMappingAsync(cancellationToken);
 
         var schemaKey = (NewSchemaEventType ?? SelectedSchemaEventType)?.Trim();
         if (string.IsNullOrWhiteSpace(schemaKey))
@@ -233,6 +245,12 @@ public sealed class EventMappingsModel(
             ModelState.AddModelError(
                 nameof(NewSchemaEventType),
                 $"'{schemaKey}' is a platform typed event. Choose a different name for schema events.");
+            return Page();
+        }
+
+        if (string.IsNullOrWhiteSpace(SchemaDefinitionJson))
+        {
+            ModelState.AddModelError(nameof(SchemaDefinitionJson), "Enter schema definition JSON.");
             return Page();
         }
 

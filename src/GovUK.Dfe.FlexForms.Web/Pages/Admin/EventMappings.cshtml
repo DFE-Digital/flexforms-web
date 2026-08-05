@@ -139,7 +139,7 @@
                     </table>
                 }
 
-                <form method="post" asp-page-handler="SaveSchema">
+                <form method="post" asp-page="/Admin/EventMappings" asp-page-handler="SaveSchema">
                     <div class="govuk-form-group">
                         <label class="govuk-label" asp-for="NewSchemaEventType">Schema event type name</label>
                         <div class="govuk-hint">Must not collide with a platform typed event name</div>
@@ -217,7 +217,7 @@
                 </details>
             }
 
-            <form method="post">
+            <form method="post" asp-page="/Admin/EventMappings" asp-page-handler="SaveMapping">
                 <input type="hidden" asp-for="SelectedTemplateId" />
                 <input type="hidden" asp-for="SelectedEventType" />
                 <input type="hidden" asp-for="SelectedSchemaEventType" />
