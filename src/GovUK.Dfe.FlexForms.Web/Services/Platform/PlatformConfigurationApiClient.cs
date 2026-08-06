@@ -61,6 +61,9 @@ public sealed class PlatformConfigurationApiClient(
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
+        var correlationId = Guid.NewGuid().ToString();
+        request.Headers.TryAddWithoutValidation("x-correlationId", correlationId);
+
         using var response = await httpClient.SendAsync(request, cancellationToken);
 
         if (!response.IsSuccessStatusCode)

@@ -503,6 +503,11 @@ builder.Services.AddTokenRefreshWithOidc(configuration, "DfESignIn", "TokenRefre
 
 // Add HttpClient for API calls
 builder.Services.AddHttpClient();
+builder.Services.AddTransient<CorrelationIdForwardingHandler>();
+builder.Services.ConfigureHttpClientDefaults(http =>
+{
+    http.AddHttpMessageHandler<CorrelationIdForwardingHandler>();
+});
 
 builder.Services.AddTenantAwarePlatformServices(configuration);
 
@@ -657,6 +662,7 @@ AppDomain.CurrentDomain.UnhandledException += (sender, args) =>
 var app = builder.Build();
 
 app.UseForwardedHeaders();
+app.UseMiddleware<CorrelationIdMiddleware>();
 app.UsePlatformTenantConfiguration();
 
 // Configure the HTTP request pipeline.
