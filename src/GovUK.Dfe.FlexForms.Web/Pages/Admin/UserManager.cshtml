@@ -190,7 +190,17 @@
         <h2 class="govuk-heading-l govuk-!-margin-top-8">Access audit trail</h2>
         <p class="govuk-body">Recent role assignment and access changes in this tenant (last 50).</p>
 
-        @if (Model.AccessAuditEntries.Count == 0)
+        @if (Model.AuditLogLoadFailed)
+        {
+            <div class="govuk-warning-text">
+                <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+                <strong class="govuk-warning-text__text">
+                    <span class="govuk-warning-text__assistive">Warning</span>
+                    @Model.AuditLogLoadErrorMessage
+                </strong>
+            </div>
+        }
+        else if (Model.AccessAuditEntries.Count == 0)
         {
             <p class="govuk-body">No access audit entries found.</p>
         }

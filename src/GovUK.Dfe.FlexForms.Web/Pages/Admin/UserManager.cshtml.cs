@@ -28,6 +28,10 @@ public sealed class UserManagerModel(
 
     public string? SuccessMessage { get; private set; }
 
+    public bool AuditLogLoadFailed { get; private set; }
+
+    public string? AuditLogLoadErrorMessage { get; private set; }
+
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         if (TempData["UserManagerSuccess"] is string success)
@@ -91,6 +95,10 @@ public sealed class UserManagerModel(
         {
             logger.LogWarning(ex, "Failed to load tenant access audit log");
             AccessAuditEntries = [];
+            AuditLogLoadFailed = true;
+            AuditLogLoadErrorMessage = GetErrorMessage(
+                ex,
+                "Could not load the access audit trail. Ensure the API is up to date and database migrations have been applied.");
         }
     }
 
