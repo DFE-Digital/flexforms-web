@@ -20,8 +20,8 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
         {
             var items = new List<DerivedCollectionItem>();
             
-            logger.LogInformation("DerivedCollectionFlow: Looking for sourceFieldId '{SourceFieldId}' in form data", sourceFieldId);
-            logger.LogInformation("DerivedCollectionFlow: Available form data keys: {Keys}", string.Join(", ", formData.Keys));
+            logger.LogDebug("DerivedCollectionFlow: Looking for sourceFieldId '{SourceFieldId}' in form data", sourceFieldId);
+            logger.LogDebug("DerivedCollectionFlow: Available form data keys: {Keys}", string.Join(", ", formData.Keys));
             
             if (!formData.TryGetValue(sourceFieldId, out var sourceValue))
             {
@@ -30,7 +30,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
             }
                 
             var sourceJson = sourceValue?.ToString() ?? "";
-            logger.LogInformation("DerivedCollectionFlow: Source value type: {ValueType}, Value: {Value}", 
+            logger.LogDebug("DerivedCollectionFlow: Source value type: {ValueType}, Value: {Value}", 
                 sourceValue?.GetType().Name ?? "null", sourceValue);
                 
             if (string.IsNullOrWhiteSpace(sourceJson))
@@ -118,21 +118,21 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
             var declarationJson = JsonSerializer.Serialize(declarationData);
             formData[declarationKey] = declarationJson;
             
-            logger.LogInformation("Saved declaration for item '{ItemId}' with status '{Status}'", itemId, status);
+            logger.LogDebug("Saved declaration for item '{ItemId}' with status '{Status}'", itemId, status);
         }
         
         private List<DerivedCollectionItem> ProcessAutocompleteSource(string sourceJson, DerivedCollectionFlowConfiguration config)
         {
             var items = new List<DerivedCollectionItem>();
             
-            logger.LogInformation("DerivedCollectionFlow: Processing autocomplete source JSON: {SourceJson}", sourceJson);
+            logger.LogDebug("DerivedCollectionFlow: Processing autocomplete source JSON: {SourceJson}", sourceJson);
             
             try
             {
                 // Try to parse as array of objects first: [{"name":"Trust A","id":"123"}, {...}]
                 var autocompleteItems = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(sourceJson);
                 
-                logger.LogInformation("DerivedCollectionFlow: Parsed {Count} autocomplete items", autocompleteItems?.Count ?? 0);
+                logger.LogDebug("DerivedCollectionFlow: Parsed {Count} autocomplete items", autocompleteItems?.Count ?? 0);
                 
                 if (autocompleteItems != null)
                 {
@@ -189,20 +189,20 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
         
         private List<DerivedCollectionItem> ProcessCollectionSource(string sourceJson, DerivedCollectionFlowConfiguration config)
         {
-            logger.LogInformation("DerivedCollectionFlow: Processing collection source JSON: {SourceJson}", sourceJson);
+            logger.LogDebug("DerivedCollectionFlow: Processing collection source JSON: {SourceJson}", sourceJson);
             
             try
             {
                 // Handle existing collection flow items
                 var collectionItems = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(sourceJson);
                 
-                logger.LogInformation("DerivedCollectionFlow: Parsed {Count} collection items", collectionItems?.Count ?? 0);
+                logger.LogDebug("DerivedCollectionFlow: Parsed {Count} collection items", collectionItems?.Count ?? 0);
                 
                 if (collectionItems != null)
                 {
                     return collectionItems.SelectMany(item =>
                     {
-                        logger.LogInformation("DerivedCollectionFlow: Processing collection item: {Item}", JsonSerializer.Serialize(item));
+                        logger.LogDebug("DerivedCollectionFlow: Processing collection item: {Item}", JsonSerializer.Serialize(item));
                         
                         // Collection items may contain nested field data
                         // Look for the actual autocomplete data within each collection item
@@ -226,7 +226,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                                         if (autocompleteData != null)
                                         {
                                             var displayName = GetDisplayName(autocompleteData, config.ItemTitleBinding);
-                                            logger.LogInformation("DerivedCollectionFlow: Extracted display name '{DisplayName}' from nested data using binding '{Binding}'", displayName, config.ItemTitleBinding);
+                                            logger.LogDebug("DerivedCollectionFlow: Extracted display name '{DisplayName}' from nested data using binding '{Binding}'", displayName, config.ItemTitleBinding);
                                             
                                             var itemId = autocompleteData.TryGetValue("id", out var id) ? id?.ToString() : GenerateItemId(displayName);
                                             
