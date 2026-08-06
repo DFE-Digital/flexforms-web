@@ -40,6 +40,12 @@ public class EventMappingProvider(
                 return fromConfig;
             }
 
+            // Admin UI often saves under the API template GUID, while form JSON may use a
+            // legacy schema TemplateId (e.g. form-001). Search sibling keys for the same event.
+            var fromSibling = TryGetFromAnyTemplateKey(eventType, preferredTemplateId: templateId);
+            if (fromSibling != null)
+                return fromSibling;
+
             return await TryGetFromDiskAsync(templateId, eventType, cancellationToken);
         }
         catch (Exception ex)
@@ -65,6 +71,85 @@ public class EventMappingProvider(
         if (!section.Exists() || (!section.GetChildren().Any() && string.IsNullOrEmpty(section.Value)))
             return null;
 
+        return DeserializeMapping(section, templateId, eventType);
+    }
+
+    /// <summary>
+    /// Finds <paramref name="eventType"/> under any EventMappings template key when the
+    /// runtime schema TemplateId does not match the Admin-saved API GUID key.
+    /// </summary>
+    private EventFieldMapping? TryGetFromAnyTemplateKey(string eventType, string preferredTemplateId)
+    {
+        var matches = new List<(string TemplateKey, EventFieldMapping Mapping)>();
+
+        CollectEventMatches(requestAppConfiguration.GetSection("EventMappings"), eventType, matches);
+        if (matches.Count == 0)
+            CollectEventMatches(hostConfiguration.GetSection("EventMappings"), eventType, matches);
+
+        if (matches.Count == 0)
+            return null;
+
+        // Prefer a key that is a Guid when the preferred key looks like a legacy string (or vice versa).
+        var preferredIsGuid = Guid.TryParse(preferredTemplateId, out _);
+        var preferredMatch = matches.FirstOrDefault(m =>
+            Guid.TryParse(m.TemplateKey, out _) != preferredIsGuid
+            || string.Equals(m.TemplateKey, preferredTemplateId, StringComparison.OrdinalIgnoreCase));
+
+        var chosen = preferredMatch.Mapping is not null
+            ? preferredMatch
+            : matches[0];
+
+        if (matches.Count > 1)
+        {
+            logger.LogWarning(
+                "Multiple EventMappings entries found for event {EventType} under templates [{Keys}]. Using template key {ChosenKey}.",
+                eventType,
+                string.Join(", ", matches.Select(m => m.TemplateKey)),
+                chosen.TemplateKey);
+        }
+        else
+        {
+            logger.LogInformation(
+                "Resolved event mapping for {EventType} under TenantConfig template key {TemplateKey} (requested {RequestedTemplateId})",
+                eventType,
+                chosen.TemplateKey,
+                preferredTemplateId);
+        }
+
+        return chosen.Mapping;
+    }
+
+    private void CollectEventMatches(
+        IConfigurationSection eventMappingsRoot,
+        string eventType,
+        List<(string TemplateKey, EventFieldMapping Mapping)> matches)
+    {
+        if (!eventMappingsRoot.Exists())
+            return;
+
+        foreach (var templateSection in eventMappingsRoot.GetChildren())
+        {
+            // Skip non-template keys such as BasePath
+            if (string.Equals(templateSection.Key, "BasePath", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var eventSection = templateSection.GetSection(eventType);
+            if (!eventSection.Exists() || (!eventSection.GetChildren().Any() && string.IsNullOrEmpty(eventSection.Value)))
+                continue;
+
+            var mapping = DeserializeMapping(eventSection, templateSection.Key, eventType);
+            if (mapping is null)
+                continue;
+
+            if (matches.Any(m => string.Equals(m.TemplateKey, templateSection.Key, StringComparison.OrdinalIgnoreCase)))
+                continue;
+
+            matches.Add((templateSection.Key, mapping));
+        }
+    }
+
+    private EventFieldMapping? DeserializeMapping(IConfigurationSection section, string templateId, string eventType)
+    {
         var json = ConfigurationSectionJson.ToJson(section);
         if (string.IsNullOrWhiteSpace(json))
             return null;

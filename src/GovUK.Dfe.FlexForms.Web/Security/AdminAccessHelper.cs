@@ -70,6 +70,15 @@ public static class AdminAccessHelper
         IsAdmin(user);
 
     /// <summary>
+    /// Event mappings / schema events for the current tenant — Admin or SuperAdmin.
+    /// Same audience as organisation settings (delegated safe TenantConfig categories).
+    /// </summary>
+    public const string CanManageEventMappingsPolicy = "CanManageEventMappings";
+
+    public static bool CanManageEventMappings(ClaimsPrincipal? user) =>
+        IsAdmin(user);
+
+    /// <summary>
     /// TenantConfig settings editor — SuperAdmin only (decrypted secrets).
     /// </summary>
     public static bool CanManageTenantSettings(ClaimsPrincipal? user) =>

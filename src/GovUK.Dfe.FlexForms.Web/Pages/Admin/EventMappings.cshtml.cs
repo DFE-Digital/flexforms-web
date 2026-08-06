@@ -18,9 +18,10 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 
 /// <summary>
-/// Tenant Admin editor for EventMappings + SchemaEvents, driven by the platform event catalogue API.
+/// Current-tenant editor for EventMappings + SchemaEvents (Tenant Admin or SuperAdmin).
+/// All reads/writes use the resolved request tenant; templates are limited to that tenant's catalogue.
 /// </summary>
-[Authorize(Roles = AdminAccessHelper.AuthorizeRoles)]
+[Authorize(Policy = AdminAccessHelper.CanManageEventMappingsPolicy)]
 public sealed class EventMappingsModel(
     ITenantAdminClient tenantAdminClient,
     ITenantRequestContext tenantRequestContext,
@@ -66,11 +67,21 @@ public sealed class EventMappingsModel(
 
     public IReadOnlyList<SchemaEventRow> SchemaEvents { get; private set; } = [];
 
+    public IReadOnlyList<SavedMappingRow> SavedTypedMappings { get; private set; } = [];
+
+    /// <summary>
+    /// Template keys belonging to the current tenant (API GUIDs plus schema-embedded ids such as form-001).
+    /// </summary>
+    public IReadOnlySet<string> AllowedTemplateKeys { get; private set; } =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
     public IReadOnlyList<string> ClrPropertyHints { get; private set; } = [];
 
     public IReadOnlyList<string> ValidationWarnings { get; private set; } = [];
 
     public string? CatalogueSource { get; private set; }
+
+    public bool IsEditingSchemaEvent => !string.IsNullOrWhiteSpace(SelectedSchemaEventType);
 
     [BindProperty(SupportsGet = true)]
     public string? SelectedTemplateId { get; set; }
@@ -101,8 +112,9 @@ public sealed class EventMappingsModel(
         }
 
         await LoadPageDataAsync(cancellationToken);
+        await LoadSavedTypedMappingsAsync(cancellationToken);
         await LoadSelectedMappingAsync(cancellationToken);
-        LoadSelectedSchemaDefinition();
+        await LoadSelectedSchemaDefinitionAsync(cancellationToken);
         return Page();
     }
 
@@ -117,18 +129,26 @@ public sealed class EventMappingsModel(
             HasError = true;
             ErrorMessage = error;
             await LoadPageDataAsync(cancellationToken);
-            LoadSelectedSchemaDefinition();
+            await LoadSavedTypedMappingsAsync(cancellationToken);
+            await LoadSelectedSchemaDefinitionAsync(cancellationToken);
             return Page();
         }
 
         await LoadPageDataAsync(cancellationToken);
-        LoadSelectedSchemaDefinition();
+        await LoadSavedTypedMappingsAsync(cancellationToken);
+        await LoadSelectedSchemaDefinitionAsync(cancellationToken);
 
         SelectedTemplateId = SelectedTemplateId?.Trim();
         SelectedEventType = SelectedEventType?.Trim();
 
         if (string.IsNullOrWhiteSpace(SelectedTemplateId))
             ModelState.AddModelError(nameof(SelectedTemplateId), "Select a template.");
+        else if (!await IsTemplateAllowedForCurrentTenantAsync(SelectedTemplateId, cancellationToken))
+        {
+            ModelState.AddModelError(
+                nameof(SelectedTemplateId),
+                "Select a template that belongs to this tenant.");
+        }
 
         if (string.IsNullOrWhiteSpace(SelectedEventType))
             ModelState.AddModelError(nameof(SelectedEventType), "Select an event type.");
@@ -191,18 +211,25 @@ public sealed class EventMappingsModel(
         try
         {
             var root = await LoadCategoryRootAsync(CategoryEventMappings, cancellationToken);
-            var templateNode = root[SelectedTemplateId!] as JsonObject ?? new JsonObject();
-            root[SelectedTemplateId!] = templateNode;
+            var mappingJson = JsonSerializer.Serialize(mapping, JsonReadOptions);
+            var templateKeys = await ResolveTemplateMappingKeysAsync(SelectedTemplateId!, cancellationToken);
 
-            var mappingNode = JsonNode.Parse(JsonSerializer.Serialize(mapping, JsonReadOptions))
-                ?? throw new InvalidOperationException("Failed to serialise mapping.");
-            templateNode[SelectedEventType!] = mappingNode;
+            foreach (var templateKey in templateKeys)
+            {
+                var templateNode = root[templateKey] as JsonObject ?? new JsonObject();
+                root[templateKey] = templateNode;
+
+                var mappingNode = JsonNode.Parse(mappingJson)
+                    ?? throw new InvalidOperationException("Failed to serialise mapping.");
+                templateNode[SelectedEventType!] = mappingNode;
+            }
 
             await UpsertCategoryAsync(CategoryEventMappings, root, cancellationToken);
             await RefreshCachesAsync(cancellationToken);
 
+            var keysLabel = string.Join(", ", templateKeys);
             TempData["EventMappingsSuccess"] =
-                $"Saved mapping for template {SelectedTemplateId} / {SelectedEventType}.";
+                $"Saved mapping for template key(s) [{keysLabel}] / {SelectedEventType}.";
             return RedirectToPage(new { SelectedTemplateId, SelectedEventType, SelectedSchemaEventType });
         }
         catch (Exception ex)
@@ -224,11 +251,13 @@ public sealed class EventMappingsModel(
             HasError = true;
             ErrorMessage = error;
             await LoadPageDataAsync(cancellationToken);
+            await LoadSavedTypedMappingsAsync(cancellationToken);
             await LoadSelectedMappingAsync(cancellationToken);
             return Page();
         }
 
         await LoadPageDataAsync(cancellationToken);
+        await LoadSavedTypedMappingsAsync(cancellationToken);
         await LoadSelectedMappingAsync(cancellationToken);
 
         var schemaKey = (NewSchemaEventType ?? SelectedSchemaEventType)?.Trim();
@@ -388,12 +417,15 @@ public sealed class EventMappingsModel(
         try
         {
             var templates = await templatesClient.GetAccessibleTemplatesAsync(cancellationToken) ?? [];
+            var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
             TemplateOptions = templates
                 .Where(t => t.TemplateId != Guid.Empty)
                 .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
                 .Select(t =>
                 {
                     var id = t.TemplateId.ToString();
+                    allowed.Add(id);
                     var label = string.IsNullOrWhiteSpace(t.Name) ? id : $"{t.Name} ({id})";
                     return new SelectListItem(
                         label,
@@ -401,12 +433,207 @@ public sealed class EventMappingsModel(
                         string.Equals(id, SelectedTemplateId, StringComparison.OrdinalIgnoreCase));
                 })
                 .ToList();
+
+            // Include schema-embedded template ids (e.g. form-001) for this tenant only.
+            foreach (var template in templates.Where(t => t.TemplateId != Guid.Empty))
+            {
+                foreach (var key in await ResolveTemplateMappingKeysAsync(
+                             template.TemplateId.ToString(),
+                             cancellationToken))
+                {
+                    allowed.Add(key);
+                }
+            }
+
+            AllowedTemplateKeys = allowed;
         }
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Could not load templates for EventMappings editor");
             TemplateOptions = [];
+            AllowedTemplateKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         }
+    }
+
+    private async Task<bool> IsTemplateAllowedForCurrentTenantAsync(
+        string templateId,
+        CancellationToken cancellationToken)
+    {
+        if (AllowedTemplateKeys.Count == 0)
+            await LoadTemplateOptionsAsync(cancellationToken);
+
+        return AllowedTemplateKeys.Contains(templateId);
+    }
+
+    /// <summary>
+    /// Returns TenantConfig keys to write the mapping under: the selected key plus the
+    /// schema-embedded <c>templateId</c> (e.g. form-001) when the selection is an API GUID.
+    /// Submissions look up by the schema TemplateId, so both must exist for SaaS.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> ResolveTemplateMappingKeysAsync(
+        string selectedTemplateId,
+        CancellationToken cancellationToken)
+    {
+        var keys = new List<string> { selectedTemplateId };
+
+        if (!Guid.TryParse(selectedTemplateId, out var templateGuid))
+            return keys;
+
+        try
+        {
+            var schema = await templatesClient.GetLatestTemplateSchemaAsync(templateGuid, cancellationToken);
+            if (string.IsNullOrWhiteSpace(schema?.JsonSchema))
+                return keys;
+
+            // JsonSchema may be raw JSON or base64-encoded JSON depending on store.
+            var schemaText = schema.JsonSchema.Trim();
+            if (!schemaText.StartsWith('{') && !schemaText.StartsWith('['))
+            {
+                try
+                {
+                    schemaText = Encoding.UTF8.GetString(Convert.FromBase64String(schemaText));
+                }
+                catch (FormatException)
+                {
+                    return keys;
+                }
+            }
+
+            using var doc = JsonDocument.Parse(schemaText);
+            if (doc.RootElement.TryGetProperty("templateId", out var embeddedId)
+                && embeddedId.ValueKind == JsonValueKind.String
+                && !string.IsNullOrWhiteSpace(embeddedId.GetString()))
+            {
+                var schemaTemplateId = embeddedId.GetString()!.Trim();
+                if (!keys.Contains(schemaTemplateId, StringComparer.OrdinalIgnoreCase))
+                    keys.Add(schemaTemplateId);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(
+                ex,
+                "Could not resolve schema templateId alias for EventMappings key {TemplateId}",
+                selectedTemplateId);
+        }
+
+        return keys;
+    }
+
+    private async Task LoadSavedTypedMappingsAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var root = await LoadCategoryRootAsync(CategoryEventMappings, cancellationToken);
+            var schemaNames = SchemaEvents
+                .Select(s => s.MessageType)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var rows = new List<SavedMappingRow>();
+            foreach (var templateProperty in root)
+            {
+                if (string.Equals(templateProperty.Key, "BasePath", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (templateProperty.Value is not JsonObject templateNode)
+                    continue;
+
+                foreach (var eventProperty in templateNode)
+                {
+                    if (eventProperty.Value is not JsonObject mappingNode)
+                        continue;
+
+                    var eventType = eventProperty.Key;
+                    if (schemaNames.Contains(eventType))
+                        continue;
+
+                    var mappingId = mappingNode["mappingId"]?.GetValue<string>()
+                        ?? mappingNode["MappingId"]?.GetValue<string>()
+                        ?? "—";
+                    var description = mappingNode["description"]?.GetValue<string>()
+                        ?? mappingNode["Description"]?.GetValue<string>();
+
+                    rows.Add(new SavedMappingRow(
+                        templateProperty.Key,
+                        eventType,
+                        mappingId,
+                        description));
+                }
+            }
+
+            SavedTypedMappings = rows
+                .Where(r => AllowedTemplateKeys.Count == 0 || AllowedTemplateKeys.Contains(r.TemplateId))
+                .GroupBy(
+                    r => $"{r.TemplateId}|{r.EventType}",
+                    StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First())
+                .OrderBy(r => r.EventType, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(r => r.TemplateId, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not load saved typed EventMappings");
+            SavedTypedMappings = [];
+        }
+    }
+
+    private async Task LoadSelectedSchemaDefinitionAsync(CancellationToken cancellationToken)
+    {
+        var key = SelectedSchemaEventType?.Trim();
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            if (string.IsNullOrWhiteSpace(SchemaDefinitionJson))
+                SchemaDefinitionJson = GetEmptySchemaTemplate();
+            return;
+        }
+
+        // Replace editor contents with the saved definition (edit = replace).
+        NewSchemaEventType = key;
+        SelectedSchemaEventType = key;
+
+        try
+        {
+            var root = await LoadCategoryRootAsync(CategorySchemaEvents, cancellationToken);
+            JsonNode? definitionNode = null;
+            foreach (var property in root)
+            {
+                if (string.Equals(property.Key, key, StringComparison.OrdinalIgnoreCase))
+                {
+                    definitionNode = property.Value;
+                    NewSchemaEventType = property.Key;
+                    SelectedSchemaEventType = property.Key;
+                    break;
+                }
+            }
+
+            if (definitionNode is not null)
+            {
+                SchemaDefinitionJson = definitionNode.ToJsonString(JsonWriteOptions);
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not load SchemaEvents definition for {SchemaKey}", key);
+        }
+
+        // Provider fallback (request-scoped overlay).
+        var def = schemaEventDefinitionProvider.GetDefinition(key);
+        if (def is not null)
+        {
+            SchemaDefinitionJson = JsonSerializer.Serialize(new
+            {
+                topicName = def.TopicName,
+                version = def.Version,
+                description = def.Description,
+                jsonSchema = def.JsonSchema
+                    ?? new Dictionary<string, object?> { ["type"] = "object", ["properties"] = new { } }
+            }, JsonWriteOptions);
+            return;
+        }
+
+        SchemaDefinitionJson = GetEmptySchemaTemplate();
     }
 
     private async Task LoadSelectedMappingAsync(CancellationToken cancellationToken)
@@ -420,11 +647,26 @@ public sealed class EventMappingsModel(
         try
         {
             var root = await LoadCategoryRootAsync(CategoryEventMappings, cancellationToken);
-            if (root[SelectedTemplateId] is JsonObject template
-                && template[SelectedEventType] is JsonNode mappingNode)
+            var lookupKeys = await ResolveTemplateMappingKeysAsync(SelectedTemplateId, cancellationToken);
+            foreach (var key in lookupKeys)
             {
-                MappingJson = mappingNode.ToJsonString(JsonWriteOptions);
-                return;
+                if (root[key] is JsonObject template
+                    && template[SelectedEventType] is JsonNode mappingNode)
+                {
+                    MappingJson = mappingNode.ToJsonString(JsonWriteOptions);
+                    return;
+                }
+            }
+
+            // Fall back: any template key that already has this event mapping.
+            foreach (var property in root)
+            {
+                if (property.Value is JsonObject template
+                    && template[SelectedEventType] is JsonNode mappingNode)
+                {
+                    MappingJson = mappingNode.ToJsonString(JsonWriteOptions);
+                    return;
+                }
             }
         }
         catch (Exception ex)
@@ -433,31 +675,6 @@ public sealed class EventMappingsModel(
         }
 
         MappingJson = GetEmptyMappingTemplate(SelectedEventType);
-    }
-
-    private void LoadSelectedSchemaDefinition()
-    {
-        var key = SelectedSchemaEventType ?? SelectedEventType;
-        if (string.IsNullOrWhiteSpace(key))
-        {
-            SchemaDefinitionJson = GetEmptySchemaTemplate();
-            return;
-        }
-
-        var def = schemaEventDefinitionProvider.GetDefinition(key);
-        if (def is null)
-        {
-            SchemaDefinitionJson = GetEmptySchemaTemplate();
-            return;
-        }
-
-        SchemaDefinitionJson = JsonSerializer.Serialize(new
-        {
-            topicName = def.TopicName,
-            version = def.Version,
-            description = def.Description,
-            jsonSchema = def.JsonSchema ?? new Dictionary<string, object?> { ["type"] = "object", ["properties"] = new { } }
-        }, JsonWriteOptions);
     }
 
     private async Task<JsonObject> LoadCategoryRootAsync(string category, CancellationToken cancellationToken)
@@ -602,5 +819,11 @@ public sealed class EventMappingsModel(
         string MessageType,
         string TopicName,
         string Version,
+        string? Description);
+
+    public sealed record SavedMappingRow(
+        string TemplateId,
+        string EventType,
+        string MappingId,
         string? Description);
 }

@@ -53,19 +53,31 @@
         }
 
         <h1 class="govuk-heading-xl">Event mappings</h1>
-        <p class="govuk-body">
-            Map form fields to platform typed events or tenant schema events for
-            <strong>@(string.IsNullOrWhiteSpace(Model.TenantName) ? Model.TenantId.ToString() : Model.TenantName)</strong>.
+        <p class="govuk-body-l">
+            Configure how form submissions publish to Service Bus for
+            <strong>@(string.IsNullOrWhiteSpace(Model.TenantName) ? Model.TenantId.ToString() : Model.TenantName)</strong>
+            only.
         </p>
+        <div class="govuk-inset-text">
+            All schema events and field mappings on this page are stored in this tenant’s TenantConfig.
+            Templates listed below are this tenant’s catalogue only.
+            Platform typed event contracts are shared; your mappings to them are tenant-specific.
+        </div>
+        <ul class="govuk-list govuk-list--bullet">
+            <li><strong>Typed events</strong> — platform contracts from CoreLibs (catalogue below).</li>
+            <li><strong>Schema events</strong> — tenant-defined shapes before a CoreLibs model exists.</li>
+        </ul>
 
-        <div class="govuk-summary-card govuk-!-margin-bottom-6">
-            <div class="govuk-summary-card__title-wrapper">
-                <h2 class="govuk-summary-card__title">Platform event catalogue</h2>
-            </div>
-            <div class="govuk-summary-card__content">
+        <details class="govuk-details govuk-!-margin-bottom-6" data-module="govuk-details">
+            <summary class="govuk-details__summary">
+                <span class="govuk-details__summary-text">
+                    Platform typed-event catalogue (@Model.Catalogue.Count) — source: @(Model.CatalogueSource ?? "unknown")
+                </span>
+            </summary>
+            <div class="govuk-details__text">
                 <p class="govuk-body">
-                    Source: <strong>@(Model.CatalogueSource ?? "unknown")</strong>.
-                    Tenants may only publish typed events that appear here.
+                    Shared CoreLibs contracts available to map against.
+                    Saving a mapping stores it for <strong>this tenant only</strong>.
                 </p>
                 @if (Model.Catalogue.Count == 0)
                 {
@@ -88,9 +100,11 @@
                         {
                             <tr class="govuk-table__row">
                                 <td class="govuk-table__cell"><code>@row.EventTypeName</code></td>
-                                <td class="govuk-table__cell">@row.Kind</td>
+                                <td class="govuk-table__cell">
+                                    <strong class="govuk-tag govuk-tag--blue">@row.Kind</strong>
+                                </td>
                                 <td class="govuk-table__cell"><code>@row.TopicName</code></td>
-                                <td class="govuk-table__cell">@row.Version</td>
+                                <td class="govuk-table__cell"><code class="govuk-!-font-size-14">@row.Version</code></td>
                                 <td class="govuk-table__cell">@(row.Description ?? "—")</td>
                             </tr>
                         }
@@ -98,72 +112,117 @@
                     </table>
                 }
             </div>
-        </div>
+        </details>
 
-        <div class="govuk-summary-card govuk-!-margin-bottom-6">
-            <div class="govuk-summary-card__title-wrapper">
-                <h2 class="govuk-summary-card__title">Schema events (Phase 3)</h2>
-            </div>
-            <div class="govuk-summary-card__content">
-                <p class="govuk-body">
-                    Define tenant-specific message shapes that are not yet in CoreLibs.
-                    Publish with <code>ApplicationSubmission:PublishEvent:Events</code> entry
-                    <code>EventKind: Schema</code>.
-                </p>
+        <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible">
 
-                @if (Model.SchemaEvents.Count > 0)
+        <h2 class="govuk-heading-l" id="schema-events">Schema events</h2>
+        <p class="govuk-body">
+            Tenant-specific message shapes for this organisation (not shared with other tenants).
+            Publish with <code>EventKind: Schema</code> in <code>ApplicationSubmission:PublishEvent:Events</code>.
+        </p>
+
+        @if (Model.SchemaEvents.Count == 0)
+        {
+            <p class="govuk-body">No schema events saved yet.</p>
+        }
+        else
+        {
+            <table class="govuk-table">
+                <caption class="govuk-table__caption govuk-table__caption--m">Saved schema events</caption>
+                <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                        <th scope="col" class="govuk-table__header">Message type</th>
+                        <th scope="col" class="govuk-table__header">Topic</th>
+                        <th scope="col" class="govuk-table__header">Version</th>
+                        <th scope="col" class="govuk-table__header">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                @foreach (var row in Model.SchemaEvents)
                 {
-                    <table class="govuk-table">
-                        <thead class="govuk-table__head">
-                            <tr class="govuk-table__row">
-                                <th scope="col" class="govuk-table__header">Message type</th>
-                                <th scope="col" class="govuk-table__header">Topic</th>
-                                <th scope="col" class="govuk-table__header">Version</th>
-                            </tr>
-                        </thead>
-                        <tbody class="govuk-table__body">
-                        @foreach (var row in Model.SchemaEvents)
-                        {
-                            <tr class="govuk-table__row">
-                                <td class="govuk-table__cell">
-                                    <a asp-page="/Admin/EventMappings"
-                                       asp-route-SelectedSchemaEventType="@row.MessageType"
-                                       asp-route-SelectedEventType="@row.MessageType"
-                                       asp-route-SelectedTemplateId="@Model.SelectedTemplateId">@row.MessageType</a>
-                                </td>
-                                <td class="govuk-table__cell"><code>@row.TopicName</code></td>
-                                <td class="govuk-table__cell">@row.Version</td>
-                            </tr>
-                        }
-                        </tbody>
-                    </table>
+                    var isSelected = string.Equals(row.MessageType, Model.SelectedSchemaEventType, StringComparison.OrdinalIgnoreCase);
+                    <tr class="govuk-table__row">
+                        <td class="govuk-table__cell">
+                            <code>@row.MessageType</code>
+                            @if (isSelected)
+                            {
+                                <strong class="govuk-tag govuk-tag--green govuk-!-margin-left-1">Editing</strong>
+                            }
+                        </td>
+                        <td class="govuk-table__cell"><code>@row.TopicName</code></td>
+                        <td class="govuk-table__cell">@row.Version</td>
+                        <td class="govuk-table__cell">
+                            <a class="govuk-link"
+                               asp-page="/Admin/EventMappings"
+                               asp-fragment="schema-editor"
+                               asp-route-SelectedSchemaEventType="@row.MessageType"
+                               asp-route-SelectedTemplateId="@Model.SelectedTemplateId">
+                                Edit definition
+                            </a>
+                        </td>
+                    </tr>
                 }
+                </tbody>
+            </table>
+        }
 
-                <form method="post" asp-page="/Admin/EventMappings" asp-page-handler="SaveSchema">
-                    <div class="govuk-form-group">
-                        <label class="govuk-label" asp-for="NewSchemaEventType">Schema event type name</label>
-                        <div class="govuk-hint">Must not collide with a platform typed event name</div>
-                        <input class="govuk-input govuk-!-width-one-half" asp-for="NewSchemaEventType"
-                               value="@(Model.NewSchemaEventType ?? Model.SelectedSchemaEventType)" autocomplete="off" />
-                    </div>
-                    <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.SchemaDefinitionJson)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
-                        <label class="govuk-label" asp-for="SchemaDefinitionJson">Schema definition JSON</label>
-                        <textarea class="govuk-textarea govuk-!-font-size-16" asp-for="SchemaDefinitionJson" rows="12" spellcheck="false"></textarea>
-                    </div>
-                    <input type="hidden" asp-for="SelectedTemplateId" />
-                    <input type="hidden" asp-for="SelectedEventType" />
-                    <input type="hidden" asp-for="SelectedSchemaEventType" />
-                    <button type="submit" class="govuk-button govuk-button--secondary" data-module="govuk-button">Save schema event</button>
-                </form>
-            </div>
+        <div class="govuk-inset-text" id="schema-editor">
+            @if (Model.IsEditingSchemaEvent)
+            {
+                <p class="govuk-body">
+                    Editing <code>@Model.SelectedSchemaEventType</code>.
+                    Saving replaces the stored definition.
+                    <a class="govuk-link" asp-page="/Admin/EventMappings" asp-fragment="schema-editor" asp-route-SelectedTemplateId="@Model.SelectedTemplateId">Clear and create new</a>
+                </p>
+            }
+            else
+            {
+                <p class="govuk-body">Create a new schema event, or choose <strong>Edit definition</strong> above to replace an existing one.</p>
+            }
         </div>
 
-        <form method="get" class="govuk-!-margin-bottom-6">
+        <form method="post" asp-page="/Admin/EventMappings" asp-page-handler="SaveSchema" class="govuk-!-margin-bottom-8">
+            <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.NewSchemaEventType)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                <label class="govuk-label" asp-for="NewSchemaEventType">Schema event type name</label>
+                <div class="govuk-hint">Must not collide with a platform typed event name</div>
+                @if (ViewData.ModelState[nameof(Model.NewSchemaEventType)]?.Errors.FirstOrDefault() is { } nameError)
+                {
+                    <p class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @nameError.ErrorMessage</p>
+                }
+                <input class="govuk-input govuk-!-width-two-thirds" asp-for="NewSchemaEventType" autocomplete="off" />
+            </div>
+            <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.SchemaDefinitionJson)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                <label class="govuk-label" asp-for="SchemaDefinitionJson">Schema definition JSON</label>
+                <div class="govuk-hint">Includes topicName, version, description, and jsonSchema</div>
+                @if (ViewData.ModelState[nameof(Model.SchemaDefinitionJson)]?.Errors.FirstOrDefault() is { } schemaError)
+                {
+                    <p class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @schemaError.ErrorMessage</p>
+                }
+                <textarea class="govuk-textarea govuk-!-font-size-16" asp-for="SchemaDefinitionJson" rows="14" spellcheck="false"></textarea>
+            </div>
+            <input type="hidden" asp-for="SelectedTemplateId" />
+            <input type="hidden" asp-for="SelectedEventType" />
+            <input type="hidden" asp-for="SelectedSchemaEventType" />
+            <button type="submit" class="govuk-button" data-module="govuk-button">
+                @(Model.IsEditingSchemaEvent ? "Replace schema event" : "Save schema event")
+            </button>
+        </form>
+
+        <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible">
+
+        <h2 class="govuk-heading-l" id="field-mappings">Field mappings</h2>
+        <p class="govuk-body">
+            Map this tenant’s form fields to a typed or schema event.
+            Saves to this tenant’s TenantConfig only (API GUID and schema <code>templateId</code> when they differ).
+        </p>
+
+        <form method="get" asp-page="/Admin/EventMappings" class="govuk-!-margin-bottom-4" asp-fragment="mapping-editor">
             <div class="govuk-grid-row">
                 <div class="govuk-grid-column-one-half">
                     <div class="govuk-form-group">
                         <label class="govuk-label" for="SelectedTemplateId">Template ID</label>
-                        <div class="govuk-hint">GUID of the form template, or a legacy id such as form-001</div>
+                        <div class="govuk-hint">Catalogue GUID preferred; schema templateId (for example form-001) also works</div>
                         <input class="govuk-input" list="template-options" name="SelectedTemplateId" id="SelectedTemplateId"
                                value="@Model.SelectedTemplateId" autocomplete="off" />
                         <datalist id="template-options">
@@ -183,60 +242,112 @@
                     </div>
                 </div>
             </div>
+            @if (!string.IsNullOrWhiteSpace(Model.SelectedSchemaEventType))
+            {
+                <input type="hidden" name="SelectedSchemaEventType" value="@Model.SelectedSchemaEventType" />
+            }
             <button type="submit" class="govuk-button govuk-button--secondary" data-module="govuk-button">Load mapping</button>
         </form>
 
         @if (!string.IsNullOrWhiteSpace(Model.SelectedTemplateId) && !string.IsNullOrWhiteSpace(Model.SelectedEventType))
         {
-            if (Model.ValidationWarnings.Count > 0)
-            {
-                <div class="govuk-warning-text">
-                    <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
-                    <strong class="govuk-warning-text__text">
-                        <span class="govuk-visually-hidden">Warning</span>
-                        Some mapping properties do not match the catalogue schema:
-                        @string.Join(" ", Model.ValidationWarnings)
-                    </strong>
-                </div>
-            }
-
-            @if (Model.ClrPropertyHints.Count > 0)
-            {
-                <details class="govuk-details" data-module="govuk-details">
-                    <summary class="govuk-details__summary">
-                        <span class="govuk-details__summary-text">Expected properties on @Model.SelectedEventType</span>
-                    </summary>
-                    <div class="govuk-details__text">
-                        <ul class="govuk-list govuk-list--bullet">
-                            @foreach (var prop in Model.ClrPropertyHints)
-                            {
-                                <li><code>@prop</code></li>
-                            }
-                        </ul>
+            <div id="mapping-editor">
+                @if (Model.ValidationWarnings.Count > 0)
+                {
+                    <div class="govuk-warning-text">
+                        <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+                        <strong class="govuk-warning-text__text">
+                            <span class="govuk-visually-hidden">Warning</span>
+                            Some mapping properties do not match the catalogue schema:
+                            @string.Join(" ", Model.ValidationWarnings)
+                        </strong>
                     </div>
-                </details>
-            }
+                }
 
-            <form method="post" asp-page="/Admin/EventMappings" asp-page-handler="SaveMapping">
-                <input type="hidden" asp-for="SelectedTemplateId" />
-                <input type="hidden" asp-for="SelectedEventType" />
-                <input type="hidden" asp-for="SelectedSchemaEventType" />
+                @if (Model.ClrPropertyHints.Count > 0)
+                {
+                    <details class="govuk-details" data-module="govuk-details">
+                        <summary class="govuk-details__summary">
+                            <span class="govuk-details__summary-text">Expected properties on @Model.SelectedEventType</span>
+                        </summary>
+                        <div class="govuk-details__text">
+                            <ul class="govuk-list govuk-list--bullet">
+                                @foreach (var prop in Model.ClrPropertyHints)
+                                {
+                                    <li><code>@prop</code></li>
+                                }
+                            </ul>
+                        </div>
+                    </details>
+                }
 
-                <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.MappingJson)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
-                    <label class="govuk-label" asp-for="MappingJson">Mapping JSON</label>
-                    <div class="govuk-hint">
-                        Saved under EventMappings:@Model.SelectedTemplateId:@Model.SelectedEventType.
-                        For schema events, also set EventKind=Schema in ApplicationSubmission.
+                <form method="post" asp-page="/Admin/EventMappings" asp-page-handler="SaveMapping">
+                    <input type="hidden" asp-for="SelectedTemplateId" />
+                    <input type="hidden" asp-for="SelectedEventType" />
+                    <input type="hidden" asp-for="SelectedSchemaEventType" />
+
+                    <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.MappingJson)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                        <label class="govuk-label" asp-for="MappingJson">
+                            Mapping JSON — <code>@Model.SelectedTemplateId</code> / <code>@Model.SelectedEventType</code>
+                        </label>
+                        <div class="govuk-hint">
+                            For schema events, also set <code>EventKind: Schema</code> in ApplicationSubmission.
+                        </div>
+                        @if (ViewData.ModelState[nameof(Model.MappingJson)]?.Errors.FirstOrDefault() is { } jsonError)
+                        {
+                            <p class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @jsonError.ErrorMessage</p>
+                        }
+                        <textarea class="govuk-textarea govuk-!-font-size-16" asp-for="MappingJson" id="MappingJson" rows="20" spellcheck="false"></textarea>
                     </div>
-                    @if (ViewData.ModelState[nameof(Model.MappingJson)]?.Errors.FirstOrDefault() is { } jsonError)
-                    {
-                        <p class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @jsonError.ErrorMessage</p>
-                    }
-                    <textarea class="govuk-textarea govuk-!-font-size-16" asp-for="MappingJson" id="MappingJson" rows="24" spellcheck="false"></textarea>
-                </div>
 
-                <button type="submit" class="govuk-button" data-module="govuk-button">Save mapping</button>
-            </form>
+                    <button type="submit" class="govuk-button" data-module="govuk-button">Save mapping</button>
+                </form>
+            </div>
+        }
+
+        <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible">
+
+        <h2 class="govuk-heading-l" id="saved-typed-mappings">Saved typed mappings</h2>
+        <p class="govuk-body">
+            Field mappings already stored for this tenant’s templates against platform typed events
+            (excluding schema event names).
+        </p>
+
+        @if (Model.SavedTypedMappings.Count == 0)
+        {
+            <p class="govuk-body">No typed mappings saved yet.</p>
+        }
+        else
+        {
+            <table class="govuk-table">
+                <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                        <th scope="col" class="govuk-table__header">Event type</th>
+                        <th scope="col" class="govuk-table__header">Template key</th>
+                        <th scope="col" class="govuk-table__header">Mapping ID</th>
+                        <th scope="col" class="govuk-table__header">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                @foreach (var row in Model.SavedTypedMappings)
+                {
+                    <tr class="govuk-table__row">
+                        <td class="govuk-table__cell"><code>@row.EventType</code></td>
+                        <td class="govuk-table__cell"><code class="govuk-!-font-size-14">@row.TemplateId</code></td>
+                        <td class="govuk-table__cell"><code>@row.MappingId</code></td>
+                        <td class="govuk-table__cell">
+                            <a class="govuk-link"
+                               asp-page="/Admin/EventMappings"
+                               asp-fragment="mapping-editor"
+                               asp-route-SelectedTemplateId="@row.TemplateId"
+                               asp-route-SelectedEventType="@row.EventType">
+                                Open mapping
+                            </a>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
         }
     </div>
 </div>

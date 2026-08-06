@@ -50,6 +50,8 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
 
         public bool IsFullAdmin => AdminAccessHelper.IsAdmin(User);
 
+        public bool IsSuperAdmin => AdminAccessHelper.IsSuperAdmin(User);
+
         public bool CanManageTemplates => AdminAccessHelper.CanManageTemplates(User);
 
         public bool CanManageUsers => AdminAccessHelper.CanManageUsers(User);
@@ -58,9 +60,20 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
 
         public bool CanManageOrganisationSettings => AdminAccessHelper.CanManageOrganisationSettings(User);
 
+        public bool CanManageEventMappings => AdminAccessHelper.CanManageEventMappings(User);
+
         public bool CanManageTenantSettings => AdminAccessHelper.CanManageTenantSettings(User);
 
         public bool CanViewTenantConfigurationSummary => AdminAccessHelper.CanViewTenantConfigurationSummary(User);
+
+        /// <summary>
+        /// Tenant Admin card: organisation settings, events, and (for SuperAdmin) own-tenant config tools.
+        /// </summary>
+        public bool CanAccessTenantAdminSection =>
+            CanManageOrganisationSettings
+            || CanManageEventMappings
+            || CanManageTenantSettings
+            || CanViewTenantConfigurationSummary;
 
         public TenantEffectiveConfigurationDto? TenantConfigurationSummary { get; private set; }
 

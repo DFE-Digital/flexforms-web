@@ -493,6 +493,8 @@ builder.Services.AddAuthorization(options =>
         policy.RequireAssertion(ctx => AdminAccessHelper.CanManageUsers(ctx.User)));
     options.AddPolicy(AdminAccessHelper.CanManageTenantSettingsPolicy, policy =>
         policy.RequireAssertion(ctx => AdminAccessHelper.CanManageTenantSettings(ctx.User)));
+    options.AddPolicy(AdminAccessHelper.CanManageEventMappingsPolicy, policy =>
+        policy.RequireAssertion(ctx => AdminAccessHelper.CanManageEventMappings(ctx.User)));
 });
 
 builder.Services.AddScoped<ICustomClaimProvider, PermissionsClaimProvider>();
