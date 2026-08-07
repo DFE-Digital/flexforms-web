@@ -40,8 +40,11 @@
                 @foreach (var (item, index) in items.Select((item, i) => (item, i)))
                 {
                     var memberNumber = index + 1;
+                    var expandedItem = DisplayHelpers.ExpandEncodedJson(item);
+                    var summaryColumns = flow.SummaryColumns ?? new List<GovUK.Dfe.FlexForms.Domain.Models.FlowSummaryColumn>();
+                    renderModel.EnsureItemFieldVisibility(item, summaryColumns.Select(c => c.Field));
                     var memberTitle = !string.IsNullOrEmpty(flow.ItemTitleBinding)
-                                    ? DisplayHelpers.InterpolateMessage($"{{{flow.ItemTitleBinding}}}", DisplayHelpers.ExpandEncodedJson(item))
+                                    ? DisplayHelpers.InterpolateMessage($"{{{flow.ItemTitleBinding}}}", expandedItem)
                                     : $"{itemLabel} {memberNumber}";
                     
                     @* Add separator header for each item (except first) *@
@@ -106,7 +109,7 @@
                     }
                     
                                           @* Item fields *@
-                     @foreach (var col in (flow.SummaryColumns ?? new List<GovUK.Dfe.FlexForms.Domain.Models.FlowSummaryColumn>()).Where(c => !renderModel.IsFieldHiddenForItem(c.Field, item)))
+                     @foreach (var col in summaryColumns.Where(c => !renderModel.IsFieldHiddenForItem(c.Field, item)))
                     {
                         var valueObj = item.TryGetValue(col.Field, out var v) ? v : null;
                         var value = valueObj is string sv ? sv :
@@ -290,8 +293,11 @@
             @foreach (var (item, index) in items.Select((item, i) => (item, i)))
             {
                 var memberNumber = index + 1;
+                var expandedItem = DisplayHelpers.ExpandEncodedJson(item);
+                var summaryColumns = flow.SummaryColumns ?? new List<GovUK.Dfe.FlexForms.Domain.Models.FlowSummaryColumn>();
+                renderModel.EnsureItemFieldVisibility(item, summaryColumns.Select(c => c.Field));
                 var memberTitle = !string.IsNullOrEmpty(flow.ItemTitleBinding)
-                                ? DisplayHelpers.InterpolateMessage($"{{{flow.ItemTitleBinding}}}", DisplayHelpers.ExpandEncodedJson(item))
+                                ? DisplayHelpers.InterpolateMessage($"{{{flow.ItemTitleBinding}}}", expandedItem)
                                 : $"{itemLabel} {memberNumber}";
                 
                 <div class="govuk-summary-card govuk-!-margin-bottom-6">
@@ -320,7 +326,7 @@
                     </div>
                                           <div class="govuk-summary-card__content">
                           <dl class="govuk-summary-list">
-                             @foreach (var col in (flow.SummaryColumns ?? new List<GovUK.Dfe.FlexForms.Domain.Models.FlowSummaryColumn>()).Where(c => !renderModel.IsFieldHiddenForItem(c.Field, item)))
+                             @foreach (var col in summaryColumns.Where(c => !renderModel.IsFieldHiddenForItem(c.Field, item)))
                             {
                                 var valueObj = item.TryGetValue(col.Field, out var v) ? v : null;
                                 var value = valueObj is string sv ? sv :

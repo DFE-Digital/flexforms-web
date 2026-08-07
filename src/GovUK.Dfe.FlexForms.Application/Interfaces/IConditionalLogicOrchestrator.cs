@@ -19,6 +19,19 @@ public interface IConditionalLogicOrchestrator
         ConditionalLogicContext? context = null);
 
     /// <summary>
+    /// Evaluates show/hide visibility for fields only — skips full template page/field initialization.
+    /// Used for collection-item summary columns where a full ApplyConditionalLogicAsync per item is too expensive.
+    /// </summary>
+    /// <param name="fieldIds">
+    /// Fields to resolve. When null, all fields with show/hide rules are evaluated.
+    /// </param>
+    Task<FormConditionalState> ApplyFieldVisibilityAsync(
+        FormTemplate template,
+        Dictionary<string, object> formData,
+        IReadOnlyCollection<string>? fieldIds = null,
+        ConditionalLogicContext? context = null);
+
+    /// <summary>
     /// Evaluates conditional logic for a specific field change
     /// </summary>
     /// <param name="template">The form template containing conditional logic rules</param>

@@ -493,6 +493,8 @@ builder.Services.AddAuthorization(options =>
         policy.RequireAssertion(ctx => AdminAccessHelper.CanManageUsers(ctx.User)));
     options.AddPolicy(AdminAccessHelper.CanManageTenantSettingsPolicy, policy =>
         policy.RequireAssertion(ctx => AdminAccessHelper.CanManageTenantSettings(ctx.User)));
+    options.AddPolicy(AdminAccessHelper.CanManageEventMappingsPolicy, policy =>
+        policy.RequireAssertion(ctx => AdminAccessHelper.CanManageEventMappings(ctx.User)));
 });
 
 builder.Services.AddScoped<ICustomClaimProvider, PermissionsClaimProvider>();
@@ -501,6 +503,11 @@ builder.Services.AddTokenRefreshWithOidc(configuration, "DfESignIn", "TokenRefre
 
 // Add HttpClient for API calls
 builder.Services.AddHttpClient();
+builder.Services.AddTransient<CorrelationIdForwardingHandler>();
+builder.Services.ConfigureHttpClientDefaults(http =>
+{
+    http.AddHttpMessageHandler<CorrelationIdForwardingHandler>();
+});
 
 builder.Services.AddTenantAwarePlatformServices(configuration);
 
@@ -655,6 +662,7 @@ AppDomain.CurrentDomain.UnhandledException += (sender, args) =>
 var app = builder.Build();
 
 app.UseForwardedHeaders();
+app.UseMiddleware<CorrelationIdMiddleware>();
 app.UsePlatformTenantConfiguration();
 
 // Configure the HTTP request pipeline.
