@@ -53,12 +53,20 @@ public sealed class EventMappingsModel(
     private static readonly JsonSerializerOptions JsonWriteOptions = new()
     {
         PropertyNameCaseInsensitive = true,
-        WriteIndented = true
+        WriteIndented = true,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
     };
 
     private static readonly JsonSerializerOptions JsonReadOptions = new()
     {
         PropertyNameCaseInsensitive = true
+    };
+
+    /// <summary>Used when persisting mappings so null optional properties do not break API config flatten/round-trip.</summary>
+    private static readonly JsonSerializerOptions JsonPersistOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
     };
 
     public Guid TenantId { get; private set; }
@@ -99,6 +107,35 @@ public sealed class EventMappingsModel(
     public IReadOnlyList<string> ClrPropertyHints { get; private set; } = [];
 
     public IReadOnlyList<string> ValidationWarnings { get; private set; } = [];
+
+    /// <summary>
+    /// Platform Metadata keys (mirrors API PlatformEventMetadataKeys) for Admin guidance.
+    /// </summary>
+    public IReadOnlyList<MetadataKeyHint> FileUploadedMetadataHints { get; } =
+    [
+        new("applicationId", "Application id (GUID)"),
+        new("applicationReference", "Human-readable application reference"),
+        new("fileId", "Uploaded file id (GUID)"),
+        new("fileName", "Stored / hashed file name"),
+        new("originalFileName", "Original file name as uploaded"),
+        new("filePath", "Storage path (without SAS)"),
+        new("fileUri", "Read URI including short-lived SAS (or local file:// in development)"),
+        new("fileHash", "Content hash used for scanning"),
+        new("fileSize", "File size in bytes"),
+        new("uploaderUserId", "User id of the uploader"),
+        new("uploaderEmail", "Email of the uploader when known"),
+        new("uploadedOn", "UTC timestamp when the file was uploaded")
+    ];
+
+    public IReadOnlyList<MetadataKeyHint> ApplicationSubmittedMetadataHints { get; } =
+    [
+        new("applicationId", "Application id (GUID)"),
+        new("applicationReference", "Human-readable application reference"),
+        new("submittedByUserId", "User id of the submitter"),
+        new("submittedByEmail", "Email of the submitter"),
+        new("submittedByFullName", "Full name of the submitter"),
+        new("submittedOn", "UTC timestamp when the application was submitted")
+    ];
 
     public string? CatalogueSource { get; private set; }
 
@@ -401,7 +438,7 @@ public sealed class EventMappingsModel(
         try
         {
             var root = await LoadCategoryRootAsync(CategoryEventMappings, cancellationToken);
-            var mappingJson = JsonSerializer.Serialize(mapping, JsonReadOptions);
+            var mappingJson = JsonSerializer.Serialize(mapping, JsonPersistOptions);
             var templateKeys = await ResolveTemplateMappingKeysAsync(SelectedTemplateId!, cancellationToken);
 
             foreach (var templateKey in templateKeys)
@@ -1098,4 +1135,6 @@ public sealed class EventMappingsModel(
         string EventKind,
         string EventType,
         string MappingId);
+
+    public sealed record MetadataKeyHint(string Key, string Description);
 }

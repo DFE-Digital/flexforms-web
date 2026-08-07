@@ -217,6 +217,83 @@
             Saves to this tenant’s TenantConfig only (API GUID and schema <code>templateId</code> when they differ).
         </p>
 
+        <details class="govuk-details govuk-!-margin-bottom-6" data-module="govuk-details" id="platform-metadata-tip">
+            <summary class="govuk-details__summary">
+                <span class="govuk-details__summary-text">
+                    Tip: predefined platform fields you can use in mappings
+                </span>
+            </summary>
+            <div class="govuk-details__text">
+                <p class="govuk-body">
+                    In mapping JSON you can pull values from:
+                </p>
+                <ul class="govuk-list govuk-list--bullet">
+                    <li>
+                        <strong>Form answers</strong> —
+                        <code>sourceType: "DirectField"</code> with <code>sourceFieldId</code> set to a template field id
+                        (for example <code>schoolName</code>).
+                    </li>
+                    <li>
+                        <strong>Platform metadata</strong> —
+                        <code>sourceType: "Metadata"</code> with <code>sourceFieldId</code> set to one of the keys below.
+                        Only keys you map are included in the published event.
+                    </li>
+                </ul>
+
+                <h3 class="govuk-heading-s">Available when trigger is FileUploaded</h3>
+                <table class="govuk-table">
+                    <thead class="govuk-table__head">
+                        <tr class="govuk-table__row">
+                            <th scope="col" class="govuk-table__header">sourceFieldId</th>
+                            <th scope="col" class="govuk-table__header">Description</th>
+                        </tr>
+                    </thead>
+                    <tbody class="govuk-table__body">
+                    @foreach (var hint in Model.FileUploadedMetadataHints)
+                    {
+                        <tr class="govuk-table__row">
+                            <td class="govuk-table__cell"><code>@hint.Key</code></td>
+                            <td class="govuk-table__cell">@hint.Description</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+
+                <h3 class="govuk-heading-s">Available when trigger is ApplicationSubmitted</h3>
+                <table class="govuk-table">
+                    <thead class="govuk-table__head">
+                        <tr class="govuk-table__row">
+                            <th scope="col" class="govuk-table__header">sourceFieldId</th>
+                            <th scope="col" class="govuk-table__header">Description</th>
+                        </tr>
+                    </thead>
+                    <tbody class="govuk-table__body">
+                    @foreach (var hint in Model.ApplicationSubmittedMetadataHints)
+                    {
+                        <tr class="govuk-table__row">
+                            <td class="govuk-table__cell"><code>@hint.Key</code></td>
+                            <td class="govuk-table__cell">@hint.Description</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+
+                <h3 class="govuk-heading-s">Example</h3>
+                <pre class="govuk-body govuk-!-font-size-14" style="white-space: pre-wrap;">{
+  "fileName": { "sourceType": "Metadata", "sourceFieldId": "originalFileName" },
+  "downloadUrl": { "sourceType": "Metadata", "sourceFieldId": "fileUri" },
+  "uploaderEmail": { "sourceType": "Metadata", "sourceFieldId": "uploaderEmail" },
+  "uploadedOn": { "sourceType": "Metadata", "sourceFieldId": "uploadedOn" },
+  "applicationReference": { "sourceType": "Metadata", "sourceFieldId": "applicationReference" },
+  "schoolName": { "sourceType": "DirectField", "sourceFieldId": "schoolName" }
+}</pre>
+                <p class="govuk-hint">
+                    <code>fileUri</code> includes a short-lived read SAS outside local development.
+                    Prefer <code>filePath</code> or <code>fileId</code> if consumers should not receive a download URL.
+                </p>
+            </div>
+        </details>
+
         <form method="get" asp-page="/Admin/EventMappings" class="govuk-!-margin-bottom-4" asp-fragment="mapping-editor">
             <div class="govuk-grid-row">
                 <div class="govuk-grid-column-one-half">
@@ -280,6 +357,11 @@
                         </div>
                     </details>
                 }
+
+                <p class="govuk-body">
+                    Need platform or form field keys?
+                    See <a class="govuk-link" href="#platform-metadata-tip">Tip: predefined platform fields you can use in mappings</a>.
+                </p>
 
                 <form method="post" asp-page="/Admin/EventMappings" asp-page-handler="SaveMapping">
                     <input type="hidden" asp-for="SelectedTemplateId" />
