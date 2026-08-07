@@ -20,9 +20,9 @@ public class ApplicationImporter(ITemplateManagementService templateManagementSe
         }
 
         Dictionary<string, string?>? fields = GetSpreadsheetFields(stream, mapping, out IList<string> spreadsheetErrors);
-        if (fields == null || fields.Count == 0)
+        if (fields == null || spreadsheetErrors.Any())
         {
-            return new ApplicationImportResult { Errors = [$"Failed to get spreadsheet fields: {string.Join(", ", spreadsheetErrors)}"] };
+            return new ApplicationImportResult { Errors = spreadsheetErrors };
         }
 
         if (!CanImport(fields, template, out IList<string> importErrors))

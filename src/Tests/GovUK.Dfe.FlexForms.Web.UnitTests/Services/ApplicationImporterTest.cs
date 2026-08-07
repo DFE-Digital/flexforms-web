@@ -60,6 +60,203 @@ namespace GovUK.Dfe.FlexForms.Web.UnitTests.Services
             output.WriteLine(string.Join(", ", result.Data.Select(kvp => $"{kvp.Key} '{kvp.Value}'")));
         }
 
+        [Fact]
+        public async System.Threading.Tasks.Task ImportSpreadsheet_TemplateNotFound_ReturnsError()
+        {
+            // Arrange
+            var templateId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+            using FileStream fileStream = new(@"Services\application.xlsx", FileMode.Open);
+
+            mockTemplateManagementService.LoadTemplateAsync(templateId.ToString()).Returns((FormTemplate)null!);
+
+            SpreadsheetTemplateMapping templateMapping = new()
+            {
+                SheetName = "Sheet1",
+                Maps = new Dictionary<string, string>()
+                {
+                    { "B1", "start-year" }
+                }
+            };
+
+            // Act
+            ApplicationImportResult result = await applicationImporter.ImportSpreadsheet(templateId, fileStream, templateMapping);
+
+            // Assert
+            Assert.NotNull(result);
+            Assert.False(result.Success);
+            Assert.NotNull(result.Errors);
+            Assert.Single(result.Errors);
+            Assert.Contains($"Template not found ({templateId})", result.Errors);
+            Assert.Null(result.Template);
+            Assert.Null(result.Data);
+        }
+
+        [Fact]
+        public async System.Threading.Tasks.Task ImportSpreadsheet_SheetNotFound_ReturnsError()
+        {
+            // Arrange
+            var templateId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+            using FileStream fileStream = new(@"Services\application.xlsx", FileMode.Open);
+
+            FormTemplate formTemplate = CreateTemplate(templateId);
+            mockTemplateManagementService.LoadTemplateAsync(templateId.ToString()).Returns(formTemplate);
+
+            SpreadsheetTemplateMapping templateMapping = new()
+            {
+                SheetName = "NonExistentSheet",
+                Maps = new Dictionary<string, string>()
+                {
+                    { "B1", "start-year" }
+                }
+            };
+
+            // Act
+            ApplicationImportResult result = await applicationImporter.ImportSpreadsheet(templateId, fileStream, templateMapping);
+
+            // Assert
+            Assert.NotNull(result);
+            Assert.False(result.Success);
+            Assert.NotNull(result.Errors);
+            Assert.Single(result.Errors);
+            Assert.Contains("Sheet 'NonExistentSheet' not found in the spreadsheet", result.Errors.ElementAt(0));
+            Assert.Null(result.Template);
+            Assert.Null(result.Data);
+        }
+
+        [Fact]
+        public async System.Threading.Tasks.Task ImportSpreadsheet_NoMappings_ReturnsError()
+        {
+            // Arrange
+            var templateId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+            using FileStream fileStream = new(@"Services\application.xlsx", FileMode.Open);
+
+            FormTemplate formTemplate = CreateTemplate(templateId);
+            mockTemplateManagementService.LoadTemplateAsync(templateId.ToString()).Returns(formTemplate);
+
+            SpreadsheetTemplateMapping templateMapping = new()
+            {
+                SheetName = "Sheet1",
+                Maps = new Dictionary<string, string>()
+            };
+
+            // Act
+            ApplicationImportResult result = await applicationImporter.ImportSpreadsheet(templateId, fileStream, templateMapping);
+
+            // Assert
+            Assert.NotNull(result);
+            Assert.False(result.Success);
+            Assert.NotNull(result.Errors);
+            Assert.Single(result.Errors);
+            Assert.Contains("No mappings found in the template", result.Errors.ElementAt(0));
+            Assert.Null(result.Template);
+            Assert.Null(result.Data);
+        }
+
+        [Fact]
+        public async System.Threading.Tasks.Task ImportSpreadsheet_CellNotFound_ReturnsError()
+        {
+            // Arrange
+            var templateId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+            using FileStream fileStream = new(@"Services\application.xlsx", FileMode.Open);
+
+            FormTemplate formTemplate = CreateTemplate(templateId);
+            mockTemplateManagementService.LoadTemplateAsync(templateId.ToString()).Returns(formTemplate);
+
+            SpreadsheetTemplateMapping templateMapping = new()
+            {
+                SheetName = "Sheet1",
+                Maps = new Dictionary<string, string>()
+                {
+                    { "Z99", "start-year" } // Non-existent cell
+                }
+            };
+
+            // Act
+            ApplicationImportResult result = await applicationImporter.ImportSpreadsheet(templateId, fileStream, templateMapping);
+
+            // Assert
+            Assert.NotNull(result);
+            Assert.False(result.Success);
+            Assert.NotNull(result.Errors);
+            Assert.Single(result.Errors);
+            Assert.Contains("Cell 'Z99' not found in the worksheet", result.Errors.ElementAt(0));
+            Assert.Null(result.Template);
+            Assert.Null(result.Data);
+        }
+
+        [Fact]
+        public async System.Threading.Tasks.Task ImportSpreadsheet_FieldNotInTemplate_ReturnsError()
+        {
+            // Arrange
+            var templateId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+            using FileStream fileStream = new(@"Services\application.xlsx", FileMode.Open);
+
+            FormTemplate formTemplate = CreateTemplate(templateId);
+            mockTemplateManagementService.LoadTemplateAsync(templateId.ToString()).Returns(formTemplate);
+
+            SpreadsheetTemplateMapping templateMapping = new()
+            {
+                SheetName = "Sheet1",
+                Maps = new Dictionary<string, string>()
+                {
+                    { "B1", "start-year" },
+                    { "B4", "non-existent-field" } // This field doesn't exist in template
+                }
+            };
+
+            // Act
+            ApplicationImportResult result = await applicationImporter.ImportSpreadsheet(templateId, fileStream, templateMapping);
+
+            // Assert
+            Assert.NotNull(result);
+            Assert.False(result.Success);
+            Assert.NotNull(result.Errors);
+            Assert.Single(result.Errors);
+            Assert.Contains("Cell 'B4' not found in the worksheet.", result.Errors.ElementAt(0));
+            Assert.Null(result.Template);
+            Assert.Null(result.Data);
+        }
+
+        [Fact]
+        public async System.Threading.Tasks.Task ImportSpreadsheet_WithValidData_ReturnsSuccess()
+        {
+            // Arrange
+            var templateId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+            using FileStream fileStream = new(@"Services\application.xlsx", FileMode.Open);
+
+            FormTemplate formTemplate = CreateTemplate(templateId);
+            mockTemplateManagementService.LoadTemplateAsync(templateId.ToString()).Returns(formTemplate);
+
+            SpreadsheetTemplateMapping templateMapping = new()
+            {
+                SheetName = "Sheet1",
+                Maps = new Dictionary<string, string>()
+                {
+                    { "B1", "start-year" },
+                    { "B2", "end-year" },
+                    { "B3", "local-authority" }
+                }
+            };
+
+            // Act
+            ApplicationImportResult result = await applicationImporter.ImportSpreadsheet(templateId, fileStream, templateMapping);
+
+            // Assert
+            Assert.NotNull(result);
+            Assert.True(result.Success);
+            Assert.Null(result.Errors);
+            Assert.NotNull(result.Template);
+            Assert.Equal(formTemplate.TemplateId, result.Template!.TemplateId);
+            Assert.NotNull(result.Data);
+            Assert.Equal(3, result.Data.Count);
+            Assert.Equal("2026", result.Data["B1"]);
+            Assert.Equal("2027", result.Data["B2"]);
+            Assert.Equal("LA1", result.Data["B3"]);
+
+            // Verify the template service was called
+            await mockTemplateManagementService.Received(1).LoadTemplateAsync(templateId.ToString());
+        }
+
         private static FormTemplate CreateTemplate(Guid templateId)
         {
             return new()
