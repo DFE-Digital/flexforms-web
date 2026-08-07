@@ -35,3 +35,7 @@
 .application-listing__filters-details .govuk-fieldset {
   min-width: 0;
 }
+
+.govuk-phase-banner__content span {
+    padding-right:10px;
+}
