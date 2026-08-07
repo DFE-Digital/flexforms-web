@@ -1,0 +1,27 @@
+[
+  {
+    "WorkflowName": "WorkflowA",
+    "Rules": [
+      {
+        "RuleName": "Rule1",
+        "Expression": "StartYear >= 2000 AND StartYear <= 3000",
+        "ErrorMessage": "StartYear must be between 2000 and 3000"
+      },
+      {
+        "RuleName": "Rule2",
+        "Expression": "EndYear >= 2000 AND EndYear <= 3000",
+        "ErrorMessage": "EndYear must be between 2000 and 3000"
+      },
+      {
+        "RuleName": "Rule3",
+        "Expression": "EndYear >= StartYear",
+        "ErrorMessage": "EndYear must be greater than or equal to StartYear"
+      },
+      {
+        "RuleName": "Rule4",
+        "Expression": "!string.IsNullOrEmpty(LocalAuthority)",
+        "ErrorMessage": "LocalAuthority must not be empty"
+      }
+    ]
+  }
+] 
