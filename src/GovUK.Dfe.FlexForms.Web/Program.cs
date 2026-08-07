@@ -588,22 +588,12 @@ builder.Services.Configure<DashboardOptions>(configuration.GetSection("Dashboard
 // Scoped so tenant-aware IOptions are not captured for the app lifetime.
 builder.Services.AddScoped<IApplicationTerminologyProvider, ApplicationTerminologyProvider>();
 
-// Application submission configuration (mapper key and handlers per application)
-builder.Services.Configure<ApplicationSubmissionOptions>(configuration.GetSection("ApplicationSubmission"));
-
 builder.Services.AddTenantAwareOptionsAccessors(configuration);
 
-// Event mapping and publishing services (scoped so TenantConfig overlay is request-aware)
-builder.Services.AddScoped<IEventMappingProvider, EventMappingProvider>();
+// Read-only event metadata for the Event mappings Admin page. Outbound mapped events are
+// published by the API from its own domain events, driven by the EventTriggers TenantConfig.
 builder.Services.AddScoped<ISchemaEventDefinitionProvider, SchemaEventDefinitionProvider>();
-builder.Services.AddKeyedScoped<IEventDataMapper, EventDataMapper>("Default");
-builder.Services.AddScoped<IEventDataMapperFactory, EventDataMapperFactory>();
 builder.Services.AddSingleton<IEventTypeRegistry, EventTypeRegistry>();
-
-// Application submission handlers (resolved by key from ApplicationSubmission:Handlers)
-builder.Services.AddKeyedScoped<IApplicationSubmittedHandler, PublishEventApplicationSubmittedHandler>("PublishEvent");
-builder.Services.AddKeyedScoped<IApplicationSubmittedHandler, NoOpApplicationSubmittedHandler>("NoOp");
-builder.Services.AddScoped<IApplicationSubmissionOrchestrator, ApplicationSubmissionOrchestrator>();
 
 builder.Services.AddDfEMassTransit(
     configuration,

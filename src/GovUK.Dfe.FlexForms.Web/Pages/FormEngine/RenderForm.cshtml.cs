@@ -48,7 +48,6 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
         IConnectionMultiplexer redis,
         ILogger<RenderFormModel> logger,
         INavigationHistoryService navigationHistoryService,
-        IApplicationSubmissionOrchestrator applicationSubmissionOrchestrator,
         IRequestAppConfiguration requestConfiguration)
         : BaseFormEngineModel(renderer, applicationResponseService, fieldFormattingService, templateManagementService,
             applicationStateService, formStateManager, formNavigationService, formDataManager, formValidationOrchestrator, formConfigurationService, logger)
@@ -62,7 +61,6 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
         private readonly IConnectionMultiplexer _redis = redis;
         private readonly IFieldRequirementService _fieldRequirementService = fieldRequirementService;
         private readonly INavigationHistoryService _navigationHistoryService = navigationHistoryService;
-        private readonly IApplicationSubmissionOrchestrator _applicationSubmissionOrchestrator = applicationSubmissionOrchestrator;
         private readonly IRequestAppConfiguration _requestConfiguration = requestConfiguration;
         private string ApplicationContext =>
             _requestConfiguration["ApplicationName"]
@@ -619,10 +617,10 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                 {
                     var statusKey = $"ApplicationStatus_{ApplicationId.Value}";
                     HttpContext.Session.SetString(statusKey, submittedApplication.Status?.ToString() ?? "Submitted");
-                    _logger.LogInformation("Successfully submitted application {ApplicationId} with reference {ReferenceNumber}", 
+                    // Outbound mapped events are published by the API from its
+                    // ApplicationSubmitted domain event, using the tenant's EventTriggers.
+                    _logger.LogInformation("Successfully submitted application {ApplicationId} with reference {ReferenceNumber}",
                         ApplicationId.Value, ReferenceNumber);
-                    
-                    await _applicationSubmissionOrchestrator.ExecuteOnSubmittedAsync(submittedApplication, FormData, Template!, CancellationToken.None);
                 }
                 else
                 {

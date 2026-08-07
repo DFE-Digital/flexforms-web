@@ -32,9 +32,23 @@ public sealed class EventMappingsModel(
     ISchemaEventDefinitionProvider schemaEventDefinitionProvider,
     ILogger<EventMappingsModel> logger) : PageModel
 {
+    /// <summary>
+    /// These categories are read by the API at runtime, so they are stored against the Shared
+    /// target rather than the Web-only target.
+    /// </summary>
+    private const string TargetShared = "Shared";
+
+    /// <summary>Pre-migration target; still read so existing tenants keep working until their next save.</summary>
     private const string TargetWeb = "Web";
+
     private const string CategoryEventMappings = "EventMappings";
     private const string CategorySchemaEvents = "SchemaEvents";
+    private const string CategoryEventTriggers = "EventTriggers";
+
+    /// <summary>Published by the API for every upload; never bindable as a tenant trigger.</summary>
+    private const string SystemOnlyEventType = "ScanRequestedEvent";
+
+    private static readonly string[] TriggerNames = ["ApplicationSubmitted", "FileUploaded"];
 
     private static readonly JsonSerializerOptions JsonWriteOptions = new()
     {
@@ -69,6 +83,13 @@ public sealed class EventMappingsModel(
 
     public IReadOnlyList<SavedMappingRow> SavedTypedMappings { get; private set; } = [];
 
+    public IReadOnlyList<SelectListItem> TriggerOptions { get; private set; } = [];
+
+    /// <summary>Event types selectable as a trigger binding (system-only events excluded).</summary>
+    public IReadOnlyList<SelectListItem> TriggerEventTypeOptions { get; private set; } = [];
+
+    public IReadOnlyList<TriggerBindingRow> SavedTriggers { get; private set; } = [];
+
     /// <summary>
     /// Template keys belonging to the current tenant (API GUIDs plus schema-embedded ids such as form-001).
     /// </summary>
@@ -101,6 +122,18 @@ public sealed class EventMappingsModel(
     [BindProperty]
     public string? NewSchemaEventType { get; set; }
 
+    [BindProperty]
+    public string? TriggerName { get; set; }
+
+    [BindProperty]
+    public string? TriggerEventKind { get; set; }
+
+    [BindProperty]
+    public string? TriggerEventType { get; set; }
+
+    [BindProperty]
+    public string? TriggerMappingId { get; set; }
+
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
         ApplyTempData();
@@ -113,9 +146,164 @@ public sealed class EventMappingsModel(
 
         await LoadPageDataAsync(cancellationToken);
         await LoadSavedTypedMappingsAsync(cancellationToken);
+        await LoadSavedTriggersAsync(cancellationToken);
         await LoadSelectedMappingAsync(cancellationToken);
         await LoadSelectedSchemaDefinitionAsync(cancellationToken);
         return Page();
+    }
+
+    public async Task<IActionResult> OnPostSaveTriggerAsync(CancellationToken cancellationToken)
+    {
+        // Ignore the mapping/schema editors when saving a trigger binding.
+        ModelState.Remove(nameof(MappingJson));
+        ModelState.Remove(nameof(SchemaDefinitionJson));
+        ModelState.Remove(nameof(NewSchemaEventType));
+
+        if (!TryResolveTenant(out var error))
+        {
+            HasError = true;
+            ErrorMessage = error;
+            return Page();
+        }
+
+        await LoadPageDataAsync(cancellationToken);
+        await LoadSavedTypedMappingsAsync(cancellationToken);
+        await LoadSavedTriggersAsync(cancellationToken);
+        await LoadSelectedMappingAsync(cancellationToken);
+        await LoadSelectedSchemaDefinitionAsync(cancellationToken);
+
+        var trigger = TriggerName?.Trim();
+        var eventType = TriggerEventType?.Trim();
+        var mappingId = TriggerMappingId?.Trim();
+        var eventKind = string.IsNullOrWhiteSpace(TriggerEventKind)
+            ? EventPublishKind.Typed
+            : TriggerEventKind.Trim();
+
+        if (string.IsNullOrWhiteSpace(trigger)
+            || !TriggerNames.Contains(trigger, StringComparer.OrdinalIgnoreCase))
+        {
+            ModelState.AddModelError(nameof(TriggerName), "Select a trigger.");
+        }
+
+        if (string.IsNullOrWhiteSpace(eventType))
+        {
+            ModelState.AddModelError(nameof(TriggerEventType), "Select an event type.");
+        }
+        else if (string.Equals(eventType, SystemOnlyEventType, StringComparison.OrdinalIgnoreCase))
+        {
+            ModelState.AddModelError(
+                nameof(TriggerEventType),
+                $"{SystemOnlyEventType} is published by the platform for every upload and cannot be configured here.");
+        }
+
+        if (string.IsNullOrWhiteSpace(mappingId))
+            ModelState.AddModelError(nameof(TriggerMappingId), "Enter the mapping ID to use.");
+
+        if (!string.Equals(eventKind, EventPublishKind.Typed, StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(eventKind, EventPublishKind.Schema, StringComparison.OrdinalIgnoreCase))
+        {
+            ModelState.AddModelError(nameof(TriggerEventKind), "Event kind must be Typed or Schema.");
+        }
+
+        if (!ModelState.IsValid)
+            return Page();
+
+        try
+        {
+            var root = await LoadCategoryRootAsync(CategoryEventTriggers, cancellationToken);
+            var bindings = root[trigger!] as JsonArray ?? new JsonArray();
+
+            // One binding per event type per trigger: saving the same event type replaces it.
+            var replaced = false;
+            for (var i = 0; i < bindings.Count; i++)
+            {
+                if (bindings[i] is not JsonObject existing)
+                    continue;
+
+                if (!string.Equals(ReadBindingValue(existing, "eventType"), eventType, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                bindings[i] = BuildBindingNode(eventKind, eventType!, mappingId!);
+                replaced = true;
+                break;
+            }
+
+            if (!replaced)
+                bindings.Add(BuildBindingNode(eventKind, eventType!, mappingId!));
+
+            root[trigger!] = bindings;
+
+            await UpsertCategoryAsync(CategoryEventTriggers, root, cancellationToken);
+            await RefreshCachesAsync(cancellationToken);
+
+            TempData["EventMappingsSuccess"] =
+                $"Saved {eventType} on the {trigger} trigger.";
+            return RedirectToPage(new { SelectedTemplateId, SelectedEventType, SelectedSchemaEventType });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to save EventTriggers for {TenantId}", TenantId);
+            HasError = true;
+            ErrorMessage = GetErrorMessage(ex, "Could not save event trigger.");
+            return Page();
+        }
+    }
+
+    public async Task<IActionResult> OnPostDeleteTriggerAsync(CancellationToken cancellationToken)
+    {
+        ModelState.Clear();
+
+        if (!TryResolveTenant(out var error))
+        {
+            HasError = true;
+            ErrorMessage = error;
+            return Page();
+        }
+
+        var trigger = TriggerName?.Trim();
+        var eventType = TriggerEventType?.Trim();
+
+        if (string.IsNullOrWhiteSpace(trigger) || string.IsNullOrWhiteSpace(eventType))
+        {
+            TempData["EventMappingsError"] = "Could not identify the trigger binding to remove.";
+            return RedirectToPage(new { SelectedTemplateId, SelectedEventType, SelectedSchemaEventType });
+        }
+
+        try
+        {
+            var root = await LoadCategoryRootAsync(CategoryEventTriggers, cancellationToken);
+            if (root[trigger] is JsonArray bindings)
+            {
+                var remaining = new JsonArray();
+                foreach (var binding in bindings)
+                {
+                    if (binding is JsonObject obj
+                        && string.Equals(ReadBindingValue(obj, "eventType"), eventType, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    remaining.Add(binding?.DeepClone());
+                }
+
+                if (remaining.Count == 0)
+                    root.Remove(trigger);
+                else
+                    root[trigger] = remaining;
+
+                await UpsertCategoryAsync(CategoryEventTriggers, root, cancellationToken);
+                await RefreshCachesAsync(cancellationToken);
+            }
+
+            TempData["EventMappingsSuccess"] = $"Removed {eventType} from the {trigger} trigger.";
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to delete EventTriggers binding for {TenantId}", TenantId);
+            TempData["EventMappingsError"] = GetErrorMessage(ex, "Could not remove event trigger.");
+        }
+
+        return RedirectToPage(new { SelectedTemplateId, SelectedEventType, SelectedSchemaEventType });
     }
 
     public async Task<IActionResult> OnPostSaveMappingAsync(CancellationToken cancellationToken)
@@ -130,12 +318,14 @@ public sealed class EventMappingsModel(
             ErrorMessage = error;
             await LoadPageDataAsync(cancellationToken);
             await LoadSavedTypedMappingsAsync(cancellationToken);
+            await LoadSavedTriggersAsync(cancellationToken);
             await LoadSelectedSchemaDefinitionAsync(cancellationToken);
             return Page();
         }
 
         await LoadPageDataAsync(cancellationToken);
         await LoadSavedTypedMappingsAsync(cancellationToken);
+        await LoadSavedTriggersAsync(cancellationToken);
         await LoadSelectedSchemaDefinitionAsync(cancellationToken);
 
         SelectedTemplateId = SelectedTemplateId?.Trim();
@@ -252,12 +442,14 @@ public sealed class EventMappingsModel(
             ErrorMessage = error;
             await LoadPageDataAsync(cancellationToken);
             await LoadSavedTypedMappingsAsync(cancellationToken);
+            await LoadSavedTriggersAsync(cancellationToken);
             await LoadSelectedMappingAsync(cancellationToken);
             return Page();
         }
 
         await LoadPageDataAsync(cancellationToken);
         await LoadSavedTypedMappingsAsync(cancellationToken);
+        await LoadSavedTriggersAsync(cancellationToken);
         await LoadSelectedMappingAsync(cancellationToken);
 
         var schemaKey = (NewSchemaEventType ?? SelectedSchemaEventType)?.Trim();
@@ -366,6 +558,18 @@ public sealed class EventMappingsModel(
 
         EventTypeOptions = eventOptions
             .OrderBy(o => o.Text, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        TriggerOptions = TriggerNames
+            .Select(t => new SelectListItem(t, t, string.Equals(t, TriggerName, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        TriggerEventTypeOptions = EventTypeOptions
+            .Where(o => !string.Equals(o.Value, SystemOnlyEventType, StringComparison.OrdinalIgnoreCase))
+            .Select(o => new SelectListItem(
+                o.Text,
+                o.Value,
+                string.Equals(o.Value, TriggerEventType, StringComparison.OrdinalIgnoreCase)))
             .ToList();
 
         if (!string.IsNullOrWhiteSpace(SelectedEventType))
@@ -578,6 +782,62 @@ public sealed class EventMappingsModel(
         }
     }
 
+    private static JsonObject BuildBindingNode(string eventKind, string eventType, string mappingId) =>
+        new()
+        {
+            ["eventKind"] = eventKind,
+            ["eventType"] = eventType,
+            ["mappingId"] = mappingId
+        };
+
+    private static string? ReadBindingValue(JsonObject binding, string camelCaseName)
+    {
+        var pascalCaseName = char.ToUpperInvariant(camelCaseName[0]) + camelCaseName[1..];
+        var node = binding[camelCaseName] ?? binding[pascalCaseName];
+        return node?.GetValue<string>();
+    }
+
+    private async Task LoadSavedTriggersAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var root = await LoadCategoryRootAsync(CategoryEventTriggers, cancellationToken);
+            var rows = new List<TriggerBindingRow>();
+
+            foreach (var triggerProperty in root)
+            {
+                if (triggerProperty.Value is not JsonArray bindings)
+                    continue;
+
+                foreach (var binding in bindings)
+                {
+                    if (binding is not JsonObject obj)
+                        continue;
+
+                    var eventType = ReadBindingValue(obj, "eventType");
+                    if (string.IsNullOrWhiteSpace(eventType))
+                        continue;
+
+                    rows.Add(new TriggerBindingRow(
+                        triggerProperty.Key,
+                        ReadBindingValue(obj, "eventKind") ?? EventPublishKind.Typed,
+                        eventType,
+                        ReadBindingValue(obj, "mappingId") ?? "—"));
+                }
+            }
+
+            SavedTriggers = rows
+                .OrderBy(r => r.Trigger, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(r => r.EventType, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not load saved EventTriggers");
+            SavedTriggers = [];
+        }
+    }
+
     private async Task LoadSelectedSchemaDefinitionAsync(CancellationToken cancellationToken)
     {
         var key = SelectedSchemaEventType?.Trim();
@@ -682,8 +942,14 @@ public sealed class EventMappingsModel(
         var response = await tenantAdminClient.GetSafeTenantSettingsAsync(TenantId, cancellationToken);
         TenantName = response.TenantName ?? TenantName;
 
-        var setting = response.Settings?
-            .FirstOrDefault(s => string.Equals(s.Category, category, StringComparison.OrdinalIgnoreCase));
+        var candidates = (response.Settings ?? [])
+            .Where(s => string.Equals(s.Category, category, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        // Shared is where the API reads from; a leftover Web row is only a migration fallback.
+        var setting = candidates.FirstOrDefault(s => string.Equals(s.Target, TargetShared, StringComparison.OrdinalIgnoreCase))
+            ?? candidates.FirstOrDefault(s => string.Equals(s.Target, TargetWeb, StringComparison.OrdinalIgnoreCase))
+            ?? candidates.FirstOrDefault();
 
         if (string.IsNullOrWhiteSpace(setting?.SettingsJson))
             return new JsonObject();
@@ -705,7 +971,7 @@ public sealed class EventMappingsModel(
             TenantId,
             new UpsertTenantSettingRequest(
                 category,
-                TargetWeb,
+                TargetShared,
                 ToBase64SettingsJson(payloadJson),
                 IsSecret: false),
             cancellationToken);
@@ -826,4 +1092,10 @@ public sealed class EventMappingsModel(
         string EventType,
         string MappingId,
         string? Description);
+
+    public sealed record TriggerBindingRow(
+        string Trigger,
+        string EventKind,
+        string EventType,
+        string MappingId);
 }
