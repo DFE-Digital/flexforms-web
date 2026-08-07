@@ -1,7 +1,7 @@
 ﻿using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using GovUK.Dfe.FlexForms.Web.Services;
-using Moq;
+using NSubstitute;
 using Xunit.Abstractions;
 
 namespace GovUK.Dfe.FlexForms.Web.UnitTests.Services
@@ -10,13 +10,13 @@ namespace GovUK.Dfe.FlexForms.Web.UnitTests.Services
     {
         private readonly ITestOutputHelper output;
         private readonly ApplicationImporter applicationImporter;
-        private readonly Mock<ITemplateManagementService> mockTemplateManagementService;
+        private readonly ITemplateManagementService mockTemplateManagementService;
 
         public ApplicationImporterTest(ITestOutputHelper output)
         {
             this.output = output;
-            mockTemplateManagementService = new Mock<ITemplateManagementService>();
-            applicationImporter = new ApplicationImporter(mockTemplateManagementService.Object);
+            mockTemplateManagementService = Substitute.For<ITemplateManagementService>();
+            applicationImporter = new ApplicationImporter(mockTemplateManagementService);
         }
 
         [Fact]
@@ -27,7 +27,7 @@ namespace GovUK.Dfe.FlexForms.Web.UnitTests.Services
 
             FormTemplate formTemplate = CreateTemplate(templateId);
 
-            mockTemplateManagementService.Setup(s => s.LoadTemplateAsync(templateId.ToString())).ReturnsAsync(formTemplate);
+            mockTemplateManagementService.LoadTemplateAsync(templateId.ToString()).Returns(formTemplate);
 
             // TODO get the mapping from an external source, e.g. a JSON file or API (database)
             SpreadsheetTemplateMapping templateMapping = new()

@@ -3,7 +3,7 @@ using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Web.Services;
-using Moq;
+using NSubstitute;
 using System.Text;
 using System.Text.Json;
 using Xunit.Abstractions;
@@ -14,15 +14,15 @@ namespace GovUK.Dfe.FlexForms.Web.UnitTests.Services
     {
         private const string ApplicationReference = "TEST-APPLICATION-REFERENCE";
         private static readonly Guid TemplateId = Guid.Parse("00000000-0000-0000-0000-000000000001");
-        private readonly Mock<IApplicationsClient> mockClient;
+        private readonly IApplicationsClient mockClient;
         private readonly ImportedApplicationService service;
         private readonly JsonSerializerOptions jsonSerializerOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
         private readonly ITestOutputHelper output;
 
         public ImportedApplicationServiceTest(ITestOutputHelper output)
         {
-            mockClient = new Mock<IApplicationsClient>();
-            service = new ImportedApplicationService(mockClient.Object);
+            mockClient = Substitute.For<IApplicationsClient>();
+            service = new ImportedApplicationService(mockClient);
             this.output = output;
         }
 
@@ -37,13 +37,11 @@ namespace GovUK.Dfe.FlexForms.Web.UnitTests.Services
                 ApplicationReference = ApplicationReference,
                 Status = ApplicationStatus.Created
             };
-            mockClient.Setup(c => c.CreateApplicationAsync(It.IsAny<CreateApplicationRequest>()))
-                .Callback<CreateApplicationRequest, CancellationToken>((request, cancellationToken) =>
-                {
-                    Assert.Equal(TemplateId, request.TemplateId);
-                    Assert.Equal("{}", request.InitialResponseBody);
-                })
-                .ReturnsAsync(createdApplication);
+            mockClient.CreateApplicationAsync(Arg.Do<CreateApplicationRequest>(request =>
+            {
+                Assert.Equal(TemplateId, request.TemplateId);
+                Assert.Equal("{}", request.InitialResponseBody);
+            })).Returns(createdApplication);
 
             var expectedData = new Dictionary<string, object>
             {
@@ -60,16 +58,15 @@ namespace GovUK.Dfe.FlexForms.Web.UnitTests.Services
                 DateTime.UtcNow,
                 Guid.Parse("00000000-0000-0000-0000-000000000003")
             );
-            mockClient.Setup(c => c.AddApplicationResponseAsync(It.IsAny<Guid>(), It.IsAny<AddApplicationResponseRequest>()))
-                .Callback<Guid, AddApplicationResponseRequest, CancellationToken>((applicationId, request, cancellationToken) =>
+            mockClient.AddApplicationResponseAsync(
+                Arg.Is<Guid>(id => id == createdApplication.ApplicationId),
+                Arg.Do<AddApplicationResponseRequest>(request =>
                 {
-                    Assert.Equal(createdApplication.ApplicationId, applicationId);
                     byte[] data = Convert.FromBase64String(request.ResponseBody);
                     string responseJson = Encoding.UTF8.GetString(data);
                     output.WriteLine($"Response body: {Environment.NewLine}{responseJson}");
                     Assert.Equal(expectedJson, responseJson);
-                })
-                .ReturnsAsync(applicationResponse);
+                })).Returns(applicationResponse);
 
             ApplicationDto submittedApplication = new()
             {
@@ -77,8 +74,8 @@ namespace GovUK.Dfe.FlexForms.Web.UnitTests.Services
                 ApplicationReference = createdApplication.ApplicationReference,
                 Status = ApplicationStatus.Submitted
             };
-            mockClient.Setup(c => c.SubmitApplicationAsync(createdApplication.ApplicationId))
-                .ReturnsAsync(submittedApplication);
+            mockClient.SubmitApplicationAsync(createdApplication.ApplicationId)
+                .Returns(submittedApplication);
 
             Dictionary<string, object> data = new()
             {
@@ -89,7 +86,9 @@ namespace GovUK.Dfe.FlexForms.Web.UnitTests.Services
 
             bool isSaved = await service.SaveApplicationAsync(ApplicationReference, data);
 
-            mockClient.VerifyAll();
+            await mockClient.Received(1).CreateApplicationAsync(Arg.Any<CreateApplicationRequest>());
+            await mockClient.Received(1).AddApplicationResponseAsync(createdApplication.ApplicationId, Arg.Any<AddApplicationResponseRequest>());
+            await mockClient.Received(1).SubmitApplicationAsync(createdApplication.ApplicationId);
             Assert.True(isSaved);
         }
     }
