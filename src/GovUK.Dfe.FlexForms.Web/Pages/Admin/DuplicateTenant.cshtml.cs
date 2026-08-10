@@ -49,6 +49,12 @@ public sealed class DuplicateTenantModel(
     public string NewTenantName { get; set; } = string.Empty;
 
     [BindProperty]
+    [Required(ErrorMessage = "Enter a service name")]
+    [StringLength(200, ErrorMessage = "Service name must be 200 characters or fewer")]
+    [Display(Name = "Service name")]
+    public string ServiceName { get; set; } = string.Empty;
+
+    [BindProperty]
     [Required(ErrorMessage = "Enter a hostname")]
     [StringLength(255, ErrorMessage = "Hostname must be 255 characters or fewer")]
     [Display(Name = "Hostname")]
@@ -90,6 +96,13 @@ public sealed class DuplicateTenantModel(
         if (string.IsNullOrWhiteSpace(NewTenantName))
             NewTenantName = $"{SourceTenantName} copy";
 
+        if (string.IsNullOrWhiteSpace(ServiceName))
+        {
+            ServiceName = tenantRequestContext.TenantConfiguration?["Layout:ServiceName"]
+                ?? SourceTenantName
+                ?? string.Empty;
+        }
+
         await LoadInternalServiceAuthServicesAsync(cancellationToken);
         EnsureSecretsPopulated();
         return Page();
@@ -127,6 +140,7 @@ public sealed class DuplicateTenantModel(
         }
 
         NewTenantName = NewTenantName?.Trim() ?? string.Empty;
+        ServiceName = ServiceName?.Trim() ?? string.Empty;
         Hostname = Hostname?.Trim() ?? string.Empty;
         FrontendOrigin = FrontendOrigin?.Trim() ?? string.Empty;
         AuthorizationApiSecretKey = AuthorizationApiSecretKey?.Trim() ?? string.Empty;
@@ -166,7 +180,7 @@ public sealed class DuplicateTenantModel(
 
         try
         {
-            // WAF-safe: hostname, frontendOrigin, and secrets live only inside Base64 payloadJson
+            // WAF-safe: hostname, frontendOrigin, serviceName, and secrets live only inside Base64 payloadJson
             // so Application Gateway does not see cleartext https:// ARGS (rule 931130 RFI).
             var secretsPayload = new CloneTenantSecretsPayload
             {
@@ -183,18 +197,21 @@ public sealed class DuplicateTenantModel(
                     .ToList()
             };
 
+            var payloadNode = JsonSerializer.SerializeToNode(secretsPayload, PayloadSerializerOptions)!.AsObject();
+            payloadNode["serviceName"] = ServiceName;
+
             var body = new CloneTenantRequest(
                 NewTenantId,
                 NewTenantName,
-                ToBase64Utf8(JsonSerializer.Serialize(secretsPayload, PayloadSerializerOptions)));
+                ToBase64Utf8(payloadNode.ToJsonString(PayloadSerializerOptions)));
 
             var response = await tenantAdminClient.CloneTenantAsync(SourceTenantId, body, cancellationToken);
 
             TempData["TenantSettingsSuccess"] =
-                $"Duplicated to '{response.NewTenantName}' ({response.NewTenantId}). " +
+                $"Created tenant '{response.NewTenantName}' ({response.NewTenantId}). " +
                 $"Copied {response.SettingsCopied} setting(s). Hostname: {response.Hostname}. " +
                 "Authorization and InternalServiceAuth secrets (SecretKey + service ApiKeys) were applied. " +
-                "Review remaining secrets and principals before using the new tenant.";
+                "Create a template for this tenant before users can access the dashboard.";
 
             return RedirectToPage("/Admin/TenantSettings");
         }

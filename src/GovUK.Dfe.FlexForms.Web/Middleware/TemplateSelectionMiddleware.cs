@@ -66,6 +66,23 @@ public sealed class TemplateSelectionMiddleware(
                 return;
             }
 
+            if (templates.Count == 0)
+            {
+                // Freshly cloned / empty tenants: admins must create a template first.
+                if (AdminAccessHelper.CanManageTemplates(context.User))
+                {
+                    context.Response.Redirect("/admin/create-template");
+                    return;
+                }
+
+                var emptyReturnUrl = IsRoot(context.Request.Path)
+                    ? DashboardPath.Value!
+                    : context.Request.Path + context.Request.QueryString;
+                context.Response.Redirect(
+                    $"{TemplatesPath.Value}?liveOnly=true&returnUrl={Uri.EscapeDataString(emptyReturnUrl)}");
+                return;
+            }
+
             if (liveTemplates.Count > 1 &&
                 selectedTemplate is { IsLive: true } &&
                 !IsRoot(context.Request.Path))
@@ -78,7 +95,7 @@ public sealed class TemplateSelectionMiddleware(
                 return;
             }
 
-            // 0 or many live templates — send the user to the live-template chooser.
+            // 0 live (drafts only) or many live templates — send to the chooser.
             var returnUrl = IsRoot(context.Request.Path)
                 ? DashboardPath.Value!
                 : context.Request.Path + context.Request.QueryString;

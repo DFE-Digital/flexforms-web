@@ -113,6 +113,45 @@ public sealed class TemplateSelectionMiddlewareTests
             Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public async Task InvokeAsync_RedirectsAdminToCreateTemplate_WhenNoTemplatesExist()
+    {
+        var service = CreateService();
+        var middleware = CreateMiddleware();
+        var context = CreateAuthenticatedContext("/applications/dashboard", "Admin");
+
+        await middleware.InvokeAsync(context, service);
+
+        Assert.Equal(StatusCodes.Status302Found, context.Response.StatusCode);
+        Assert.Equal("/admin/create-template", context.Response.Headers.Location.ToString());
+    }
+
+    [Fact]
+    public async Task InvokeAsync_RedirectsNonAdminToTemplates_WhenNoTemplatesExist()
+    {
+        var service = CreateService();
+        var middleware = CreateMiddleware();
+        var context = CreateAuthenticatedContext("/applications/dashboard");
+
+        await middleware.InvokeAsync(context, service);
+
+        Assert.Equal(StatusCodes.Status302Found, context.Response.StatusCode);
+        Assert.StartsWith("/templates?liveOnly=true", context.Response.Headers.Location.ToString());
+    }
+
+    [Fact]
+    public async Task InvokeAsync_RedirectsToLiveChooser_WhenOnlyDraftTemplatesExist()
+    {
+        var service = CreateService(CreateTemplate("Draft", isLive: false));
+        var middleware = CreateMiddleware();
+        var context = CreateAuthenticatedContext("/applications/dashboard", "Admin");
+
+        await middleware.InvokeAsync(context, service);
+
+        Assert.Equal(StatusCodes.Status302Found, context.Response.StatusCode);
+        Assert.StartsWith("/templates?liveOnly=true", context.Response.Headers.Location.ToString());
+    }
+
     private static TemplateSelectionMiddleware CreateMiddleware(Action? onNext = null)
         => new(
             _ =>

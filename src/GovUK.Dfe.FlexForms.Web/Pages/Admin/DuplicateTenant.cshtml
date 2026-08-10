@@ -1,7 +1,7 @@
 @page "/admin/duplicate-tenant"
 @model GovUK.Dfe.FlexForms.Web.Pages.Admin.DuplicateTenantModel
 @{
-    ViewData["Title"] = "Duplicate tenant";
+    ViewData["Title"] = "New tenant";
 }
 
 <div class="govuk-grid-row">
@@ -22,14 +22,15 @@
 
         <govuk-error-summary />
 
-        <h1 class="govuk-heading-xl">Duplicate tenant</h1>
+        <h1 class="govuk-heading-xl">New tenant</h1>
         <p class="govuk-body">
-            Create a new TenantConfig tenant by copying all app settings from
+            Create a new TenantConfig tenant by copying app settings from
             <strong>@(string.IsNullOrWhiteSpace(Model.SourceTenantName) ? Model.SourceTenantId.ToString() : Model.SourceTenantName)</strong>
             (<code>@Model.SourceTenantId</code>).
         </p>
         <p class="govuk-body">
-            Hostname and frontend origin must be unique. Principals (managed identities / service principals) are not copied.
+            Hostname, frontend origin and service name must be set for the new tenant. Principals (managed identities / service principals) are not copied.
+            Form templates are not copied — create a template after the tenant exists.
             Authorization and InternalServiceAuth secrets below are applied on save. InternalServiceAuth (root SecretKey and every Services ApiKey) is generated once and written identically to both API and Web.
         </p>
 
@@ -45,6 +46,13 @@
                 <label class="govuk-label" asp-for="NewTenantName"></label>
                 <span asp-validation-for="NewTenantName" class="govuk-error-message"></span>
                 <input class="govuk-input govuk-!-width-two-thirds" asp-for="NewTenantName" type="text" autocomplete="off" />
+            </div>
+
+            <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.ServiceName)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                <label class="govuk-label" asp-for="ServiceName"></label>
+                <div class="govuk-hint">Shown in the header service navigation (<code>Layout:ServiceName</code>).</div>
+                <span asp-validation-for="ServiceName" class="govuk-error-message"></span>
+                <input class="govuk-input" asp-for="ServiceName" type="text" autocomplete="off" />
             </div>
 
             <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.Hostname)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
@@ -112,7 +120,7 @@
 
             <div class="govuk-button-group">
                 <button type="submit" class="govuk-button" data-module="govuk-button" id="duplicate-tenant-button">
-                    Duplicate tenant
+                    Create tenant
                 </button>
                 <button type="submit"
                         class="govuk-button govuk-button--secondary"

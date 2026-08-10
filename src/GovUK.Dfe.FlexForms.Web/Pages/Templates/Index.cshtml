@@ -25,7 +25,7 @@
             <p class="govuk-body">
                 @if (Model.IsAdmin)
                 {
-                    <text>There are no forms available for you yet. Create a form and set it to live when you are ready for users.</text>
+                    <text>There are no forms for this tenant yet. Create a template before users can access the dashboard.</text>
                 }
                 else
                 {
@@ -34,6 +34,9 @@
             </p>
             @if (Model.IsAdmin)
             {
+                <p class="govuk-body">
+                    <a class="govuk-button" href="/admin/create-template">Create a new template</a>
+                </p>
                 <p class="govuk-body">
                     <a class="govuk-link" href="/admin">Go to admin</a>
                 </p>
