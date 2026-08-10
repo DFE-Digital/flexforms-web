@@ -1,12 +1,10 @@
 using System.ComponentModel.DataAnnotations;
-using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
-using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.FlexForms.Web.Tenancy;
@@ -22,7 +20,6 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 [Authorize(Policy = AdminAccessHelper.CanManageTenantSettingsPolicy)]
 public sealed class DuplicateTenantModel(
     ITenantAdminClient tenantAdminClient,
-    IHttpClientFactory httpClientFactory,
     ITenantRequestContext tenantRequestContext,
     ILogger<DuplicateTenantModel> logger) : PageModel
 {
@@ -191,7 +188,7 @@ public sealed class DuplicateTenantModel(
                 FrontendOrigin,
                 ToBase64Utf8(JsonSerializer.Serialize(secretsPayload, PayloadSerializerOptions)));
 
-            var response = await CloneTenantAsync(body, cancellationToken);
+            var response = await tenantAdminClient.CloneTenantAsync(SourceTenantId, body, cancellationToken);
 
             TempData["TenantSettingsSuccess"] =
                 $"Duplicated to '{response.NewTenantName}' ({response.NewTenantId}). " +
@@ -212,53 +209,6 @@ public sealed class DuplicateTenantModel(
             ErrorMessage = GetCloneErrorMessage(ex);
             return Page();
         }
-    }
-
-    private async Task<DuplicateTenantResponse> CloneTenantAsync(
-        CloneTenantRequest body,
-        CancellationToken cancellationToken)
-    {
-        var http = httpClientFactory.CreateClient(nameof(ITenantAdminClient));
-        using var response = await http.PostAsJsonAsync(
-            $"v1/admin/tenants/{SourceTenantId:D}/clone",
-            body,
-            PayloadSerializerOptions,
-            cancellationToken);
-
-        var responseText = response.Content is null
-            ? string.Empty
-            : await response.Content.ReadAsStringAsync(cancellationToken);
-
-        var headers = response.Headers
-            .Concat(response.Content?.Headers ?? Enumerable.Empty<KeyValuePair<string, IEnumerable<string>>>())
-            .GroupBy(h => h.Key, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => (IEnumerable<string>)g.SelectMany(x => x.Value).ToArray());
-
-        if (!response.IsSuccessStatusCode)
-        {
-            throw new ExternalApplicationsException(
-                $"Clone tenant failed with HTTP {(int)response.StatusCode}.",
-                (int)response.StatusCode,
-                responseText,
-                headers,
-                null);
-        }
-
-        var dto = JsonSerializer.Deserialize<DuplicateTenantResponse>(
-            responseText,
-            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-
-        if (dto is null)
-        {
-            throw new ExternalApplicationsException(
-                "Clone tenant returned an empty body.",
-                (int)response.StatusCode,
-                responseText,
-                headers,
-                null);
-        }
-
-        return dto;
     }
 
     private async Task LoadInternalServiceAuthServicesAsync(CancellationToken cancellationToken)
