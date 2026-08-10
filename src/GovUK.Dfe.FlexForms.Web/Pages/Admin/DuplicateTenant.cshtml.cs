@@ -166,10 +166,12 @@ public sealed class DuplicateTenantModel(
 
         try
         {
-            // WAF-safe: secrets live only inside Base64 payloadJson (no secret property names on the wire).
-            // Route is /clone (not /duplicate) to avoid path-based WAF rules.
+            // WAF-safe: hostname, frontendOrigin, and secrets live only inside Base64 payloadJson
+            // so Application Gateway does not see cleartext https:// ARGS (rule 931130 RFI).
             var secretsPayload = new CloneTenantSecretsPayload
             {
+                Hostname = Hostname,
+                FrontendOrigin = FrontendOrigin,
                 AuthorizationApiSecretKey = AuthorizationApiSecretKey,
                 InternalServiceAuthSecretKey = InternalServiceAuthSecretKey,
                 InternalServiceAuthServiceApiKeys = InternalServiceAuthServiceApiKeys
@@ -184,8 +186,6 @@ public sealed class DuplicateTenantModel(
             var body = new CloneTenantRequest(
                 NewTenantId,
                 NewTenantName,
-                Hostname,
-                FrontendOrigin,
                 ToBase64Utf8(JsonSerializer.Serialize(secretsPayload, PayloadSerializerOptions)));
 
             var response = await tenantAdminClient.CloneTenantAsync(SourceTenantId, body, cancellationToken);
