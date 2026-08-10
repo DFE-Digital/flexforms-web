@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
@@ -158,6 +159,7 @@ public sealed class DuplicateTenantModel(
 
         try
         {
+            // Secret fields are Base64-encoded UTF-8 for Front Door / WAF (same pattern as SettingsJson).
             var response = await tenantAdminClient.DuplicateTenantAsync(
                 SourceTenantId,
                 new DuplicateTenantRequest(
@@ -165,10 +167,10 @@ public sealed class DuplicateTenantModel(
                     NewTenantName,
                     Hostname,
                     FrontendOrigin,
-                    AuthorizationApiSecretKey,
-                    InternalServiceAuthSecretKey,
+                    ToBase64Utf8(AuthorizationApiSecretKey),
+                    ToBase64Utf8(InternalServiceAuthSecretKey),
                     InternalServiceAuthServiceApiKeys
-                        .Select(s => new DuplicateTenantServiceApiKey(s.Email, s.ApiKey))
+                        .Select(s => new DuplicateTenantServiceApiKey(s.Email, ToBase64Utf8(s.ApiKey)))
                         .ToList()),
                 cancellationToken);
 
@@ -267,6 +269,12 @@ public sealed class DuplicateTenantModel(
 
     private static string GenerateSecretKey(int byteLength = 48) =>
         Convert.ToBase64String(RandomNumberGenerator.GetBytes(byteLength));
+
+    /// <summary>
+    /// Encodes a secret for the duplicate-tenant API (WAF-safe transport).
+    /// </summary>
+    internal static string ToBase64Utf8(string value) =>
+        Convert.ToBase64String(Encoding.UTF8.GetBytes(value ?? string.Empty));
 
     private bool TryResolveSourceTenant(out string? error)
     {
