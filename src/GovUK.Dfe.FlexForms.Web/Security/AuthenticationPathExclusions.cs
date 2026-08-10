@@ -13,6 +13,8 @@ internal static class AuthenticationPathExclusions
         "/signin-entra",
         "/signout-callback-entra",
         "/Logout",
+        "/TestLogin",
+        "/TestLogout",
         "/health",
         "/healthz",
         "/liveness",

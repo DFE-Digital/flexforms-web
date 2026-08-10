@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using GovUK.Dfe.CoreLibs.Security.Configurations;
 using GovUK.Dfe.FlexForms.Web.Security;
@@ -12,6 +13,7 @@ namespace GovUK.Dfe.FlexForms.Web.Services;
 public class TestAuthenticationService : ITestAuthenticationService
 {
     private readonly IOptions<TestAuthenticationOptions> _options;
+    private readonly IHostEnvironment _hostEnvironment;
     private readonly ILogger<TestAuthenticationService> _logger;
     
     private static class SessionKeys
@@ -22,15 +24,27 @@ public class TestAuthenticationService : ITestAuthenticationService
 
     public TestAuthenticationService(
         IOptions<TestAuthenticationOptions> options,
+        IHostEnvironment hostEnvironment,
         ILogger<TestAuthenticationService> logger)
     {
         _options = options;
+        _hostEnvironment = hostEnvironment;
         _logger = logger;
     }
 
     public async Task<TestAuthenticationResult> AuthenticateAsync(string email, HttpContext httpContext)
     {
         _logger.LogInformation("TestAuthenticationService.AuthenticateAsync called for email: {Email}", email);
+
+        if (!TestAuthenticationEnvironmentGate.IsAllowed(_hostEnvironment))
+        {
+            _logger.LogWarning(
+                "Test authentication rejected in {Environment} for {Email}",
+                _hostEnvironment.EnvironmentName,
+                email);
+            return TestAuthenticationResult.Failure(
+                "Test authentication is not available in Production.");
+        }
 
         try
         {

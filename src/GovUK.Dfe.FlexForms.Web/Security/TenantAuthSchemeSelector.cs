@@ -1,5 +1,6 @@
 using GovUK.Dfe.FlexForms.Web.Tenancy;
 using GovUK.Dfe.CoreLibs.Security.Configurations;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace GovUK.Dfe.FlexForms.Web.Security;
@@ -33,8 +34,9 @@ public static class TenantAuthSchemeSelector
     /// when set — use this when Test, DfE Sign-In, and Entra are all configured/enabled.
     /// Values: <c>Test</c> / <c>TestAuthentication</c>, <c>Entra</c> / <c>EntraSso</c>,
     /// <c>DfESignIn</c> / <c>DSI</c> / <c>OpenIdConnect</c>.
+    /// Test Authentication is never selected in Production.
     /// </description></item>
-    /// <item><description>Else if <c>TestAuthentication:Enabled</c> → Test</description></item>
+    /// <item><description>Else if <c>TestAuthentication:Enabled</c> → Test (non-Production only)</description></item>
     /// <item><description>Else if <c>EntraSso:Enabled</c> → Entra</description></item>
     /// <item><description>Else DfE Sign-In</description></item>
     /// </list>
@@ -44,12 +46,19 @@ public static class TenantAuthSchemeSelector
         IOptions<TestAuthenticationOptions>? hostTestOptions = null,
         IOptions<EntraSsoOptions>? hostEntraOptions = null)
     {
+        var allowTestAuth = IsTestAuthAllowed(httpContext);
+
         if (TryParseScheme(ReadExplicitScheme(httpContext), out var explicitScheme))
         {
-            return explicitScheme;
+            if (explicitScheme != InteractiveAuthScheme.TestAuthentication || allowTestAuth)
+            {
+                return explicitScheme;
+            }
+
+            // Production (or Prod): ignore an explicit Test scheme and fall through.
         }
 
-        if (IsTestAuthenticationEnabled(httpContext, hostTestOptions))
+        if (allowTestAuth && IsTestAuthenticationEnabled(httpContext, hostTestOptions))
         {
             return InteractiveAuthScheme.TestAuthentication;
         }
@@ -78,11 +87,17 @@ public static class TenantAuthSchemeSelector
 
     /// <summary>
     /// Returns <c>true</c> when Test Authentication is enabled for the current tenant (or host fallback).
+    /// Always <c>false</c> in Production.
     /// </summary>
     public static bool IsTestAuthenticationEnabled(
         HttpContext? httpContext,
         IOptions<TestAuthenticationOptions>? hostTestOptions = null)
     {
+        if (!IsTestAuthAllowed(httpContext))
+        {
+            return false;
+        }
+
         if (TryGetTenantBool(httpContext, "TestAuthentication:Enabled", out var tenantEnabled))
         {
             return tenantEnabled;
@@ -96,6 +111,12 @@ public static class TenantAuthSchemeSelector
         IOptions<TestAuthenticationOptions>? hostTestOptions = null,
         IOptions<EntraSsoOptions>? hostEntraOptions = null)
         => Resolve(httpContext, hostTestOptions, hostEntraOptions) == InteractiveAuthScheme.TestAuthentication;
+
+    private static bool IsTestAuthAllowed(HttpContext? httpContext)
+    {
+        var environment = httpContext?.RequestServices.GetService<IHostEnvironment>();
+        return TestAuthenticationEnvironmentGate.IsAllowed(environment);
+    }
 
     private static string? ReadExplicitScheme(HttpContext? httpContext)
     {

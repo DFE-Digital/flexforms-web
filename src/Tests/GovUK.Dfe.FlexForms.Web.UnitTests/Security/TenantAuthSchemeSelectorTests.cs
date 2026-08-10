@@ -4,6 +4,7 @@ using GovUK.Dfe.FlexForms.Web.Tenancy;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace GovUK.Dfe.FlexForms.Web.UnitTests.Security;
@@ -46,6 +47,52 @@ public class TenantAuthSchemeSelectorTests
     }
 
     [Fact]
+    public void Resolve_IgnoresExplicitTestScheme_InProduction()
+    {
+        var httpContext = CreateHttpContext(
+            new Dictionary<string, string?>
+            {
+                ["Authentication:Scheme"] = "TestAuthentication",
+                ["TestAuthentication:Enabled"] = "true",
+                ["EntraSso:Enabled"] = "true"
+            },
+            environmentName: "Production");
+
+        var result = TenantAuthSchemeSelector.Resolve(httpContext);
+
+        Assert.Equal(InteractiveAuthScheme.EntraSso, result);
+    }
+
+    [Fact]
+    public void Resolve_IgnoresEnabledTestAuth_InProdAlias()
+    {
+        var httpContext = CreateHttpContext(
+            new Dictionary<string, string?>
+            {
+                ["TestAuthentication:Enabled"] = "true",
+                ["EntraSso:Enabled"] = "false"
+            },
+            environmentName: "Prod");
+
+        var result = TenantAuthSchemeSelector.Resolve(httpContext);
+
+        Assert.Equal(InteractiveAuthScheme.DfESignIn, result);
+    }
+
+    [Fact]
+    public void IsTestAuthenticationEnabled_ReturnsFalse_InProduction()
+    {
+        var httpContext = CreateHttpContext(
+            new Dictionary<string, string?>
+            {
+                ["TestAuthentication:Enabled"] = "true"
+            },
+            environmentName: "Production");
+
+        Assert.False(TenantAuthSchemeSelector.IsTestAuthenticationEnabled(httpContext));
+    }
+
+    [Fact]
     public void Resolve_UsesEntra_WhenOnlyEntraEnabled()
     {
         var httpContext = CreateHttpContext(new Dictionary<string, string?>
@@ -84,7 +131,9 @@ public class TenantAuthSchemeSelectorTests
         Assert.Equal(InteractiveAuthScheme.DfESignIn, result);
     }
 
-    private static DefaultHttpContext CreateHttpContext(Dictionary<string, string?>? tenantSettings)
+    private static DefaultHttpContext CreateHttpContext(
+        Dictionary<string, string?>? tenantSettings,
+        string environmentName = "Development")
     {
         var services = new ServiceCollection();
         IConfiguration? tenantConfiguration = null;
@@ -101,7 +150,18 @@ public class TenantAuthSchemeSelectorTests
             TenantConfiguration = tenantConfiguration
         });
 
+        services.AddSingleton<IHostEnvironment>(new FakeHostEnvironment(environmentName));
+
         var provider = services.BuildServiceProvider();
         return new DefaultHttpContext { RequestServices = provider };
+    }
+
+    private sealed class FakeHostEnvironment(string environmentName) : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = environmentName;
+        public string ApplicationName { get; set; } = "Tests";
+        public string ContentRootPath { get; set; } = ".";
+        public Microsoft.Extensions.FileProviders.IFileProvider ContentRootFileProvider { get; set; }
+            = new Microsoft.Extensions.FileProviders.NullFileProvider();
     }
 }

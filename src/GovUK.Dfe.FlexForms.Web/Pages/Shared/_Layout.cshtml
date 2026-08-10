@@ -125,7 +125,8 @@
         var previewTemplateName = TemplateSelectionService.GetSelectedTemplateName(Context);
 
         var showFormsNav = false;
-        if (User?.Identity?.IsAuthenticated == true)
+        if (User?.Identity?.IsAuthenticated == true
+            && !GovUK.Dfe.FlexForms.Web.Security.AuthenticationPathExclusions.ShouldSkip(Context.Request.Path))
         {
             if (GovUK.Dfe.FlexForms.Web.Security.AdminAccessHelper.CanManageTemplates(User))
             {
