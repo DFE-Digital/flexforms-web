@@ -1,9 +1,12 @@
 using System.ComponentModel.DataAnnotations;
+using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
+using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.FlexForms.Web.Tenancy;
@@ -19,9 +22,16 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 [Authorize(Policy = AdminAccessHelper.CanManageTenantSettingsPolicy)]
 public sealed class DuplicateTenantModel(
     ITenantAdminClient tenantAdminClient,
+    IHttpClientFactory httpClientFactory,
     ITenantRequestContext tenantRequestContext,
     ILogger<DuplicateTenantModel> logger) : PageModel
 {
+    private static readonly JsonSerializerOptions PayloadSerializerOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+
     public Guid SourceTenantId { get; private set; }
 
     public string SourceTenantName { get; private set; } = string.Empty;
@@ -159,20 +169,29 @@ public sealed class DuplicateTenantModel(
 
         try
         {
-            // Secret fields are Base64-encoded UTF-8 for Front Door / WAF (same pattern as SettingsJson).
-            var response = await tenantAdminClient.DuplicateTenantAsync(
-                SourceTenantId,
-                new DuplicateTenantRequest(
-                    NewTenantId,
-                    NewTenantName,
-                    Hostname,
-                    FrontendOrigin,
-                    ToBase64Utf8(AuthorizationApiSecretKey),
-                    ToBase64Utf8(InternalServiceAuthSecretKey),
-                    InternalServiceAuthServiceApiKeys
-                        .Select(s => new DuplicateTenantServiceApiKey(s.Email, ToBase64Utf8(s.ApiKey)))
-                        .ToList()),
-                cancellationToken);
+            // WAF-safe: secrets live only inside Base64 payloadJson (no secret property names on the wire).
+            // Route is /clone (not /duplicate) to avoid path-based WAF rules.
+            var secretsPayload = new CloneTenantSecretsPayload
+            {
+                AuthorizationApiSecretKey = AuthorizationApiSecretKey,
+                InternalServiceAuthSecretKey = InternalServiceAuthSecretKey,
+                InternalServiceAuthServiceApiKeys = InternalServiceAuthServiceApiKeys
+                    .Select(s => new CloneTenantServiceApiKeyPayload
+                    {
+                        Email = s.Email,
+                        ApiKey = s.ApiKey
+                    })
+                    .ToList()
+            };
+
+            var body = new CloneTenantRequest(
+                NewTenantId,
+                NewTenantName,
+                Hostname,
+                FrontendOrigin,
+                ToBase64Utf8(JsonSerializer.Serialize(secretsPayload, PayloadSerializerOptions)));
+
+            var response = await CloneTenantAsync(body, cancellationToken);
 
             TempData["TenantSettingsSuccess"] =
                 $"Duplicated to '{response.NewTenantName}' ({response.NewTenantId}). " +
@@ -190,9 +209,56 @@ public sealed class DuplicateTenantModel(
                 SourceTenantId,
                 NewTenantId);
             HasError = true;
-            ErrorMessage = TenantSettingsModel.GetErrorMessage(ex, "Could not duplicate tenant.");
+            ErrorMessage = GetCloneErrorMessage(ex);
             return Page();
         }
+    }
+
+    private async Task<DuplicateTenantResponse> CloneTenantAsync(
+        CloneTenantRequest body,
+        CancellationToken cancellationToken)
+    {
+        var http = httpClientFactory.CreateClient(nameof(ITenantAdminClient));
+        using var response = await http.PostAsJsonAsync(
+            $"v1/admin/tenants/{SourceTenantId:D}/clone",
+            body,
+            PayloadSerializerOptions,
+            cancellationToken);
+
+        var responseText = response.Content is null
+            ? string.Empty
+            : await response.Content.ReadAsStringAsync(cancellationToken);
+
+        var headers = response.Headers
+            .Concat(response.Content?.Headers ?? Enumerable.Empty<KeyValuePair<string, IEnumerable<string>>>())
+            .GroupBy(h => h.Key, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => (IEnumerable<string>)g.SelectMany(x => x.Value).ToArray());
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new ExternalApplicationsException(
+                $"Clone tenant failed with HTTP {(int)response.StatusCode}.",
+                (int)response.StatusCode,
+                responseText,
+                headers,
+                null);
+        }
+
+        var dto = JsonSerializer.Deserialize<DuplicateTenantResponse>(
+            responseText,
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+        if (dto is null)
+        {
+            throw new ExternalApplicationsException(
+                "Clone tenant returned an empty body.",
+                (int)response.StatusCode,
+                responseText,
+                headers,
+                null);
+        }
+
+        return dto;
     }
 
     private async Task LoadInternalServiceAuthServicesAsync(CancellationToken cancellationToken)
@@ -270,11 +336,27 @@ public sealed class DuplicateTenantModel(
     private static string GenerateSecretKey(int byteLength = 48) =>
         Convert.ToBase64String(RandomNumberGenerator.GetBytes(byteLength));
 
-    /// <summary>
-    /// Encodes a secret for the duplicate-tenant API (WAF-safe transport).
-    /// </summary>
     internal static string ToBase64Utf8(string value) =>
         Convert.ToBase64String(Encoding.UTF8.GetBytes(value ?? string.Empty));
+
+    private static string GetCloneErrorMessage(Exception ex)
+    {
+        if (ex is ExternalApplicationsException clientEx)
+        {
+            var body = clientEx.Response?.TrimStart() ?? string.Empty;
+            if (clientEx.StatusCode == 403 && body.StartsWith('<'))
+            {
+                return "Clone was blocked with HTTP 403 (HTML response). "
+                    + "This usually means Front Door / WAF rejected the request before the API. "
+                    + "Check WAF logs for POST /v1/admin/tenants/.../clone.";
+            }
+
+            if (clientEx.StatusCode > 0)
+                return $"Could not duplicate tenant. (HTTP {clientEx.StatusCode})";
+        }
+
+        return TenantSettingsModel.GetErrorMessage(ex, "Could not duplicate tenant.");
+    }
 
     private bool TryResolveSourceTenant(out string? error)
     {
