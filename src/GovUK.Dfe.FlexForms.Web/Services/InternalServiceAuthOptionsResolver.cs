@@ -33,8 +33,10 @@ public sealed class InternalServiceAuthOptionsResolver(
 
         var hostOptions = new InternalServiceAuthOptions();
         hostConfiguration.GetSection(InternalServiceAuthOptions.SectionName).Bind(hostOptions);
-        logger.LogDebug(
-            "Resolved InternalServiceAuth from host configuration (tenant section missing)");
+        logger.LogWarning(
+            "Tenant '{TenantName}' has no InternalServiceAuth section; falling back to host secrets. " +
+            "Configure a per-tenant InternalServiceAuth setting to isolate service credentials.",
+            tenantContext?.TenantName ?? "unknown");
         return hostOptions;
     }
 }

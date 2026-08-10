@@ -1,3 +1,5 @@
+using GovUK.Dfe.FlexForms.Application.Models;
+
 namespace GovUK.Dfe.FlexForms.Application.Interfaces;
 
 /// <summary>
@@ -11,4 +13,9 @@ public interface IEventTypeRegistry
     /// <param name="eventTypeName">Event type name as configured in appsettings</param>
     /// <returns>The Type to use for mapping and publishing, or null if not registered</returns>
     Type? GetEventType(string eventTypeName);
+
+    /// <summary>
+    /// Returns all discovered platform event types (name, topic, CLR type).
+    /// </summary>
+    IReadOnlyList<EventCatalogueEntry> GetCatalogue();
 }

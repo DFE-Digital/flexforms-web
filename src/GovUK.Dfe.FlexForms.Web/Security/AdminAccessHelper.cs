@@ -64,10 +64,32 @@ public static class AdminAccessHelper
         IsAdmin(user);
 
     /// <summary>
+    /// Organisation settings (non-secret delegated TenantConfig) — Admin or SuperAdmin.
+    /// </summary>
+    public static bool CanManageOrganisationSettings(ClaimsPrincipal? user) =>
+        IsAdmin(user);
+
+    /// <summary>
+    /// Event mappings / schema events for the current tenant — Admin or SuperAdmin.
+    /// Same audience as organisation settings (delegated safe TenantConfig categories).
+    /// </summary>
+    public const string CanManageEventMappingsPolicy = "CanManageEventMappings";
+
+    public static bool CanManageEventMappings(ClaimsPrincipal? user) =>
+        IsAdmin(user);
+
+    /// <summary>
     /// TenantConfig settings editor — SuperAdmin only (decrypted secrets).
     /// </summary>
     public static bool CanManageTenantSettings(ClaimsPrincipal? user) =>
         IsSuperAdmin(user);
+
+    /// <summary>
+    /// Read-only tenant configuration summary (auth scheme, hostnames) for tenant Admins.
+    /// SuperAdmins use <see cref="CanManageTenantSettings"/> for the full editor.
+    /// </summary>
+    public static bool CanViewTenantConfigurationSummary(ClaimsPrincipal? user) =>
+        IsAdmin(user) && !IsSuperAdmin(user);
 
     /// <summary>
     /// Roles shown in User Manager add/edit.

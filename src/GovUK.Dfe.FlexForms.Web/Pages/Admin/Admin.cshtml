@@ -144,7 +144,7 @@
             </div>
         }
 
-        @if (Model.CanManageUsers || Model.CanManageRoles)
+        @if (Model.CanManageUsers || Model.CanManageRoles || Model.IsFullAdmin)
         {
             <div class="govuk-summary-card">
                 <div class="govuk-summary-card__title-wrapper">
@@ -165,30 +165,96 @@
                                 Role Manager
                             </a>
                         }
+                        @if (Model.CanManageUsers || Model.IsFullAdmin)
+                        {
+                            <a asp-page="/Admin/ContributorManagement" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="go-to-contributor-management-button">
+                                Contributor management
+                            </a>
+                        }
                     </div>
                 </div>
             </div>
         }
 
-        @if (Model.CanManageTenantSettings)
+        @if (Model.CanAccessTenantAdminSection)
         {
             <div class="govuk-summary-card">
                 <div class="govuk-summary-card__title-wrapper">
-                    <h2 class="govuk-summary-card__title">Tenant configuration</h2>
+                    <h2 class="govuk-summary-card__title">Tenant Admin</h2>
                 </div>
                 <div class="govuk-summary-card__content">
                     <p class="govuk-body">
-                        View and edit TenantConfig app settings for this tenant (SuperAdmin only).
-                        Secret values are encrypted at rest.
+                        Manage this tenant’s organisation settings, event mappings, and configuration.
+                        Changes apply to the current tenant only.
                     </p>
                     <div class="govuk-button-group">
-                        <a asp-page="/Admin/DuplicateTenant" class="govuk-button" data-module="govuk-button" id="go-to-duplicate-tenant-button">
-                            Duplicate tenant
-                        </a>
-                        <a asp-page="/Admin/TenantSettings" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="go-to-tenant-settings-button">
-                            Tenant Settings
-                        </a>
+                        @if (Model.CanManageOrganisationSettings)
+                        {
+                            <a asp-page="/Admin/OrganisationSettings" class="govuk-button" data-module="govuk-button" id="go-to-organisation-settings-button">
+                                Organisation settings
+                            </a>
+                        }
+                        @if (Model.CanManageEventMappings)
+                        {
+                            <a asp-page="/Admin/EventMappings" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="go-to-event-mappings-button">
+                                Event mappings
+                            </a>
+                        }
+                        @if (Model.CanManageTenantSettings)
+                        {
+
+                            <a asp-page="/Admin/TenantSettings" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="go-to-tenant-settings-button">
+                                Tenant Settings
+                            </a>
+                        }
+                        @if (Model.IsSuperAdmin)
+                        {
+                            <a asp-page="/Admin/DuplicateTenant" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="go-to-duplicate-tenant-button">
+                                Duplicate tenant
+                            </a>
+                            <a asp-page="/Admin/PlatformTenants" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="go-to-platform-tenants-button">
+                                Platform tenants
+                            </a>
+                        }
                     </div>
+
+                    @if (Model.CanViewTenantConfigurationSummary && Model.TenantConfigurationSummary is not null)
+                    {
+                        <hr class="govuk-section-break govuk-section-break--m govuk-section-break--visible">
+                        <h3 class="govuk-heading-s">This tenant’s configuration</h3>
+                        <p class="govuk-body">Read-only summary of runtime configuration for the current tenant.</p>
+                        <dl class="govuk-summary-list govuk-summary-list--no-border">
+                            <div class="govuk-summary-list__row">
+                                <dt class="govuk-summary-list__key">Auth scheme</dt>
+                                <dd class="govuk-summary-list__value">
+                                    <strong class="govuk-tag govuk-tag--blue">
+                                        @(Model.TenantConfigurationSummary.InteractiveAuthScheme ?? "Not set")
+                                    </strong>
+                                </dd>
+                            </div>
+                            <div class="govuk-summary-list__row">
+                                <dt class="govuk-summary-list__key">Auth providers</dt>
+                                <dd class="govuk-summary-list__value">
+                                    @(Model.TenantConfigurationSummary.TestAuthenticationEnabled ? "TestAuth " : "")
+                                    @(Model.TenantConfigurationSummary.EntraSsoEnabled ? "EntraSSO " : "")
+                                    @(Model.TenantConfigurationSummary.DfESignInConfigured ? "DfESignIn" : "")
+                                </dd>
+                            </div>
+                            <div class="govuk-summary-list__row">
+                                <dt class="govuk-summary-list__key">Hostnames</dt>
+                                <dd class="govuk-summary-list__value">
+                                    @if (Model.TenantConfigurationSummary.Hostnames?.Count > 0)
+                                    {
+                                        @string.Join(", ", Model.TenantConfigurationSummary.Hostnames)
+                                    }
+                                    else
+                                    {
+                                        <span class="govuk-hint">None</span>
+                                    }
+                                </dd>
+                            </div>
+                        </dl>
+                    }
                 </div>
             </div>
         }

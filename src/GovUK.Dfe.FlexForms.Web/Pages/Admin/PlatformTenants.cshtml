@@ -1,0 +1,74 @@
+@page "/admin/platform-tenants"
+@model GovUK.Dfe.FlexForms.Web.Pages.Admin.PlatformTenantsModel
+@{
+    ViewData["Title"] = "Platform tenants";
+}
+
+<div class="govuk-grid-row">
+    <div class="govuk-grid-column-full">
+        <a asp-page="/Admin/Admin" class="govuk-back-link">Back to Admin</a>
+
+        @if (Model.HasError)
+        {
+            <div class="govuk-error-summary" data-module="govuk-error-summary">
+                <div role="alert">
+                    <h2 class="govuk-error-summary__title">There is a problem</h2>
+                    <div class="govuk-error-summary__body">
+                        <p class="govuk-body">@Model.ErrorMessage</p>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <h1 class="govuk-heading-xl">Platform tenants</h1>
+        <p class="govuk-body">
+            Read-only catalogue of tenants loaded in the platform configuration store
+            (source: <strong>@(Model.Source ?? "unknown")</strong>,
+            @(Model.TenantCount) active).
+            @if (Model.LastCatalogueRefreshUtc is not null)
+            {
+                <span>Last refresh: @Model.LastCatalogueRefreshUtc.Value.ToString("yyyy-MM-dd HH:mm:ss") UTC.</span>
+            }
+        </p>
+        <p class="govuk-body">
+            <a asp-page="/Admin/TenantSettings" class="govuk-link">Open current tenant settings</a>
+        </p>
+
+        @if (Model.Tenants.Count == 0)
+        {
+            <p class="govuk-body">No tenants found.</p>
+        }
+        else
+        {
+            <table class="govuk-table">
+                <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                        <th scope="col" class="govuk-table__header">Name</th>
+                        <th scope="col" class="govuk-table__header">Tenant ID</th>
+                        <th scope="col" class="govuk-table__header">Auth scheme</th>
+                        <th scope="col" class="govuk-table__header">Hostnames</th>
+                        <th scope="col" class="govuk-table__header">Origins</th>
+                    </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                    @foreach (var tenant in Model.Tenants)
+                    {
+                        <tr class="govuk-table__row">
+                            <td class="govuk-table__cell">@tenant.TenantName</td>
+                            <td class="govuk-table__cell"><code class="govuk-!-font-size-14">@tenant.TenantId</code></td>
+                            <td class="govuk-table__cell">
+                                <strong class="govuk-tag govuk-tag--blue">@(tenant.InteractiveAuthScheme ?? "—")</strong>
+                            </td>
+                            <td class="govuk-table__cell">
+                                @(tenant.Hostnames.Count > 0 ? string.Join(", ", tenant.Hostnames) : "—")
+                            </td>
+                            <td class="govuk-table__cell">
+                                @(tenant.FrontendOrigins.Count > 0 ? string.Join(", ", tenant.FrontendOrigins) : "—")
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>

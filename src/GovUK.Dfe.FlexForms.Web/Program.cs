@@ -30,7 +30,6 @@ using GovUK.Dfe.CoreLibs.Security.EntraSso;
 using GovUK.Dfe.CoreLibs.Security.TokenRefresh.Extensions;
 using System.IO.Compression;
 using GovUK.Dfe.FlexForms.Infrastructure.Consumers;
-using GovUK.Dfe.CoreLibs.Messaging.Contracts.Entities.Topics;
 using GovUK.Dfe.CoreLibs.Messaging.Contracts.Messages.Events;
 using GovUK.Dfe.CoreLibs.Messaging.MassTransit.Extensions;
 using Microsoft.AspNetCore.Authentication;
@@ -494,6 +493,8 @@ builder.Services.AddAuthorization(options =>
         policy.RequireAssertion(ctx => AdminAccessHelper.CanManageUsers(ctx.User)));
     options.AddPolicy(AdminAccessHelper.CanManageTenantSettingsPolicy, policy =>
         policy.RequireAssertion(ctx => AdminAccessHelper.CanManageTenantSettings(ctx.User)));
+    options.AddPolicy(AdminAccessHelper.CanManageEventMappingsPolicy, policy =>
+        policy.RequireAssertion(ctx => AdminAccessHelper.CanManageEventMappings(ctx.User)));
 });
 
 builder.Services.AddScoped<ICustomClaimProvider, PermissionsClaimProvider>();
@@ -502,6 +503,11 @@ builder.Services.AddTokenRefreshWithOidc(configuration, "DfESignIn", "TokenRefre
 
 // Add HttpClient for API calls
 builder.Services.AddHttpClient();
+builder.Services.AddTransient<CorrelationIdForwardingHandler>();
+builder.Services.ConfigureHttpClientDefaults(http =>
+{
+    http.AddHttpMessageHandler<CorrelationIdForwardingHandler>();
+});
 
 builder.Services.AddTenantAwarePlatformServices(configuration);
 
@@ -582,21 +588,12 @@ builder.Services.Configure<DashboardOptions>(configuration.GetSection("Dashboard
 // Scoped so tenant-aware IOptions are not captured for the app lifetime.
 builder.Services.AddScoped<IApplicationTerminologyProvider, ApplicationTerminologyProvider>();
 
-// Application submission configuration (mapper key and handlers per application)
-builder.Services.Configure<ApplicationSubmissionOptions>(configuration.GetSection("ApplicationSubmission"));
-
 builder.Services.AddTenantAwareOptionsAccessors(configuration);
 
-// Event mapping and publishing services
-builder.Services.AddSingleton<IEventMappingProvider, EventMappingProvider>();
-builder.Services.AddKeyedScoped<IEventDataMapper, EventDataMapper>("Default");
-builder.Services.AddScoped<IEventDataMapperFactory, EventDataMapperFactory>();
+// Read-only event metadata for the Event mappings Admin page. Outbound mapped events are
+// published by the API from its own domain events, driven by the EventTriggers TenantConfig.
+builder.Services.AddScoped<ISchemaEventDefinitionProvider, SchemaEventDefinitionProvider>();
 builder.Services.AddSingleton<IEventTypeRegistry, EventTypeRegistry>();
-
-// Application submission handlers (resolved by key from ApplicationSubmission:Handlers)
-builder.Services.AddKeyedScoped<IApplicationSubmittedHandler, PublishEventApplicationSubmittedHandler>("PublishEvent");
-builder.Services.AddKeyedScoped<IApplicationSubmittedHandler, NoOpApplicationSubmittedHandler>("NoOp");
-builder.Services.AddScoped<IApplicationSubmissionOrchestrator, ApplicationSubmissionOrchestrator>();
 
 builder.Services.AddDfEMassTransit(
     configuration,
@@ -606,9 +603,9 @@ builder.Services.AddDfEMassTransit(
     },
     configureBus: (context, cfg) =>
     {
-        // Configure topic names for message types
-        cfg.Message<ScanResultEvent>(m => m.SetEntityName(TopicNames.ScanResult));
-        cfg.Message<TransferApplicationSubmittedEvent>(m => m.SetEntityName(TopicNames.TransferApplicationSubmitted));
+        // Wire all CoreLibs Messaging.Contracts events to TopicNames (assembly-scanned).
+        GovUK.Dfe.FlexForms.Infrastructure.Messaging.MessagingEventBusConfigurator
+            .ConfigureDiscoveredMessageTopics(cfg);
 
         cfg.UseJsonSerializer();
     },
@@ -655,6 +652,7 @@ AppDomain.CurrentDomain.UnhandledException += (sender, args) =>
 var app = builder.Build();
 
 app.UseForwardedHeaders();
+app.UseMiddleware<CorrelationIdMiddleware>();
 app.UsePlatformTenantConfiguration();
 
 // Configure the HTTP request pipeline.

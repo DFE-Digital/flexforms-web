@@ -14,6 +14,7 @@ using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.Mvc;
 using StackExchange.Redis;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -47,7 +48,6 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
         IConnectionMultiplexer redis,
         ILogger<RenderFormModel> logger,
         INavigationHistoryService navigationHistoryService,
-        IApplicationSubmissionOrchestrator applicationSubmissionOrchestrator,
         IRequestAppConfiguration requestConfiguration)
         : BaseFormEngineModel(renderer, applicationResponseService, fieldFormattingService, templateManagementService,
             applicationStateService, formStateManager, formNavigationService, formDataManager, formValidationOrchestrator, formConfigurationService, logger)
@@ -61,7 +61,6 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
         private readonly IConnectionMultiplexer _redis = redis;
         private readonly IFieldRequirementService _fieldRequirementService = fieldRequirementService;
         private readonly INavigationHistoryService _navigationHistoryService = navigationHistoryService;
-        private readonly IApplicationSubmissionOrchestrator _applicationSubmissionOrchestrator = applicationSubmissionOrchestrator;
         private readonly IRequestAppConfiguration _requestConfiguration = requestConfiguration;
         private string ApplicationContext =>
             _requestConfiguration["ApplicationName"]
@@ -101,6 +100,15 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
 
         // Conditional logic state for the current form
         public FormConditionalState? ConditionalState { get; set; }
+
+        /// <summary>
+        /// Per-request cache: one lean field-visibility evaluation per collection item dictionary
+        /// (preview/summary previously re-ran the whole template for every column).
+        /// </summary>
+        private readonly Dictionary<object, FormConditionalState> _itemConditionalStateCache =
+            new(ReferenceEqualityComparer.Instance);
+
+        private HashSet<string>? _fieldsWithConditionalVisibility;
 
         public async Task OnGetAsync()
         {
@@ -446,6 +454,14 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                                 foreach (var item in items)
                                 {
                                     bool itemHasMissingFields = false;
+                                    var requiredFieldIds = flow.Pages
+                                        .Where(p => p?.Fields != null)
+                                        .SelectMany(p => p.Fields)
+                                        .Where(f => _fieldRequirementService.IsFieldRequired(f, Template))
+                                        .Select(f => f.FieldId)
+                                        .ToList();
+                                    EnsureItemFieldVisibility(item, requiredFieldIds);
+
                                     foreach (var page in flow.Pages)
                                     {
                                         if (page?.Fields == null) continue;
@@ -601,10 +617,10 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                 {
                     var statusKey = $"ApplicationStatus_{ApplicationId.Value}";
                     HttpContext.Session.SetString(statusKey, submittedApplication.Status?.ToString() ?? "Submitted");
-                    _logger.LogInformation("Successfully submitted application {ApplicationId} with reference {ReferenceNumber}", 
+                    // Outbound mapped events are published by the API from its
+                    // ApplicationSubmitted domain event, using the tenant's EventTriggers.
+                    _logger.LogInformation("Successfully submitted application {ApplicationId} with reference {ReferenceNumber}",
                         ApplicationId.Value, ReferenceNumber);
-                    
-                    await _applicationSubmissionOrchestrator.ExecuteOnSubmittedAsync(submittedApplication, FormData, Template!, CancellationToken.None);
                 }
                 else
                 {
@@ -2327,17 +2343,11 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
 
                 if (Template?.ConditionalLogic != null && Template.ConditionalLogic.Any())
                 {
-                    // Log all rules in template
-                    foreach (var rule in Template.ConditionalLogic)
-                    {
-                        
-                        foreach (var condition in rule.ConditionGroup.Conditions)
-                        {
-                            
-                        }
-                    }
-
-                    var dataForConditionalLogic = new Dictionary<string, object>(Data);
+                    // Prefer FormData (session) when Data is empty (e.g. preview GET before bind);
+                    // otherwise use Data so current-page POST values win.
+                    var dataForConditionalLogic = Data.Count > 0
+                        ? new Dictionary<string, object>(Data)
+                        : new Dictionary<string, object>(FormData);
                     
                     // Only merge when in POST/change trigger (not during initial GET/load)
                     if (trigger == "change")
@@ -2532,13 +2542,34 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
         private bool HasFieldConditionalLogic(string fieldId)
         {
             if (Template?.ConditionalLogic == null) return false;
-            
-            return Template.ConditionalLogic.Any(rule => 
-                rule.Enabled && 
-                rule.AffectedElements.Any(element => 
-                    element.ElementId == fieldId && 
-                    element.ElementType == "field" && 
-                    (element.Action == "hide" || element.Action == "show")));
+
+            _fieldsWithConditionalVisibility ??= BuildFieldsWithConditionalVisibility();
+            return _fieldsWithConditionalVisibility.Contains(fieldId);
+        }
+
+        private HashSet<string> BuildFieldsWithConditionalVisibility()
+        {
+            var fields = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (Template?.ConditionalLogic == null)
+                return fields;
+
+            foreach (var rule in Template.ConditionalLogic)
+            {
+                if (!rule.Enabled || rule.AffectedElements == null)
+                    continue;
+
+                foreach (var element in rule.AffectedElements)
+                {
+                    if (element.ElementType == "field"
+                        && (element.Action == "hide" || element.Action == "show")
+                        && !string.IsNullOrEmpty(element.ElementId))
+                    {
+                        fields.Add(element.ElementId);
+                    }
+                }
+            }
+
+            return fields;
         }
 
         /// <summary>
@@ -2696,6 +2727,58 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
         }
 
         /// <summary>
+        /// Ensures field visibility for a collection item is evaluated for the given field IDs (batched).
+        /// Call once per item before checking multiple summary columns.
+        /// </summary>
+        public void EnsureItemFieldVisibility(Dictionary<string, object> itemData, IEnumerable<string> fieldIds)
+        {
+            if (Template?.ConditionalLogic == null || !Template.ConditionalLogic.Any())
+                return;
+
+            var needed = fieldIds
+                .Where(HasFieldConditionalLogic)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Where(id =>
+                    !_itemConditionalStateCache.TryGetValue(itemData, out var existing)
+                    || !existing.FieldVisibility.ContainsKey(id))
+                .ToList();
+
+            if (needed.Count == 0)
+                return;
+
+            try
+            {
+                var context = new ConditionalLogicContext
+                {
+                    CurrentPageId = CurrentPageId,
+                    CurrentTaskId = TaskId,
+                    IsClientSide = false,
+                    Trigger = "load"
+                };
+
+                var partial = _conditionalLogicOrchestrator
+                    .ApplyFieldVisibilityAsync(Template, itemData, needed, context)
+                    .GetAwaiter()
+                    .GetResult();
+
+                if (!_itemConditionalStateCache.TryGetValue(itemData, out var state))
+                {
+                    _itemConditionalStateCache[itemData] = partial;
+                    return;
+                }
+
+                foreach (var kvp in partial.FieldVisibility)
+                {
+                    state.FieldVisibility[kvp.Key] = kvp.Value;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error ensuring field visibility for collection item");
+            }
+        }
+
+        /// <summary>
         /// Check if a field should be hidden for a specific collection item based on conditional logic
         /// </summary>
         /// <param name="fieldId">The field ID to check</param>
@@ -2710,28 +2793,20 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                     return false; // No conditional logic defined
                 }
 
-                var context = new ConditionalLogicContext
+                if (!HasFieldConditionalLogic(fieldId))
                 {
-                    CurrentPageId = CurrentPageId,
-                    CurrentTaskId = TaskId,
-                    IsClientSide = false,
-                    Trigger = "load"
-                };
+                    return false;
+                }
 
-                // Evaluate conditional logic synchronously using the specific item's data
-                var itemConditionalState = _conditionalLogicOrchestrator.ApplyConditionalLogicAsync(Template, itemData, context).GetAwaiter().GetResult();
-                
-                if (itemConditionalState.FieldVisibility.TryGetValue(fieldId, out var isVisible))
+                EnsureItemFieldVisibility(itemData, [fieldId]);
+
+                if (_itemConditionalStateCache.TryGetValue(itemData, out var itemConditionalState)
+                    && itemConditionalState.FieldVisibility.TryGetValue(fieldId, out var isVisible))
                 {
                     return !isVisible;
                 }
 
-                if (Template?.ConditionalLogic != null && HasFieldConditionalLogic(fieldId))
-                {
-                    return true;
-                }
-
-                return false;
+                return true;
             }
             catch (Exception ex)
             {

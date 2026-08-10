@@ -11,6 +11,12 @@ public class ConditionalLogicOrchestrator(
     IConditionalLogicEngine conditionalLogicEngine,
     ILogger<ConditionalLogicOrchestrator> logger) : IConditionalLogicOrchestrator
 {
+    /// <summary>
+    /// Per-request (scoped) cache of expensive template walks shared across many item evaluations.
+    /// </summary>
+    private readonly Dictionary<string, TemplateStructureCache> _templateStructureCache =
+        new(StringComparer.OrdinalIgnoreCase);
+
     public async Task<FormConditionalState> ApplyConditionalLogicAsync(FormTemplate template,
         Dictionary<string, object> formData,
         ConditionalLogicContext? context = null)
@@ -48,6 +54,77 @@ public class ConditionalLogicOrchestrator(
         }
 
         return state;
+    }
+
+    public async Task<FormConditionalState> ApplyFieldVisibilityAsync(
+        FormTemplate template,
+        Dictionary<string, object> formData,
+        IReadOnlyCollection<string>? fieldIds = null,
+        ConditionalLogicContext? context = null)
+    {
+        var state = new FormConditionalState();
+
+        try
+        {
+            var structure = GetOrCreateTemplateStructure(template);
+            var targetFields = fieldIds == null || fieldIds.Count == 0
+                ? structure.FieldsWithVisibilityRules
+                : fieldIds
+                    .Where(id => structure.FieldsWithVisibilityRules.Contains(id))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var fieldId in targetFields)
+            {
+                // Affected fields default to hidden until a matching show action fires.
+                state.FieldVisibility[fieldId] = false;
+            }
+
+            if (template.ConditionalLogic == null || targetFields.Count == 0)
+            {
+                return state;
+            }
+
+            var relevantRules = template.ConditionalLogic.Where(rule =>
+                rule.Enabled
+                && rule.AffectedElements != null
+                && rule.AffectedElements.Any(element =>
+                    string.Equals(element.ElementType, ConditionalLogicConstants.ElementTypes.Field, StringComparison.OrdinalIgnoreCase)
+                    && targetFields.Contains(element.ElementId)
+                    && (string.Equals(element.Action, ConditionalLogicConstants.Actions.Show, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(element.Action, ConditionalLogicConstants.Actions.Hide, StringComparison.OrdinalIgnoreCase))));
+
+            var result = conditionalLogicEngine.EvaluateRules(relevantRules, formData, context);
+            state.EvaluationResult = result;
+
+            foreach (var action in result.Actions.OrderBy(a => a.Priority))
+            {
+                var element = action.Element;
+                if (!string.Equals(element.ElementType, ConditionalLogicConstants.ElementTypes.Field, StringComparison.OrdinalIgnoreCase)
+                    || !targetFields.Contains(element.ElementId))
+                {
+                    continue;
+                }
+
+                if (string.Equals(element.Action, ConditionalLogicConstants.Actions.Show, StringComparison.OrdinalIgnoreCase))
+                {
+                    state.FieldVisibility[element.ElementId] = true;
+                }
+                else if (string.Equals(element.Action, ConditionalLogicConstants.Actions.Hide, StringComparison.OrdinalIgnoreCase))
+                {
+                    state.FieldVisibility[element.ElementId] = false;
+                }
+            }
+
+            logger.LogDebug(
+                "Applied field visibility for template '{TemplateId}', {FieldCount} fields, {RuleCount} rules",
+                template.TemplateId, targetFields.Count, result.EvaluatedRules.Count);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error applying field visibility for template '{TemplateId}'", template.TemplateId);
+        }
+
+        return await System.Threading.Tasks.Task.FromResult(state);
     }
 
     public async Task<ConditionalLogicResult> EvaluateFieldChangeAsync(FormTemplate template,
@@ -251,11 +328,42 @@ public class ConditionalLogicOrchestrator(
 
     private void InitializeDefaultState(FormTemplate template, FormConditionalState state)
     {
-        // Determine which pages/fields are affected by conditional logic rules
+        var structure = GetOrCreateTemplateStructure(template);
+
+        foreach (var page in structure.AllPages)
+        {
+            var isAffected = structure.AffectedPages.Contains(page.PageId);
+            state.PageVisibility[page.PageId] = isAffected ? false : true;
+        }
+
+        foreach (var field in structure.AllFields)
+        {
+            var isAffected = structure.AffectedFields.Contains(field.FieldId);
+            state.FieldVisibility[field.FieldId] = isAffected ? false : true;
+            state.FieldEnabled[field.FieldId] = true;
+            state.FieldRequired[field.FieldId] = field.Required ?? false;
+        }
+    }
+
+    private TemplateStructureCache GetOrCreateTemplateStructure(FormTemplate template)
+    {
+        var cacheKey = template.TemplateId ?? string.Empty;
+        if (_templateStructureCache.TryGetValue(cacheKey, out var cached))
+        {
+            return cached;
+        }
+
+        var allPages = BuildAllPages(template);
+        var allFields = allPages
+            .Where(p => p.Fields != null)
+            .SelectMany(p => p.Fields)
+            .ToList();
+
         var affectedPages = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var affectedFields = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var fieldsWithVisibilityRules = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        if (template?.ConditionalLogic != null)
+        if (template.ConditionalLogic != null)
         {
             foreach (var rule in template.ConditionalLogic.Where(r => r.Enabled))
             {
@@ -270,28 +378,20 @@ public class ConditionalLogicOrchestrator(
                             break;
                         case ConditionalLogicConstants.ElementTypes.Field:
                             affectedFields.Add(element.ElementId);
+                            if (string.Equals(element.Action, ConditionalLogicConstants.Actions.Show, StringComparison.OrdinalIgnoreCase)
+                                || string.Equals(element.Action, ConditionalLogicConstants.Actions.Hide, StringComparison.OrdinalIgnoreCase))
+                            {
+                                fieldsWithVisibilityRules.Add(element.ElementId);
+                            }
                             break;
                     }
                 }
             }
         }
 
-        var allPages = GetAllPages(template);
-        var allFields = GetAllFields(template);
-
-        foreach (var page in allPages)
-        {
-            var isAffected = affectedPages.Contains(page.PageId);
-            state.PageVisibility[page.PageId] = isAffected ? false : true;
-        }
-
-        foreach (var field in allFields)
-        {
-            var isAffected = affectedFields.Contains(field.FieldId);
-            state.FieldVisibility[field.FieldId] = isAffected ? false : true;
-            state.FieldEnabled[field.FieldId] = true;
-            state.FieldRequired[field.FieldId] = field.Required ?? false;
-        }
+        cached = new TemplateStructureCache(allPages, allFields, affectedPages, affectedFields, fieldsWithVisibilityRules);
+        _templateStructureCache[cacheKey] = cached;
+        return cached;
     }
 
     private async System.Threading.Tasks.Task ApplyActionsAsync(List<ConditionalLogicAction> actions,
@@ -530,7 +630,21 @@ public class ConditionalLogicOrchestrator(
         return rule;
     }
 
-    private List<Page> GetAllPages(FormTemplate template)
+    private List<Page> GetAllPages(FormTemplate template) =>
+        GetOrCreateTemplateStructure(template).AllPages;
+
+    private List<Field> GetFieldsForPage(FormTemplate template, string pageId)
+    {
+        var page = GetAllPages(template).FirstOrDefault(p => p.PageId == pageId);
+        if (page?.Fields != null)
+        {
+            return page.Fields.ToList();
+        }
+
+        return new List<Field>();
+    }
+
+    private static List<Page> BuildAllPages(FormTemplate template)
     {
         var pages = new List<Page>();
 
@@ -570,23 +684,18 @@ public class ConditionalLogicOrchestrator(
         return pages;
     }
 
-    private List<Field> GetAllFields(FormTemplate template)
+    private sealed class TemplateStructureCache(
+        List<Page> allPages,
+        List<Field> allFields,
+        HashSet<string> affectedPages,
+        HashSet<string> affectedFields,
+        HashSet<string> fieldsWithVisibilityRules)
     {
-        return GetAllPages(template)
-            .Where(p => p.Fields != null)
-            .SelectMany(p => p.Fields)
-            .ToList();
-    }
-
-    private List<Field> GetFieldsForPage(FormTemplate template, string pageId)
-    {
-        var page = GetAllPages(template).FirstOrDefault(p => p.PageId == pageId);
-        if (page?.Fields != null)
-        {
-            return page.Fields.ToList();
-        }
-
-        return new List<Field>();
+        public List<Page> AllPages { get; } = allPages;
+        public List<Field> AllFields { get; } = allFields;
+        public HashSet<string> AffectedPages { get; } = affectedPages;
+        public HashSet<string> AffectedFields { get; } = affectedFields;
+        public HashSet<string> FieldsWithVisibilityRules { get; } = fieldsWithVisibilityRules;
     }
 
     #endregion

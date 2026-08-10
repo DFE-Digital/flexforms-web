@@ -1,27 +1,50 @@
-using GovUK.Dfe.FlexForms.Application.Interfaces;
-using GovUK.Dfe.CoreLibs.Messaging.Contracts.Messages.Events;
 using System.Collections.Concurrent;
+using GovUK.Dfe.FlexForms.Application.Interfaces;
+using GovUK.Dfe.FlexForms.Application.Models;
+using GovUK.Dfe.FlexForms.Infrastructure.Messaging;
+using Microsoft.Extensions.Logging;
 
 namespace GovUK.Dfe.FlexForms.Infrastructure.Services;
 
 /// <summary>
-/// Maps event type names (from config) to .NET types for use with IEventDataMapper.MapToEventAsync.
-/// Register additional event types via Register when new message types are added.
+/// Maps event type names (from config) to .NET types by scanning CoreLibs Messaging.Contracts.
 /// </summary>
 public class EventTypeRegistry : IEventTypeRegistry
 {
-    private readonly ConcurrentDictionary<string, Type> _eventTypes = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, Type> _eventTypes;
+    private readonly IReadOnlyList<EventCatalogueEntry> _catalogue;
 
     /// <summary>
-    /// Creates a registry with the built-in event types registered.
+    /// Creates a registry populated from assembly-scanned messaging contracts.
     /// </summary>
-    public EventTypeRegistry()
+    public EventTypeRegistry(ILogger<EventTypeRegistry>? logger = null)
     {
-        Register(typeof(TransferApplicationSubmittedEvent));
+        var discovered = MessagingEventDiscovery.Discover();
+        _eventTypes = new ConcurrentDictionary<string, Type>(StringComparer.OrdinalIgnoreCase);
+        var catalogue = new List<EventCatalogueEntry>(discovered.Count);
+
+        foreach (var entry in discovered)
+        {
+            _eventTypes[entry.EventTypeName] = entry.ClrType;
+            catalogue.Add(new EventCatalogueEntry(entry.EventTypeName, entry.TopicName, entry.ClrType));
+
+            if (entry.TopicName is null)
+            {
+                logger?.LogWarning(
+                    "Discovered messaging event {EventType} has no matching TopicNames constant; MassTransit topic wiring will be skipped.",
+                    entry.EventTypeName);
+            }
+        }
+
+        _catalogue = catalogue;
+
+        logger?.LogInformation(
+            "EventTypeRegistry loaded {Count} event type(s) from Messaging.Contracts.",
+            _catalogue.Count);
     }
 
     /// <summary>
-    /// Registers an event type by its type (uses type.Name as the key).
+    /// Registers an additional event type by its type (uses type.Name as the key).
     /// </summary>
     public void Register(Type eventType)
     {
@@ -35,4 +58,7 @@ public class EventTypeRegistry : IEventTypeRegistry
         if (string.IsNullOrEmpty(eventTypeName)) return null;
         return _eventTypes.TryGetValue(eventTypeName, out var type) ? type : null;
     }
+
+    /// <inheritdoc />
+    public IReadOnlyList<EventCatalogueEntry> GetCatalogue() => _catalogue;
 }

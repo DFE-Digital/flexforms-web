@@ -15,6 +15,7 @@ using System.Diagnostics.CodeAnalysis;
 using Microsoft.AspNetCore.Authentication;
 using Task = System.Threading.Tasks.Task;
 using GovUK.Dfe.FlexForms.Api.Client.Security;
+using GovUK.Dfe.FlexForms.Web.Tenancy;
 
 namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
 {
@@ -27,6 +28,8 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
         ICacheService<IMemoryCacheType> cacheService,
         IHttpContextAccessor httpContextAccessor,
         IInternalUserTokenStore tokenStore,
+        ITenantAdminClient tenantAdminClient,
+        ITenantRequestContext tenantRequestContext,
         ILogger<AdminModel> logger)
         : PageModel
     {
@@ -47,13 +50,32 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
 
         public bool IsFullAdmin => AdminAccessHelper.IsAdmin(User);
 
+        public bool IsSuperAdmin => AdminAccessHelper.IsSuperAdmin(User);
+
         public bool CanManageTemplates => AdminAccessHelper.CanManageTemplates(User);
 
         public bool CanManageUsers => AdminAccessHelper.CanManageUsers(User);
 
         public bool CanManageRoles => AdminAccessHelper.CanManageRoles(User);
 
+        public bool CanManageOrganisationSettings => AdminAccessHelper.CanManageOrganisationSettings(User);
+
+        public bool CanManageEventMappings => AdminAccessHelper.CanManageEventMappings(User);
+
         public bool CanManageTenantSettings => AdminAccessHelper.CanManageTenantSettings(User);
+
+        public bool CanViewTenantConfigurationSummary => AdminAccessHelper.CanViewTenantConfigurationSummary(User);
+
+        /// <summary>
+        /// Tenant Admin card: organisation settings, events, and (for SuperAdmin) own-tenant config tools.
+        /// </summary>
+        public bool CanAccessTenantAdminSection =>
+            CanManageOrganisationSettings
+            || CanManageEventMappings
+            || CanManageTenantSettings
+            || CanViewTenantConfigurationSummary;
+
+        public TenantEffectiveConfigurationDto? TenantConfigurationSummary { get; private set; }
 
         public async Task<IActionResult> OnGetAsync()
         {
@@ -75,6 +97,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
 
             await LoadTenantTemplatesAsync();
             await LoadTemplateInformationAsync();
+            await LoadTenantConfigurationSummaryAsync();
             return Page();
         }
 
@@ -245,6 +268,28 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
                 logger.LogError(ex, "Failed to load template information for admin page");
                 HasError = true;
                 ErrorMessage = "Failed to load template information. Please try again.";
+            }
+        }
+
+        private async Task LoadTenantConfigurationSummaryAsync()
+        {
+            if (!CanViewTenantConfigurationSummary)
+            {
+                return;
+            }
+
+            if (tenantRequestContext.TenantId is not { } tenantId || tenantId == Guid.Empty)
+            {
+                return;
+            }
+
+            try
+            {
+                TenantConfigurationSummary = await tenantAdminClient.GetEffectiveConfigurationAsync(tenantId);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to load tenant configuration summary for admin dashboard");
             }
         }
 

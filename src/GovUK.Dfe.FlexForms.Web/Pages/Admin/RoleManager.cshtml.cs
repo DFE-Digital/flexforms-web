@@ -63,6 +63,34 @@ public sealed class RoleManagerModel(
         }
     }
 
+    public async Task<IActionResult> OnPostCreateFromTemplateAsync(
+        string templateKey,
+        CancellationToken cancellationToken)
+    {
+        templateKey = templateKey?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(templateKey))
+        {
+            TempData["RoleManagerError"] = "Choose a role template.";
+            return RedirectToPage();
+        }
+
+        try
+        {
+            var created = await rolesClient.CreateFromTemplateAsync(
+                new CreateTenantRoleFromTemplateRequest(templateKey),
+                cancellationToken);
+            TempData["RoleManagerSuccess"] =
+                $"Role '{created.Name}' has been created from the {templateKey} template.";
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to create role from template {TemplateKey}", templateKey);
+            TempData["RoleManagerError"] = GetErrorMessage(ex, "Could not create the role from template.");
+        }
+
+        return RedirectToPage();
+    }
+
     public async Task<IActionResult> OnPostDeleteAsync(Guid roleId, CancellationToken cancellationToken)
     {
         try

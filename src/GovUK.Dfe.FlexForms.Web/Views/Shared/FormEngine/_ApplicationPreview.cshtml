@@ -106,10 +106,10 @@
                                     }
                                     else
                                     {
+                                        var statuses = DerivedFlowService.GetItemStatuses(derivedFlow.FieldId, Model.FormData);
                                         @foreach (var (item, itemIndex) in derivedItems.Select((item, i) => (item, i)))
                                         {
                                             var declarationData = DerivedFlowService.GetItemDeclarationData(derivedFlow.FieldId, item.Id, Model.FormData);
-                                            var statuses = DerivedFlowService.GetItemStatuses(derivedFlow.FieldId, Model.FormData);
                                             var status = statuses.TryGetValue(item.Id, out var s) ? s : "Not signed yet";
                                             
                                             <div class="govuk-summary-list__row">
@@ -278,10 +278,13 @@
                                         @foreach (var (item, itemIndex) in items.Select((item, i) => (item, i)))
                                         {
                                             var itemNumber = itemIndex + 1;
+                                            var expandedItem = DisplayHelpers.ExpandEncodedJson(item);
+                                            var summaryColumns = flow.SummaryColumns ?? new List<GovUK.Dfe.FlexForms.Domain.Models.FlowSummaryColumn>();
+                                            Model.EnsureItemFieldVisibility(item, summaryColumns.Select(c => c.Field));
                                             // Use itemTitleBinding to get the proper label (e.g., "Member", "Person") instead of "Item"
                                             var itemLabel = flow.ItemKind ?? "Item";
                                             var displayTitle = !string.IsNullOrEmpty(flow.ItemTitleBinding)
-                                                ? DisplayHelpers.InterpolateMessage($"{{{flow.ItemTitleBinding}}}", DisplayHelpers.ExpandEncodedJson(item))
+                                                ? DisplayHelpers.InterpolateMessage($"{{{flow.ItemTitleBinding}}}", expandedItem)
                                                 : $"{itemLabel} {itemNumber}";
                                             
                                             // Add item header (no gray background, just bold text)
@@ -295,9 +298,9 @@
                                             </div>
                                             
                                             // Display each field for this collection item
-                                            @foreach (var col in (flow.SummaryColumns ?? new List<GovUK.Dfe.FlexForms.Domain.Models.FlowSummaryColumn>()).Where(c => !Model.IsFieldHiddenForItem(c.Field, item)))
+                                            @foreach (var col in summaryColumns.Where(c => !Model.IsFieldHiddenForItem(c.Field, item)))
                                             {
-                                                var rawValue = DisplayHelpers.InterpolateMessage($"{{{col.Field}}}", DisplayHelpers.ExpandEncodedJson(item));
+                                                var rawValue = DisplayHelpers.InterpolateMessage($"{{{col.Field}}}", expandedItem);
                                                 var value = rawValue == $"{{{col.Field}}}" ? string.Empty : rawValue;
                                                 
                                                 <div class="govuk-summary-list__row">

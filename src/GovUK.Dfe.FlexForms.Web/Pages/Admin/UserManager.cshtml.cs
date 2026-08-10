@@ -18,6 +18,8 @@ public sealed class UserManagerModel(
 {
     public IReadOnlyList<TenantUserDto> Users { get; private set; } = [];
 
+    public IReadOnlyList<TenantAccessAuditEntryDto> AccessAuditEntries { get; private set; } = [];
+
     public bool HasError { get; private set; }
 
     public string? ErrorMessage { get; private set; }
@@ -25,6 +27,10 @@ public sealed class UserManagerModel(
     public bool ShowSuccess { get; private set; }
 
     public string? SuccessMessage { get; private set; }
+
+    public bool AuditLogLoadFailed { get; private set; }
+
+    public string? AuditLogLoadErrorMessage { get; private set; }
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
@@ -41,6 +47,7 @@ public sealed class UserManagerModel(
         }
 
         await LoadUsersAsync(cancellationToken);
+        await LoadAccessAuditLogAsync(cancellationToken);
     }
 
     public async Task<IActionResult> OnPostRemoveAsync(Guid userId, CancellationToken cancellationToken)
@@ -72,6 +79,26 @@ public sealed class UserManagerModel(
             HasError = true;
             ErrorMessage = GetErrorMessage(ex, "Could not load users for this tenant.");
             Users = [];
+        }
+    }
+
+    private async Task LoadAccessAuditLogAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var log = await usersClient.GetAccessAuditLogAsync(take: 50, cancellationToken);
+            AccessAuditEntries = log?.Entries?
+                .OrderByDescending(e => e.OccurredAtUtc)
+                .ToList() ?? [];
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to load tenant access audit log");
+            AccessAuditEntries = [];
+            AuditLogLoadFailed = true;
+            AuditLogLoadErrorMessage = GetErrorMessage(
+                ex,
+                "Could not load the access audit trail. Ensure the API is up to date and database migrations have been applied.");
         }
     }
 

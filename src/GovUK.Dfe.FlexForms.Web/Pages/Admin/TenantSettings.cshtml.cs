@@ -20,6 +20,7 @@ public sealed class TenantSettingsModel(
     ITenantAdminClient tenantAdminClient,
     ITenantRequestContext tenantRequestContext,
     ITenantConfigurationCache tenantConfigurationCache,
+    ITenantIdResolver tenantIdResolver,
     ILogger<TenantSettingsModel> logger) : PageModel
 {
     public static readonly string[] ValidTargets = ["Shared", "Api", "Web"];
@@ -29,6 +30,22 @@ public sealed class TenantSettingsModel(
     public string TenantName { get; private set; } = string.Empty;
 
     public IReadOnlyList<TenantSettingDto> Settings { get; private set; } = [];
+
+    public TenantEffectiveConfigurationDto? EffectiveConfig { get; private set; }
+
+    public TenantHealthDto? TenantHealth { get; private set; }
+
+    public IReadOnlyList<TenantSettingCategoryCookbookEntryDto> Cookbook { get; private set; } = [];
+
+    public IReadOnlyList<TenantSettingAuditEntryDto> AuditEntries { get; private set; } = [];
+
+    public ValidateTenantSettingResponse? ValidationPreview { get; private set; }
+
+    public string? ValidationCategory { get; private set; }
+
+    public string? ValidationTarget { get; private set; }
+
+    public bool ValidationIsSecret { get; private set; }
 
     public bool HasError { get; private set; }
 
@@ -61,7 +78,93 @@ public sealed class TenantSettingsModel(
         }
 
         await LoadSettingsAsync(cancellationToken);
+        await LoadHealthAsync(cancellationToken);
+        await LoadCookbookAsync(cancellationToken);
+        await LoadAuditLogAsync(cancellationToken);
         return Page();
+    }
+
+    public async Task<IActionResult> OnPostValidateAsync(
+        string category,
+        string target,
+        string settingsJson,
+        bool isSecret,
+        CancellationToken cancellationToken)
+    {
+        ApplyTempData();
+        if (!TryResolveTenant(out var error))
+        {
+            HasError = true;
+            ErrorMessage = error;
+            return Page();
+        }
+
+        category = category?.Trim() ?? string.Empty;
+        target = target?.Trim() ?? string.Empty;
+        settingsJson = settingsJson?.Trim() ?? string.Empty;
+        ValidationCategory = category;
+        ValidationTarget = target;
+        ValidationIsSecret = isSecret;
+
+        await LoadSettingsAsync(cancellationToken);
+        await LoadHealthAsync(cancellationToken);
+        await LoadCookbookAsync(cancellationToken);
+        await LoadAuditLogAsync(cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(category) || string.IsNullOrWhiteSpace(settingsJson))
+        {
+            HasError = true;
+            ErrorMessage = "Category and settings JSON are required to validate.";
+            return Page();
+        }
+
+        try
+        {
+            ValidationPreview = await tenantAdminClient.ValidateTenantSettingAsync(
+                TenantId,
+                new ValidateTenantSettingRequest(category, target, ToBase64SettingsJson(settingsJson), isSecret),
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to validate tenant setting {Category}/{Target}", category, target);
+            HasError = true;
+            ErrorMessage = GetErrorMessage(ex, "Could not validate setting.");
+        }
+
+        return Page();
+    }
+
+    public Task<IActionResult> OnPostValidateNewAsync(CancellationToken cancellationToken)
+        => OnPostValidateAsync(NewCategory, NewTarget, NewSettingsJson, NewIsSecret, cancellationToken);
+
+    public async Task<IActionResult> OnPostDeleteAsync(
+        string category,
+        string target,
+        CancellationToken cancellationToken)
+    {
+        if (!TryResolveTenant(out var error))
+        {
+            TempData["TenantSettingsError"] = error;
+            return RedirectToPage();
+        }
+
+        category = category?.Trim() ?? string.Empty;
+        target = target?.Trim() ?? string.Empty;
+
+        try
+        {
+            await tenantAdminClient.DeleteTenantSettingAsync(TenantId, category, target, cancellationToken);
+            await RefreshCachesAsync(cancellationToken);
+            TempData["TenantSettingsSuccess"] = $"Deleted '{category}' ({target}).";
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to delete tenant setting {Category}/{Target}", category, target);
+            TempData["TenantSettingsError"] = GetErrorMessage(ex, "Could not delete setting.");
+        }
+
+        return RedirectToPage();
     }
 
     public async Task<IActionResult> OnPostUpdateAsync(
@@ -169,6 +272,82 @@ public sealed class TenantSettingsModel(
         return RedirectToPage();
     }
 
+    public async Task<IActionResult> OnPostExportAsync(CancellationToken cancellationToken)
+    {
+        if (!TryResolveTenant(out var error))
+        {
+            TempData["TenantSettingsError"] = error;
+            return RedirectToPage();
+        }
+
+        try
+        {
+            var export = await tenantAdminClient.ExportConfigurationAsync(TenantId, cancellationToken);
+            var json = System.Text.Json.JsonSerializer.Serialize(export,
+                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            var bytes = Encoding.UTF8.GetBytes(json);
+            return File(bytes, "application/json", $"tenant-config-{TenantId:N}-{DateTime.UtcNow:yyyyMMddHHmmss}.json");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to export tenant configuration for {TenantId}", TenantId);
+            TempData["TenantSettingsError"] = GetErrorMessage(ex, "Could not export configuration.");
+            return RedirectToPage();
+        }
+    }
+
+    public async Task<IActionResult> OnPostImportAsync(IFormFile? importFile, CancellationToken cancellationToken)
+    {
+        if (!TryResolveTenant(out var error))
+        {
+            TempData["TenantSettingsError"] = error;
+            return RedirectToPage();
+        }
+
+        if (importFile is null || importFile.Length == 0)
+        {
+            TempData["TenantSettingsError"] = "Select a JSON file to import.";
+            return RedirectToPage();
+        }
+
+        try
+        {
+            using var reader = new StreamReader(importFile.OpenReadStream());
+            var json = await reader.ReadToEndAsync(cancellationToken);
+            var exportBundle = System.Text.Json.JsonSerializer.Deserialize<ExportTenantConfigurationDto>(json,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            if (exportBundle?.Settings is null || exportBundle.Settings.Count == 0)
+            {
+                TempData["TenantSettingsError"] = "The import file contains no settings.";
+                return RedirectToPage();
+            }
+
+            var importItems = exportBundle.Settings
+                .Select(s => new TenantSettingImportItemDto(s.Category, s.Target, s.SettingsJson, s.IsSecret))
+                .ToList();
+
+            var bundle = new ImportTenantConfigurationDto(importItems, SkipSecretPlaceholders: true);
+
+            var result = await tenantAdminClient.ImportConfigurationAsync(TenantId, bundle, cancellationToken);
+            await RefreshCachesAsync(cancellationToken);
+
+            TempData["TenantSettingsSuccess"] =
+                $"Imported {result.AppliedCount} settings ({result.SkippedCount} secret placeholders skipped).";
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            TempData["TenantSettingsError"] = "The file is not valid JSON.";
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to import tenant configuration for {TenantId}", TenantId);
+            TempData["TenantSettingsError"] = GetErrorMessage(ex, "Could not import configuration.");
+        }
+
+        return RedirectToPage();
+    }
+
     public async Task<IActionResult> OnPostRefreshAsync(CancellationToken cancellationToken)
     {
         if (!TryResolveTenant(out var error))
@@ -195,6 +374,7 @@ public sealed class TenantSettingsModel(
     {
         await tenantAdminClient.RefreshTenantConfigurationAsync(cancellationToken);
         tenantConfigurationCache.Invalidate(TenantId);
+        tenantIdResolver.InvalidateHostnameCache();
     }
 
     private async Task LoadSettingsAsync(CancellationToken cancellationToken)
@@ -248,6 +428,53 @@ public sealed class TenantSettingsModel(
     /// </summary>
     internal static string ToBase64SettingsJson(string settingsJson) =>
         Convert.ToBase64String(Encoding.UTF8.GetBytes(settingsJson));
+
+    private async Task LoadHealthAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            TenantHealth = await tenantAdminClient.GetTenantHealthAsync(TenantId, cancellationToken);
+            EffectiveConfig = TenantHealth.EffectiveConfiguration;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to load tenant health for {TenantId}", TenantId);
+            try
+            {
+                EffectiveConfig = await tenantAdminClient.GetEffectiveConfigurationAsync(TenantId, cancellationToken);
+            }
+            catch (Exception inner)
+            {
+                logger.LogWarning(inner, "Failed to load effective configuration for {TenantId}", TenantId);
+            }
+        }
+    }
+
+    private async Task LoadCookbookAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await tenantAdminClient.GetCategoryCookbookAsync(cancellationToken);
+            Cookbook = response.Categories?.ToList() ?? [];
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to load category cookbook");
+        }
+    }
+
+    private async Task LoadAuditLogAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var log = await tenantAdminClient.GetSettingAuditLogAsync(TenantId, 20, cancellationToken);
+            AuditEntries = log?.Entries?.ToList() ?? [];
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to load audit log for {TenantId}", TenantId);
+        }
+    }
 
     internal static string GetErrorMessage(Exception ex, string fallback)
     {

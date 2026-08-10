@@ -9,4 +9,9 @@ public interface ITenantIdResolver
     /// Resolves tenant id from <c>X-Tenant-ID</c>, query string, or request hostname (via platform API).
     /// </summary>
     Task<Guid?> ResolveTenantIdAsync(HttpContext httpContext, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Clears cached hostname → tenant mappings (e.g. after tenant settings refresh).
+    /// </summary>
+    void InvalidateHostnameCache();
 }
