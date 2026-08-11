@@ -134,12 +134,16 @@ public sealed class UserManagerPermissionsModel(
                 cancellationToken);
 
             NewResourceKey = string.Empty;
+            // Always re-load from the API so the list reflects tenant-filtered grants,
+            // not the posted form (which can contain stale cross-tenant entries).
+            await LoadPermissionsAsync(cancellationToken);
             return Page();
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to save permissions for user {UserId}", UserId);
             ModelState.AddModelError(string.Empty, UserManagerModel.GetErrorMessage(ex, "Could not save permissions."));
+            await LoadPermissionsAsync(cancellationToken);
             return Page();
         }
     }
@@ -151,12 +155,7 @@ public sealed class UserManagerPermissionsModel(
 
         try
         {
-            var existing = await usersClient.GetUserPermissionsAsync(UserId, cancellationToken);
-            SelectedGrants = NormalizeGrants(
-                existing?
-                    .Select(p => RoleManagerPermissionsModel.EncodeGrantKey(p.ResourceType, p.ResourceKey, p.AccessType))
-                    .ToList() ?? []);
-
+            await LoadPermissionsAsync(cancellationToken);
             return true;
         }
         catch (Exception ex)
@@ -165,6 +164,15 @@ public sealed class UserManagerPermissionsModel(
             TempData["UserManagerError"] = UserManagerModel.GetErrorMessage(ex, "Could not load user permissions.");
             return false;
         }
+    }
+
+    private async Task LoadPermissionsAsync(CancellationToken cancellationToken)
+    {
+        var existing = await usersClient.GetUserPermissionsAsync(UserId, cancellationToken);
+        SelectedGrants = NormalizeGrants(
+            existing?
+                .Select(p => RoleManagerPermissionsModel.EncodeGrantKey(p.ResourceType, p.ResourceKey, p.AccessType))
+                .ToList() ?? []);
     }
 
     private async Task<bool> LoadUserMetaAsync(CancellationToken cancellationToken)
