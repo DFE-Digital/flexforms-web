@@ -27,6 +27,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       environment: ${{ steps.var.outputs.environment }}
+      environment-lower: ${{ steps.var.outputs.environment-lower }}
       branch: ${{ steps.var.outputs.branch }}
       checked-out-sha: ${{ steps.var.outputs.checked-out-sha }}
       image-name: ${{ steps.var.outputs.image-name }}
@@ -53,6 +54,7 @@ jobs:
     permissions:
       contents: read
     needs: [ set-env ]
+    if: needs.set-env.outputs.environment-lower == 'production'
     steps:
       - name: Validate Packages
         uses: DFE-Digital/rsd-github-actions/.github/actions/validate-packages@v1
