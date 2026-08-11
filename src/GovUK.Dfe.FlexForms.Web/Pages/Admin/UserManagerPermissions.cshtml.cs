@@ -36,7 +36,7 @@ public sealed class UserManagerPermissionsModel(
     public ResourceType NewResourceType { get; set; } = ResourceType.Application;
 
     [BindProperty]
-    public string NewResourceKey { get; set; } = string.Empty;
+    public string? NewResourceKey { get; set; }
 
     [BindProperty]
     public AccessType NewAccessType { get; set; } = AccessType.Read;
@@ -90,6 +90,11 @@ public sealed class UserManagerPermissionsModel(
 
     public async Task<IActionResult> OnPostRemoveAsync(string grantKey, CancellationToken cancellationToken)
     {
+        // Remove form does not post Add fields; clear implicit required errors for them.
+        ModelState.Remove(nameof(NewResourceKey));
+        ModelState.Remove(nameof(NewResourceType));
+        ModelState.Remove(nameof(NewAccessType));
+
         if (!await LoadUserMetaAsync(cancellationToken))
             return RedirectToPage("/Admin/UserManager");
 
