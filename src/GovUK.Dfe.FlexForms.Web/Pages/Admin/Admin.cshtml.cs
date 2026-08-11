@@ -132,22 +132,6 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
             return RedirectToPage("/Applications/Dashboard");
         }
 
-        public IActionResult OnPostGoToTemplateManager()
-        {
-            if (!CanManageTemplates)
-                return Forbid();
-
-            return RedirectToPage("/Admin/TemplateManager");
-        }
-
-        public IActionResult OnPostGoToCustomStatusLabelOverrides()
-        {
-            if (!CanManageTemplates)
-                return Forbid();
-
-            return RedirectToPage("/Admin/CustomStatusLabelOverrides");
-        }
-
         public Task<IActionResult> OnPostMakeLiveAsync(Guid templateId)
             => SetTemplateLiveAsync(templateId, isLive: true);
 
