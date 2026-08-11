@@ -170,6 +170,23 @@
             </div>
         }
 
+        @if (Model.IsFullAdmin)
+        {
+            <div class="govuk-summary-card">
+                <div class="govuk-summary-card__title-wrapper">
+                    <h2 class="govuk-summary-card__title">Applications</h2>
+                </div>
+                <div class="govuk-summary-card__content">
+                    <p class="govuk-body">Browse all applications for a template in this tenant.</p>
+                    <div class="govuk-button-group">
+                        <a asp-page="/Admin/Applications" class="govuk-button" data-module="govuk-button" id="go-to-admin-applications-button">
+                            View applications
+                        </a>
+                    </div>
+                </div>
+            </div>
+        }
+
         @if (Model.CanAccessTenantAdminSection)
         {
             <div class="govuk-summary-card">
