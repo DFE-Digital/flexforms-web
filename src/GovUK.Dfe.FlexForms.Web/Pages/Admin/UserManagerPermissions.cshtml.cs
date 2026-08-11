@@ -79,15 +79,13 @@ public sealed class UserManagerPermissionsModel(
             ModelState.AddModelError(
                 string.Empty,
                 $"{NewResourceType} / {resourceKey} / {NewAccessType} is already in the list.");
-        }
-        else
-        {
-            SelectedGrants.Add(key);
-            SelectedGrants = NormalizeGrants(SelectedGrants);
-            NewResourceKey = string.Empty;
+            return Page();
         }
 
-        return Page();
+        SelectedGrants.Add(key);
+        SelectedGrants = NormalizeGrants(SelectedGrants);
+
+        return await SaveAndReloadAsync(cancellationToken);
     }
 
     public async Task<IActionResult> OnPostRemoveAsync(string grantKey, CancellationToken cancellationToken)
@@ -97,16 +95,12 @@ public sealed class UserManagerPermissionsModel(
 
         SelectedGrants = NormalizeGrants(SelectedGrants);
         SelectedGrants.RemoveAll(g => string.Equals(g, grantKey, StringComparison.OrdinalIgnoreCase));
-        return Page();
+
+        return await SaveAndReloadAsync(cancellationToken);
     }
 
-    public async Task<IActionResult> OnPostSaveAsync(CancellationToken cancellationToken)
+    private async Task<IActionResult> SaveAndReloadAsync(CancellationToken cancellationToken)
     {
-        if (!await LoadUserMetaAsync(cancellationToken))
-            return RedirectToPage("/Admin/UserManager");
-
-        SelectedGrants = NormalizeGrants(SelectedGrants);
-
         foreach (var grant in SelectedGrants.Select(ParseGrantKey).Where(g => g is not null))
         {
             var error = ValidateUserGrant(
@@ -139,12 +133,12 @@ public sealed class UserManagerPermissionsModel(
                 new SetUserPermissionsRequest { Permissions = grants },
                 cancellationToken);
 
-            TempData["UserManagerSuccess"] = $"Permissions updated for '{UserName}'.";
-            return RedirectToPage("/Admin/UserManager");
+            NewResourceKey = string.Empty;
+            return Page();
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to set permissions for user {UserId}", UserId);
+            logger.LogError(ex, "Failed to save permissions for user {UserId}", UserId);
             ModelState.AddModelError(string.Empty, UserManagerModel.GetErrorMessage(ex, "Could not save permissions."));
             return Page();
         }
