@@ -84,7 +84,7 @@
                     <div class="govuk-grid-column-one-half">
                         <h3 class="govuk-heading-s">Caseworker</h3>
                         <p class="govuk-body">
-                            Read all applications/files; create applications on any template.
+                            Read all applications/files.
                         </p>
                         <form method="post" asp-page-handler="CreateFromTemplate">
                             <input type="hidden" name="templateKey" value="Caseworker" />
@@ -94,14 +94,14 @@
                         </form>
                     </div>
                     <div class="govuk-grid-column-one-half">
-                        <h3 class="govuk-heading-s">Reviewer</h3>
+                        <h3 class="govuk-heading-s">Template Manager</h3>
                         <p class="govuk-body">
-                            Read-only access to all applications and files.
+                            Manage templates.
                         </p>
                         <form method="post" asp-page-handler="CreateFromTemplate">
-                            <input type="hidden" name="templateKey" value="Reviewer" />
+                            <input type="hidden" name="templateKey" value="TemplateManager" />
                             <button type="submit" class="govuk-button govuk-button--secondary" data-module="govuk-button">
-                                Create Reviewer role
+                                Create Template Manager role
                             </button>
                         </form>
                     </div>
