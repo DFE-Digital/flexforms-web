@@ -68,26 +68,32 @@
                         <div class="govuk-radios" data-module="govuk-radios">
                             @foreach (var template in Model.Templates)
                             {
-                                var inputId = $"form-{template.TemplateId}";
-                                var isChecked = Model.SelectedTemplateId == template.TemplateId;
+                                var inputId = $"form-{template.Template.TemplateId}";
+                                var isChecked = Model.SelectedTemplateId == template.Template.TemplateId;
                                 <div class="govuk-radios__item">
                                     <input class="govuk-radios__input"
                                            id="@inputId"
                                            name="SelectedTemplateId"
                                            type="radio"
-                                           value="@template.TemplateId"
+                                           value="@template.Template.TemplateId"
                                            @(isChecked ? "checked" : null) />
                                     <label class="govuk-label govuk-radios__label" for="@inputId">
-                                        @template.Name
+                                        @template.Template.Name
                                         @if (Model.IsAdmin)
                                         {
-                                            <text> (@(template.IsLive ? "Live" : "Not live"))</text>
+                                            <text> (@(template.Template.IsLive ? "Live" : "Not live"))</text>
                                         }
                                     </label>
-                                    @if (!string.IsNullOrWhiteSpace(template.LatestVersionNumber))
+                                    @if (!string.IsNullOrWhiteSpace(template.Description))
                                     {
                                         <div class="govuk-hint govuk-radios__hint">
-                                            Version @template.LatestVersionNumber
+                                            @template.Description
+                                        </div>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(template.Template.LatestVersionNumber))
+                                    {
+                                        <div class="govuk-hint govuk-radios__hint">
+                                            Version @template.Template.LatestVersionNumber
                                         </div>
                                     }
                                 </div>
