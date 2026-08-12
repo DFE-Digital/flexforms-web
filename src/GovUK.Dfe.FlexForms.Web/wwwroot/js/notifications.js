@@ -242,7 +242,13 @@ async function dismiss(id) {
 
 window.NotificationsApi = {
     markAllRead: async () => { try { await fetch('/notifications/read-all', { method: 'POST', credentials: 'include', headers: { 'RequestVerificationToken': antiForgeryToken() ?? '' } }); } finally { await refreshUnreadCount(); } },
-    clearAll: async () => { try { await fetch('/notifications/clear', { method: 'POST', credentials: 'include', headers: { 'RequestVerificationToken': antiForgeryToken() ?? '' } }); } finally { await refreshUnreadCount(); } }
+    clearAll: async () => {
+        const response = await fetch('/notifications/clear', { method: 'POST', credentials: 'include', headers: { 'RequestVerificationToken': antiForgeryToken() ?? '' } });
+        if (!response.ok) {
+            throw new Error(`Failed to clear notifications (${response.status})`);
+        }
+        await refreshUnreadCount();
+    }
 };
 
 // Update badge when hub events occur

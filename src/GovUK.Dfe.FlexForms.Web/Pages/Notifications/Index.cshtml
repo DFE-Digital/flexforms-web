@@ -92,12 +92,21 @@
             });
         };
         document.getElementById('btn-clear-all').onclick = async () => {
-            await fetch('/notifications/clear', {
-                method: 'POST',
-                credentials: 'include',
-                headers: { 'RequestVerificationToken': antiForgeryToken() }
-            });
-            await loadAll();
+            try {
+                const response = await fetch('/notifications/clear', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'RequestVerificationToken': antiForgeryToken() }
+                });
+                if (!response.ok) {
+                    alert('You do not have permission to delete notifications.');
+                    return;
+                }
+                await loadAll();
+            } catch (error) {
+                console.error('Error clearing notifications:', error);
+                alert('An error occurred while clearing notifications.');
+            }
         };
 
         loadAll();

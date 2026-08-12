@@ -8,7 +8,7 @@ namespace GovUK.Dfe.FlexForms.Application.Interfaces
     /// </summary>
     public interface IFileUploadService
     {
-        Task UploadFileAsync(Guid applicationId, string? name = null, string? description = null, FileParameter file = null!, CancellationToken cancellationToken = default);
+        Task<UploadDto> UploadFileAsync(Guid applicationId, string? name = null, string? description = null, FileParameter file = null!, CancellationToken cancellationToken = default);
         Task<IReadOnlyList<UploadDto>> GetFilesForApplicationAsync(Guid applicationId, CancellationToken cancellationToken = default);
         Task<FileResponse> DownloadFileAsync(Guid fileId, Guid applicationId, CancellationToken cancellationToken = default);
         Task DeleteFileAsync(Guid fileId, Guid applicationId, CancellationToken cancellationToken = default);

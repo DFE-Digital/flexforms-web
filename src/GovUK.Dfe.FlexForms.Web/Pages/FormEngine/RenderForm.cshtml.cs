@@ -2916,45 +2916,21 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             
             try
             {
-                await fileUploadService.UploadFileAsync(appId, file.FileName, uploadDescription, fileParam);
+                var uploadedFile = await fileUploadService.UploadFileAsync(appId, file.FileName, uploadDescription, fileParam);
 
                 
                 // Only execute this code if API call succeeds
                 // Get existing files for this field/collection instance
                 var currentFieldFiles = (await GetFilesForFieldAsync(appId, fieldId)).ToList();
                 
-                // Find the newly uploaded file by matching the original filename
-                // We get ALL files without filtering to avoid race conditions with the virus scanner
-                // The file needs to appear in the list first, then the consumer will remove it if infected
-                var allDbFiles = await fileUploadService.GetFilesForApplicationAsync(appId);
-                var newlyUploadedFile = allDbFiles
-                    .Where(f => f.OriginalFileName == file.FileName)
-                    .OrderByDescending(f => f.UploadedOn)
-                    .FirstOrDefault();
-                
-                if (newlyUploadedFile != null && !currentFieldFiles.Any(cf => cf.Id == newlyUploadedFile.Id))
+                if (!currentFieldFiles.Any(cf => cf.Id == uploadedFile.Id))
                 {
                     _logger.LogInformation(
                         "Adding newly uploaded file {FileId} ({FileName}) to field {FieldId}",
-                        newlyUploadedFile.Id,
-                        newlyUploadedFile.OriginalFileName,
+                        uploadedFile.Id,
+                        uploadedFile.OriginalFileName,
                         fieldId);
-                    currentFieldFiles.Add(newlyUploadedFile);
-                }
-                else if (newlyUploadedFile == null)
-                {
-                    _logger.LogWarning(
-                        "Could not find newly uploaded file with name {FileName} for field {FieldId}",
-                        file.FileName,
-                        fieldId);
-                }
-                else
-                {
-                    _logger.LogInformation(
-                        "Newly uploaded file {FileId} ({FileName}) already exists in list for field {FieldId}",
-                        newlyUploadedFile.Id,
-                        newlyUploadedFile.OriginalFileName,
-                        fieldId);
+                    currentFieldFiles.Add(uploadedFile);
                 }
                 
                 //  Filter infected files AFTER adding the newly uploaded file
@@ -2990,7 +2966,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                     AutoDismiss = false,
                     AutoDismissSeconds = 5
                 };
-                await _notificationsClient.CreateNotificationAsync(addRequest);
+                await TryCreateFileNotificationAsync(addRequest);
 
                 
                 // Redirect back if we have return URL
@@ -3129,7 +3105,8 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             }
             catch (Exception e)
             {
-                _logger.LogWarning("File doesn't exist to delete, perhaps removed already. Error: {Error}", e.Message);
+                _logger.LogWarning(e, "Failed to delete file {FileId} for application {ApplicationId}", fileId, appId);
+                throw;
             }
             
             SuccessMessage = "File deleted.";
@@ -3145,13 +3122,25 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             {
                 //  Send notification for successful delete
                 addRequest.Message = SuccessMessage;
-                await _notificationsClient.CreateNotificationAsync(addRequest);
+                await TryCreateFileNotificationAsync(addRequest);
 
                 
                 return Redirect(returnUrl);
             }
 
             return Page();
+        }
+
+        private async Task TryCreateFileNotificationAsync(AddNotificationRequest addRequest)
+        {
+            try
+            {
+                await _notificationsClient.CreateNotificationAsync(addRequest);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "File operation succeeded but notification could not be created");
+            }
         }
 
         /// <summary>

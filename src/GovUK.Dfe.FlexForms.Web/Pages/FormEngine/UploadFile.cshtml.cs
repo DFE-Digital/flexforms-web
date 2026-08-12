@@ -95,25 +95,15 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
 
             using var stream = file.OpenReadStream();
             var fileParam = new FileParameter(stream, file.FileName, file.ContentType);
-            await fileUploadService.UploadFileAsync(appId, file.FileName, description, fileParam);
+            var uploadedFile = await fileUploadService.UploadFileAsync(appId, file.FileName, description, fileParam);
             SuccessMessage = $"Your file '{file.FileName}' uploaded.";
 
             // Get the current files for this field
             var currentFieldFiles = (await GetFilesForFieldAsync(appId, FieldId)).ToList();
 
-            
-            // CRITICAL FIX: Find the newly uploaded file by matching the original filename
-            // We get ALL files without filtering to avoid race conditions with the virus scanner
-            var allDbFiles = await fileUploadService.GetFilesForApplicationAsync(appId);
-            var newlyUploadedFile = allDbFiles
-                .Where(f => f.OriginalFileName == file.FileName)
-                .OrderByDescending(f => f.UploadedOn)
-                .FirstOrDefault();
-            
-            // Add the newly uploaded file to our field's file list (if not already there)
-            if (newlyUploadedFile != null && !currentFieldFiles.Any(cf => cf.Id == newlyUploadedFile.Id))
+            if (!currentFieldFiles.Any(cf => cf.Id == uploadedFile.Id))
             {
-                currentFieldFiles.Add(newlyUploadedFile);
+                currentFieldFiles.Add(uploadedFile);
             }
             
 
@@ -126,7 +116,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             if (!string.IsNullOrEmpty(ReturnUrl))
             {
                 addRequest.Message = SuccessMessage;
-                await notificationsClient.CreateNotificationAsync(addRequest);
+                await TryCreateFileNotificationAsync(addRequest);
                 return Redirect(ReturnUrl);
             }
 
@@ -198,7 +188,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             if (!string.IsNullOrEmpty(ReturnUrl))
             {
                 addRequest.Message = SuccessMessage;
-                await notificationsClient.CreateNotificationAsync(addRequest);
+                await TryCreateFileNotificationAsync(addRequest);
                 return Redirect(ReturnUrl);
             }
 
@@ -413,10 +403,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                     if (sessionFiles != null)
                     {
                         // Cross-reference with database to make sure files still exist
-                        var allDbFiles = await fileUploadService.GetFilesForApplicationAsync(appId);
-                        var validSessionFiles = sessionFiles
-                            .Where(sf => allDbFiles.Any(dbf => dbf.Id == sf.Id))
-                            .ToList();
+                        var validSessionFiles = await FilterFilesAgainstDatabaseAsync(appId, sessionFiles);
                         
                         return validSessionFiles.AsReadOnly();
                     }
@@ -440,10 +427,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                         if (existingFiles != null)
                         {
                             // Cross-reference with database to make sure files still exist
-                            var allDbFiles = await fileUploadService.GetFilesForApplicationAsync(appId);
-                            var validFiles = existingFiles
-                                .Where(ef => allDbFiles.Any(dbf => dbf.Id == ef.Id))
-                                .ToList();
+                            var validFiles = await FilterFilesAgainstDatabaseAsync(appId, existingFiles);
                             
                             return validFiles.AsReadOnly();
                         }
@@ -458,6 +442,32 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             // If no existing data for this field, return empty list
             // Don't return all database files, as that would include files from other fields
             return new List<UploadDto>().AsReadOnly();
+        }
+
+        private async Task TryCreateFileNotificationAsync(AddNotificationRequest addRequest)
+        {
+            try
+            {
+                await notificationsClient.CreateNotificationAsync(addRequest);
+            }
+            catch
+            {
+                // Upload/delete succeeded; notification is optional when user lacks notification permissions
+            }
+        }
+
+        private async Task<List<UploadDto>> FilterFilesAgainstDatabaseAsync(Guid appId, List<UploadDto> files)
+        {
+            try
+            {
+                var allDbFiles = await fileUploadService.GetFilesForApplicationAsync(appId);
+                return files.Where(sf => allDbFiles.Any(dbf => dbf.Id == sf.Id)).ToList();
+            }
+            catch (ExternalApplicationsException ex) when (ex.StatusCode == 403)
+            {
+                // User may have write but not read permission; trust session data
+                return files;
+            }
         }
 
         // legacy method removed in favour of IFormErrorStore

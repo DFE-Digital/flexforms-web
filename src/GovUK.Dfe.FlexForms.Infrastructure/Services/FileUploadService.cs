@@ -12,13 +12,14 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
     public class FileUploadService(IApplicationsClient applicationsClient, ILogger<FileUploadService> logger)
         : IFileUploadService
     {
-        public async Task UploadFileAsync(Guid applicationId, string? name = null, string? description = null, FileParameter file = null!, CancellationToken cancellationToken = default)
+        public async Task<UploadDto> UploadFileAsync(Guid applicationId, string? name = null, string? description = null, FileParameter file = null!, CancellationToken cancellationToken = default)
         {
             try
             {
                 logger.LogInformation("Uploading file for application {ApplicationId}", applicationId);
-                await applicationsClient.UploadFileAsync(applicationId, name, description, file, cancellationToken);
+                var upload = await applicationsClient.UploadFileAsync(applicationId, name, description, file, cancellationToken);
                 logger.LogInformation("File uploaded successfully for application {ApplicationId}", applicationId);
+                return upload;
             }
             catch (Exception ex)
             {
@@ -29,17 +30,8 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
 
         public async Task<IReadOnlyList<UploadDto>> GetFilesForApplicationAsync(Guid applicationId, CancellationToken cancellationToken = default)
         {
-            try
-            {
-                logger.LogInformation("Getting files for application {ApplicationId}", applicationId);
-                var files = await applicationsClient.GetFilesForApplicationAsync(applicationId, cancellationToken);
-                return files;
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error getting files for application {ApplicationId}", applicationId);
-                return new List<UploadDto>().AsReadOnly();
-            }
+            logger.LogInformation("Getting files for application {ApplicationId}", applicationId);
+            return await applicationsClient.GetFilesForApplicationAsync(applicationId, cancellationToken);
         }
 
         public async Task<FileResponse> DownloadFileAsync(Guid fileId, Guid applicationId, CancellationToken cancellationToken = default)

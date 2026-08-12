@@ -11,6 +11,18 @@ public static class ApplicationAccessMessages
     public const string NoWritePermission =
         "You do not have permission to make changes to this application.";
 
+    public const string NoFileWritePermission =
+        "You do not have permission to upload files for this application.";
+
+    public const string NoFileReadPermission =
+        "You do not have permission to download files for this application.";
+
+    public const string NoFileDeletePermission =
+        "You do not have permission to delete files for this application.";
+
+    public const string NoNotificationDeletePermission =
+        "You do not have permission to delete notifications.";
+
     /// <summary>
     /// Shown when a user cannot view a page or resource.
     /// </summary>

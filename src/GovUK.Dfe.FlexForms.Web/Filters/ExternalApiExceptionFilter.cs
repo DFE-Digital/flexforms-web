@@ -22,12 +22,17 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
             PageHandlerExecutionDelegate next)
         {
             
-            // DETECT UPLOAD REQUESTS BEFORE EXECUTION
+            // DETECT UPLOAD/FILE REQUESTS BEFORE EXECUTION
             var uploadInfo = DetectUploadRequest(context);
             if (uploadInfo.isUpload)
             {
-                
                 context.HttpContext.Items["UploadRequestInfo"] = uploadInfo;
+            }
+
+            var fileOpInfo = DetectFileOperationRequest(context);
+            if (fileOpInfo.Item1)
+            {
+                context.HttpContext.Items["FileOperationInfo"] = fileOpInfo;
             }
             
             var executedContext = await next();
@@ -49,6 +54,13 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
                 var response = (apiException as ExternalApplicationsException<ExceptionResponse>)?.Result;
                 var statusCode = response?.StatusCode ?? apiException.StatusCode;
                 var message = response?.Message ?? apiException.Message;
+
+                if (TryHandleApplicationFileAccessDenied(context.HttpContext, page, statusCode, message, out var fileAccessResult))
+                {
+                    executedContext.Result = fileAccessResult;
+                    executedContext.ExceptionHandled = true;
+                    return;
+                }
 
                 if (TryHandleApplicationWriteAccessDenied(context.HttpContext, page, statusCode, message, out var writeAccessResult))
                 {
@@ -260,30 +272,116 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
         
         private static (bool isUpload, string fieldId) DetectUploadRequest(PageHandlerExecutingContext context)
         {
-            // Check if this is an upload handler
-            var handlerName = context.HandlerMethod?.Name;
-            
-            // Handle both possible handler name formats
-            var isUploadHandler = handlerName == "OnPostUploadFileAsync" || handlerName == "UploadFile";
-            if (!isUploadHandler)
+            var fileOp = DetectFileOperationRequest(context);
+            if (fileOp.Item1 && fileOp.Item2 == "upload")
             {
-                
-                return (false, string.Empty);
+                return (true, fileOp.Item3);
             }
-            
-            
-            
-            // Try to get FieldId from form data
+
+            return (false, string.Empty);
+        }
+
+        private static (bool isFileOp, string operation, string fieldId) DetectFileOperationRequest(PageHandlerExecutingContext context)
+        {
+            var handlerName = context.HandlerMethod?.Name;
+            var operation = handlerName switch
+            {
+                "OnPostUploadFileAsync" => "upload",
+                "OnPostDownloadFileAsync" => "download",
+                "OnPostDeleteFileAsync" => "delete",
+                _ => string.Empty
+            };
+
+            if (string.IsNullOrEmpty(operation))
+            {
+                return (false, string.Empty, string.Empty);
+            }
+
+            var fieldId = string.Empty;
             if (context.HttpContext.Request.HasFormContentType)
             {
-                var fieldId = context.HttpContext.Request.Form["FieldId"].ToString();
-                if (!string.IsNullOrEmpty(fieldId))
+                fieldId = context.HttpContext.Request.Form["FieldId"].ToString();
+            }
+
+            return (true, operation, fieldId);
+        }
+
+        private static bool TryHandleApplicationFileAccessDenied(
+            HttpContext httpContext,
+            PageModel page,
+            int statusCode,
+            string? apiMessage,
+            out IActionResult result)
+        {
+            result = new PageResult();
+
+            if (statusCode is not (401 or 403))
+            {
+                return false;
+            }
+
+            if (!IsApplicationRequest(httpContext.Request.Path) || !IsMutatingHttpMethod(httpContext.Request))
+            {
+                return false;
+            }
+
+            var fileOpInfo = httpContext.Items.TryGetValue("FileOperationInfo", out var storedInfo)
+                ? (ValueTuple<bool, string, string>)storedInfo!
+                : (false, string.Empty, string.Empty);
+
+            if (!fileOpInfo.Item1)
+            {
+                return false;
+            }
+
+            if (statusCode == 401 && IsAuthenticationFailureMessage(apiMessage))
+            {
+                return false;
+            }
+
+            if (page is BaseFormEngineModel formEnginePage)
+            {
+                formEnginePage.EnsureFormStateForErrorDisplay();
+            }
+
+            var message = fileOpInfo.Item2 switch
+            {
+                "upload" => ApplicationAccessMessages.NoFileWritePermission,
+                "download" => ApplicationAccessMessages.NoFileReadPermission,
+                "delete" => ApplicationAccessMessages.NoFileDeletePermission,
+                _ => ApplicationAccessMessages.NoAccess
+            };
+
+            AddNonFieldError(page, message);
+
+            if (fileOpInfo.Item2 is "upload" or "delete")
+            {
+                var returnUrl = httpContext.Request.Form["ReturnUrl"].ToString();
+                if (!string.IsNullOrEmpty(returnUrl) && !string.IsNullOrEmpty(fileOpInfo.Item3))
                 {
-                    return (true, fieldId);
+                    try
+                    {
+                        var formErrorStore = httpContext.RequestServices.GetService<IFormErrorStore>();
+                        formErrorStore?.Save(fileOpInfo.Item3, page.ModelState);
+                        result = new RedirectResult(returnUrl);
+                        return true;
+                    }
+                    catch (Exception)
+                    {
+                        // Fall through to page result
+                    }
                 }
             }
-            
-            return (false, string.Empty);
+
+            if (fileOpInfo.Item2 == "download")
+            {
+                page.TempData["AccessDeniedReason"] = message;
+                result = new RedirectToPageResult("/Error/Forbidden");
+                return true;
+            }
+
+            result = new PageResult();
+            return true;
         }
 
         private static bool TryHandleApplicationWriteAccessDenied(
