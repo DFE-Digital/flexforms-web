@@ -33,7 +33,7 @@
             <strong>Template — Manage</strong> or <strong>User — Manage</strong>.
         </p>
 
-        <form method="post">
+        <form method="post" asp-page-handler="Add">
             <input type="hidden" asp-for="RoleId" />
             @foreach (var grant in Model.SelectedGrants)
             {
@@ -83,65 +83,64 @@
 
                     <button type="submit"
                             class="govuk-button govuk-button--secondary"
-                            asp-page-handler="Add"
                             data-module="govuk-button">
                         Add
                     </button>
                 </fieldset>
             </div>
+        </form>
 
-            <h2 class="govuk-heading-m">Permissions for this role</h2>
+        <h2 class="govuk-heading-m">Permissions for this role</h2>
 
-            @if (Model.SelectedGrants.Count == 0)
-            {
-                <p class="govuk-body">No permissions added yet.</p>
-            }
-            else
-            {
-                <table class="govuk-table">
-                    <thead class="govuk-table__head">
+        @if (Model.SelectedGrants.Count == 0)
+        {
+            <p class="govuk-body">No permissions added yet.</p>
+        }
+        else
+        {
+            <table class="govuk-table">
+                <thead class="govuk-table__head">
+                    <tr class="govuk-table__row">
+                        <th scope="col" class="govuk-table__header">Resource type</th>
+                        <th scope="col" class="govuk-table__header">Resource key</th>
+                        <th scope="col" class="govuk-table__header">Access</th>
+                        <th scope="col" class="govuk-table__header">
+                            <span class="govuk-visually-hidden">Actions</span>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="govuk-table__body">
+                    @foreach (var grant in Model.SelectedGrants)
+                    {
+                        var parts = grant.Split('|', 3);
                         <tr class="govuk-table__row">
-                            <th scope="col" class="govuk-table__header">Resource type</th>
-                            <th scope="col" class="govuk-table__header">Resource key</th>
-                            <th scope="col" class="govuk-table__header">Access</th>
-                            <th scope="col" class="govuk-table__header">
-                                <span class="govuk-visually-hidden">Actions</span>
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody class="govuk-table__body">
-                        @foreach (var grant in Model.SelectedGrants)
-                        {
-                            var parts = grant.Split('|', 3);
-                            <tr class="govuk-table__row">
-                                <td class="govuk-table__cell">@(parts.Length > 0 ? parts[0] : grant)</td>
-                                <td class="govuk-table__cell"><code class="govuk-!-font-size-16">@(parts.Length > 1 ? parts[1] : "")</code></td>
-                                <td class="govuk-table__cell">@(parts.Length > 2 ? parts[2] : "")</td>
-                                <td class="govuk-table__cell">
+                            <td class="govuk-table__cell">@(parts.Length > 0 ? parts[0] : grant)</td>
+                            <td class="govuk-table__cell"><code class="govuk-!-font-size-16">@(parts.Length > 1 ? parts[1] : "")</code></td>
+                            <td class="govuk-table__cell">@(parts.Length > 2 ? parts[2] : "")</td>
+                            <td class="govuk-table__cell">
+                                <form method="post" asp-page-handler="Remove" style="display:inline">
+                                    <input type="hidden" asp-for="RoleId" />
+                                    @foreach (var g in Model.SelectedGrants)
+                                    {
+                                        <input type="hidden" name="SelectedGrants" value="@g" />
+                                    }
                                     <button type="submit"
                                             class="govuk-button govuk-button--warning govuk-!-margin-bottom-0"
-                                            asp-page-handler="Remove"
                                             name="grantKey"
                                             value="@grant"
                                             data-module="govuk-button">
                                         Remove
                                     </button>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            }
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
 
-            <div class="govuk-button-group">
-                <button type="submit"
-                        class="govuk-button"
-                        asp-page-handler="Save"
-                        data-module="govuk-button">
-                    Save permissions
-                </button>
-                <a asp-page="/Admin/RoleManager" class="govuk-link">Cancel</a>
-            </div>
-        </form>
+        <div class="govuk-button-group">
+            <a asp-page="/Admin/RoleManager" class="govuk-link">Back to Role Manager</a>
+        </div>
     </div>
 </div>

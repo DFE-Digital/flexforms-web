@@ -83,20 +83,17 @@ public sealed class RoleManagerPermissionsModel(
             ModelState.AddModelError(
                 string.Empty,
                 $"{NewResourceType} / {resourceKey} / {NewAccessType} is already in the list.");
-        }
-        else
-        {
-            SelectedGrants.Add(key);
-            SelectedGrants = NormalizeGrants(SelectedGrants);
-            NewResourceKey = string.Empty;
+            return Page();
         }
 
-        return Page();
+        SelectedGrants.Add(key);
+        SelectedGrants = NormalizeGrants(SelectedGrants);
+
+        return await SaveAndReloadAsync(cancellationToken);
     }
 
     public async Task<IActionResult> OnPostRemoveAsync(string grantKey, CancellationToken cancellationToken)
     {
-        // Remove form does not post Add fields; clear implicit required errors for them.
         ModelState.Remove(nameof(NewResourceKey));
         ModelState.Remove(nameof(NewResourceType));
         ModelState.Remove(nameof(NewAccessType));
@@ -112,26 +109,12 @@ public sealed class RoleManagerPermissionsModel(
 
         SelectedGrants = NormalizeGrants(SelectedGrants);
         SelectedGrants.RemoveAll(g => string.Equals(g, grantKey, StringComparison.OrdinalIgnoreCase));
-        return Page();
+
+        return await SaveAndReloadAsync(cancellationToken);
     }
 
-    public async Task<IActionResult> OnPostSaveAsync(CancellationToken cancellationToken)
+    private async Task<IActionResult> SaveAndReloadAsync(CancellationToken cancellationToken)
     {
-        ModelState.Remove(nameof(NewResourceKey));
-        ModelState.Remove(nameof(NewResourceType));
-        ModelState.Remove(nameof(NewAccessType));
-
-        if (!await LoadRoleMetaAsync(cancellationToken))
-            return RedirectToPage("/Admin/RoleManager");
-
-        if (IsSystemRole)
-        {
-            TempData["RoleManagerError"] = "System role permissions cannot be changed.";
-            return RedirectToPage("/Admin/RoleManager");
-        }
-
-        SelectedGrants = NormalizeGrants(SelectedGrants);
-
         foreach (var grant in SelectedGrants.Select(ParseGrantKey).Where(g => g is not null))
         {
             var error = ValidateGrant(grant!.Value.ResourceType, grant.Value.ResourceKey, grant.Value.AccessType);
@@ -161,13 +144,15 @@ public sealed class RoleManagerPermissionsModel(
                 new SetRolePermissionsRequest { Permissions = grants },
                 cancellationToken);
 
-            TempData["RoleManagerSuccess"] = $"Permissions updated for '{RoleName}'.";
-            return RedirectToPage("/Admin/RoleManager");
+            NewResourceKey = string.Empty;
+            await LoadPermissionsAsync(cancellationToken);
+            return Page();
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to set permissions for role {RoleId}", RoleId);
             ModelState.AddModelError(string.Empty, RoleManagerModel.GetErrorMessage(ex, "Could not save permissions."));
+            await LoadPermissionsAsync(cancellationToken);
             return Page();
         }
     }
@@ -185,12 +170,7 @@ public sealed class RoleManagerPermissionsModel(
 
         try
         {
-            var existing = await rolesClient.GetPermissionsAsync(RoleId, cancellationToken);
-            SelectedGrants = NormalizeGrants(
-                existing?
-                    .Select(p => EncodeGrantKey(p.ResourceType, p.ResourceKey, p.AccessType))
-                    .ToList() ?? []);
-
+            await LoadPermissionsAsync(cancellationToken);
             return true;
         }
         catch (Exception ex)
@@ -223,6 +203,15 @@ public sealed class RoleManagerPermissionsModel(
             TempData["RoleManagerError"] = RoleManagerModel.GetErrorMessage(ex, "Could not load role.");
             return false;
         }
+    }
+
+    private async Task LoadPermissionsAsync(CancellationToken cancellationToken)
+    {
+        var existing = await rolesClient.GetPermissionsAsync(RoleId, cancellationToken);
+        SelectedGrants = NormalizeGrants(
+            existing?
+                .Select(p => EncodeGrantKey(p.ResourceType, p.ResourceKey, p.AccessType))
+                .ToList() ?? []);
     }
 
     public static string EncodeGrantKey(ResourceType resourceType, string resourceKey, AccessType accessType) =>
