@@ -40,34 +40,22 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
                 r.ExceptionType,
                 r.Message);
 
-            if (r.StatusCode is 401)
-            {
-
-                    
-                context.Result = new UnauthorizedResult();
-                context.ExceptionHandled = true;
-                return;
-            }
-            if (r.StatusCode is 403)
-            {
-                var userId = context.HttpContext.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "Anonymous";
-                var userClaims = string.Join(", ", context.HttpContext.User?.Claims?.Select(c => $"{c.Type}:{c.Value}") ?? Array.Empty<string>());
-                
-
-                    
-                context.Result = new ForbidResult();
-                context.ExceptionHandled = true;
-                return;
-            }
-
-            // Build ProblemDetails for client consumers
             var problem = new ProblemDetails
             {
-                Title = string.IsNullOrWhiteSpace(r.Message) ? "API error" : r.Message,
+                Title = string.IsNullOrWhiteSpace(r.Message)
+                    ? (r.StatusCode is 401 or 403 ? "Access denied" : "API error")
+                    : r.Message,
                 Status = r.StatusCode,
             };
             problem.Extensions["errorId"] = r.ErrorId;
             problem.Extensions["exceptionType"] = r.ExceptionType;
+
+            if (r.StatusCode is 401 or 403)
+            {
+                context.Result = new ObjectResult(problem) { StatusCode = r.StatusCode };
+                context.ExceptionHandled = true;
+                return;
+            }
 
             if (r.StatusCode is 429)
             {

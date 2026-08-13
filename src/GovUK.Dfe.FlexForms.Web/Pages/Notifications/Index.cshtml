@@ -4,13 +4,30 @@
     ViewData["Title"] = "Notifications";
 }
 
+@Html.AntiForgeryToken()
+
 <h1 class="govuk-heading-l">Notifications</h1>
 
-<div class="govuk-button-group govuk-!-margin-bottom-5">
-    <button class="govuk-button govuk-button--secondary" data-module="govuk-button" id="btn-mark-all-read">Mark all as read</button>
-    <button class="govuk-button govuk-button--warning" data-module="govuk-button" id="btn-clear-all">Clear all</button>
-    <a class="govuk-link" href="/applications/dashboard">Back to home</a>
+<div id="notifications-error" class="govuk-error-summary" data-module="govuk-error-summary" hidden>
+    <div role="alert">
+        <h2 class="govuk-error-summary__title">There is a problem</h2>
+        <div class="govuk-error-summary__body">
+            <p class="govuk-body" id="notifications-error-message"></p>
+        </div>
     </div>
+</div>
+
+<div class="govuk-button-group govuk-!-margin-bottom-5">
+    @if (Model.CanWriteNotifications)
+    {
+        <button class="govuk-button govuk-button--secondary" data-module="govuk-button" id="btn-mark-all-read">Mark all as read</button>
+    }
+    @if (Model.CanDeleteNotifications)
+    {
+        <button class="govuk-button govuk-button--warning" data-module="govuk-button" id="btn-clear-all">Clear all</button>
+    }
+    <a class="govuk-link" href="/applications/dashboard">Back to home</a>
+</div>
 
 <table class="govuk-table govuk-!-margin-top-5">
     <thead class="govuk-table__head">
@@ -27,9 +44,23 @@
 <script>
     (function () {
         const tbody = document.getElementById('notifications-tbody');
+        const canDelete = @(Model.CanDeleteNotifications ? "true" : "false");
+        const errorBox = document.getElementById('notifications-error');
+        const errorMessage = document.getElementById('notifications-error-message');
         const antiForgeryToken = () => {
             const input = document.querySelector('input[name="__RequestVerificationToken"]');
             return input ? input.value : '';
+        };
+
+        const showError = (message) => {
+            errorMessage.textContent = message;
+            errorBox.hidden = false;
+            errorBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
+
+        const hideError = () => {
+            errorBox.hidden = true;
+            errorMessage.textContent = '';
         };
 
         const mapTypeTag = (type) => {
@@ -48,68 +79,92 @@
             tr.className = 'govuk-table__row';
             const created = n.createdAt ? new Date(n.createdAt) : null;
             const dateStr = created ? created.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : '';
+            const actionCell = canDelete
+                ? `<a class="govuk-link" data-id="${n.id}" href="#">Dismiss <span class="govuk-visually-hidden">this notification</span></a>`
+                : '';
             tr.innerHTML = `
                 <td class="govuk-table__cell">${n.message || ''}</td>
                 <td class="govuk-table__cell">${mapTypeTag(n.type)}</td>
                 <td class="govuk-table__cell">${dateStr}</td>
-                <td class="govuk-table__cell"><a class="govuk-link" data-id="${n.id}" href="#">Dismiss <span class="govuk-visually-hidden">this notification</span></a></td>
+                <td class="govuk-table__cell">${actionCell}</td>
             `;
-            tr.querySelector('a').onclick = async (e) => {
-                e.preventDefault();
-                const id = e.currentTarget.getAttribute('data-id');
-                try {
-                    const response = await fetch(`/notifications/remove/${encodeURIComponent(id)}`, {
-                        method: 'POST',
-                        credentials: 'include',
-                        headers: { 'RequestVerificationToken': antiForgeryToken() }
-                    });
-                    if (response.ok) {
-                        tr.innerHTML = '<td class="govuk-table__cell" aria-live="assertive" role="alert" colspan="4">Notification dismissed.</td>';
-                        setTimeout(() => tr.remove(), 3000);
-                    } else {
-                        console.error('Failed to dismiss notification:', response.status, await response.text());
-                        alert('Failed to dismiss notification. Please try again.');
+            const dismissLink = tr.querySelector('a');
+            if (dismissLink) {
+                dismissLink.onclick = async (e) => {
+                    e.preventDefault();
+                    hideError();
+                    const id = e.currentTarget.getAttribute('data-id');
+                    try {
+                        const response = await fetch(`/notifications/remove/${encodeURIComponent(id)}`, {
+                            method: 'POST',
+                            credentials: 'include',
+                            redirect: 'manual',
+                            headers: { 'RequestVerificationToken': antiForgeryToken() }
+                        });
+                        if (response.ok) {
+                            tr.remove();
+                        } else {
+                            showError('You do not have permission to delete notifications.');
+                        }
+                    } catch (error) {
+                        console.error('Error dismissing notification:', error);
+                        showError('An error occurred while dismissing the notification.');
                     }
-                } catch (error) {
-                    console.error('Error dismissing notification:', error);
-                    alert('An error occurred while dismissing the notification.');
-                }
-            };
+                };
+            }
             return tr;
         }
 
         async function loadAll() {
             tbody.innerHTML = '';
-            const all = await fetch('/notifications/all', { credentials: 'include' }).then(r => r.ok ? r.json() : []);
+            const response = await fetch('/notifications/all', { credentials: 'include', redirect: 'manual' });
+            if (!response.ok) {
+                showError('You do not have permission to view notifications.');
+                return;
+            }
+            const all = await response.json();
             all.forEach(n => tbody.appendChild(renderRow(n)));
         }
 
-        document.getElementById('btn-mark-all-read').onclick = async () => {
-            await fetch('/notifications/read-all', {
-                method: 'POST',
-                credentials: 'include',
-                headers: { 'RequestVerificationToken': antiForgeryToken() }
-            });
-        };
-        document.getElementById('btn-clear-all').onclick = async () => {
-            try {
-                const response = await fetch('/notifications/clear', {
+        const markAllButton = document.getElementById('btn-mark-all-read');
+        if (markAllButton) {
+            markAllButton.onclick = async () => {
+                hideError();
+                const response = await fetch('/notifications/read-all', {
                     method: 'POST',
                     credentials: 'include',
+                    redirect: 'manual',
                     headers: { 'RequestVerificationToken': antiForgeryToken() }
                 });
                 if (!response.ok) {
-                    alert('You do not have permission to delete notifications.');
-                    return;
+                    showError('You do not have permission to update notifications.');
                 }
-                await loadAll();
-            } catch (error) {
-                console.error('Error clearing notifications:', error);
-                alert('An error occurred while clearing notifications.');
-            }
-        };
+            };
+        }
+
+        const clearAllButton = document.getElementById('btn-clear-all');
+        if (clearAllButton) {
+            clearAllButton.onclick = async () => {
+                hideError();
+                try {
+                    const response = await fetch('/notifications/clear', {
+                        method: 'POST',
+                        credentials: 'include',
+                        redirect: 'manual',
+                        headers: { 'RequestVerificationToken': antiForgeryToken() }
+                    });
+                    if (!response.ok) {
+                        showError('You do not have permission to delete notifications.');
+                        return;
+                    }
+                    await loadAll();
+                } catch (error) {
+                    console.error('Error clearing notifications:', error);
+                    showError('An error occurred while clearing notifications.');
+                }
+            };
+        }
 
         loadAll();
     })();
 </script>
-

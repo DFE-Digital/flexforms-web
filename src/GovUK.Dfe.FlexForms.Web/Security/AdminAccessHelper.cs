@@ -135,6 +135,21 @@ public static class AdminAccessHelper
     /// <summary>
     /// Matches claims shaped as <c>{resourceType}:{key}:Manage</c> (Any or specific id/email).
     /// </summary>
+    public static bool HasNotificationAccess(ClaimsPrincipal? user, string accessType)
+    {
+        if (IsAdmin(user))
+            return true;
+
+        if (user is null || string.IsNullOrWhiteSpace(accessType))
+            return false;
+
+        var suffix = $":{accessType}";
+        return user.Claims.Any(c =>
+            string.Equals(c.Type, PermissionClaimType, StringComparison.OrdinalIgnoreCase)
+            && c.Value.StartsWith("Notifications:", StringComparison.OrdinalIgnoreCase)
+            && c.Value.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
+    }
+
     public static bool HasAnyManageClaim(ClaimsPrincipal? user, string resourceType)
     {
         if (user is null || string.IsNullOrWhiteSpace(resourceType))

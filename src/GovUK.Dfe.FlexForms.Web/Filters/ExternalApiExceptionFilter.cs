@@ -65,6 +65,13 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
                     return;
                 }
 
+                if (IsFileOperation(context.HttpContext))
+                {
+                    executedContext.Result = MapUnhandledApiException(page, statusCode, message, context.HttpContext);
+                    executedContext.ExceptionHandled = true;
+                    return;
+                }
+
                 if (TryHandleApplicationWriteAccessDenied(context.HttpContext, page, statusCode, message, out var writeAccessResult))
                 {
                     executedContext.Result = writeAccessResult;
@@ -298,14 +305,54 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
             return (false, string.Empty);
         }
 
+        private static bool IsFileOperation(HttpContext httpContext) =>
+            httpContext.Items.TryGetValue("FileOperationInfo", out var storedInfo)
+            && storedInfo is ValueTuple<bool, string, string> info
+            && info.Item1;
+
+        private static string? ResolveHandlerName(PageHandlerExecutingContext context)
+        {
+            var name = context.HandlerMethod?.Name;
+            if (!string.IsNullOrWhiteSpace(name))
+                return name;
+
+            if (context.HttpContext.Request.Query.TryGetValue("handler", out var queryHandler)
+                && !string.IsNullOrWhiteSpace(queryHandler))
+                return queryHandler.ToString();
+
+            if (context.HttpContext.Request.HasFormContentType
+                && context.HttpContext.Request.Form.TryGetValue("handler", out var formHandler)
+                && !string.IsNullOrWhiteSpace(formHandler))
+                return formHandler.ToString();
+
+            return null;
+        }
+
+        private static string NormalizeHandlerName(string? handlerName)
+        {
+            if (string.IsNullOrWhiteSpace(handlerName))
+                return string.Empty;
+
+            var name = handlerName.Trim();
+            if (name.StartsWith("OnPost", StringComparison.OrdinalIgnoreCase))
+                name = name["OnPost".Length..];
+            else if (name.StartsWith("OnGet", StringComparison.OrdinalIgnoreCase))
+                name = name["OnGet".Length..];
+
+            if (name.EndsWith("Async", StringComparison.OrdinalIgnoreCase))
+                name = name[..^"Async".Length];
+
+            return name;
+        }
+
         private static (bool isFileOp, string operation, string fieldId) DetectFileOperationRequest(PageHandlerExecutingContext context)
         {
-            var handlerName = context.HandlerMethod?.Name;
+            var handlerName = NormalizeHandlerName(ResolveHandlerName(context));
             var operation = handlerName switch
             {
-                "OnPostUploadFileAsync" => "upload",
-                "OnPostDownloadFileAsync" => "download",
-                "OnPostDeleteFileAsync" => "delete",
+                "UploadFile" => "upload",
+                "DownloadFile" => "download",
+                "DeleteFile" => "delete",
                 _ => string.Empty
             };
 
@@ -373,20 +420,26 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
 
             if (fileOpInfo.Item2 is "upload" or "delete")
             {
-                var returnUrl = httpContext.Request.Form["ReturnUrl"].ToString();
-                if (!string.IsNullOrEmpty(returnUrl) && !string.IsNullOrEmpty(fileOpInfo.Item3))
+                var returnUrl = httpContext.Request.HasFormContentType
+                    ? httpContext.Request.Form["ReturnUrl"].ToString()
+                    : string.Empty;
+                if (string.IsNullOrEmpty(returnUrl))
+                    returnUrl = httpContext.Request.Headers.Referer.ToString();
+
+                var errorKey = !string.IsNullOrEmpty(fileOpInfo.Item3) ? fileOpInfo.Item3 : "Error";
+                try
                 {
-                    try
+                    var formErrorStore = httpContext.RequestServices.GetService<IFormErrorStore>();
+                    formErrorStore?.Save(errorKey, page.ModelState);
+                    if (!string.IsNullOrEmpty(returnUrl))
                     {
-                        var formErrorStore = httpContext.RequestServices.GetService<IFormErrorStore>();
-                        formErrorStore?.Save(fileOpInfo.Item3, page.ModelState);
                         result = new RedirectResult(returnUrl);
                         return true;
                     }
-                    catch (Exception)
-                    {
-                        // Fall through to page result
-                    }
+                }
+                catch (Exception)
+                {
+                    // Fall through to page result
                 }
             }
 
@@ -416,6 +469,11 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
             }
 
             if (!IsApplicationRequest(httpContext.Request.Path) || !IsMutatingHttpMethod(httpContext.Request))
+            {
+                return false;
+            }
+
+            if (IsFileOperation(httpContext))
             {
                 return false;
             }

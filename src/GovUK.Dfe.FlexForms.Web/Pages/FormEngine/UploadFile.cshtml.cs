@@ -463,7 +463,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                 var allDbFiles = await fileUploadService.GetFilesForApplicationAsync(appId);
                 return files.Where(sf => allDbFiles.Any(dbf => dbf.Id == sf.Id)).ToList();
             }
-            catch (ExternalApplicationsException ex) when (ex.StatusCode == 403)
+            catch (ExternalApplicationsException ex) when (ex.StatusCode is 401 or 403)
             {
                 // User may have write but not read permission; trust session data
                 return files;
