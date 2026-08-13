@@ -38,7 +38,8 @@
       "launchUrl": "https://rgvisits.localhost:7020",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "LOCAL_HOST_SECRETS_SECTION": "Transfers"
+        "LOCAL_HOST_SECRETS_SECTION": "Transfers",
+        "ConnectionStrings__Redis": "localhost:6379"
       },
       "dotnetRunMessages": true,
       "applicationUrl": "https://rgvisits.localhost:7020;http://rgvisits.localhost:5211"
