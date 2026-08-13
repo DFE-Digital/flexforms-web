@@ -221,6 +221,7 @@
                     <th scope="col" class="govuk-table__header">File name</th>
                     <th scope="col" class="govuk-table__header">File size</th>
                     <th scope="col" class="govuk-table__header">File type</th>
+                    <th scope="col" class="govuk-table__header">Status</th>
                     <th scope="col" class="govuk-table__header">Action</th>
                 </tr>
             </thead>
@@ -246,6 +247,23 @@
                             </td>
                             <td class="govuk-table__cell">@FormatFileSize(file.FileSize)</td>
                             <td class="govuk-table__cell">@(System.IO.Path.GetExtension(file.OriginalFileName)?.TrimStart('.').ToUpperInvariant() ?? "Unknown")</td>
+                            <td class="govuk-table__cell" data-file-validation-status="@file.Id">
+                                @{
+                                    var validationLabel = GovUK.Dfe.FlexForms.Web.Services.FileValidationUi.StatusText(file.ValidationStatus);
+                                }
+                                @if (!string.IsNullOrWhiteSpace(validationLabel))
+                                {
+                                    <span>@validationLabel</span>
+                                    @if (!string.IsNullOrWhiteSpace(file.ValidationMessage))
+                                    {
+                                        <span class="govuk-hint"> — @file.ValidationMessage</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span>—</span>
+                                }
+                            </td>
                             <td class="govuk-table__cell">
                                 <form method="post" asp-page="/FormEngine/RenderForm" asp-route-referenceNumber="@referenceNumber" asp-route-taskId="@taskId" asp-route-pageId="@actualPageId" asp-page-handler="DeleteFile" style="display:inline">
                                     <input type="hidden" name="FileId" value="@file.Id" />
@@ -275,7 +293,7 @@
                 else
                 {
                     <tr class="govuk-table__row">
-                        <td class="govuk-table__cell" colspan="4">No files uploaded yet</td>
+                        <td class="govuk-table__cell" colspan="5">No files uploaded yet</td>
                     </tr>
                 }
             </tbody>

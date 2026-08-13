@@ -98,6 +98,10 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
         // Files property for upload field (matches original UploadFile.cshtml.cs)
         public IReadOnlyList<UploadDto> Files { get; set; } = new List<UploadDto>();
 
+        public bool FileValidationBlocksSubmit { get; set; }
+
+        public IReadOnlyList<FileValidationBlockDto> FileValidationBlockingFiles { get; set; } = [];
+
         // Conditional logic state for the current form
         public FormConditionalState? ConditionalState { get; set; }
 
@@ -157,6 +161,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                     
                     // Clear all validation errors for preview since we don't need validation on preview page
                     ModelState.Clear();
+                    await RefreshFileValidationGateAsync();
                 }
                 else
                 {
@@ -601,6 +606,16 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             {
                 _logger.LogError("ApplicationId not found during submission for reference {ReferenceNumber}", ReferenceNumber);
                 ModelState.AddModelError("", "Application not found. Please try again.");
+                return Page();
+            }
+
+            await RefreshFileValidationGateAsync();
+            if (FileValidationBlocksSubmit)
+            {
+                CurrentFormState = FormState.ApplicationPreview;
+                var names = string.Join(", ", FileValidationBlockingFiles.Select(f => f.OriginalFileName));
+                ModelState.AddModelError("",
+                    $"Some uploaded files failed validation or are still being checked: {names}");
                 return Page();
             }
 
@@ -3149,6 +3164,26 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
         /// Uses direct key lookup instead of KEYS command for better reliability and performance.
         /// Checks both file ID-based and filename-based blacklists.
         /// </summary>
+        private async Task RefreshFileValidationGateAsync()
+        {
+            FileValidationBlocksSubmit = false;
+            FileValidationBlockingFiles = [];
+
+            if (!ApplicationId.HasValue)
+                return;
+
+            try
+            {
+                var gate = await _applicationsClient.GetFileValidationGateAsync(ApplicationId.Value);
+                FileValidationBlocksSubmit = !gate.CanSubmit;
+                FileValidationBlockingFiles = gate.BlockingFiles ?? [];
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not evaluate file validation gate for application {ApplicationId}", ApplicationId);
+            }
+        }
+
         public List<UploadDto> FilterInfectedFilesFromList(List<UploadDto> files)
         {
             if (files == null || files.Count == 0)

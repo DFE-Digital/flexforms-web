@@ -655,6 +655,36 @@
             <p class="govuk-body">You'll see a <b>Submit</b> button here when they're open.</p>
             <p class="govuk-body">You can still work on your @AppTerminology.Singular and save it.</p>
         }
+        else if (Model.FileValidationBlocksSubmit)
+        {
+            <div class="govuk-error-summary" data-module="govuk-error-summary">
+                <div role="alert">
+                    <h2 class="govuk-error-summary__title">There is a problem</h2>
+                    <div class="govuk-error-summary__body">
+                        <p class="govuk-body">You cannot submit until uploaded files pass validation.</p>
+                        <ul class="govuk-list govuk-error-summary__list">
+                            @foreach (var file in Model.FileValidationBlockingFiles)
+                            {
+                                <li>
+                                    <span>@file.OriginalFileName</span>
+                                    @if (!string.IsNullOrWhiteSpace(file.ValidationMessage))
+                                    {
+                                        <span> — @file.ValidationMessage</span>
+                                    }
+                                    else if (file.ValidationStatus == GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums.FileValidationStatus.Pending)
+                                    {
+                                        <span> — validation is still running</span>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <button class="govuk-button" type="button" disabled="disabled" aria-disabled="true" id="submit-application-button">
+                Submit
+            </button>
+        }
         else
         {
             <p class="govuk-body">By submitting this @AppTerminology.Singular you are confirming that, to the best of your knowledge, the details you are providing are correct.</p>

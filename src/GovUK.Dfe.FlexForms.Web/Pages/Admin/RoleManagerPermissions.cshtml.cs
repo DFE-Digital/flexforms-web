@@ -247,20 +247,22 @@ public sealed class RoleManagerPermissionsModel(
                 || (resourceType == ResourceType.Template && accessType == AccessType.Manage)
                 || (resourceType == ResourceType.User && accessType == AccessType.Manage)
                 || (resourceType == ResourceType.Application && accessType == AccessType.Read)
-                || (resourceType == ResourceType.ApplicationFiles && accessType == AccessType.Read))
+                || (resourceType == ResourceType.ApplicationFiles && accessType == AccessType.Read)
+                || (resourceType == ResourceType.FileValidation && accessType == AccessType.Write))
             {
                 return null;
             }
 
             return $"Resource key '{AnyResourceKey}' is only allowed for Template — Write, " +
                    "Template — Manage, User — Manage, Application — Read, " +
-                   "or ApplicationFiles — Read. For other combinations, use a specific resource id or email.";
+                   "ApplicationFiles — Read, or FileValidation — Write. " +
+                   "For other combinations, use a specific resource id or email.";
         }
 
         return resourceType switch
         {
             ResourceType.Application or ResourceType.ApplicationFiles or ResourceType.Template
-                or ResourceType.File or ResourceType.Task or ResourceType.TaskGroup
+                or ResourceType.File or ResourceType.FileValidation or ResourceType.Task or ResourceType.TaskGroup
                 or ResourceType.Page or ResourceType.Field
                 when !Guid.TryParse(key, out var id) || id == Guid.Empty
                 => $"{resourceType} resource key must be a valid non-empty GUID (the resource id) or 'Any' (where allowed).",
