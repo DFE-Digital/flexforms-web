@@ -15,8 +15,8 @@ Template authoring guide: [`docs/Form-Template-Designer-Manual.md`](docs/Form-Te
 - **Auth** — DfE Sign-In (OIDC) and optional Entra SSO, with cookie sessions and API token exchange
 - **Admin area** — Template Manager, User Manager, Role Manager, Tenant Settings (SuperAdmin)
 - **Contributors** — Invite collaborators when `contributorPattern` is enabled on the template
-- **Files** — Upload via API; scan results consumed from Service Bus
-- **Notifications** — API-backed notification centre
+- **Files** — Upload via API; ClamAV scan results from Service Bus; optional tenant file-validation status
+- **Notifications** — API-backed notification centre + SignalR (malware, file delete, file validation)
 - **GOV.UK Frontend** — Design System components via GovUk.Frontend.AspNetCore
 - **Request tracing** — Correlation id end-to-end, structured logs (Serilog → Application Insights), API error logging with ErrorId
 
@@ -272,6 +272,7 @@ Full authoring reference: [`docs/Form-Template-Designer-Manual.md`](docs/Form-Te
 | Conditional logic | `ConditionalLogicEngine` / orchestrator |
 | Collections | Multi + derived flow handlers on `RenderForm` |
 | Complex fields | Tenant `FormEngine:ComplexFields` (Trust/Academy search, uploads) |
+| File validation | Status column on upload fields; `GetFileValidationGateAsync` blocks preview submit when the API gate says so |
 | Submit | `SubmitApplicationAsync` + `ApplicationSubmissionOrchestrator` (e.g. publish event) |
 
 ### Template selection
@@ -309,10 +310,49 @@ Tenant Settings uses `ITenantAdminClient` (Base64 settings payloads), then refre
 | Form | `/applications/{ref}/…` |
 | Contributors | `/applications/{ref}/contributors`, `…/invite` when `contributorPattern: true` |
 | Submitted | `/application-submitted/{referenceNumber}` |
-| Notifications | `/Notifications` UI + `notifications/*` API proxy |
+| Notifications | `/Notifications` UI + `notifications/*` API proxy; SignalR `notification.upserted` |
 | Feedback | `/Feedback/*` (often anonymous) |
 
 Terminology (application vs case, etc.) comes from tenant `ApplicationTerminology` settings.
+
+---
+
+## File validation (tenant integrations)
+
+Virus scanning stays platform-owned (Service Bus → `ScanResultConsumer` → malware notification + delete). Tenants can also run their **own** checks (for example Excel schema) via the API callback. Web only displays status, live updates, and the submit gate.
+
+Configure on the API: Tenant Settings category `FileValidation`, Target `Shared`. Full callback contract and auth: [flexforms-api README — File validation](https://github.com/DFE-Digital/flexforms-api#file-validation-callback-tenant-integrations).
+
+```json
+{
+  "DefaultMode": "RequirePassed",
+  "Extensions": [ ".xlsx", ".xls" ],
+  "Templates": {
+    "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee": "RequirePassed"
+  }
+}
+```
+
+| Mode | Submit behaviour |
+|------|------------------|
+| `Off` | Ignore validation (default) |
+| `FailOnInvalid` | Block only when a file is `Failed` |
+| `RequirePassed` | Eligible files must be `Passed` (`Pending` also blocks) |
+
+`Extensions` is optional. Omit or `[]` → every upload is eligible when mode is not `Off`. Set e.g. `[".xlsx"]` so JPEG/PNG stay `NotRequired` (no pending label, never block submit) while Excel is validated.
+
+### What the applicant sees
+
+| Surface | Behaviour |
+|---------|-----------|
+| Upload field Status column | `Validation pending` / `Validated` / `Validation failed` (or `—` when `NotRequired`) |
+| Preview submit | Disabled when `GetFileValidationGateAsync` returns `canSubmit: false`; lists blocking file names |
+| Banner | GOV.UK error/success from SignalR `notification.upserted` (category `file-validation`) |
+| Nav badge + `/Notifications` | Same notification store as file-delete / malware (`Context` = tenant `ApplicationName`) |
+
+Live updates: stay on the upload page when the tenant function POSTs a result. The Status cell and banner change without a refresh. The preview submit-gate list still needs a reload.
+
+Failed validation **keeps** the file (unlike malware, which deletes it). The tenant function must not call the product `Api.Client` with an API key — use a narrow HTTP call to the integrations endpoint.
 
 ---
 
@@ -452,7 +492,7 @@ sequenceDiagram
 ## Related documentation
 
 - [`docs/Form-Template-Designer-Manual.md`](docs/Form-Template-Designer-Manual.md) — JSON template authoring
-- [flexforms-api README](https://github.com/DFE-Digital/flexforms-api) — API, TenantConfig, roles, security, API-side tracing
+- [flexforms-api README](https://github.com/DFE-Digital/flexforms-api) — API, TenantConfig, roles, security, file-validation callback
 - DfE.CoreLibs `GovUK.Dfe.CoreLibs.Http/ExceptionHandler.md` — global exception handler + KQL support playbook
 - `terraform/README.md` — deployment
 
