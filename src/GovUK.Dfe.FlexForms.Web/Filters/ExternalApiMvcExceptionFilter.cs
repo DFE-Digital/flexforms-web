@@ -1,5 +1,7 @@
 using GovUK.Dfe.CoreLibs.Http.Models;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
+using GovUK.Dfe.FlexForms.Web.Services;
+using GovUK.Dfe.FlexForms.Web.Telemetry;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
@@ -17,8 +19,26 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
 
             var r = ex.Result;
 
-            logger.LogWarning("API exception for MVC action. StatusCode: {StatusCode}, ErrorId: {ErrorId}, ExceptionType: {ExceptionType}, Message: {Message}",
-                r.StatusCode, r.ErrorId, r.ExceptionType, r.Message);
+            string? templateId = context.HttpContext.Session.GetString("TemplateId");
+            if (r.Context is not null
+                && r.Context.TryGetValue(FlexFormsLogContextKeys.TemplateId, out var contextTemplate)
+                && contextTemplate is not null)
+            {
+                templateId = contextTemplate.ToString();
+            }
+
+            logger.LogWarning(
+                "API exception for MVC action. StatusCode={StatusCode} ErrorId={ErrorId} CorrelationId={CorrelationId} TenantId={TenantId} UserEmail={UserEmail} TemplateId={TemplateId} ExceptionType={ExceptionType} Message={Message}",
+                r.StatusCode,
+                r.ErrorId,
+                context.HttpContext.Request.Headers.TryGetValue(CorrelationIdForwardingHandler.HeaderName, out var correlationHeader)
+                    ? correlationHeader.ToString()
+                    : r.CorrelationId,
+                r.TenantId,
+                r.UserEmail ?? context.HttpContext.User?.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value,
+                templateId,
+                r.ExceptionType,
+                r.Message);
 
             if (r.StatusCode is 401)
             {

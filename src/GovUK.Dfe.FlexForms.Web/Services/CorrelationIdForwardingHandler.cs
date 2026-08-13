@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Http.Features;
+
 namespace GovUK.Dfe.FlexForms.Web.Services;
 
 /// <summary>
@@ -5,7 +7,7 @@ namespace GovUK.Dfe.FlexForms.Web.Services;
 /// </summary>
 public sealed class CorrelationIdForwardingHandler(IHttpContextAccessor httpContextAccessor) : DelegatingHandler
 {
-    public const string HeaderName = Middleware.CorrelationIdMiddleware.HeaderName;
+    public const string HeaderName = "x-correlationId";
 
     protected override Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
@@ -34,6 +36,42 @@ public sealed class CorrelationIdForwardingHandler(IHttpContextAccessor httpCont
 
         request.Headers.TryAddWithoutValidation(HeaderName, correlationId);
 
+        if (httpContext is not null)
+        {
+            ForwardTelemetryHeader(request, httpContext, "X-Template-Id", "TemplateId");
+            ForwardTelemetryHeader(request, httpContext, "X-Application-Reference", "ApplicationReference");
+        }
+
         return base.SendAsync(request, cancellationToken);
+    }
+
+    private static void ForwardTelemetryHeader(
+        HttpRequestMessage request,
+        HttpContext httpContext,
+        string headerName,
+        string sessionKey)
+    {
+        string? value = null;
+
+        if (httpContext.Request.Headers.TryGetValue(headerName, out var fromRequest)
+            && !string.IsNullOrWhiteSpace(fromRequest))
+        {
+            value = fromRequest.ToString();
+        }
+        else
+        {
+            // Tenant bootstrap HTTP calls run before UseSession(); skip session then.
+            var session = httpContext.Features.Get<ISessionFeature>()?.Session;
+            if (session is not null)
+                value = session.GetString(sessionKey);
+        }
+
+        if (string.IsNullOrWhiteSpace(value))
+            return;
+
+        if (request.Headers.Contains(headerName))
+            request.Headers.Remove(headerName);
+
+        request.Headers.TryAddWithoutValidation(headerName, value);
     }
 }

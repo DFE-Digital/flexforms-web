@@ -18,6 +18,7 @@ Template authoring guide: [`docs/Form-Template-Designer-Manual.md`](docs/Form-Te
 - **Files** — Upload via API; scan results consumed from Service Bus
 - **Notifications** — API-backed notification centre
 - **GOV.UK Frontend** — Design System components via GovUk.Frontend.AspNetCore
+- **Request tracing** — Correlation id end-to-end, structured logs (Serilog → Application Insights), API error logging with ErrorId
 
 ---
 
@@ -96,6 +97,64 @@ sequenceDiagram
 Prefer launch profiles that use `*.localhost` hostnames mapped in TenantConfig (e.g. `lsrp.localhost`, `rgvisits.localhost`).
 
 **API business calls** get `X-Tenant-ID` from `TenantApiClientSettingsProvider` / Api.Client `HeaderForwardingHandler`.
+
+---
+
+## Observability and request tracing
+
+Structured logging uses **Serilog** with `Enrich.FromLogContext()` and an Application Insights sink (`ExceptionTrackingTelemetryConverter`). Disable the default App Insights `ILogger` provider so all telemetry flows through Serilog.
+
+### Correlation id
+
+- Header: `x-correlationId` (GUID) on every browser request and outbound API call.
+- Middleware: CoreLibs `UseCorrelationId()` (replaces the former local middleware).
+- Log scope key: `CorrelationId` (canonical name for App Insights `customDimensions`).
+
+### Request telemetry scopes
+
+After auth and template selection, `RequestTelemetryEnrichmentMiddleware` populates:
+
+| Property | Source |
+|----------|--------|
+| `CorrelationId` | CoreLibs correlation middleware |
+| `TenantId`, `TenantName` | `ITenantRequestContext` |
+| `UserId`, `UserEmail` | Authenticated claims |
+| `TemplateId`, `ApplicationReference` | Session (when configured) |
+| `ServiceName` | `flexforms-web` |
+
+FlexForms-specific keys live in `Telemetry/FlexFormsLogContextKeys.cs` and `IFlexFormsRequestScope` — not in the shared CoreLibs NuGet.
+
+### Outbound API headers
+
+`CorrelationIdForwardingHandler` (global `HttpClient` default) forwards:
+
+- `x-correlationId`
+- `X-Template-Id` / `X-Application-Reference` when session is available (skipped during early tenant bootstrap before `UseSession()`)
+
+Api.Client `HeaderForwardingHandler` also forwards tenant and auth headers on typed API clients.
+
+### API error logging
+
+`ExternalApiPageExceptionFilter` and `ExternalApiMvcExceptionFilter` log every API failure with `ErrorId`, `StatusCode`, `CorrelationId`, `TenantId`, `UserEmail`, `TemplateId`, and path — then redirect or return the appropriate UX. The user-facing error page can show the API `ErrorId` from TempData.
+
+`TokenExchangeHandler` logs exchange failures (no silent catches).
+
+### Support queries (Application Insights)
+
+End-user provides **ErrorId** from the error page → search traces/exceptions by `customDimensions.ErrorId` → follow `customDimensions.CorrelationId` for the full Web + API chain.
+
+Example:
+
+```kusto
+union traces, exceptions
+| where customDimensions.ErrorId == "P-123456"
+| project timestamp, cloud_RoleName, message,
+          customDimensions.CorrelationId, customDimensions.TenantId,
+          customDimensions.UserEmail, customDimensions.TemplateId
+| order by timestamp asc
+```
+
+Generic CoreLibs keys and more KQL examples: `DfE.CoreLibs.Http/ExceptionHandler.md`.
 
 ---
 
@@ -278,16 +337,18 @@ Permission claim shape (from API): `{ResourceType}:{ResourceKey}:{AccessType}`.
 
 ```mermaid
 flowchart TD
-    A[Forwarded headers] --> B[TenantConfigurationMiddleware]
-    B --> C[Exception / status pages]
-    C --> D[HTTPS / static / cookie policy]
-    D --> E[Session + Authentication]
-    E --> F[TokenManagementMiddleware]
-    F --> G[ActivityBasedTokenRefresh]
-    G --> H[Permissions cache middleware]
-    H --> I[TemplateSelectionMiddleware]
-    I --> J[Authorization]
-    J --> K[Razor Pages / Controllers]
+    A[Forwarded headers] --> B[UseCorrelationId]
+    B --> C[TenantConfigurationMiddleware]
+    C --> D[Exception / status pages]
+    D --> E[HTTPS / static / cookie policy]
+    E --> F[Session + Authentication]
+    F --> G[TokenManagementMiddleware]
+    G --> H[ActivityBasedTokenRefresh]
+    H --> I[Permissions cache middleware]
+    I --> J[TemplateSelectionMiddleware]
+    J --> K[RequestTelemetryEnrichmentMiddleware]
+    K --> L[Authorization]
+    L --> M[Razor Pages / Controllers]
 ```
 
 ---
@@ -296,10 +357,12 @@ flowchart TD
 
 | Concern | Mechanism |
 |---------|-----------|
-| Package | `GovUK.Dfe.FlexForms.Api.Client` (NuGet; local ProjectReference optional while developing) |
+| Package | `GovUK.Dfe.FlexForms.Api.Client` — **NuGet in CI**; local **project reference** to `flexforms-api` while developing telemetry/client changes |
+| CoreLibs | `GovUK.Dfe.CoreLibs.Http` — **project reference** to `DfE.CoreLibs` locally (correlation + generic SaaS telemetry); publish NuGet for CI |
 | Platform HTTP | `/v1/host-config`, `/v1/tenant-config/resolve`, `/v1/tenant-config/tenants/{id}` |
 | Business clients | `IApplicationsClient`, `ITemplatesClient`, `IUsersClient`, `IRolesClient`, `INotificationsClient`, `ITenantAdminClient`, `ITokensClient`, … |
 | Auth to API | Token exchange + `X-Tenant-ID` |
+| Tracing headers | `x-correlationId`, optional `X-Template-Id`, `X-Application-Reference` |
 | Contracts | `GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.*` (namespace historical; product is FlexForms) |
 
 Web does **not** own SQL for applications/templates/users — the API does.
@@ -389,7 +452,8 @@ sequenceDiagram
 ## Related documentation
 
 - [`docs/Form-Template-Designer-Manual.md`](docs/Form-Template-Designer-Manual.md) — JSON template authoring
-- [flexforms-api README](https://github.com/DFE-Digital/flexforms-api) — API, TenantConfig, roles, security
+- [flexforms-api README](https://github.com/DFE-Digital/flexforms-api) — API, TenantConfig, roles, security, API-side tracing
+- DfE.CoreLibs `GovUK.Dfe.CoreLibs.Http/ExceptionHandler.md` — global exception handler + KQL support playbook
 - `terraform/README.md` — deployment
 
 ---

@@ -41,8 +41,22 @@ using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using GovUK.Dfe.FlexForms.Web.Telemetry;
 using GovUK.Dfe.FlexForms.Web.Configuration;
+using GovUK.Dfe.CoreLibs.Http.Extensions;
+using Serilog;
+using Serilog.Events;
+using TelemetryConfiguration = Microsoft.ApplicationInsights.Extensibility.TelemetryConfiguration;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Host.UseSerilog((context, _, loggerConfiguration) =>
+{
+    loggerConfiguration
+        .MinimumLevel.Information()
+        .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+        .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
+        .Enrich.FromLogContext()
+        .WriteTo.Console();
+});
 
 builder.Configuration.AddJsonFile("appsettings.bootstrap.json", optional: true, reloadOnChange: true);
 
@@ -147,6 +161,9 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 
 builder.Services.AddApplicationInsightsTelemetry(configuration);
 
+builder.Logging.AddFilter<Microsoft.Extensions.Logging.ApplicationInsights.ApplicationInsightsLoggerProvider>(
+    (_, _) => false);
+
 // Filter out health check endpoints from Application Insights telemetry
 builder.Services.AddApplicationInsightsTelemetryProcessor<HealthCheckTelemetryFilter>();
 // Configure test authentication options
@@ -190,10 +207,19 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(optio
     options.ValueCountLimit = 1000;
 });
 
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddCorrelationId();
+builder.Services.AddScoped<IFlexFormsRequestScope, FlexFormsRequestScope>();
+
+builder.Services.AddScoped<ExternalApiPageExceptionFilter>();
+
+builder.Services.Configure<Microsoft.AspNetCore.Mvc.MvcOptions>(options =>
+{
+    options.Filters.AddService<ExternalApiPageExceptionFilter>();
+});
+
 builder.Services.AddRazorPages(options =>
 {
-    options.Conventions.ConfigureFilter(new ExternalApiPageExceptionFilter());
-
     options.Conventions.AuthorizeFolder("/", "OpenIdConnectPolicy");
     options.Conventions.AllowAnonymousToPage("/Logout");
 
@@ -651,8 +677,21 @@ AppDomain.CurrentDomain.UnhandledException += (sender, args) =>
 
 var app = builder.Build();
 
+var telemetryConfig = app.Services.GetService<TelemetryConfiguration>();
+if (telemetryConfig is not null)
+{
+    Log.Logger = new LoggerConfiguration()
+        .MinimumLevel.Information()
+        .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+        .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
+        .Enrich.FromLogContext()
+        .WriteTo.Console()
+        .WriteTo.ApplicationInsights(telemetryConfig, new ExceptionTrackingTelemetryConverter())
+        .CreateLogger();
+}
+
 app.UseForwardedHeaders();
-app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseCorrelationId();
 app.UsePlatformTenantConfiguration();
 
 // Configure the HTTP request pipeline.
@@ -718,6 +757,7 @@ app.UseActivityBasedTokenRefresh(); // Session management: idle timeout 30min, a
 app.UsePermissionsCache();
 app.UseAuthorization();
 app.UseTemplateSelection();
+app.UseRequestTelemetryEnrichment();
 
 app.MapRazorPages();
 app.MapControllers();
