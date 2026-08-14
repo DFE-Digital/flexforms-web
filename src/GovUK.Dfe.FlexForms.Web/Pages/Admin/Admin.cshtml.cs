@@ -67,7 +67,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
         public bool CanViewTenantConfigurationSummary => AdminAccessHelper.CanViewTenantConfigurationSummary(User);
 
         /// <summary>
-        /// Tenant Admin card: organisation settings, events, and (for SuperAdmin) own-tenant config tools.
+        /// Tenant Admin card: organisation settings, events, and own-tenant config tools.
         /// </summary>
         public bool CanAccessTenantAdminSection =>
             CanManageOrganisationSettings

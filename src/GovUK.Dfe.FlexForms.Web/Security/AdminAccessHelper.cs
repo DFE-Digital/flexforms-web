@@ -15,6 +15,7 @@ public static class AdminAccessHelper
     public const string CanManageTemplatesPolicy = "CanManageTemplates";
     public const string CanManageUsersPolicy = "CanManageUsers";
     public const string CanManageTenantSettingsPolicy = "CanManageTenantSettings";
+    public const string CanManagePlatformTenantsPolicy = "CanManagePlatformTenants";
 
     public const string PermissionClaimType = "permission";
 
@@ -79,9 +80,16 @@ public static class AdminAccessHelper
         IsAdmin(user);
 
     /// <summary>
-    /// TenantConfig settings editor — SuperAdmin only (decrypted secrets).
+    /// TenantConfig settings editor for the current tenant — Admin or SuperAdmin.
+    /// Platform-wide tools (new tenant, platform tenants) stay SuperAdmin-only.
     /// </summary>
     public static bool CanManageTenantSettings(ClaimsPrincipal? user) =>
+        IsAdmin(user);
+
+    /// <summary>
+    /// Create tenant / list all platform tenants — SuperAdmin only.
+    /// </summary>
+    public static bool CanManagePlatformTenants(ClaimsPrincipal? user) =>
         IsSuperAdmin(user);
 
     /// <summary>

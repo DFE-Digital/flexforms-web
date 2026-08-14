@@ -62,11 +62,11 @@ public sealed class OrganisationSettingsModel(
 
     [BindProperty]
     [StringLength(200)]
-    public string BannerHeading { get; set; } = "Important";
+    public string? BannerHeading { get; set; } = "Important";
 
     [BindProperty]
     [StringLength(2000)]
-    public string BannerMessage { get; set; } = string.Empty;
+    public string? BannerMessage { get; set; } = string.Empty;
 
     [BindProperty]
     [Range(1, 500, ErrorMessage = "Page size must be between 1 and 500")]

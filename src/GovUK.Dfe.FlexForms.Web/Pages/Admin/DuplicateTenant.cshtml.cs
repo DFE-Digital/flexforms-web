@@ -17,7 +17,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 /// <summary>
 /// SuperAdmin form to clone the current tenant's TenantConfig into a new tenant.
 /// </summary>
-[Authorize(Policy = AdminAccessHelper.CanManageTenantSettingsPolicy)]
+[Authorize(Policy = AdminAccessHelper.CanManagePlatformTenantsPolicy)]
 public sealed class DuplicateTenantModel(
     ITenantAdminClient tenantAdminClient,
     ITenantRequestContext tenantRequestContext,

@@ -9,7 +9,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 /// <summary>
 /// SuperAdmin read-only list of all platform tenants.
 /// </summary>
-[Authorize(Policy = AdminAccessHelper.CanManageTenantSettingsPolicy)]
+[Authorize(Policy = AdminAccessHelper.CanManagePlatformTenantsPolicy)]
 public sealed class PlatformTenantsModel(
     ITenantAdminClient tenantAdminClient,
     ILogger<PlatformTenantsModel> logger) : PageModel

@@ -13,7 +13,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 
 /// <summary>
-/// SuperAdmin-only editor for TenantConfig app settings (current tenant).
+/// Tenant Admin / SuperAdmin editor for TenantConfig app settings (current tenant).
 /// </summary>
 [Authorize(Policy = AdminAccessHelper.CanManageTenantSettingsPolicy)]
 public sealed class TenantSettingsModel(
