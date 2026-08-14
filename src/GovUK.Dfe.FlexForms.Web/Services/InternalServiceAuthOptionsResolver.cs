@@ -1,5 +1,6 @@
 using GovUK.Dfe.FlexForms.Web.Tenancy;
 using GovUK.Dfe.CoreLibs.Security.Configurations;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace GovUK.Dfe.FlexForms.Web.Services;
 
@@ -15,7 +16,8 @@ public sealed class InternalServiceAuthOptionsResolver(
     public InternalServiceAuthOptions Resolve()
     {
         var tenantContext = httpContextAccessor.HttpContext?.RequestServices
-            .GetService<ITenantRequestContext>();
+            .GetService<ITenantRequestContext>()
+            ?? AmbientTenantRequestContext.Value;
         var tenantSection = tenantContext?.TenantConfiguration?
             .GetSection(InternalServiceAuthOptions.SectionName);
 

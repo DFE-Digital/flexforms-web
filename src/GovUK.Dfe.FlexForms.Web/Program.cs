@@ -30,6 +30,7 @@ using GovUK.Dfe.CoreLibs.Security.EntraSso;
 using GovUK.Dfe.CoreLibs.Security.TokenRefresh.Extensions;
 using System.IO.Compression;
 using GovUK.Dfe.FlexForms.Infrastructure.Consumers;
+using GovUK.Dfe.FlexForms.Web.Messaging;
 using GovUK.Dfe.CoreLibs.Messaging.Contracts.Messages.Events;
 using GovUK.Dfe.CoreLibs.Messaging.MassTransit.Extensions;
 using Microsoft.AspNetCore.Authentication;
@@ -657,6 +658,7 @@ builder.Services.AddDfEMassTransit(
                 r.Interval(3, TimeSpan.FromSeconds(5)); // 3 retries, 5 seconds apart for real errors
             });
 
+            e.UseConsumeFilter(typeof(ScanResultTenantContextFilter<>), context);
             e.ConfigureConsumeTopology = false;
             e.ConfigureConsumer<ScanResultConsumer>(context);
         });

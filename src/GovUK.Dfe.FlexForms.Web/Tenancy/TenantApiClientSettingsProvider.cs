@@ -21,16 +21,17 @@ public sealed class TenantApiClientSettingsProvider(
         hostConfiguration.GetSection("ExternalApplicationsApiClient").Bind(settings);
 
         var tenantRequestContext = httpContextAccessor.HttpContext?.RequestServices
-            .GetService<ITenantRequestContext>();
+            .GetService<ITenantRequestContext>()
+            ?? AmbientTenantRequestContext.Value;
 
         if (tenantRequestContext?.TenantConfiguration is { } tenantConfiguration)
         {
             tenantConfiguration.GetSection("ExternalApplicationsApiClient").Bind(settings);
+        }
 
-            if (tenantRequestContext.TenantId.HasValue)
-            {
-                settings.TenantId = tenantRequestContext.TenantId;
-            }
+        if (tenantRequestContext?.TenantId.HasValue == true)
+        {
+            settings.TenantId = tenantRequestContext.TenantId;
         }
 
         return settings;
