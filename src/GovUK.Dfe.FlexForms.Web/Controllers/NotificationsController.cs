@@ -25,13 +25,14 @@ namespace GovUK.Dfe.FlexForms.Web.Controllers
         [HttpGet("unread")]
         public async Task<IActionResult> GetUnreadAsync(CancellationToken cancellationToken)
         {
-            return await ExecuteAsync(() => notificationsClient.GetUnreadNotificationsAsync(ApplicationContext, null, cancellationToken));
+            // Storage is already tenant-scoped; ApplicationName prefix hid API-created malware banners.
+            return await ExecuteAsync(() => notificationsClient.GetUnreadNotificationsAsync(null, null, cancellationToken));
         }
 
         [HttpGet("all")]
         public async Task<IActionResult> GetAllAsync(CancellationToken cancellationToken)
         {
-            return await ExecuteAsync(() => notificationsClient.GetAllNotificationsAsync(ApplicationContext, null, cancellationToken));
+            return await ExecuteAsync(() => notificationsClient.GetAllNotificationsAsync(null, null, cancellationToken));
         }
 
         [ValidateAntiForgeryToken]
@@ -51,7 +52,7 @@ namespace GovUK.Dfe.FlexForms.Web.Controllers
         {
             return await ExecuteAsync(async () =>
             {
-                var ok = await notificationsClient.MarkAllNotificationsAsReadAsync(ApplicationContext, null, cancellationToken);
+                var ok = await notificationsClient.MarkAllNotificationsAsReadAsync(null, null, cancellationToken);
                 return ok;
             }, ApplicationAccessMessages.NoNotificationWritePermission);
         }
@@ -73,7 +74,7 @@ namespace GovUK.Dfe.FlexForms.Web.Controllers
         {
             return await ExecuteAsync(async () =>
             {
-                var ok = await notificationsClient.ClearNotificationsByContextAsync(ApplicationContext, cancellationToken);
+                var ok = await notificationsClient.ClearAllNotificationsAsync(cancellationToken);
                 return ok;
             }, ApplicationAccessMessages.NoNotificationDeletePermission);
         }

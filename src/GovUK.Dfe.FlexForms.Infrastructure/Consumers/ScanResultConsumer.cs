@@ -745,7 +745,6 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Consumers
             {
                 var context = NotificationScopeContext.Build(
                     notificationContext,
-                    templateId?.ToString(),
                     "malware-detection",
                     fileId.ToString());
 
