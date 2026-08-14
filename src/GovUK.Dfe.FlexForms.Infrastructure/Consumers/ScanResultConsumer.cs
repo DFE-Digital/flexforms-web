@@ -424,10 +424,9 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Consumers
             catch (Exception ex)
             {
                 logger.LogError(ex,
-                    "Error cleaning up infected file {FileId} from database for application reference {Reference}",
+                    "Error cleaning up infected file {FileId} from database for application reference {Reference}. Continuing so Redis cleanup and notification can still run.",
                     fileId,
                     reference);
-                throw;
             }
         }
 
