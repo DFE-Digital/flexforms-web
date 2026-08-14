@@ -1,4 +1,5 @@
 using GovUK.Dfe.FlexForms.Application.Interfaces;
+using GovUK.Dfe.FlexForms.Application.Notifications;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
@@ -81,7 +82,7 @@ namespace GovUK.Dfe.FlexForms.Web.Controllers
         [HttpPost("create")]
         public async Task<IActionResult> CreateAsync([FromBody] AddNotificationRequest request, CancellationToken cancellationToken)
         {
-            request.Context = ApplicationContext;
+            request.Context = NotificationScopeContext.PrefixDetail(ApplicationContext, request.Context);
             return await ExecuteAsync(() => notificationsClient.CreateNotificationAsync(request, cancellationToken));
         }
 

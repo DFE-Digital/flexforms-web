@@ -2,6 +2,7 @@ using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
+using GovUK.Dfe.FlexForms.Application.Notifications;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Web.Interfaces;
 using Microsoft.AspNetCore.Mvc;
@@ -15,9 +16,15 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
         IFileUploadService fileUploadService,
         IApplicationResponseService applicationResponseService,
         INotificationsClient notificationsClient,
-        IFormErrorStore formErrorStore)
+        IFormErrorStore formErrorStore,
+        IRequestAppConfiguration requestConfiguration)
         : PageModel
     {
+        private string ApplicationContext =>
+            requestConfiguration["ApplicationName"]
+            ?? requestConfiguration["TenantName"]
+            ?? throw new InvalidOperationException(
+                "ApplicationName (or TenantName) is required in tenant configuration for notifications.");
         [BindProperty(SupportsGet = true)] public string ApplicationId { get; set; }
         [BindProperty(SupportsGet = true)] public string FieldId { get; set; }
         [BindProperty(SupportsGet = true, Name = "referenceNumber")] public string ReferenceNumber { get; set; }
@@ -65,7 +72,8 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                 Context = FieldId + "FileUpload",
                 Type = NotificationType.Success,
                 AutoDismiss = false,
-                AutoDismissSeconds = 5
+                AutoDismissSeconds = 5,
+                ReplaceExistingContext = false
             };
 
             if (!Guid.TryParse(ApplicationId, out var appId))
@@ -98,24 +106,19 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             var uploadedFile = await fileUploadService.UploadFileAsync(appId, file.FileName, description, fileParam);
             SuccessMessage = $"Your file '{file.FileName}' uploaded.";
 
-            // Get the current files for this field
+            // Get current files for this field and add the new one
             var currentFieldFiles = (await GetFilesForFieldAsync(appId, FieldId)).ToList();
+            currentFieldFiles.Add(uploadedFile);
 
-            if (!currentFieldFiles.Any(cf => cf.Id == uploadedFile.Id))
-            {
-                currentFieldFiles.Add(uploadedFile);
-            }
-            
-
-            
             Files = currentFieldFiles.AsReadOnly();
             UpdateSessionFileList(appId, FieldId, Files);
             await SaveUploadedFilesToResponseAsync(appId, FieldId, Files);
-            
+
             // If we have a return URL (from partial form), redirect back
             if (!string.IsNullOrEmpty(ReturnUrl))
             {
                 addRequest.Message = SuccessMessage;
+                addRequest.Context = $"file-upload|{uploadedFile.Id}";
                 await TryCreateFileNotificationAsync(addRequest);
                 return Redirect(ReturnUrl);
             }
@@ -146,10 +149,10 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             {
                 Message = string.Empty,
                 Category = "file-upload",
-                Context = FieldId + "FileDeletion",
                 Type = NotificationType.Success,
                 AutoDismiss = false,
-                AutoDismissSeconds = 5
+                AutoDismissSeconds = 5,
+                ReplaceExistingContext = false
             };
 
             if (!Guid.TryParse(ApplicationId, out var appId))
@@ -188,6 +191,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             if (!string.IsNullOrEmpty(ReturnUrl))
             {
                 addRequest.Message = SuccessMessage;
+                addRequest.Context = $"file-delete|{fileId}";
                 await TryCreateFileNotificationAsync(addRequest);
                 return Redirect(ReturnUrl);
             }
@@ -448,6 +452,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
         {
             try
             {
+                addRequest.Context = NotificationScopeContext.PrefixDetail(ApplicationContext, addRequest.Context);
                 await notificationsClient.CreateNotificationAsync(addRequest);
             }
             catch

@@ -1,5 +1,6 @@
 using GovUK.Dfe.FlexForms.Application.Exceptions;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
+using GovUK.Dfe.FlexForms.Application.Notifications;
 using GovUK.Dfe.FlexForms.Domain.Caching;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using GovUK.Dfe.FlexForms.Infrastructure.Services;
@@ -2976,10 +2977,11 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                 {
                     Message = SuccessMessage,
                     Category = "file-upload",
-                    Context = ApplicationContext,
+                    Context = $"file-upload|{uploadedFile.Id}",
                     Type = NotificationType.Success,
                     AutoDismiss = false,
-                    AutoDismissSeconds = 5
+                    AutoDismissSeconds = 5,
+                    ReplaceExistingContext = false
                 };
                 await TryCreateFileNotificationAsync(addRequest);
 
@@ -3109,9 +3111,10 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             {
                 Message = string.Empty, // set later when known
                 Category = "file-upload",
-                Context = ApplicationContext,
+                Context = $"file-delete|{fileId}",
                 Type = NotificationType.Success,
                 AutoDismiss = false,
+                ReplaceExistingContext = false
             };
 
             try
@@ -3150,6 +3153,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
         {
             try
             {
+                addRequest.Context = NotificationScopeContext.PrefixDetail(ApplicationContext, addRequest.Context);
                 await _notificationsClient.CreateNotificationAsync(addRequest);
             }
             catch (Exception ex)

@@ -768,9 +768,10 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Consumers
                 {
                     Message = $"The selected file '{fileName}' contains a virus called [{malwareName}]. We have deleted the file. Upload a new one.",
                     Category = "malware-detection",
-                    Context = notificationContext,
+                    Context = $"{notificationContext}|malware-detection|{fileId}",
                     Type = NotificationType.Error,
                     AutoDismiss = false,
+                    ReplaceExistingContext = true,
                     Metadata = new Dictionary<string, object>
                     {
                         ["fileId"] = fileId.ToString(),
