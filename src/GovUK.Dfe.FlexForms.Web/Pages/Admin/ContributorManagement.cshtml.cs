@@ -1,7 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
-using GovUK.Dfe.CoreLibs.Http.Models;
-using GovUK.Dfe.FlexForms.Api.Client.Contracts;
+using GovUK.Dfe.FlexForms.Application.Admin;
 using GovUK.Dfe.FlexForms.Web.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,9 +12,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 /// Lookup application contributors by reference number for tenant admins.
 /// </summary>
 [Authorize(Policy = AdminAccessHelper.CanManageUsersPolicy)]
-public sealed class ContributorManagementModel(
-    IApplicationsClient applicationsClient,
-    ILogger<ContributorManagementModel> logger) : PageModel
+public sealed class ContributorManagementModel(IContributorManagementAdmin contributorManagementAdmin) : PageModel
 {
     public bool HasError { get; private set; }
 
@@ -47,53 +44,23 @@ public sealed class ContributorManagementModel(
         if (!ModelState.IsValid)
             return Page();
 
-        LookupPerformed = true;
-        ApplicationReference = ReferenceNumber;
-
-        try
-        {
-            var application = await applicationsClient.GetApplicationByReferenceAsync(
-                ReferenceNumber,
-                cancellationToken);
-
-            ApplicationId = application.ApplicationId;
-            ApplicationReference = string.IsNullOrWhiteSpace(application.ApplicationReference)
-                ? ReferenceNumber
-                : application.ApplicationReference;
-            TemplateName = application.TemplateName;
-
-            var contributors = await applicationsClient.GetContributorsAsync(
-                application.ApplicationId,
-                includePermissionDetails: false,
-                cancellationToken);
-
-            Contributors = contributors?
-                .OrderBy(c => c.Name)
-                .ThenBy(c => c.Email)
-                .ToList() ?? [];
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to look up contributors for {ReferenceNumber}", ReferenceNumber);
-            HasError = true;
-            ErrorMessage = GetErrorMessage(ex, "Could not find that application or load its contributors.");
-            Contributors = [];
-        }
-
+        var state = new ContributorManagementWorkState { ReferenceNumber = ReferenceNumber };
+        await contributorManagementAdmin.LookupAsync(state, cancellationToken);
+        ApplyWorkState(state);
         return Page();
     }
 
-    internal static string GetErrorMessage(Exception ex, string fallback)
+    private void ApplyWorkState(ContributorManagementWorkState state)
     {
-        if (ex is ExternalApplicationsException<ExceptionResponse> apiEx
-            && !string.IsNullOrWhiteSpace(apiEx.Result?.Message))
+        LookupPerformed = state.LookupPerformed;
+        ApplicationReference = state.ApplicationReference;
+        ApplicationId = state.ApplicationId;
+        TemplateName = state.TemplateName;
+        Contributors = state.Contributors;
+        if (state.HasError)
         {
-            return apiEx.Result.Message;
+            HasError = true;
+            ErrorMessage = state.ErrorMessage;
         }
-
-        if (ex is ExternalApplicationsException clientEx && clientEx.StatusCode > 0)
-            return $"{fallback} (HTTP {clientEx.StatusCode})";
-
-        return fallback;
     }
 }

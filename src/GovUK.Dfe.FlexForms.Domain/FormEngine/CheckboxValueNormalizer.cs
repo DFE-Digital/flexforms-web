@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace GovUK.Dfe.FlexForms.Infrastructure.Services;
+namespace GovUK.Dfe.FlexForms.Domain.FormEngine;
 
 /// <summary>
 /// Normalises checkbox values into a simple string collection regardless of source shape.
@@ -25,7 +25,7 @@ public static class CheckboxValueNormalizer
             }
 
             var trimmed = s.Trim();
-            if (trimmed.StartsWith("[") && trimmed.EndsWith("]"))
+            if (trimmed.StartsWith('[') && trimmed.EndsWith(']'))
             {
                 try
                 {
@@ -36,19 +36,19 @@ public static class CheckboxValueNormalizer
                             .EnumerateArray()
                             .Select(e => e.ValueKind == JsonValueKind.String ? e.GetString() : e.ToString())
                             .Where(v => !string.IsNullOrWhiteSpace(v))
-                            .ToArray();
+                            .ToArray()!;
                     }
                 }
-                catch
+                catch (JsonException)
                 {
                     // Fall through to return the raw string if parsing fails
                 }
             }
 
-            return new[] { s };
+            return [s];
         }
 
-        if (value is IEnumerable<string> stringEnumerable && value is not string)
+        if (value is IEnumerable<string> stringEnumerable)
         {
             return stringEnumerable.Where(v => !string.IsNullOrWhiteSpace(v)).ToArray();
         }
@@ -61,13 +61,13 @@ public static class CheckboxValueNormalizer
                     .EnumerateArray()
                     .Select(e => e.ValueKind == JsonValueKind.String ? e.GetString() : e.ToString())
                     .Where(v => !string.IsNullOrWhiteSpace(v))
-                    .ToArray();
+                    .ToArray()!;
             }
 
             if (json.ValueKind == JsonValueKind.String)
             {
                 var str = json.GetString();
-                return string.IsNullOrWhiteSpace(str) ? Array.Empty<string>() : new[] { str };
+                return string.IsNullOrWhiteSpace(str) ? Array.Empty<string>() : [str];
             }
         }
 
@@ -76,10 +76,10 @@ public static class CheckboxValueNormalizer
             return objEnumerable
                 .Select(o => o?.ToString())
                 .Where(v => !string.IsNullOrWhiteSpace(v))
-                .ToArray();
+                .ToArray()!;
         }
 
         var fallback = value.ToString();
-        return string.IsNullOrWhiteSpace(fallback) ? Array.Empty<string>() : new[] { fallback };
+        return string.IsNullOrWhiteSpace(fallback) ? Array.Empty<string>() : [fallback];
     }
 }

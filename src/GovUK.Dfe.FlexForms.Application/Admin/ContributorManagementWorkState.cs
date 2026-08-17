@@ -1,0 +1,25 @@
+using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
+
+namespace GovUK.Dfe.FlexForms.Application.Admin;
+
+/// <summary>
+/// Mutable view-state bag for Contributor Management.
+/// </summary>
+public sealed class ContributorManagementWorkState
+{
+    public string ReferenceNumber { get; set; } = string.Empty;
+
+    public bool LookupPerformed { get; set; }
+
+    public string? ApplicationReference { get; set; }
+
+    public Guid? ApplicationId { get; set; }
+
+    public string? TemplateName { get; set; }
+
+    public IReadOnlyList<UserDto> Contributors { get; set; } = [];
+
+    public bool HasError { get; set; }
+
+    public string? ErrorMessage { get; set; }
+}

@@ -1,21 +1,20 @@
 using GovUK.Dfe.FlexForms.Web.Security;
+using GovUK.Dfe.FlexForms.Application.Dashboard;
 using GovUK.Dfe.FlexForms.Application.Options;
 using GovUK.Dfe.FlexForms.Web.Models.Applications;
 using GovUK.Dfe.FlexForms.Web.Services;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
-using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Options;
-using static GovUK.Dfe.FlexForms.Web.Pages.Applications.DashboardModel;
 
 namespace GovUK.Dfe.FlexForms.Web.Pages.Applications;
 
 [Authorize(Policy = AdminAccessHelper.CanReadAnyApplicationPolicy)]
 public class IndexModel(
-    IApplicationsClient applicationsClient,
+    IDashboardApplications dashboardApplications,
     IApplicationStatusService applicationStatusService,
     IOptions<DashboardOptions> dashboardOptions,
     ILogger<IndexModel> logger) : PageModel
@@ -115,35 +114,30 @@ public class IndexModel(
 
         if (!TemplateId.HasValue)
         {
-            // Try again on next request; show empty state instead of erroring
             logger.LogWarning("TemplateId not available when loading applications; rendering empty dashboard");
             Applications = Array.Empty<ApplicationWithCalculatedStatus>();
             return;
         }
 
-        var pageSize = dashboardOptions.Value.PageSize;
         var filters = FiltersEnabled ? SearchFilters : new DashboardApplicationSearch();
-        var result = await applicationsClient.GetApplicationsByTemplateAsync(
-            templateId: TemplateId.Value,
-            pageNumber: CurrentPage,
-            pageSize: pageSize,
-            applicationReference: string.IsNullOrWhiteSpace(filters.SearchReference) ? null : filters.SearchReference,
-            dateStartedFrom: filters.DateStartedFrom,
-            dateStartedTo: filters.DateStartedTo,
-            dateSubmittedFrom: filters.DateSubmittedFrom,
-            dateSubmittedTo: filters.DateSubmittedTo,
-            status: filters.Status);
-
-        TotalPages = result.TotalPages;
-        CurrentPage = Math.Clamp(CurrentPage, 1, Math.Max(1, TotalPages));
-
-        var applicationTasks = result.Items.AsEnumerable().Select(async app => new ApplicationWithCalculatedStatus
+        var result = await dashboardApplications.ListAsync(new DashboardApplicationListQuery
         {
-            Application = app,
-            CalculatedStatus = applicationStatusService.GetCalculatedApplicationStatusAsync(app, CustomStatuses)
+            TemplateId = TemplateId.Value,
+            CurrentPage = CurrentPage,
+            PageSize = dashboardOptions.Value.PageSize,
+            Scope = DashboardApplicationListScope.AllForTemplate,
+            IncludeCustomColumns = false,
+            CustomStatuses = CustomStatuses,
+            SearchReference = filters.SearchReference,
+            DateStartedFrom = filters.DateStartedFrom,
+            DateStartedTo = filters.DateStartedTo,
+            DateSubmittedFrom = filters.DateSubmittedFrom,
+            DateSubmittedTo = filters.DateSubmittedTo,
+            Status = filters.Status
         });
 
-        Applications = [..(await Task.WhenAll(applicationTasks))
-                .OrderByDescending(a => a.DateCreated)];
+        Applications = result.Applications;
+        TotalPages = result.TotalPages;
+        CurrentPage = result.CurrentPage;
     }
 }

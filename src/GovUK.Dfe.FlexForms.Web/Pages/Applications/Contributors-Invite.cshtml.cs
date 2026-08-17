@@ -19,8 +19,6 @@ public class ContributorsInviteModel(
     IApplicationStateService applicationStateService,
     IContributorPatternService contributorPatternService,
     IRequestAppConfiguration requestConfiguration,
-    //IApiErrorParser apiErrorParser,
-    //IModelStateErrorHandler errorHandler,
     ILogger<ContributorsInviteModel> logger) : PageModel
 {
     [BindProperty(SupportsGet = true, Name = "referenceNumber")]

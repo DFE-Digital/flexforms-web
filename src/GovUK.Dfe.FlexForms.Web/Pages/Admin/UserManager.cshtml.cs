@@ -1,6 +1,5 @@
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
-using GovUK.Dfe.CoreLibs.Http.Models;
-using GovUK.Dfe.FlexForms.Api.Client.Contracts;
+using GovUK.Dfe.FlexForms.Application.Admin;
 using GovUK.Dfe.FlexForms.Web.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,9 +11,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 /// Lists users with form access in the current tenant.
 /// </summary>
 [Authorize(Policy = AdminAccessHelper.CanManageUsersPolicy)]
-public sealed class UserManagerModel(
-    IUsersClient usersClient,
-    ILogger<UserManagerModel> logger) : PageModel
+public sealed class UserManagerModel(IUserManagerAdmin userManagerAdmin) : PageModel
 {
     public IReadOnlyList<TenantUserDto> Users { get; private set; } = [];
 
@@ -34,6 +31,43 @@ public sealed class UserManagerModel(
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
+        ApplyTempData();
+        var state = new UserManagerWorkState();
+        await userManagerAdmin.LoadAsync(state, cancellationToken);
+        ApplyWorkState(state);
+    }
+
+    public async Task<IActionResult> OnPostRemoveAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        return MapOutcome(await userManagerAdmin.RemoveAsync(new UserManagerWorkState(), userId, cancellationToken));
+    }
+
+    private void ApplyWorkState(UserManagerWorkState state)
+    {
+        Users = state.Users;
+        AccessAuditEntries = state.AccessAuditEntries;
+        AuditLogLoadFailed = state.AuditLogLoadFailed;
+        AuditLogLoadErrorMessage = state.AuditLogLoadErrorMessage;
+        if (state.HasError)
+        {
+            HasError = true;
+            ErrorMessage = state.ErrorMessage;
+        }
+    }
+
+    private IActionResult MapOutcome(AdminPageOutcome outcome)
+    {
+        if (outcome.SuccessMessage != null)
+            TempData["UserManagerSuccess"] = outcome.SuccessMessage;
+
+        if (outcome.ErrorMessage != null)
+            TempData["UserManagerError"] = outcome.ErrorMessage;
+
+        return RedirectToPage();
+    }
+
+    private void ApplyTempData()
+    {
         if (TempData["UserManagerSuccess"] is string success)
         {
             ShowSuccess = true;
@@ -45,71 +79,5 @@ public sealed class UserManagerModel(
             HasError = true;
             ErrorMessage = error;
         }
-
-        await LoadUsersAsync(cancellationToken);
-        await LoadAccessAuditLogAsync(cancellationToken);
-    }
-
-    public async Task<IActionResult> OnPostRemoveAsync(Guid userId, CancellationToken cancellationToken)
-    {
-        try
-        {
-            await usersClient.RemoveUserFromTenantAsync(userId, cancellationToken);
-            TempData["UserManagerSuccess"] = "User removed from this tenant.";
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to remove user {UserId} from tenant", userId);
-            TempData["UserManagerError"] = GetErrorMessage(ex, "Could not remove the user from this tenant.");
-        }
-
-        return RedirectToPage();
-    }
-
-    private async Task LoadUsersAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            var users = await usersClient.GetTenantUsersAsync(cancellationToken);
-            Users = users?.OrderBy(u => u.Name).ToList() ?? [];
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to load tenant users");
-            HasError = true;
-            ErrorMessage = GetErrorMessage(ex, "Could not load users for this tenant.");
-            Users = [];
-        }
-    }
-
-    private async Task LoadAccessAuditLogAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            var log = await usersClient.GetAccessAuditLogAsync(take: 50, cancellationToken);
-            AccessAuditEntries = log?.Entries?
-                .OrderByDescending(e => e.OccurredAtUtc)
-                .ToList() ?? [];
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Failed to load tenant access audit log");
-            AccessAuditEntries = [];
-            AuditLogLoadFailed = true;
-            AuditLogLoadErrorMessage = GetErrorMessage(
-                ex,
-                "Could not load the access audit trail. Ensure the API is up to date and database migrations have been applied.");
-        }
-    }
-
-    internal static string GetErrorMessage(Exception ex, string fallback)
-    {
-        if (ex is ExternalApplicationsException<ExceptionResponse> apiEx
-            && !string.IsNullOrWhiteSpace(apiEx.Result?.Message))
-        {
-            return apiEx.Result.Message;
-        }
-
-        return fallback;
     }
 }
