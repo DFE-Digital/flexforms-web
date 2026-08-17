@@ -7,6 +7,7 @@ using GovUK.Dfe.FlexForms.Infrastructure.Stores;
 using GovUK.Dfe.FlexForms.Web.Configuration;
 using GovUK.Dfe.FlexForms.Web.Interfaces;
 using GovUK.Dfe.FlexForms.Web.Services;
+using GovUK.Dfe.FlexForms.Web.ViewModels.FormEngine;
 using GovUK.Dfe.FlexForms.Api.Client;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Api.Client.Extensions;
@@ -82,6 +83,7 @@ namespace GovUK.Dfe.FlexForms.Web.Extensions
             services.AddScoped<IFormFileFieldService, FormFileFieldService>();
             services.AddSingleton<IPostedFormDataBinder, PostedFormDataBinder>();
             services.AddScoped<IFieldRequirementService, FieldRequirementService>();
+            services.AddScoped<IFormEnginePresentationComposer, FormEnginePresentationComposer>();
             services.AddScoped<IFormValidationOrchestrator, GovUK.Dfe.FlexForms.Infrastructure.Services.FormValidationOrchestrator>();
             services.AddScoped<IFormConfigurationService, FormConfigurationService>();
             services.AddScoped<ITemplateValidationService, TemplateValidationService>();

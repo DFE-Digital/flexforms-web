@@ -11,14 +11,17 @@ using GovUK.Dfe.FlexForms.Web.Constants;
 using GovUK.Dfe.FlexForms.Web.Interfaces;
 using GovUK.Dfe.FlexForms.Web.Pages.Shared;
 using GovUK.Dfe.FlexForms.Web.Services;
+using GovUK.Dfe.FlexForms.Web.ViewModels.FormEngine;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Security.Claims;
 using System.Text.Json;
 using System.Threading;
 using static GovUK.Dfe.FlexForms.Web.Pages.FormEngine.DisplayHelpers;
@@ -51,6 +54,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
         IInfectedUploadFilter infectedUploadFilter,
         IFormFileFieldService formFileFieldService,
         IPostedFormDataBinder postedFormDataBinder,
+        IFormEnginePresentationComposer formEnginePresentationComposer,
         ILogger<RenderFormModel> logger,
         INavigationHistoryService navigationHistoryService,
         IRequestAppConfiguration requestConfiguration)
@@ -67,6 +71,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
         private readonly IInfectedUploadFilter _infectedUploadFilter = infectedUploadFilter;
         private readonly IFormFileFieldService _formFileFieldService = formFileFieldService;
         private readonly IPostedFormDataBinder _postedFormDataBinder = postedFormDataBinder;
+        private readonly IFormEnginePresentationComposer _formEnginePresentationComposer = formEnginePresentationComposer;
         private readonly IFieldRequirementService _fieldRequirementService = fieldRequirementService;
         private readonly INavigationHistoryService _navigationHistoryService = navigationHistoryService;
         private readonly IRequestAppConfiguration _requestConfiguration = requestConfiguration;
@@ -109,6 +114,10 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
         public bool FileValidationBlocksSubmit { get; set; }
 
         public IReadOnlyList<FileValidationBlockDto> FileValidationBlockingFiles { get; set; } = [];
+
+        public ApplicationPreviewViewModel? Preview { get; private set; }
+
+        public IReadOnlyList<CollectionFlowSectionViewModel> CollectionFlows { get; private set; } = [];
 
         // Conditional logic state for the current form
         public FormConditionalState? ConditionalState { get; set; }
@@ -365,8 +374,80 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             catch { }
         }
 
+        public override void OnPageHandlerExecuted(PageHandlerExecutedContext context)
+        {
+            BuildPresentationViewModels();
+            base.OnPageHandlerExecuted(context);
+        }
+
         public static string BuildHistoryScope(string referenceNumber, string taskId, string currentPageId) =>
             FormRouteParser.HistoryScope(referenceNumber, taskId, currentPageId);
+
+        private void BuildPresentationViewModels()
+        {
+            if (Template == null)
+                return;
+
+            var presentationContext = CreatePresentationContext();
+
+            if (CurrentFormState == FormState.ApplicationPreview)
+            {
+                Preview = _formEnginePresentationComposer.BuildPreview(presentationContext);
+            }
+
+            if (CurrentFormState == FormState.TaskSummary
+                && CurrentTask != null
+                && FormStepPolicy.IsCollectionFlowSummary(CurrentTask))
+            {
+                CollectionFlows = _formEnginePresentationComposer.BuildCollectionFlows(presentationContext, CurrentTask);
+            }
+        }
+
+        private FormEnginePresentationContext CreatePresentationContext()
+        {
+            var submitDisabled = _requestConfiguration.GetSection("Layout:SubmitAppDisabled").Exists();
+            return new FormEnginePresentationContext
+            {
+                Template = Template,
+                FormData = FormData,
+                ReferenceNumber = ReferenceNumber,
+                TaskId = TaskId,
+                ApplicationId = ApplicationId,
+                InfectedFilterApplicationId = ApplicationId?.ToString()
+                    ?? HttpContext.Session.GetString(FormSessionKeys.ApplicationId),
+                IsEditable = IsApplicationEditable(),
+                IsLeadApplicant = IsCurrentUserLeadApplicant(),
+                SubmitDisabledByConfig = submitDisabled,
+                SubmitDisabledBannerText = submitDisabled
+                    ? _requestConfiguration["Layout:SubmitAppDisabled:BannerText"]
+                    : null,
+                SubmitDisabledHelpText = submitDisabled
+                    ? _requestConfiguration["Layout:SubmitAppDisabled:HelpText"]
+                    : null,
+                FileValidationBlocksSubmit = FileValidationBlocksSubmit,
+                BlockingFiles = FileValidationBlockingFiles,
+                IncludePreviewQuery = Request.Query.ContainsKey("preview"),
+                EnsureItemFieldVisibility = EnsureItemFieldVisibility,
+                IsFieldHiddenForItem = IsFieldHiddenForItem,
+                IsFieldHidden = IsFieldHidden
+            };
+        }
+
+        private bool IsCurrentUserLeadApplicant()
+        {
+            var applicationId = HttpContext.Session.GetString(FormSessionKeys.ApplicationId);
+            var leadApplicantEmail = HttpContext.Session.GetString($"ApplicationLeadApplicantEmail_{applicationId}");
+            var currentUserEmail = User.FindFirst(ClaimTypes.Email)?.Value
+                ?? User.FindFirst("email")?.Value
+                ?? User.FindFirst("sub")?.Value
+                ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? User.Identity?.Name;
+
+            return string.Equals(
+                currentUserEmail?.Trim(),
+                leadApplicantEmail?.Trim(),
+                StringComparison.InvariantCultureIgnoreCase);
+        }
 
         public async Task<IActionResult> OnPostTaskSummaryAsync()
         {

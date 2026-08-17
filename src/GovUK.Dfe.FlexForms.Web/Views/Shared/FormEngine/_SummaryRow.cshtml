@@ -1,0 +1,29 @@
+@model GovUK.Dfe.FlexForms.Web.ViewModels.FormEngine.SummaryRowViewModel
+@{
+    var rowStyle = Model.ShowSeparator
+        ? "border-top: 2px solid #d1d1d1; margin-top: 15px; padding-top: 15px;"
+        : null;
+    var keyStyle = Model.KeyIsBold ? "font-weight: bold;" : null;
+}
+<div class="govuk-summary-list__row" style="@rowStyle">
+    <dt class="govuk-summary-list__key" style="@keyStyle">
+        @Model.Key
+    </dt>
+    <dd class="govuk-summary-list__value">
+        @await Html.PartialAsync("FormEngine/_SummaryValue", Model.Value)
+    </dd>
+    @if (Model.Remove != null)
+    {
+        <dd class="govuk-summary-list__actions">
+            @await Html.PartialAsync("FormEngine/_CollectionItemRemove", Model.Remove)
+        </dd>
+    }
+    else if (Model.ChangeUrl != null)
+    {
+        <dd class="govuk-summary-list__actions">
+            <a class="govuk-link" href="@Model.ChangeUrl">
+                Change<span class="govuk-visually-hidden"> @Model.ChangeHiddenText</span>
+            </a>
+        </dd>
+    }
+</div>
