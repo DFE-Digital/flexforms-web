@@ -524,6 +524,8 @@ builder.Services.AddAuthorization(options =>
         policy.RequireAssertion(ctx => AdminAccessHelper.CanManagePlatformTenants(ctx.User)));
     options.AddPolicy(AdminAccessHelper.CanManageEventMappingsPolicy, policy =>
         policy.RequireAssertion(ctx => AdminAccessHelper.CanManageEventMappings(ctx.User)));
+    options.AddPolicy(AdminAccessHelper.CanReadAnyApplicationPolicy, policy =>
+        policy.RequireAssertion(ctx => AdminAccessHelper.CanReadAnyApplication(ctx.User)));
 });
 
 builder.Services.AddScoped<ICustomClaimProvider, PermissionsClaimProvider>();

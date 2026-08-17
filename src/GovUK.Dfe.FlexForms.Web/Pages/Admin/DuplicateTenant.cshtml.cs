@@ -207,13 +207,13 @@ public sealed class DuplicateTenantModel(
 
             var response = await tenantAdminClient.CloneTenantAsync(SourceTenantId, body, cancellationToken);
 
-            TempData["TenantSettingsSuccess"] =
+            TempData["AdminSuccess"] =
                 $"Created tenant '{response.NewTenantName}' ({response.NewTenantId}). " +
                 $"Copied {response.SettingsCopied} setting(s). Hostname: {response.Hostname}. " +
                 "Authorization and InternalServiceAuth secrets (SecretKey + service ApiKeys) were applied. " +
                 "Create a template for this tenant before users can access the dashboard.";
 
-            return RedirectToPage("/Admin/TenantSettings");
+            return RedirectToPage("/Admin/Admin");
         }
         catch (Exception ex)
         {

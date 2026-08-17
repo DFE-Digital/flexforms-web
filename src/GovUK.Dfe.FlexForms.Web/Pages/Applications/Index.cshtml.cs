@@ -1,3 +1,4 @@
+using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.FlexForms.Application.Options;
 using GovUK.Dfe.FlexForms.Web.Models.Applications;
 using GovUK.Dfe.FlexForms.Web.Services;
@@ -12,7 +13,7 @@ using static GovUK.Dfe.FlexForms.Web.Pages.Applications.DashboardModel;
 
 namespace GovUK.Dfe.FlexForms.Web.Pages.Applications;
 
-[Authorize]
+[Authorize(Policy = AdminAccessHelper.CanReadAnyApplicationPolicy)]
 public class IndexModel(
     IApplicationsClient applicationsClient,
     IApplicationStatusService applicationStatusService,

@@ -22,8 +22,10 @@ public static class AdminAccessHelper
     /// <summary>Claim value for tenant-wide template manager custom roles.</summary>
     public const string TemplateManageAnyClaim = "Template:Any:Manage";
 
-    /// <summary>Claim value for tenant-wide user manager custom roles.</summary>
-    public const string UserManageAnyClaim = "User:Any:Manage";
+    /// <summary>Claim value for tenant-wide application listing (Caseworker / Case Manager).</summary>
+    public const string ApplicationAnyReadClaim = "Application:Any:Read";
+
+    public const string CanReadAnyApplicationPolicy = "CanReadAnyApplication";
 
     /// <summary>True for SuperAdmin only.</summary>
     public static bool IsSuperAdmin(ClaimsPrincipal? user) =>
@@ -50,6 +52,14 @@ public static class AdminAccessHelper
     public static bool CanManageTemplates(ClaimsPrincipal? user) =>
         IsAdmin(user)
         || HasAnyManageClaim(user, "Template");
+
+    /// <summary>
+    /// True when the user can list all applications for the active template
+    /// (Admin/SuperAdmin, or Application:Any:Read — e.g. Caseworker).
+    /// </summary>
+    public static bool CanReadAnyApplication(ClaimsPrincipal? user) =>
+        IsAdmin(user)
+        || HasPermissionClaim(user, ApplicationAnyReadClaim);
 
     /// <summary>
     /// True when the user is Admin/SuperAdmin or has any User:*:Manage claim.

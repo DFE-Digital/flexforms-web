@@ -187,6 +187,14 @@
                             Menu
                         </button>
                         <ul class="govuk-service-navigation__list" id="navigation">
+                            @if (GovUK.Dfe.FlexForms.Web.Security.AdminAccessHelper.CanReadAnyApplication(User))
+                            {
+                                <li class="govuk-service-navigation__item">
+                                    <a class="govuk-service-navigation__link" href="/applications">
+                                        Applications
+                                    </a>
+                                </li>
+                            }
                             @if (showFormsNav)
                             {
                                 <li class="govuk-service-navigation__item">
