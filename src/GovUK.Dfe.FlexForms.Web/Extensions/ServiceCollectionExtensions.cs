@@ -1,3 +1,4 @@
+using GovUK.Dfe.FlexForms.Application.Admin;
 using GovUK.Dfe.FlexForms.Application.FormEngine;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Infrastructure.Parsers;
@@ -90,6 +91,9 @@ namespace GovUK.Dfe.FlexForms.Web.Extensions
             services.AddScoped<IUploadFormFile, UploadFormFileService>();
             services.AddScoped<IDeleteFormFile, DeleteFormFileService>();
             services.AddScoped<IDownloadFormFile, DownloadFormFileService>();
+            services.AddScoped<ITenantSettingsAdmin, TenantSettingsAdminService>();
+            services.AddScoped<IEventMappingsAdmin, EventMappingsAdminService>();
+            services.AddScoped<ITemplateManagerAdmin, TemplateManagerAdminService>();
             services.AddScoped<IFieldRequirementService, FieldRequirementService>();
             services.AddScoped<IFormEnginePresentationComposer, FormEnginePresentationComposer>();
             services.AddScoped<IFormValidationOrchestrator, GovUK.Dfe.FlexForms.Infrastructure.Services.FormValidationOrchestrator>();
