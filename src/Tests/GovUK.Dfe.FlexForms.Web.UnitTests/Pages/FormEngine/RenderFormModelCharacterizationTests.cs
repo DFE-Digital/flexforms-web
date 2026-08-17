@@ -154,6 +154,67 @@ public class RenderFormModelCharacterizationTests
 
         _fixture.Register(() => Substitute.For<INavigationHistoryService>());
 
+        _fixture.Register<ICompleteFormTask>(() => new CompleteFormTaskService(
+            _applicationState,
+            _fieldRequirements,
+            _conditionalLogic,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<CompleteFormTaskService>.Instance));
+        _fixture.Register<ISubmitFormApplication>(() => new SubmitFormApplicationService(
+            _applicationState,
+            _applicationsClient,
+            sessionStore,
+            _conditionalLogic,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<SubmitFormApplicationService>.Instance));
+        _fixture.Register<IPrepareFormEngineGet>(() => new PrepareFormEngineGetService(
+            _templates,
+            _responses,
+            _fixture.Create<ICollectionFlowProgressStore>(),
+            sessionStore,
+            _conditionalLogic,
+            _fixture.Create<IFormStateManager>(),
+            _fileFieldService,
+            _fixture.Create<IComplexFieldConfigurationService>(),
+            _fixture.Create<IDerivedCollectionFlowService>(),
+            _applicationsClient,
+            _fixture.Create<INavigationHistoryService>(),
+            _applicationState,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<PrepareFormEngineGetService>.Instance));
+        _fixture.Register<ISaveFormPage>(() => new SaveFormPageService(
+            _templates,
+            _fixture.Create<IPostedFormDataBinder>(),
+            _fileFieldService,
+            _validation,
+            _responses,
+            _fixture.Create<ICollectionFlowProgressStore>(),
+            sessionStore,
+            _fixture.Create<INavigationHistoryService>(),
+            _navigation,
+            _fixture.Create<IFormStateManager>(),
+            _conditionalLogic,
+            _fixture.Create<IComplexFieldConfigurationService>(),
+            _fixture.Create<IDerivedCollectionFlowService>(),
+            _applicationState,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<SaveFormPageService>.Instance));
+        _fixture.Register<IRemoveCollectionItem>(() => new RemoveCollectionItemService(
+            _templates,
+            _responses,
+            _fileUploadService,
+            _navigation,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<RemoveCollectionItemService>.Instance));
+        _fixture.Register<IUploadFormFile>(() => new UploadFormFileService(
+            _fileFieldService,
+            _fileUploadService,
+            _infectedFilter,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<UploadFormFileService>.Instance));
+        _fixture.Register<IDeleteFormFile>(() => new DeleteFormFileService(
+            _fileFieldService,
+            _fileUploadService,
+            _responses,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<DeleteFormFileService>.Instance));
+        _fixture.Register<IDownloadFormFile>(() => new DownloadFormFileService(
+            _fileUploadService,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<DownloadFormFileService>.Instance));
+
         _request = Substitute.For<HttpRequest>();
         _request.Path = PathString.Empty;
         _request.QueryString = QueryString.Empty;
