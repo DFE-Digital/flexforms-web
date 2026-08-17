@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Options;
 using static GovUK.Dfe.FlexForms.Web.Pages.Applications.DashboardModel;
+using GovUK.Dfe.FlexForms.Web.Security;
 
 namespace GovUK.Dfe.FlexForms.Web.Pages.Applications;
 
@@ -136,7 +137,8 @@ public class IndexModel(
         TotalPages = result.TotalPages;
         CurrentPage = Math.Clamp(CurrentPage, 1, Math.Max(1, TotalPages));
 
-        var applicationTasks = result.Items.AsEnumerable().Select(async app => new ApplicationWithCalculatedStatus
+        var applicationTasks = result.Items.Where(app => AdminAccessHelper.IsAdmin(User) || AdminAccessHelper.IsSuperAdmin(User) || app.Status != ApplicationStatus.Deleted)
+            .AsEnumerable().Select(async app => new ApplicationWithCalculatedStatus
         {
             Application = app,
             CalculatedStatus = applicationStatusService.GetCalculatedApplicationStatusAsync(app, CustomStatuses)

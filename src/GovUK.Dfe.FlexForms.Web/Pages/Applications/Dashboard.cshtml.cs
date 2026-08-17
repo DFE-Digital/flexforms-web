@@ -17,6 +17,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
 using System.Text.Json;
 using SystemTask = System.Threading.Tasks.Task;
+using StackExchange.Redis;
 
 namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
 {
@@ -112,7 +113,8 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
                 var customStatus = CustomStatuses.FirstOrDefault(x => x.ApplicationStatus == item.Key);
                 statusFilters.Add(new KeyValuePair<ApplicationStatus, string>(item.Key, customStatus?.Label != null ? customStatus.Label : item.Value));
             }
-            StatusFilters = statusFilters.OrderBy(x => x.Key).ToList();
+            StatusFilters = statusFilters.Where(app => AdminAccessHelper.IsAdmin(User) || AdminAccessHelper.IsSuperAdmin(User) || app.Key != ApplicationStatus.Deleted)
+                .OrderBy(app => app.Key).ToList();
             SelectedStatusFilter = status;
             ValidateSearchFilters();
             await LoadDashboardColumnsAsync();
@@ -265,7 +267,8 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
 
             var fieldColumns = Columns.Where(c => c.Kind == DashboardColumnKind.Field).ToList();
 
-            var applicationTasks = result.Items.AsEnumerable().Select(async app =>
+            var applicationTasks = result.Items.Where(app => AdminAccessHelper.IsAdmin(User) || AdminAccessHelper.IsSuperAdmin(User) || app.Status != ApplicationStatus.Deleted)
+                .AsEnumerable().Select(async app =>
             {
                 var formData = DashboardAnswerReader.ParseFormData(app.LatestResponse?.ResponseBody);
                 var customValues = fieldColumns.ToDictionary(
