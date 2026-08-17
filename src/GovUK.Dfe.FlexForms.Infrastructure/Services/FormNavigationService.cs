@@ -1,4 +1,5 @@
 using GovUK.Dfe.FlexForms.Application.Interfaces;
+using GovUK.Dfe.FlexForms.Domain.FormEngine;
 
 namespace GovUK.Dfe.FlexForms.Infrastructure.Services
 {
@@ -138,7 +139,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
             }
 
             // Find the next page in the same task
-            var nextPage = GetNextPageInTask(currentPage, currentTask);
+            var nextPage = FormStepPolicy.GetNextPage(currentTask.Pages, currentPage.PageId);
             if (nextPage != null)
             {
                 return $"/applications/{referenceNumber}/{currentTask.TaskId}/{nextPage.PageId}";
@@ -146,31 +147,6 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
 
             // If there's no next page in the task, go to task summary
             return GetTaskSummaryUrl(currentTask.TaskId, referenceNumber);
-        }
-
-        /// <summary>
-        /// Gets the next page in the same task, or null if there is no next page
-        /// </summary>
-        /// <param name="currentPage">The current page</param>
-        /// <param name="currentTask">The current task</param>
-        /// <returns>The next page, or null if there is no next page</returns>
-        private Domain.Models.Page? GetNextPageInTask(Domain.Models.Page currentPage, Domain.Models.Task currentTask)
-        {
-            if (currentTask.Pages == null || !currentTask.Pages.Any())
-            {
-                return null;
-            }
-
-            // Find the current page index
-            var currentPageIndex = currentTask.Pages.FindIndex(p => p.PageId == currentPage.PageId);
-            if (currentPageIndex == -1 || currentPageIndex >= currentTask.Pages.Count - 1)
-            {
-                // Current page not found or it's the last page
-                return null;
-            }
-
-            // Return the next page
-            return currentTask.Pages[currentPageIndex + 1];
         }
 
         // Sub-flow helpers
@@ -190,26 +166,10 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
             return $"/applications/{referenceNumber}/{taskId}/flow/{flowId}/{instanceId}/{pageId}";
         }
 
-        private static bool IsSubFlowPage(string currentPageId)
-        {
-            return !string.IsNullOrEmpty(currentPageId) && currentPageId.StartsWith("flow/", StringComparison.OrdinalIgnoreCase);
-        }
+        private static bool IsSubFlowPage(string currentPageId) =>
+            FormStepPolicy.IsCollectionFlowPage(currentPageId);
 
-        private static string BuildScope(string referenceNumber, string taskId, string currentPageId)
-        {
-            if (string.IsNullOrEmpty(currentPageId))
-            {
-                return $"{referenceNumber}:{taskId}";
-            }
-            // Extract flow/instance if present: flow/{flowId}/{instanceId}/...
-            var parts = currentPageId.Split('/', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length >= 3 && string.Equals(parts[0], "flow", StringComparison.OrdinalIgnoreCase))
-            {
-                var flowId = parts[1];
-                var instanceId = parts[2];
-                return $"{referenceNumber}:{taskId}:flow:{flowId}:{instanceId}";
-            }
-            return $"{referenceNumber}:{taskId}";
-        }
+        private static string BuildScope(string referenceNumber, string taskId, string currentPageId) =>
+            FormRouteParser.HistoryScope(referenceNumber, taskId, currentPageId);
     }
 }

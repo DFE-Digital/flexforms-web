@@ -3,6 +3,7 @@ using GovUK.Dfe.FlexForms.Application.FormEngine;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Application.Notifications;
 using GovUK.Dfe.FlexForms.Domain.Caching;
+using GovUK.Dfe.FlexForms.Domain.FormEngine;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using GovUK.Dfe.FlexForms.Web.Extensions;
 using GovUK.Dfe.FlexForms.Infrastructure.Services;
@@ -211,7 +212,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                             }
                             if (flowPages != null)
                             {
-                                var page = string.IsNullOrEmpty(flowPageId) ? flowPages.FirstOrDefault() : flowPages.FirstOrDefault(p => p.PageId == flowPageId);
+                                var page = FormStepPolicy.ResolvePage(flowPages, flowPageId);
                                 if (page != null)
                                 {
                                     CurrentPage = page;
@@ -253,7 +254,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                             if (derivedConfig != null)
                             {
                                 // Get the page to render (default to first page if no specific page)
-                                var page = string.IsNullOrEmpty(derivedPageId) ? derivedConfig.Pages.FirstOrDefault() : derivedConfig.Pages.FirstOrDefault(p => p.PageId == derivedPageId);
+                                var page = FormStepPolicy.ResolvePage(derivedConfig.Pages, derivedPageId);
                                 if (page != null)
                                 {
                                     CurrentPage = page;
@@ -364,21 +365,8 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             catch { }
         }
 
-        public static string BuildHistoryScope(string referenceNumber, string taskId, string currentPageId)
-        {
-            if (string.IsNullOrEmpty(currentPageId))
-            {
-                return $"{referenceNumber}:{taskId}";
-            }
-            var parts = currentPageId.Split('/', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length >= 3 && string.Equals(parts[0], "flow", StringComparison.OrdinalIgnoreCase))
-            {
-                var flowId = parts[1];
-                var instanceId = parts[2];
-                return $"{referenceNumber}:{taskId}:flow:{flowId}:{instanceId}";
-            }
-            return $"{referenceNumber}:{taskId}";
-        }
+        public static string BuildHistoryScope(string referenceNumber, string taskId, string currentPageId) =>
+            FormRouteParser.HistoryScope(referenceNumber, taskId, currentPageId);
 
         public async Task<IActionResult> OnPostTaskSummaryAsync()
         {
@@ -731,7 +719,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                     var flowPages = GetFlowPages(task, flowId);
                     if (flowPages != null)
                     {
-                        var page = string.IsNullOrEmpty(flowPageId) ? flowPages.FirstOrDefault() : flowPages.FirstOrDefault(p => p.PageId == flowPageId);
+                        var page = FormStepPolicy.ResolvePage(flowPages, flowPageId);
                         if (page != null)
                         {
                             CurrentPage = page;
@@ -747,9 +735,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                     var derivedConfig = GetDerivedFlowConfiguration(task, dFlowId);
                     if (derivedConfig != null)
                     {
-                        var page = string.IsNullOrEmpty(dPageId)
-                            ? derivedConfig.Pages?.FirstOrDefault()
-                            : derivedConfig.Pages?.FirstOrDefault(p => p.PageId == dPageId);
+                        var page = FormStepPolicy.ResolvePage(derivedConfig.Pages, dPageId);
                         if (page != null)
                         {
                             CurrentPage = page;
@@ -1021,8 +1007,8 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                             }
                         }
 
-                        var index = flowPages.FindIndex(p => p.PageId == CurrentPage.PageId);
-                        var isLast = index == -1 || index >= flowPages.Count - 1;
+                        var index = FormStepPolicy.IndexOfPage(flowPages, CurrentPage.PageId);
+                        var isLast = FormStepPolicy.IsLastPage(flowPages, CurrentPage.PageId);
                         if (!isLast)
                         {
                             // Find the next visible page using conditional logic
@@ -1151,9 +1137,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
 				var derivedConfig = GetDerivedFlowConfiguration(correctTask, derivedFlowId);
 				if (derivedConfig != null)
 				{
-					var currentDerivedPage = string.IsNullOrEmpty(derivedPageId)
-						? derivedConfig.Pages?.FirstOrDefault()
-						: derivedConfig.Pages?.FirstOrDefault(p => p.PageId == derivedPageId);
+					var currentDerivedPage = FormStepPolicy.ResolvePage(derivedConfig.Pages, derivedPageId);
 
 					if (currentDerivedPage != null)
 					{
@@ -1358,15 +1342,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                     }
                     
                     // No conditional next page - find the next page in sequence
-                    Domain.Models.Page? sequentialNextPage = null;
-                    if (CurrentTask.Pages != null && CurrentTask.Pages.Any())
-                    {
-                        var currentPageIndex = CurrentTask.Pages.FindIndex(p => p.PageId == CurrentPage.PageId);
-                        if (currentPageIndex != -1 && currentPageIndex < CurrentTask.Pages.Count - 1)
-                        {
-                            sequentialNextPage = CurrentTask.Pages[currentPageIndex + 1];
-                        }
-                    }
+                    var sequentialNextPage = FormStepPolicy.GetNextPage(CurrentTask.Pages, CurrentPage.PageId);
                     
                     if (sequentialNextPage != null)
                     {
@@ -1664,79 +1640,40 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
 
         private static bool TryParseFlowRoute(string pageId, out string flowId, out string instanceId, out string flowPageId)
         {
-            flowId = instanceId = flowPageId = string.Empty;
-            if (string.IsNullOrEmpty(pageId)) return false;
-            // Expected: flow/{flowId}/{instanceId}/{pageId?}
-            var parts = pageId.Split('/', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length >= 3 && parts[0].Equals("flow", StringComparison.OrdinalIgnoreCase))
+            if (FormRouteParser.TryParseCollectionFlow(pageId, out var route))
             {
-                flowId = parts[1];
-                instanceId = parts[2];
-                flowPageId = parts.Length > 3 ? parts[3] : string.Empty;
+                flowId = route.FlowId;
+                instanceId = route.InstanceId;
+                flowPageId = route.PageId;
                 return true;
             }
+
+            flowId = instanceId = flowPageId = string.Empty;
             return false;
         }
 
-        /// <summary>
-        /// Parses derived collection flow routes like: {flowId}/derived/{itemId}/{pageId?}
-        /// </summary>
         private static bool TryParseDerivedFlowRoute(string pageId, out string derivedFlowId, out string derivedItemId, out string derivedPageId)
         {
-            derivedFlowId = derivedItemId = derivedPageId = string.Empty;
-            if (string.IsNullOrEmpty(pageId)) return false;
-            
-            // Expected: {flowId}/derived/{itemId}/{pageId?}
-            var parts = pageId.Split('/', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length >= 3 && parts[1].Equals("derived", StringComparison.OrdinalIgnoreCase))
+            if (FormRouteParser.TryParseDerivedFlow(pageId, out var route))
             {
-                derivedFlowId = parts[0];
-                derivedItemId = parts[2];
-                derivedPageId = parts.Length > 3 ? parts[3] : string.Empty;
+                derivedFlowId = route.FlowId;
+                derivedItemId = route.ItemId;
+                derivedPageId = route.PageId;
                 return true;
             }
+
+            derivedFlowId = derivedItemId = derivedPageId = string.Empty;
             return false;
         }
 
-        /// <summary>
-        /// Gets the pages for a specific flow in multi-collection flow mode
-        /// </summary>
-        private List<Domain.Models.Page>? GetFlowPages(Domain.Models.Task? task, string flowId)
-        {
-            var flow = task?.Summary?.Flows?.FirstOrDefault(f => f.FlowId == flowId);
-            return flow?.Pages;
-        }
+        private static List<Domain.Models.Page>? GetFlowPages(Domain.Models.Task? task, string flowId) =>
+            FormStepPolicy.GetCollectionFlowPages(task, flowId)?.ToList();
 
-        /// <summary>
-        /// Gets the fieldId for a specific flow in multi-collection flow mode
-        /// </summary>
-        private string? GetFlowFieldId(Domain.Models.Task? task, string flowId)
-        {
-            var flow = task?.Summary?.Flows?.FirstOrDefault(f => f.FlowId == flowId);
-            return flow?.FieldId;
-        }
+        private static string? GetFlowFieldId(Domain.Models.Task? task, string flowId) =>
+            FormStepPolicy.GetCollectionFlowFieldId(task, flowId);
 
-        /// <summary>
-        /// Gets the configuration for a specific derived flow
-        /// </summary>
-        private DerivedCollectionFlowConfiguration? GetDerivedFlowConfiguration(Domain.Models.Task? task, string derivedFlowId)
-        {
-            _logger.LogInformation("GetDerivedFlowConfiguration: Looking for flowId='{FlowId}' in task '{TaskId}'", derivedFlowId, task?.TaskId);
-            _logger.LogInformation("GetDerivedFlowConfiguration: Task summary mode: '{Mode}'", task?.Summary?.Mode);
-            _logger.LogInformation("GetDerivedFlowConfiguration: DerivedFlows count: {Count}", task?.Summary?.DerivedFlows?.Count ?? 0);
-            
-            if (task?.Summary?.DerivedFlows != null)
-            {
-                foreach (var flow in task.Summary.DerivedFlows)
-                {
-                    _logger.LogInformation("GetDerivedFlowConfiguration: Available flow - FlowId='{FlowId}', FieldId='{FieldId}'", flow.FlowId, flow.FieldId);
-                }
-            }
-            
-            var derivedFlow = task?.Summary?.DerivedFlows?.FirstOrDefault(f => f.FlowId == derivedFlowId);
-            _logger.LogInformation("GetDerivedFlowConfiguration: Found config: {Found}", derivedFlow != null);
-            return derivedFlow;
-        }
+        private static DerivedCollectionFlowConfiguration? GetDerivedFlowConfiguration(Domain.Models.Task? task, string derivedFlowId) =>
+            FormStepPolicy.GetDerivedFlow(task, derivedFlowId);
 
         /// <summary>
         /// Loads pre-filled data for a derived collection item
