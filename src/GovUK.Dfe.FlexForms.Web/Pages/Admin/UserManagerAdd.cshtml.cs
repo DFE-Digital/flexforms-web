@@ -85,6 +85,7 @@ public sealed class UserManagerAddModel(
                     Role = Role,
                     TemplateIds = SelectedTemplateIds
                 },
+                createOnly: true,
                 cancellationToken);
 
             if (created?.UserId is Guid userId && SelectedTemplateIds is { Count: > 0 })

@@ -82,6 +82,7 @@ public sealed class UserManagerEditModel(
                     Role = Role,
                     TemplateIds = SelectedTemplateIds
                 },
+                createOnly: false,
                 cancellationToken);
 
             await usersClient.UpdateUserTemplateAccessAsync(
