@@ -1,0 +1,27 @@
+.govuk-table-responsive {
+    overflow-x: auto;
+    border-right: 1px solid #b1b4b6;
+}
+
+.user-manager-audit-table {
+    table-layout: fixed;
+    width: 100%;
+}
+
+.user-manager-audit-table__when {
+    width: 11rem;
+}
+
+.user-manager-audit-table__action {
+    width: 8rem;
+}
+
+.user-manager-audit-table__role {
+    width: 7rem;
+}
+
+.user-manager-audit-table__email,
+.user-manager-audit-table__details {
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}

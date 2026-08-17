@@ -25,6 +25,13 @@ public sealed class TemplateSelectionMiddleware(
         try
         {
             var templates = await templateSelectionService.GetSelectableTemplatesAsync(context.RequestAborted);
+
+            if (await TrySelectTemplateFromQueryAsync(context, templates, templateSelectionService, context.RequestAborted))
+            {
+                await next(context);
+                return;
+            }
+
             var liveTemplates = templates.Where(template => template.IsLive).ToList();
             var selectedId = templateSelectionService.GetSelectedTemplateId(context);
             var selectedTemplate = Guid.TryParse(selectedId, out var parsedSelectedId)
@@ -146,6 +153,27 @@ public sealed class TemplateSelectionMiddleware(
 
     private static bool IsRoot(PathString path)
         => !path.HasValue || path.Value is "/" or "";
+
+    private static async Task<bool> TrySelectTemplateFromQueryAsync(
+        HttpContext context,
+        IReadOnlyList<GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response.TemplateDto> templates,
+        ITemplateSelectionService templateSelectionService,
+        CancellationToken cancellationToken)
+    {
+        if (!context.Request.Query.TryGetValue("templateId", out var templateIdValues))
+            return false;
+
+        var templateIdValue = templateIdValues.FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(templateIdValue) || !Guid.TryParse(templateIdValue, out var templateId))
+            return false;
+
+        var template = templates.FirstOrDefault(t => t.TemplateId == templateId);
+        if (template is null)
+            return false;
+
+        await templateSelectionService.SelectTemplateAsync(context, template, cancellationToken);
+        return true;
+    }
 }
 
 /// <summary>

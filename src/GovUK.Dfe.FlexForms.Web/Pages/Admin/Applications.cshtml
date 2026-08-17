@@ -81,7 +81,7 @@
                                 </td>
                                 <td class="govuk-table__cell">@app.DateCreated.ToString("d MMMM yyyy HH:mm")</td>
                                 <td class="govuk-table__cell">
-                                    <a href="/applications/@app.ApplicationReference"
+                                    <a href="/applications/@app.ApplicationReference?templateId=@Model.SelectedTemplateId"
                                        class="govuk-link"
                                        target="_blank"
                                        rel="noopener noreferrer">

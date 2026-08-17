@@ -67,6 +67,16 @@ public sealed class UserManagerAddModel(
 
         try
         {
+            var existingUsers = await usersClient.GetTenantUsersAsync(cancellationToken);
+            if (existingUsers?.Any(u =>
+                    string.Equals(u.Email, Email.Trim(), StringComparison.OrdinalIgnoreCase)) == true)
+            {
+                ModelState.AddModelError(
+                    nameof(Email),
+                    "A user with this email address already exists in this tenant.");
+                return Page();
+            }
+
             var created = await usersClient.AssignUserRoleAsync(
                 new AssignUserRoleRequest
                 {

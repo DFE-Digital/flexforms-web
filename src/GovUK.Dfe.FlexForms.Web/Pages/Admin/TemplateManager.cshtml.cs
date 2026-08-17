@@ -76,9 +76,7 @@ public class TemplateManagerModel(
         bool success = false,
         bool cleared = false,
         bool created = false,
-        bool granted = false,
-        string? suggestedVersion = null,
-        string? grantSummary = null)
+        string? suggestedVersion = null)
     {
         try
         {
@@ -89,8 +87,12 @@ public class TemplateManagerModel(
             ShowSuccess = success;
             ShowCacheCleared = cleared;
             ShowCreated = created;
-            ShowGrantedToAllUsers = granted;
-            GrantToAllUsersSummary = grantSummary;
+
+            if (TempData["TemplateManagerGrantSummary"] is string grantSummary)
+            {
+                ShowGrantedToAllUsers = true;
+                GrantToAllUsersSummary = grantSummary;
+            }
 
             await LoadTenantTemplatesAsync();
             var templateId = await ResolveSelectedTemplateIdAsync();
@@ -247,7 +249,8 @@ public class TemplateManagerModel(
                 result.UsersAlreadyHadAccess,
                 result.TotalUsers);
 
-            return RedirectToPage(new { granted = true, grantSummary = summary });
+            TempData["TemplateManagerGrantSummary"] = summary;
+            return RedirectToPage();
         }
         catch (Exception ex)
         {
