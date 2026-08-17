@@ -1,6 +1,7 @@
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
+using GovUK.Dfe.FlexForms.Application.FormEngine;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Application.Notifications;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
@@ -8,13 +9,13 @@ using GovUK.Dfe.FlexForms.Web.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using System.Text.Json;
 
 namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
 {
     public class UploadFileModel(
         IFileUploadService fileUploadService,
         IApplicationResponseService applicationResponseService,
+        IFormFileFieldService formFileFieldService,
         INotificationsClient notificationsClient,
         IFormErrorStore formErrorStore,
         IRequestAppConfiguration requestConfiguration)
@@ -233,219 +234,17 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
         }
 
 
-        private void UpdateSessionFileList(Guid appId, string fieldId, IReadOnlyList<UploadDto> files)
-        {
-
-            
-            if (IsCollectionFlow)
-            {
-                // For collection flows, store in flow progress system
-                var progressKey = GetFlowProgressSessionKey(FlowId, InstanceId);
-
-                
-                // CRITICAL FIX: Try multiple sources to find existing flow data
-                var existingProgress = LoadFlowProgress();
-
-                
-                // CRITICAL FIX: The 'files' parameter contains ALL files (existing + new), so just save it directly
-                // No need to merge because GetFilesForFieldAsync already combined existing and new files
-                var serializedFiles = JsonSerializer.Serialize(files);
-
-                existingProgress[fieldId] = serializedFiles;
-                
-                // Force session to commit immediately
-                var progressJson = JsonSerializer.Serialize(existingProgress);
-                HttpContext.Session.SetString(progressKey, progressJson);
-                
-
-                
-                // Flow progress saved successfully
-
-            }
-            else
-            {
-                // For regular forms, use the original session key
-                var key = $"UploadedFiles_{appId}_{fieldId}";
-
-                HttpContext.Session.SetString(key, JsonSerializer.Serialize(files));
-            }
-        }
-
-        private async Task SaveUploadedFilesToResponseAsync(Guid appId, string fieldId, IReadOnlyList<UploadDto> files)
-        {
-            if (string.IsNullOrEmpty(fieldId))
-            {
-                return;
-            }
-
-            if (IsCollectionFlow)
-            {
-                // For collection flows, files are saved via flow progress system
-                // This happens in UpdateSessionFileList, no need to save to main application response here
-                return;
-            }
-
-            var json = JsonSerializer.Serialize(files);
-            var data = new Dictionary<string, object> { { fieldId, json } };
-
-            await applicationResponseService.SaveApplicationResponseAsync(appId, data);
-        }
+        private void UpdateSessionFileList(Guid appId, string fieldId, IReadOnlyList<UploadDto> files) =>
+            formFileFieldService.SaveFiles(new FormFileFieldContext(appId, FlowId, InstanceId), fieldId, files);
 
         /// <summary>
-        /// Gets files for a specific field ID by filtering from existing session data first,
-        /// then cross-referencing with database files to ensure we only get files for this field
+        /// Gets files for a specific field, then drops any that no longer exist in the database.
         /// </summary>
         private async Task<IReadOnlyList<UploadDto>> GetFilesForFieldAsync(Guid appId, string fieldId)
         {
-            if (string.IsNullOrEmpty(fieldId))
-            {
-                return new List<UploadDto>().AsReadOnly();
-            }
-
-            string? sessionFilesJson = null;
-
-            if (IsCollectionFlow)
-            {
-                // For collection flows, get files from flow progress system
-
-                var progressData = LoadFlowProgress();
-
-                
-                if (progressData.TryGetValue(fieldId, out var progressValue))
-                {
-                    sessionFilesJson = progressValue?.ToString();
-
-                }
-                else
-                {
-                    // CRITICAL FIX: Flow progress not found, initialize from database if possible
-
-                    
-                    // 1. Check if any files exist in database for this application
-                    // Note: Since UploadDto doesn't have FieldId, we'll rely on session data for field association
-                    try
-                    {
-                        var allDbFiles = await fileUploadService.GetFilesForApplicationAsync(appId);
-
-                        
-                        // For now, we can't filter by field ID since UploadDto doesn't have that property
-                        // We'll rely on session data to maintain field-specific file associations
-
-                    }
-                    catch (Exception ex)
-                    {
-
-                    }
-                    
-                    // 2. If still no files, check accumulated form data
-                    if (string.IsNullOrWhiteSpace(sessionFilesJson))
-                    {
-                        var alternativeAccumulatedData = applicationResponseService.GetAccumulatedFormData();
-                        if (alternativeAccumulatedData.TryGetValue(fieldId, out var accFieldValue))
-                        {
-                            sessionFilesJson = accFieldValue?.ToString();
-
-                        }
-                    }
-                    
-                    // 3. If still not found, search all session keys for this field data
-                    if (string.IsNullOrWhiteSpace(sessionFilesJson))
-                    {
-
-                        foreach (var sessionKey in HttpContext.Session.Keys)
-                        {
-                            var keyValue = HttpContext.Session.GetString(sessionKey);
-                            if (!string.IsNullOrWhiteSpace(keyValue))
-                            {
-                                // Check if this key contains our field data
-                                if (sessionKey.Contains(fieldId, StringComparison.OrdinalIgnoreCase) ||
-                                    (keyValue.StartsWith("[") && keyValue.Contains("\"id\"") && keyValue.Contains(fieldId)))
-                                {
-
-                                    sessionFilesJson = keyValue;
-                                    break;
-                                }
-                                
-                                // Also check if the key contains flow progress for our specific flow
-                                if (sessionKey.Contains($"FlowProgress_{FlowId}") && keyValue.Contains(fieldId))
-                                {
-
-                                    try
-                                    {
-                                        var flowData = JsonSerializer.Deserialize<Dictionary<string, object>>(keyValue);
-                                        if (flowData != null && flowData.TryGetValue(fieldId, out var fieldData))
-                                        {
-                                            sessionFilesJson = fieldData?.ToString();
-
-                                            break;
-                                        }
-                                    }
-                                    catch (Exception ex)
-                                    {
-
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                
-
-            }
-            else
-            {
-                // For regular forms, get files from session
-                var sessionKey = $"UploadedFiles_{appId}_{fieldId}";
-                sessionFilesJson = HttpContext.Session.GetString(sessionKey);
-            }
-            
-            if (!string.IsNullOrEmpty(sessionFilesJson))
-            {
-                try
-                {
-                    var sessionFiles = JsonSerializer.Deserialize<List<UploadDto>>(sessionFilesJson);
-                    if (sessionFiles != null)
-                    {
-                        // Cross-reference with database to make sure files still exist
-                        var validSessionFiles = await FilterFilesAgainstDatabaseAsync(appId, sessionFiles);
-                        
-                        return validSessionFiles.AsReadOnly();
-                    }
-                }
-                catch (JsonException)
-                {
-                    // Session data is corrupted, fall through to check accumulated data
-                }
-            }
-
-            // If no session data, try to get from accumulated form data (for existing applications)
-            var accumulatedData = applicationResponseService.GetAccumulatedFormData();
-            if (accumulatedData.TryGetValue(fieldId, out var fieldValue))
-            {
-                var fieldValueStr = fieldValue?.ToString();
-                if (!string.IsNullOrEmpty(fieldValueStr))
-                {
-                    try
-                    {
-                        var existingFiles = JsonSerializer.Deserialize<List<UploadDto>>(fieldValueStr);
-                        if (existingFiles != null)
-                        {
-                            // Cross-reference with database to make sure files still exist
-                            var validFiles = await FilterFilesAgainstDatabaseAsync(appId, existingFiles);
-                            
-                            return validFiles.AsReadOnly();
-                        }
-                    }
-                    catch (JsonException)
-                    {
-                        // Data is corrupted, return empty list
-                    }
-                }
-            }
-
-            // If no existing data for this field, return empty list
-            // Don't return all database files, as that would include files from other fields
-            return new List<UploadDto>().AsReadOnly();
+            var files = formFileFieldService.GetFiles(new FormFileFieldContext(appId, FlowId, InstanceId), fieldId).ToList();
+            var validFiles = await FilterFilesAgainstDatabaseAsync(appId, files);
+            return validFiles.AsReadOnly();
         }
 
         private async Task TryCreateFileNotificationAsync(AddNotificationRequest addRequest)
@@ -475,57 +274,14 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             }
         }
 
-        // legacy method removed in favour of IFormErrorStore
-
-        /// <summary>
-        /// Helper methods for collection flow support
-        /// </summary>
-        private static string GetFlowProgressSessionKey(string flowId, string instanceId) => $"FlowProgress_{flowId}_{instanceId}";
-
-        private Dictionary<string, object> LoadFlowProgress()
+        private async Task SaveUploadedFilesToResponseAsync(Guid appId, string fieldId, IReadOnlyList<UploadDto> files)
         {
-            if (!IsCollectionFlow)
-            {
+            if (string.IsNullOrEmpty(fieldId) || IsCollectionFlow)
+                return;
 
-                return new Dictionary<string, object>();
-            }
-
-            var key = GetFlowProgressSessionKey(FlowId, InstanceId);
-
-            
-            // Debug: List all session keys to see what's actually in the session
-
-
-            
-            // Try to get all session keys
-
-                var sessionKeys = new List<string>();
-                foreach (var sessionKey in HttpContext.Session.Keys)
-                {
-                    sessionKeys.Add(sessionKey);
-                }
-
-            
-            var json = HttpContext.Session.GetString(key);
-
-            
-            if (string.IsNullOrWhiteSpace(json))
-            {
-
-                return new Dictionary<string, object>();
-            }
-
-            try
-            {
-                var result = JsonSerializer.Deserialize<Dictionary<string, object>>(json) ?? new Dictionary<string, object>();
-
-                return result;
-            }
-            catch (Exception ex)
-            {
-
-                return new Dictionary<string, object>();
-            }
+            var json = System.Text.Json.JsonSerializer.Serialize(files);
+            var data = new Dictionary<string, object> { { fieldId, json } };
+            await applicationResponseService.SaveApplicationResponseAsync(appId, data);
         }
     }
 }

@@ -1,3 +1,4 @@
+using GovUK.Dfe.FlexForms.Application.FormEngine;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Application.Validation;
 using GovUK.Dfe.FlexForms.Domain.Models;
@@ -518,7 +519,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
             }
 
             // Handle special session data placeholder - this indicates NO files uploaded yet
-            if (value == "UPLOAD_FIELD_SESSION_DATA")
+            if (value == FormEngineConstants.UploadFieldSessionPlaceholder)
             {
                 return false;
             }

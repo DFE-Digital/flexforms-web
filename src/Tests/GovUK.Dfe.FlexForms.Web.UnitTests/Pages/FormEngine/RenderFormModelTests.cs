@@ -2,6 +2,7 @@ using System.Security.Claims;
 using AutoFixture;
 using AutoFixture.AutoNSubstitute;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
+using GovUK.Dfe.FlexForms.Application.FormEngine;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Application.Validation;
 using GovUK.Dfe.FlexForms.Domain.Models;
@@ -85,6 +86,30 @@ public class RenderFormModelTests
         infectedFileStore.IsFileInfected(Arg.Any<Guid>()).Returns(false);
         infectedFileStore.IsFileNameInfected(Arg.Any<string>(), Arg.Any<string>()).Returns(false);
         _fixture.Register(() => infectedFileStore);
+
+        var sessionStore = Substitute.For<IFormSessionStore>();
+        sessionStore.GetString(Arg.Any<string>()).Returns(call =>
+        {
+            var key = call.Arg<string>();
+            return _session.TryGetValue(key, out var bytes) && bytes is { Length: > 0 }
+                ? System.Text.Encoding.UTF8.GetString(bytes)
+                : null;
+        });
+        _fixture.Register(() => sessionStore);
+        _fixture.Register<IPostedFormDataBinder>(() => new PostedFormDataBinder());
+        _fixture.Register<ICollectionFlowProgressStore>(() => new CollectionFlowProgressStore(sessionStore));
+
+        var infectedFilter = Substitute.For<IInfectedUploadFilter>();
+        infectedFilter.FilterList(Arg.Any<IReadOnlyList<UploadDto>>(), Arg.Any<string?>())
+            .Returns(call => (call.Arg<IReadOnlyList<UploadDto>>() ?? []).ToList());
+        infectedFilter.FilterUploadDataJson(Arg.Any<string?>(), Arg.Any<string?>())
+            .Returns(call => call.ArgAt<string?>(0) ?? string.Empty);
+        _fixture.Register(() => infectedFilter);
+
+        var fileFieldService = Substitute.For<IFormFileFieldService>();
+        fileFieldService.GetFiles(Arg.Any<FormFileFieldContext>(), Arg.Any<string>())
+            .Returns(Array.Empty<UploadDto>());
+        _fixture.Register(() => fileFieldService);
 
         var conditionalLogic = Substitute.For<IConditionalLogicOrchestrator>();
         conditionalLogic.ApplyConditionalLogicAsync(default!, default!, default)

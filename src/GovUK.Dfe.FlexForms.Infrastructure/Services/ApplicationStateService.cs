@@ -1,5 +1,6 @@
 using GovUK.Dfe.FlexForms.Application.Exceptions;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
+using GovUK.Dfe.FlexForms.Domain.Caching;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.CoreLibs.Http.Models;
@@ -160,7 +161,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
 
         private void ClearStaleSessionDataIfReferenceChanged(string referenceNumber)
         {
-            var sessionReference = sessionStore.GetString("ApplicationReference");
+            var sessionReference = sessionStore.GetString(FormSessionKeys.ApplicationReference);
             if (string.IsNullOrEmpty(sessionReference)
                 || string.Equals(sessionReference, referenceNumber, StringComparison.OrdinalIgnoreCase))
             {
@@ -168,14 +169,14 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
             }
 
             applicationResponseService.ClearAccumulatedFormData();
-            sessionStore.Remove("ApplicationId");
-            sessionStore.Remove("ApplicationReference");
+            sessionStore.Remove(FormSessionKeys.ApplicationId);
+            sessionStore.Remove(FormSessionKeys.ApplicationReference);
         }
 
         private void PersistApplicationToSession(ApplicationDto application, string referenceNumber)
         {
-            sessionStore.SetString("ApplicationId", application.ApplicationId.ToString());
-            sessionStore.SetString("ApplicationReference", application.ApplicationReference ?? referenceNumber);
+            sessionStore.SetString(FormSessionKeys.ApplicationId, application.ApplicationId.ToString());
+            sessionStore.SetString(FormSessionKeys.ApplicationReference, application.ApplicationReference ?? referenceNumber);
 
             var templateSchemaKey = $"TemplateSchema_{referenceNumber}";
             var templateVersionIdKey = $"TemplateVersionId_{referenceNumber}";

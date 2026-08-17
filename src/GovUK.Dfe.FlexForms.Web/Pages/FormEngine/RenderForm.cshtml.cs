@@ -1,7 +1,10 @@
 using GovUK.Dfe.FlexForms.Application.Exceptions;
+using GovUK.Dfe.FlexForms.Application.FormEngine;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Application.Notifications;
+using GovUK.Dfe.FlexForms.Domain.Caching;
 using GovUK.Dfe.FlexForms.Domain.Models;
+using GovUK.Dfe.FlexForms.Web.Extensions;
 using GovUK.Dfe.FlexForms.Infrastructure.Services;
 using GovUK.Dfe.FlexForms.Web.Constants;
 using GovUK.Dfe.FlexForms.Web.Interfaces;
@@ -16,7 +19,6 @@ using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using System.Threading;
 using static GovUK.Dfe.FlexForms.Web.Pages.FormEngine.DisplayHelpers;
 using Task = System.Threading.Tasks.Task;
@@ -44,7 +46,10 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
         IComplexFieldConfigurationService complexFieldConfigurationService,
         IDerivedCollectionFlowService derivedCollectionFlowService,
         IFieldRequirementService fieldRequirementService,
-        IInfectedFileStore infectedFileStore,
+        ICollectionFlowProgressStore collectionFlowProgressStore,
+        IInfectedUploadFilter infectedUploadFilter,
+        IFormFileFieldService formFileFieldService,
+        IPostedFormDataBinder postedFormDataBinder,
         ILogger<RenderFormModel> logger,
         INavigationHistoryService navigationHistoryService,
         IRequestAppConfiguration requestConfiguration)
@@ -57,7 +62,10 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
         private readonly IFormErrorStore _formErrorStore = formErrorStore;
         private readonly IComplexFieldConfigurationService _complexFieldConfigurationService = complexFieldConfigurationService;
         private readonly IDerivedCollectionFlowService _derivedCollectionFlowService = derivedCollectionFlowService;
-        private readonly IInfectedFileStore _infectedFileStore = infectedFileStore;
+        private readonly ICollectionFlowProgressStore _collectionFlowProgressStore = collectionFlowProgressStore;
+        private readonly IInfectedUploadFilter _infectedUploadFilter = infectedUploadFilter;
+        private readonly IFormFileFieldService _formFileFieldService = formFileFieldService;
+        private readonly IPostedFormDataBinder _postedFormDataBinder = postedFormDataBinder;
         private readonly IFieldRequirementService _fieldRequirementService = fieldRequirementService;
         private readonly INavigationHistoryService _navigationHistoryService = navigationHistoryService;
         private readonly IRequestAppConfiguration _requestConfiguration = requestConfiguration;
@@ -194,7 +202,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                             // success message even after partial autosaves add the item to the session.
                             if (!string.IsNullOrEmpty(flowFieldId))
                             {
-                                var existenceKey = GetFlowItemExistenceSessionKey(flowId, instanceId);
+                                var existenceKey = FormSessionKeys.FlowItemExisted(flowId, instanceId);
                                 if (HttpContext.Session.GetString(existenceKey) == null)
                                 {
                                     var existed = IsExistingCollectionItem(flowFieldId, instanceId);
@@ -215,7 +223,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                                     
                                     // Also load any in-progress data for this specific flow instance
                                 // IMPORTANT: Progress data takes priority over existing item data as it contains the latest user changes
-                                    var progressData = LoadFlowProgress(flowId, instanceId);
+                                    var progressData = _collectionFlowProgressStore.Load(flowId, instanceId);
                                     foreach (var kvp in progressData)
                                     {
                                     Data[kvp.Key] = kvp.Value; // Always overwrite with progress data (latest changes)
@@ -320,7 +328,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
 
                 // For upload fields, populate Data from session so they display on GET
                 // This ensures files appear in the list after upload
-                await PopulateUploadFieldsFromSessionAsync();
+                PopulateUploadFieldsFromSession();
                 
                 await ApplyConditionalLogicAsync();
                 ModelState.Clear();
@@ -779,240 +787,13 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                 return Page();
             }
 
-            // Removed verbose debug logging of posted keys
+            var postedFields = Request.Form.ToPostedFields();
+            Data = _postedFormDataBinder.Bind(postedFields, Data);
+            _formFileFieldService.ReplaceUploadPlaceholders(Data, FileFieldContext);
 
-            // Collect date parts for fields rendered with GOV.UK date input
-            var dateParts = new Dictionary<string, (string? Day, string? Month, string? Year)>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var key in Request.Form.Keys)
-            {
-                var match = Regex.Match(key, @"^Data\[(.+?)\]$", RegexOptions.None, TimeSpan.FromMilliseconds(200));
-
-                if (match.Success)
-                {
-                    var fieldId = match.Groups[1].Value;
-                    // Normalise autocomplete ids like Data_trustsSearch to trustsSearch
-                    var normalisedFieldId = fieldId.StartsWith("Data_", StringComparison.Ordinal) ? fieldId.Substring(5) : fieldId;
-                    var formValue = Request.Form[key];
-
-                    _logger.LogInformation("DEBUG: Processing form field - Key: '{Key}', FieldId: '{FieldId}', FormValue: '{FormValue}'", 
-                        key, fieldId, formValue.ToString());
-
-                    // Convert StringValues to a simple string or array based on count
-                    if (formValue.Count == 1)
-                    {
-                        var val = SanitiseHtmlInput(formValue.ToString());
-                        Data[fieldId] = val;
-                        if (!string.Equals(fieldId, normalisedFieldId, StringComparison.Ordinal))
-                        {
-                            Data[normalisedFieldId] = val;
-                        }
-                        _logger.LogInformation("DEBUG: Added to Data - FieldId: '{FieldId}', Value: '{Value}'", fieldId, val);
-                    }
-                    else if (formValue.Count > 1)
-                    {
-                        var arr = formValue.Select(SanitiseHtmlInput).ToArray();
-                        Data[fieldId] = arr;
-                        if (!string.Equals(fieldId, normalisedFieldId, StringComparison.Ordinal))
-                        {
-                            Data[normalisedFieldId] = arr;
-                        }
-                    }
-                    else
-                    {
-                        Data[fieldId] = string.Empty;
-                        if (!string.Equals(fieldId, normalisedFieldId, StringComparison.Ordinal))
-                        {
-                            Data[normalisedFieldId] = string.Empty;
-                        }
-                    }
-                }
-                else
-                {
-                    // Match date inputs like Data[fieldId].Day / Data[fieldId]-day (support both dot and hyphen)
-                    var dateMatch = Regex.Match(key, @"^Data\[(.+?)\](?:[.\-](day|month|year))$", RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(200));
-                    if (dateMatch.Success)
-                    {
-                        var fieldId = dateMatch.Groups[1].Value;
-                        var part = dateMatch.Groups[2].Value.ToLowerInvariant();
-                        var formValue = Request.Form[key].ToString();
-
-                        if (!dateParts.TryGetValue(fieldId, out var parts))
-                        {
-                            parts = (null, null, null);
-                        }
-
-                        switch (part)
-                        {
-                            case "day":
-                                parts.Day = formValue;
-                                break;
-                            case "month":
-                                parts.Month = formValue;
-                                break;
-                            case "year":
-                                parts.Year = formValue;
-                                break;
-                        }
-
-                        dateParts[fieldId] = parts;
-                    }
-                }
-              }
-
-            // Apply conditional logic after processing form data changes
-
-
-            
-
-            
-            // Handle upload fields that use session data instead of form data to avoid truncation
-            if (IsCollectionFlow)
-            {
-                var flowProgress = LoadFlowProgress(FlowId, InstanceId);
-                var accumulatedData = _applicationResponseService.GetAccumulatedFormData();
-                
-                foreach (var key in Data.Keys.ToList())
-                {
-                    if (Data[key]?.ToString() == "UPLOAD_FIELD_SESSION_DATA")
-                    {
-                        //  FIX: Try session first, then fall back to database
-                        //  Filter infected files BEFORE saving to database
-                        if (flowProgress.TryGetValue(key, out var sessionValue))
-                        {
-                            // Filter infected files from session data before saving
-                            var filteredValue = FilterInfectedFilesFromUploadData(sessionValue?.ToString());
-                            Data[key] = filteredValue;
-                            _logger.LogInformation("Collection flow: Replaced upload placeholder for field {FieldId} with filtered session data", key);
-                        }
-                        else
-                        {
-                            // Fall back to database data if session is empty
-                            // This handles the case where user clicks Continue without making changes
-                            _logger.LogWarning("Collection flow: Session empty for field {FieldId}, falling back to database", key);
-                            
-                            // Try to get from accumulated data (database)
-                            // Need to look inside the collection items
-                            try
-                            {
-                                foreach (var kvp in accumulatedData)
-                                {
-                                    var collectionJson = kvp.Value?.ToString();
-                                    if (string.IsNullOrWhiteSpace(collectionJson))
-                                        continue;
-                                    
-                                    var items = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(collectionJson);
-                                    if (items == null) continue;
-                                    
-                                    var existingItem = items.FirstOrDefault(item => item.TryGetValue("id", out var idVal) && idVal?.ToString() == InstanceId);
-                                    if (existingItem != null && existingItem.TryGetValue(key, out var fieldValue))
-                                    {
-                                        var fieldValueStr = fieldValue?.ToString();
-                                        if (!string.IsNullOrWhiteSpace(fieldValueStr))
-                                        {
-                                            // Filter infected files from database data before saving
-                                            var filteredValue = FilterInfectedFilesFromUploadData(fieldValueStr);
-                                            Data[key] = filteredValue;
-                                            _logger.LogInformation("Collection flow: Replaced upload placeholder for field {FieldId} with filtered database data", key);
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                _logger.LogError(ex, "Collection flow: Error getting database data for field {FieldId}", key);
-                            }
-                        }
-                    }
-                }
-            }
-            else
-            {
-                // For regular (non-collection) forms, also replace upload placeholders with session data
-                foreach (var key in Data.Keys.ToList())
-                {
-                    if (Data[key]?.ToString() == "UPLOAD_FIELD_SESSION_DATA")
-                    {
-                        //  Read from upload-specific session key, not from AccumulatedFormData
-                        // Uploads are stored in: UploadedFiles_{appId}_{fieldId}
-                        var sessionKey = $"UploadedFiles_{ApplicationId}_{key}";
-                        var sessionFilesJson = HttpContext.Session.GetString(sessionKey);
-                        
-                        if (!string.IsNullOrWhiteSpace(sessionFilesJson))
-                        {
-                            // Filter infected files before saving
-                            var filteredValue = FilterInfectedFilesFromUploadData(sessionFilesJson);
-                            Data[key] = filteredValue;
-                            _logger.LogInformation("Replaced upload placeholder for field {FieldId} with filtered session data from upload key", key);
-                        }
-                        else
-                        {
-                            // No session data means no files uploaded yet - keep placeholder so validation can detect it
-                            _logger.LogInformation("No session data found for upload field {FieldId} - validation will detect empty field", key);
-                        }
-                    }
-                }
-            }
-            
             await ApplyConditionalLogicAsync("change");
 
-            // Compose collected date parts into a single ISO date string so summaries recognise an answer
-            if (dateParts.Count > 0)
-            {
-                foreach (var kvp in dateParts)
-                {
-                    var fieldId = kvp.Key;
-                    var parts = kvp.Value;
-                    var anyEntered = !string.IsNullOrWhiteSpace(parts.Day) || !string.IsNullOrWhiteSpace(parts.Month) || !string.IsNullOrWhiteSpace(parts.Year);
-
-                    if (!anyEntered)
-                    {
-                        continue;
-                    }
-
-                    if (int.TryParse(parts.Year, out var y) && int.TryParse(parts.Month, out var m) && int.TryParse(parts.Day, out var d))
-                    {
-                        try
-                        {
-                            // Enforce four-digit year: if not 4 digits, do not normalise to ISO,
-                            // leave as joined parts so validation can raise an error
-                            var yearText = parts.Year?.Trim() ?? string.Empty;
-                            if (yearText.Length != 4)
-                            {
-                                var joinedInvalid = $"{parts.Year}-{parts.Month}-{parts.Day}";
-                                var normalisedFieldId = fieldId.StartsWith("Data_", StringComparison.Ordinal) ? fieldId.Substring(5) : fieldId;
-                                Data[fieldId] = joinedInvalid;
-                                if (!string.Equals(fieldId, normalisedFieldId, StringComparison.Ordinal)) Data[normalisedFieldId] = joinedInvalid;
-                            }
-                            else
-                            {
-                                var dt = new DateTime(y, m, d);
-                                var iso = dt.ToString("yyyy-MM-dd");
-                                var normalisedFieldId = fieldId.StartsWith("Data_", StringComparison.Ordinal) ? fieldId.Substring(5) : fieldId;
-                                Data[fieldId] = iso;
-                                if (!string.Equals(fieldId, normalisedFieldId, StringComparison.Ordinal)) Data[normalisedFieldId] = iso;
-                            }
-                        }
-                        catch
-                        {
-                            // Invalid date combo: set a joined value so validator can produce a message and retain the parts
-                            var joined = $"{parts.Year}-{parts.Month}-{parts.Day}";
-                            var normalisedFieldId = fieldId.StartsWith("Data_", StringComparison.Ordinal) ? fieldId.Substring(5) : fieldId;
-                            Data[fieldId] = joined;
-                            if (!string.Equals(fieldId, normalisedFieldId, StringComparison.Ordinal)) Data[normalisedFieldId] = joined;
-                        }
-                    }
-                    else
-                    {
-                        // Partial or non-numeric: set a joined value so validator can produce a message
-                        var joined = $"{parts.Year}-{parts.Month}-{parts.Day}";
-                        var normalisedFieldId = fieldId.StartsWith("Data_", StringComparison.Ordinal) ? fieldId.Substring(5) : fieldId;
-                        Data[fieldId] = joined;
-                        if (!string.Equals(fieldId, normalisedFieldId, StringComparison.Ordinal)) Data[normalisedFieldId] = joined;
-                    }
-                }
-            }
+            _postedFormDataBinder.ApplyDateParts(postedFields, Data);
 
 			bool isDerivedFlowRoute = TryParseDerivedFlowRoute(CurrentPageId, out var _, out var _, out var _);
 			if (!isDerivedFlowRoute && CurrentPage != null)
@@ -1031,7 +812,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                 {
                     if (TryParseFlowRoute(CurrentPageId, out var fId, out var instId, out _))
                     {
-                        SaveFlowProgress(fId, instId, Data);
+                        _collectionFlowProgressStore.Save(fId, instId, Data);
                         _logger.LogInformation("Saved in-progress flow data for flow {FlowId}, instance {InstanceId} with {Count} fields due to validation errors.", fId, instId, Data?.Count ?? 0);
                     }
                 }
@@ -1214,19 +995,19 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                     if (flowPages != null && !string.IsNullOrEmpty(flowFieldId))
                     {
                         // Use the existence flag captured when the flow was first opened (fallback to current check)
-                        var existenceKey = GetFlowItemExistenceSessionKey(flowId, instanceId);
+                        var existenceKey = FormSessionKeys.FlowItemExisted(flowId, instanceId);
                         bool itemExistedBeforeSave = HttpContext.Session.GetString(existenceKey) is { } existedValue &&
                                                      bool.TryParse(existedValue, out var parsed)
                                                      ? parsed
                                                      : IsExistingCollectionItem(flowFieldId, instanceId);
 
                         // Persist in-progress sub-flow data for this instance
-                        SaveFlowProgress(flowId, instanceId, Data);
+                        _collectionFlowProgressStore.Save(flowId, instanceId, Data);
 
                         // Also persist partial collection item to the database on every page
                         if (ApplicationId.HasValue)
                         {
-                            var accumulatedProgress = LoadFlowProgress(flowId, instanceId);
+                            var accumulatedProgress = _collectionFlowProgressStore.Load(flowId, instanceId);
                             AppendCollectionItemToSession(flowPages, flowFieldId, instanceId, accumulatedProgress);
 
                             var accData = _applicationResponseService.GetAccumulatedFormData();
@@ -1253,7 +1034,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                                 _logger.LogDebug("Sub-flow navigation: checking conditional logic for pages. Current page: {CurrentPageId}, Flow: {FlowId}", CurrentPage.PageId, flowId);
                                 
                                 // Re-evaluate conditional logic with complete flow data for navigation
-                                var mergedData = LoadFlowProgress(FlowId, InstanceId);
+                                var mergedData = _collectionFlowProgressStore.Load(FlowId, InstanceId);
                                 foreach (var kvp in Data)
                                 {
                                     mergedData[kvp.Key] = kvp.Value;
@@ -1311,7 +1092,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                         if (!string.IsNullOrEmpty(flowFieldId))
                         {
                             // Merge accumulated progress with final page data
-                            var accumulated = LoadFlowProgress(flowId, instanceId);
+                            var accumulated = _collectionFlowProgressStore.Load(flowId, instanceId);
             
                             foreach (var kv in Data)
                             {
@@ -1340,7 +1121,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                                 }
                             }
                             // Clear the in-progress cache for this instance
-                            ClearFlowProgress(flowId, instanceId);
+                            _collectionFlowProgressStore.Clear(flowId, instanceId);
 
                             // Clear navigation history
                             var scope = BuildHistoryScope(ReferenceNumber, TaskId, CurrentPageId);
@@ -2208,104 +1989,12 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             _applicationResponseService.AccumulateFormData(new Dictionary<string, object> { [fieldId] = serialized });
         }
 
-        private static string GetFlowProgressSessionKey(string flowId, string instanceId) => $"FlowProgress_{flowId}_{instanceId}";
+        private FormFileFieldContext FileFieldContext => new(ApplicationId, FlowId, InstanceId);
 
-        private static string GetFlowItemExistenceSessionKey(string flowId, string instanceId) => $"FlowItemExisted_{flowId}_{instanceId}";
-
-        private Dictionary<string, object> LoadFlowProgressWithDebug()
-        {
-            if (!IsCollectionFlow)
-            {
-
-                return new Dictionary<string, object>();
-            }
-
-            var key = GetFlowProgressSessionKey(FlowId, InstanceId);
-
-            
-
-
-            
-            // Try to get all session keys
-            try
-            {
-                var sessionKeys = new List<string>();
-                foreach (var sessionKey in HttpContext.Session.Keys)
-                {
-                    sessionKeys.Add(sessionKey);
-                }
-
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[UPLOAD DEBUG] Error getting session keys: {ex.Message}");
-            }
-            
-            var json = HttpContext.Session.GetString(key);
-            if (string.IsNullOrWhiteSpace(json)) 
-            {
-
-                return new Dictionary<string, object>();
-            }
-            
-            try
-            {
-                var data = JsonSerializer.Deserialize<Dictionary<string, object>>(json) ?? new Dictionary<string, object>();
-
-                return data;
-            }
-            catch (Exception ex)
-            {
-
-                return new Dictionary<string, object>();
-            }
-        }
-
-        private Dictionary<string, object> LoadFlowProgress(string flowId, string instanceId)
-        {
-            var key = GetFlowProgressSessionKey(flowId, instanceId);
-            var json = HttpContext.Session.GetString(key);
-            if (string.IsNullOrWhiteSpace(json)) 
-            {
-
-
-                return new Dictionary<string, object>();
-            }
-            try
-            {
-                var dict = JsonSerializer.Deserialize<Dictionary<string, object>>(json);
-
-                return dict ?? new Dictionary<string, object>();
-            }
-            catch
-            {
-
-                return new Dictionary<string, object>();
-            }
-        }
-
-        private void SaveFlowProgress(string flowId, string instanceId, Dictionary<string, object> latest)
-        {
-            var existing = LoadFlowProgress(flowId, instanceId);
-            foreach (var kv in latest)
-            {
-                existing[kv.Key] = kv.Value;
-            }
-            var key = GetFlowProgressSessionKey(flowId, instanceId);
-            HttpContext.Session.SetString(key, JsonSerializer.Serialize(existing));
-            
-
-        }
-
-        private void ClearFlowProgress(string flowId, string instanceId)
-        {
-            var key = GetFlowProgressSessionKey(flowId, instanceId);
-            HttpContext.Session.Remove(key);
-        }
         private void CheckAndClearSessionForNewApplication()
         {
             // Check if we're working with a different application than what's stored in session
-            var sessionApplicationId = HttpContext.Session.GetString("CurrentAccumulatedApplicationId");
+            var sessionApplicationId = HttpContext.Session.GetString(FormSessionKeys.CurrentAccumulatedApplicationId);
             var currentApplicationId = ApplicationId?.ToString();
 
             if (!string.IsNullOrEmpty(sessionApplicationId) &&
@@ -2466,7 +2155,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                     else
                     {
                         // New item: check if this is the first page or if we have progress
-                        var existingProgress = LoadFlowProgress(flowId, instanceId);
+                        var existingProgress = _collectionFlowProgressStore.Load(flowId, instanceId);
                         if (existingProgress.Any())
                         {
                             // We have progress, this is not the first page - load the progress
@@ -2479,7 +2168,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                         else
                         {
                             // No progress exists, this is likely the first page - ensure clean start
-                            ClearFlowProgress(flowId, instanceId);
+                            _collectionFlowProgressStore.Clear(flowId, instanceId);
                             Data.Clear();
 
                         }
@@ -2493,7 +2182,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             else
             {
                 // No collection exists yet - check for existing progress
-                var existingProgress = LoadFlowProgress(flowId, instanceId);
+                var existingProgress = _collectionFlowProgressStore.Load(flowId, instanceId);
                 if (existingProgress.Any())
                 {
                     // Load existing progress
@@ -2506,7 +2195,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                 else
                 {
                     // Truly new - clear everything
-                    ClearFlowProgress(flowId, instanceId);
+                    _collectionFlowProgressStore.Clear(flowId, instanceId);
                     Data.Clear();
 
                 }
@@ -2888,7 +2577,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                     _formErrorStore.Save(fieldId, ModelState);
                 }
 
-                Files = await GetFilesForFieldAsync(appId, fieldId);
+                Files = _formFileFieldService.GetFiles(new FormFileFieldContext(appId, FlowId, InstanceId), fieldId);
                 
                 // Check if we have return URL
                 if (!string.IsNullOrEmpty(returnUrl))
@@ -2900,7 +2589,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                 return Page();
             }
 
-            if (FileExistInSessionList(appId, fieldId, file.FileName))
+            if (_formFileFieldService.ContainsFileName(new FormFileFieldContext(appId, FlowId, InstanceId), fieldId, file.FileName))
             {
                 ErrorMessage = "The selected file has already been uploaded. Upload a file with a different name.\n ";
                 ModelState.AddModelError("UploadFile", ErrorMessage);
@@ -2910,7 +2599,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                     _formErrorStore.Save(fieldId, ModelState);
                 }
 
-                Files = await GetFilesForFieldAsync(appId, fieldId);
+                Files = _formFileFieldService.GetFiles(new FormFileFieldContext(appId, FlowId, InstanceId), fieldId);
 
                 if (!string.IsNullOrEmpty(returnUrl))
                 {
@@ -2931,7 +2620,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                 
                 // Only execute this code if API call succeeds
                 // Get existing files for this field/collection instance
-                var currentFieldFiles = (await GetFilesForFieldAsync(appId, fieldId)).ToList();
+                var currentFieldFiles = _formFileFieldService.GetFiles(new FormFileFieldContext(appId, FlowId, InstanceId), fieldId).ToList();
                 
                 if (!currentFieldFiles.Any(cf => cf.Id == uploadedFile.Id))
                 {
@@ -2947,7 +2636,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                 // This ensures the file appears briefly, then gets removed by the consumer
                 currentFieldFiles = FilterInfectedFilesFromList(currentFieldFiles);
                 
-                UpdateSessionFileList(appId, fieldId, currentFieldFiles);
+                _formFileFieldService.SaveFiles(new FormFileFieldContext(appId, FlowId, InstanceId), fieldId, currentFieldFiles);
                 //  Do NOT save to database on upload! Files are saved when user clicks "Continue"
                 // This gives the virus scanner time to process and blacklist infected files
                 
@@ -3123,10 +2812,10 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             
             SuccessMessage = "File deleted.";
 
-            var currentFieldFiles = (await GetFilesForFieldAsync(appId, fieldId)).ToList();
+            var currentFieldFiles = _formFileFieldService.GetFiles(new FormFileFieldContext(appId, FlowId, InstanceId), fieldId).ToList();
             currentFieldFiles.RemoveAll(f => f.Id == fileId);
             
-            UpdateSessionFileList(appId, fieldId, currentFieldFiles);
+            _formFileFieldService.SaveFiles(new FormFileFieldContext(appId, FlowId, InstanceId), fieldId, currentFieldFiles);
             await SaveUploadedFilesToResponseAsync(appId, fieldId, currentFieldFiles);
             
             // If we have a return URL (from partial form), redirect back
@@ -3182,406 +2871,10 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             }
         }
 
-        public List<UploadDto> FilterInfectedFilesFromList(List<UploadDto> files)
-        {
-            if (files == null || files.Count == 0)
-            {
-                _logger.LogDebug("FilterInfectedFilesFromList: No files to filter (null or empty)");
-                return files ?? new List<UploadDto>();
-            }
-            
-            try
-            {
-                var infectedFileIds = new HashSet<Guid>();
-                var appId = ApplicationId?.ToString() ?? HttpContext.Session.GetString("ApplicationId");
-                
-                _logger.LogInformation(
-                    "FilterInfectedFilesFromList: Checking {FileCount} file(s) against blacklist for application {ApplicationId}",
-                    files.Count,
-                    appId);
-                
-                foreach (var file in files)
-                {
-                    var fileIdExists = _infectedFileStore.IsFileInfected(file.Id);
-                    var filenameExists = !string.IsNullOrEmpty(appId)
-                        && !string.IsNullOrEmpty(file.OriginalFileName)
-                        && _infectedFileStore.IsFileNameInfected(appId, file.OriginalFileName);
-                    
-                    _logger.LogInformation(
-                        "FilterInfectedFilesFromList: File {FileId} ({FileName}) - FileIdInfected={FileIdExists}, FilenameInfected={FilenameExists}",
-                        file.Id,
-                        file.OriginalFileName,
-                        fileIdExists,
-                        filenameExists);
-                    
-                    if (fileIdExists || filenameExists)
-                    {
-                        infectedFileIds.Add(file.Id);
-                        _logger.LogWarning(
-                            "FilterInfectedFilesFromList: INFECTED - File {FileId} ({FileName}) WILL BE FILTERED OUT",
-                            file.Id,
-                            file.OriginalFileName);
-                    }
-                }
-                
-                if (!infectedFileIds.Any())
-                {
-                    _logger.LogInformation(
-                        "FilterInfectedFilesFromList: No infected files found, returning all {FileCount} files",
-                        files.Count);
-                    return files;
-                }
-                
-                // Filter out infected files
-                var cleanFiles = files.Where(f => !infectedFileIds.Contains(f.Id)).ToList();
-                
-                _logger.LogWarning(
-                    "FilterInfectedFilesFromList: Filtered out {RemovedCount} infected file(s), returning {CleanCount} clean files",
-                    files.Count - cleanFiles.Count,
-                    cleanFiles.Count);
-                
-                return cleanFiles;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "FilterInfectedFilesFromList: ERROR - returning original list of {FileCount} files", files.Count);
-                return files; // Return original list if filtering fails
-            }
-        }
-
-        /// <summary>
-        /// Filters infected files from JSON-encoded upload data (used when saving form data)
-        /// </summary>
-        private string FilterInfectedFilesFromUploadData(string? uploadDataJson)
-        {
-            if (string.IsNullOrWhiteSpace(uploadDataJson))
-                return uploadDataJson ?? string.Empty;
-            
-            try
-            {
-                // Try to deserialize as file list
-                var files = JsonSerializer.Deserialize<List<UploadDto>>(uploadDataJson);
-                if (files != null)
-                {
-                    // Filter infected files
-                    var cleanFiles = FilterInfectedFilesFromList(files);
-                    
-                    // Serialize back to JSON
-                    return JsonSerializer.Serialize(cleanFiles);
-                }
-            }
-            catch (JsonException ex)
-            {
-                // Not a file list, return as-is
-                _logger.LogDebug(ex, "Failed to parse upload data as file list, returning original value");
-            }
-            
-            return uploadDataJson;
-        }
-
-        private async Task<IReadOnlyList<UploadDto>> GetFilesForFieldAsync(Guid appId, string fieldId)
-        {
-            _logger.LogInformation(
-                "GetFilesForFieldAsync: START - AppId={AppId}, FieldId={FieldId}, IsCollectionFlow={IsCollectionFlow}",
-                appId, fieldId, IsCollectionFlow);
-            
-            if (string.IsNullOrEmpty(fieldId))
-            {
-                _logger.LogDebug("GetFilesForFieldAsync: Empty fieldId, returning empty list");
-                return new List<UploadDto>().AsReadOnly();
-            }
-
-            if (IsCollectionFlow)
-            {
-                //  FIX: For collection flows, check SESSION flow progress FIRST!
-                // Session has the latest data (including recent deletes), database data is stale.
-                var progressData = LoadFlowProgress(FlowId, InstanceId);
-
-                if (progressData.TryGetValue(fieldId, out var progressValue))
-                {
-                    var sessionFilesJson = progressValue?.ToString();
-
-                    if (!string.IsNullOrWhiteSpace(sessionFilesJson))
-                    {
-                        try
-                        {
-                            var files = JsonSerializer.Deserialize<List<UploadDto>>(sessionFilesJson) ?? new List<UploadDto>();
-                            _logger.LogInformation(
-                                "GetFilesForFieldAsync: COLLECTION FLOW SESSION - Found {FileCount} files in session before filtering",
-                                files.Count);
-                            var cleanFiles = FilterInfectedFilesFromList(files);
-                            _logger.LogInformation(
-                                "GetFilesForFieldAsync: COLLECTION FLOW SESSION - Returning {FileCount} files after filtering",
-                                cleanFiles.Count);
-                            return cleanFiles.AsReadOnly();
-                        }
-                        catch (JsonException ex)
-                        {
-                            _logger.LogWarning("Failed to parse session flow progress: {Error}", ex.Message);
-                        }
-                    }
-                }
-                
-                // FALLBACK: Only check accumulated data (database) if session is empty
-                // This handles the initial load or page refresh scenarios
-                try
-                {
-                    var accumulatedData = applicationResponseService.GetAccumulatedFormData();
-
-
-                    foreach (var kvp in accumulatedData)
-                    {
-                        var collectionJson = kvp.Value?.ToString();
-                        if (string.IsNullOrWhiteSpace(collectionJson))
-                            continue;
-
-                        try
-                        {
-                            var items = JsonSerializer.Deserialize<List<Dictionary<string, object>>>(collectionJson) ?? new();
-                            
-                            var existingItem = items.FirstOrDefault(item => item.TryGetValue("id", out var idVal) && idVal?.ToString() == InstanceId);
-                            if (existingItem != null && existingItem.TryGetValue(fieldId, out var innerValue) && innerValue != null)
-                            {
-                                // Handle JsonElement (could be array or string)
-                                if (innerValue is JsonElement innerElem)
-                                {
-                                    if (innerElem.ValueKind == JsonValueKind.Array)
-                                    {
-                                        try
-                                        {
-                                            var files = JsonSerializer.Deserialize<List<UploadDto>>(innerElem.GetRawText()) ?? new List<UploadDto>();
-                                            var cleanFiles = FilterInfectedFilesFromList(files);
-                                            return cleanFiles.AsReadOnly();
-                                        }
-                                        catch (JsonException)
-                                        {
-                                            // Failed to parse, continue
-                                        }
-                                    }
-                                    else if (innerElem.ValueKind == JsonValueKind.String)
-                                    {
-                                        //  FIX: JsonElement can also be a STRING containing JSON
-                                        var stringValue = innerElem.GetString();
-                                        
-                                        if (!string.IsNullOrWhiteSpace(stringValue))
-                                        {
-                                            try
-                                            {
-                                                var files = JsonSerializer.Deserialize<List<UploadDto>>(stringValue) ?? new List<UploadDto>();
-                                                var cleanFiles = FilterInfectedFilesFromList(files);
-                                                return cleanFiles.AsReadOnly();
-                                            }
-                                            catch (JsonException)
-                                            {
-                                                // Failed to parse, continue
-                                            }
-                                        }
-                                    }
-                                }
-                                // Handle string JSON
-                                else if (innerValue is string innerJson && !string.IsNullOrWhiteSpace(innerJson))
-                                {
-                                    try
-                                    {
-                                        var files = JsonSerializer.Deserialize<List<UploadDto>>(innerJson) ?? new List<UploadDto>();
-                                        var cleanFiles = FilterInfectedFilesFromList(files);
-                                        return cleanFiles.AsReadOnly();
-                                    }
-                                    catch (JsonException)
-                                    {
-                                        // Failed to parse, continue
-                                    }
-                                }
-                                // Handle direct list
-                                else if (innerValue is List<UploadDto> uploadList)
-                                {
-                                    var cleanFiles = FilterInfectedFilesFromList(uploadList);
-                                    return cleanFiles.AsReadOnly();
-                                }
-                            }
-                        }
-                        catch (Exception)
-                        {
-                            // Ignore parse errors for non-collection fields
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error processing accumulated data for collection flow");
-                }
-            }
-            else
-            {
-                // For regular forms, get files from session
-                var sessionKey = $"UploadedFiles_{appId}_{fieldId}";
-                var sessionFilesJson = HttpContext.Session.GetString(sessionKey);
-                
-                _logger.LogInformation(
-                    "GetFilesForFieldAsync: REGULAR FORM - SessionKey={SessionKey}, HasData={HasData}",
-                    sessionKey,
-                    !string.IsNullOrWhiteSpace(sessionFilesJson));
-
-                if (!string.IsNullOrWhiteSpace(sessionFilesJson))
-                {
-                    try
-                    {
-                        var files = JsonSerializer.Deserialize<List<UploadDto>>(sessionFilesJson) ?? new List<UploadDto>();
-                        _logger.LogInformation(
-                            "GetFilesForFieldAsync: REGULAR FORM SESSION - Found {FileCount} files in session before filtering",
-                            files.Count);
-                        var cleanFiles = FilterInfectedFilesFromList(files);
-                        _logger.LogInformation(
-                            "GetFilesForFieldAsync: REGULAR FORM SESSION - Returning {FileCount} files after filtering",
-                            cleanFiles.Count);
-                        return cleanFiles.AsReadOnly();
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Failed to deserialize session files for key {Key}", sessionKey);
-                    }
-                }
-                
-                // Fallback to accumulated form data (which contains database data)
-                // This handles the case where session is empty after app restart but DB has files
-                try
-                {
-                    _logger.LogInformation("GetFilesForFieldAsync: REGULAR FORM - Falling back to accumulated data");
-                    var accumulatedData = applicationResponseService.GetAccumulatedFormData();
-                    
-                    if (accumulatedData.TryGetValue(fieldId, out var fieldValue))
-                    {
-                        var fieldValueStr = fieldValue?.ToString();
-                        
-                        if (!string.IsNullOrWhiteSpace(fieldValueStr))
-                        {
-                            try
-                            {
-                                var files = JsonSerializer.Deserialize<List<UploadDto>>(fieldValueStr) ?? new List<UploadDto>();
-                                _logger.LogInformation(
-                                    "GetFilesForFieldAsync: REGULAR FORM ACCUMULATED - Found {FileCount} files before filtering",
-                                    files.Count);
-                                var cleanFiles = FilterInfectedFilesFromList(files);
-                                _logger.LogInformation(
-                                    "GetFilesForFieldAsync: REGULAR FORM ACCUMULATED - Returning {FileCount} files after filtering",
-                                    cleanFiles.Count);
-                                return cleanFiles.AsReadOnly();
-                            }
-                            catch (JsonException)
-                            {
-                                // Failed to parse, continue
-                            }
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error accessing accumulated form data");
-                }
-            }
-
-            _logger.LogInformation("GetFilesForFieldAsync: END - Returning empty list (no files found)");
-            return new List<UploadDto>().AsReadOnly();
-        }
-
-        private void UpdateSessionFileList(Guid appId, string fieldId, IReadOnlyList<UploadDto> files)
-        {
-            if (IsCollectionFlow)
-            {
-                // For collection flows, store in flow progress system
-                var progressKey = GetFlowProgressSessionKey(FlowId, InstanceId);
-                
-                //  FIX: Use same method as page load for consistency
-                var existingProgress = LoadFlowProgress(FlowId, InstanceId);
-                
-                // The 'files' parameter contains ALL files (existing + new), so just save it directly
-                // No need to merge because GetFilesForFieldAsync already combined existing and new files
-                var serializedFiles = JsonSerializer.Serialize(files);
-                existingProgress[fieldId] = serializedFiles;
-                
-                // Force session to commit immediately
-                var progressJson = JsonSerializer.Serialize(existingProgress);
-                HttpContext.Session.SetString(progressKey, progressJson);
-            }
-            else
-            {
-                // For regular forms, use the original session key
-                var key = $"UploadedFiles_{appId}_{fieldId}";
-                HttpContext.Session.SetString(key, JsonSerializer.Serialize(files));
-            }
-        }
-
-        private bool FileExistInSessionList(Guid appId, string fieldId, string fileName)
-        {
-            // First check if this filename is in the infected blacklist
-            // If it is, we should ALLOW re-upload (the old infected file should be replaced)
-            try
-            {
-                if (_infectedFileStore.IsFileNameInfected(appId.ToString(), fileName))
-                {
-                    _logger.LogInformation(
-                        "File '{FileName}' is in infected blacklist, allowing re-upload",
-                        fileName);
-                    return false; // Allow re-upload of infected files
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error checking infected blacklist for file '{FileName}'", fileName);
-            }
-
-            if (IsCollectionFlow)
-            {
-                // For collection flows, check the actual file list (not just string search)
-                var existingProgress = LoadFlowProgress(FlowId, InstanceId);
-                
-                if (existingProgress.TryGetValue(fieldId, out var filesJson) && !string.IsNullOrEmpty(filesJson?.ToString()))
-                {
-                    try
-                    {
-                        var files = JsonSerializer.Deserialize<List<UploadDto>>(filesJson.ToString()!);
-                        if (files != null)
-                        {
-                            // Filter out infected files before checking
-                            var cleanFiles = FilterInfectedFilesFromList(files);
-                            return cleanFiles.Any(f => string.Equals(f.OriginalFileName, fileName, StringComparison.OrdinalIgnoreCase));
-                        }
-                    }
-                    catch (JsonException)
-                    {
-                        // Fall back to string search if parsing fails
-                        return filesJson.ToString()?.IndexOf(fileName, StringComparison.InvariantCultureIgnoreCase) >= 0;
-                    }
-                }
-                return false;
-            }
-            else
-            {
-                // For regular forms, check the actual file list
-                var key = $"UploadedFiles_{appId}_{fieldId}";
-                var sessionFilesJson = HttpContext.Session.GetString(key);
-                
-                if (!string.IsNullOrEmpty(sessionFilesJson))
-                {
-                    try
-                    {
-                        var files = JsonSerializer.Deserialize<List<UploadDto>>(sessionFilesJson);
-                        if (files != null)
-                        {
-                            // Filter out infected files before checking
-                            var cleanFiles = FilterInfectedFilesFromList(files);
-                            return cleanFiles.Any(f => string.Equals(f.OriginalFileName, fileName, StringComparison.OrdinalIgnoreCase));
-                        }
-                    }
-                    catch (JsonException)
-                    {
-                        // Fall back to string search if parsing fails
-                        return sessionFilesJson.IndexOf(fileName, StringComparison.InvariantCultureIgnoreCase) >= 0;
-                    }
-                }
-                return false;
-            }
-        }
+        public List<UploadDto> FilterInfectedFilesFromList(List<UploadDto> files) =>
+            _infectedUploadFilter.FilterList(
+                files,
+                ApplicationId?.ToString() ?? HttpContext.Session.GetString(FormSessionKeys.ApplicationId));
 
         private async Task SaveUploadedFilesToResponseAsync(Guid appId, string fieldId, IReadOnlyList<UploadDto> files)
         {
@@ -3603,7 +2896,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
         /// Populates Data dictionary with files from session for upload fields so they display on GET.
         /// Also cleans up session by removing any infected files that have been blacklisted.
         /// </summary>
-        private async Task PopulateUploadFieldsFromSessionAsync()
+        private void PopulateUploadFieldsFromSession()
         {
             if (CurrentPage == null || !ApplicationId.HasValue)
                 return;
@@ -3620,11 +2913,11 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                 var fieldId = field.FieldId;
                 
                 // Get files from session (this already filters out infected files)
-                var files = await GetFilesForFieldAsync(ApplicationId.Value, fieldId);
+                var files = _formFileFieldService.GetFiles(FileFieldContext, fieldId);
                 
                 // Update session with the filtered list to remove infected files from session
-                // This ensures FileExistInSessionList won't find infected files
-                UpdateSessionFileList(ApplicationId.Value, fieldId, files.ToList());
+                // This ensures ContainsFileName won't find infected files
+                _formFileFieldService.SaveFiles(FileFieldContext, fieldId, files.ToList());
                 
                 if (files.Any())
                 {
@@ -3655,7 +2948,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                     var instanceId = idObj?.ToString();
                     if (string.IsNullOrWhiteSpace(instanceId)) continue;
 
-                    var progress = LoadFlowProgress(flow.FlowId, instanceId);
+                    var progress = _collectionFlowProgressStore.Load(flow.FlowId, instanceId);
                     if (!progress.Any()) continue;
 
                     foreach (var kv in progress)

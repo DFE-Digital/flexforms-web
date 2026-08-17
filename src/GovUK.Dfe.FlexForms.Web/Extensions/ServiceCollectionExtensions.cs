@@ -1,3 +1,4 @@
+using GovUK.Dfe.FlexForms.Application.FormEngine;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Infrastructure.Parsers;
 using GovUK.Dfe.FlexForms.Infrastructure.Providers;
@@ -76,6 +77,10 @@ namespace GovUK.Dfe.FlexForms.Web.Extensions
             services.AddScoped<IFormDataManager, FormDataManager>();
             services.AddScoped<IFormSessionStore, HttpFormSessionStore>();
             services.AddSingleton<IInfectedFileStore, RedisInfectedFileStore>();
+            services.AddScoped<ICollectionFlowProgressStore, CollectionFlowProgressStore>();
+            services.AddScoped<IInfectedUploadFilter, InfectedUploadFilter>();
+            services.AddScoped<IFormFileFieldService, FormFileFieldService>();
+            services.AddSingleton<IPostedFormDataBinder, PostedFormDataBinder>();
             services.AddScoped<IFieldRequirementService, FieldRequirementService>();
             services.AddScoped<IFormValidationOrchestrator, GovUK.Dfe.FlexForms.Infrastructure.Services.FormValidationOrchestrator>();
             services.AddScoped<IFormConfigurationService, FormConfigurationService>();

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
+using GovUK.Dfe.FlexForms.Domain.Caching;
 using Microsoft.Extensions.Logging;
 
 namespace GovUK.Dfe.FlexForms.Infrastructure.Services
@@ -12,7 +13,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
         IFormSessionStore sessionStore,
         ILogger<NavigationHistoryService> logger) : INavigationHistoryService
     {
-        private const string SessionPrefix = "NavHistory_";
+        private const string SessionPrefix = FormSessionKeys.NavHistoryPrefix;
         private const int MaxDepth = 25;
 
         public void Push(string scopeKey, string url)

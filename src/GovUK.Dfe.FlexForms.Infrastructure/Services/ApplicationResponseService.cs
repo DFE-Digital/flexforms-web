@@ -1,5 +1,6 @@
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
+using GovUK.Dfe.FlexForms.Domain.Caching;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using Microsoft.Extensions.Logging;
@@ -16,7 +17,7 @@ public class ApplicationResponseService(
     ILogger<ApplicationResponseService> logger)
     : IApplicationResponseService
 {
-    private const string SessionKeyFormData = "AccumulatedFormData";
+    private const string SessionKeyFormData = FormSessionKeys.AccumulatedFormData;
 
     public async Task SaveApplicationResponseAsync(Guid applicationId, Dictionary<string, object> formData, CancellationToken cancellationToken = default)
     {
@@ -156,7 +157,7 @@ public class ApplicationResponseService(
                          ?? new Dictionary<string, object>();
             
             // Get applicationId from session for filename-based blacklist checking
-            var applicationId = sessionStore.GetString("ApplicationId");
+            var applicationId = sessionStore.GetString(FormSessionKeys.ApplicationId);
             
             // Filter out any infected files from the data
             var filteredData = FilterInfectedFilesFromData(rawData, applicationId);
@@ -372,7 +373,7 @@ public class ApplicationResponseService(
     {
         try
         {
-            var templateId = sessionStore.GetString("TemplateId");
+            var templateId = sessionStore.GetString(FormSessionKeys.TemplateId);
             if (string.IsNullOrWhiteSpace(templateId))
             {
                 logger.LogWarning("No TemplateId in session when saving application response; question/dataType will use runtime fallbacks only");
@@ -423,7 +424,7 @@ public class ApplicationResponseService(
 
     public void SetCurrentAccumulatedApplicationId(Guid applicationId)
     {
-        sessionStore.SetString("CurrentAccumulatedApplicationId", applicationId.ToString());
+        sessionStore.SetString(FormSessionKeys.CurrentAccumulatedApplicationId, applicationId.ToString());
     }
 
 } 
