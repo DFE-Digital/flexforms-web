@@ -1,11 +1,8 @@
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
-using GovUK.Dfe.FlexForms.Domain.Caching;
 using GovUK.Dfe.FlexForms.Domain.Models;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
-using StackExchange.Redis;
 using System.Text.Json;
 using Task = System.Threading.Tasks.Task;
 
@@ -13,26 +10,27 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services;
 
 public class ApplicationResponseService(
     IApplicationsClient applicationsClient,
-    IConnectionMultiplexer redis,
+    IInfectedFileStore infectedFileStore,
+    IFormSessionStore sessionStore,
     IFormTemplateProvider formTemplateProvider,
     ILogger<ApplicationResponseService> logger)
     : IApplicationResponseService
 {
     private const string SessionKeyFormData = "AccumulatedFormData";
 
-    public async Task SaveApplicationResponseAsync(Guid applicationId, Dictionary<string, object> formData, ISession session, CancellationToken cancellationToken = default)
+    public async Task SaveApplicationResponseAsync(Guid applicationId, Dictionary<string, object> formData, CancellationToken cancellationToken = default)
     {
         try
         {            
             // Accumulate the new data with existing data (infected files filtered by blacklist)
-            AccumulateFormData(formData, session);
+            AccumulateFormData(formData);
             
             // Get all accumulated data
-            var allFormData = GetAccumulatedFormData(session);
+            var allFormData = GetAccumulatedFormData();
             
-            var taskStatusData = GetTaskStatusFromSession(applicationId, session);
+            var taskStatusData = GetTaskStatusFromSession(applicationId);
 
-            var template = await TryGetTemplateFromSessionAsync(session, cancellationToken);
+            var template = await TryGetTemplateFromSessionAsync(cancellationToken);
             
             var responseJson = TransformToResponseJson(allFormData, taskStatusData, template);
             
@@ -43,7 +41,7 @@ public class ApplicationResponseService(
             
             // Update application status to InProgress when any data is saved
             // This ensures the dashboard shows the correct status
-            await EnsureApplicationStatusIsInProgress(applicationId, allFormData, session, cancellationToken);
+            await EnsureApplicationStatusIsInProgress(applicationId, allFormData, cancellationToken);
             
             logger.LogInformation("Successfully saved application response for {ApplicationId}", applicationId);
         }
@@ -59,7 +57,7 @@ public class ApplicationResponseService(
         }
     }
 
-    private async Task EnsureApplicationStatusIsInProgress(Guid applicationId, Dictionary<string, object> allFormData, ISession session, CancellationToken cancellationToken)
+    private async Task EnsureApplicationStatusIsInProgress(Guid applicationId, Dictionary<string, object> allFormData, CancellationToken cancellationToken)
     {
         try
         {
@@ -70,7 +68,7 @@ public class ApplicationResponseService(
             {
                 // Get current application status from session
                 var statusKey = $"ApplicationStatus_{applicationId}";
-                var currentStatus = session.GetString(statusKey);
+                var currentStatus = sessionStore.GetString(statusKey);
                 
                 // Promote Created/empty session status to InProgress once data is saved.
                 // Do not overwrite Submitted (or other terminal statuses).
@@ -78,7 +76,7 @@ public class ApplicationResponseService(
                     || currentStatus.Equals("Created", StringComparison.OrdinalIgnoreCase)
                     || currentStatus.Equals("InProgress", StringComparison.OrdinalIgnoreCase))
                 {
-                    session.SetString(statusKey, "InProgress");
+                    sessionStore.SetString(statusKey, "InProgress");
                     logger.LogInformation("Updated application {ApplicationId} status to InProgress due to form data being saved", applicationId);
                 }
             }
@@ -90,10 +88,10 @@ public class ApplicationResponseService(
         }
     }
 
-    public void AccumulateFormData(Dictionary<string, object> newData, ISession session)
+    public void AccumulateFormData(Dictionary<string, object> newData)
     {
         // Get existing data (infected files will be filtered by blacklist)
-        var existingData = GetAccumulatedFormData(session);
+        var existingData = GetAccumulatedFormData();
         
         foreach (var kvp in newData)
         {
@@ -116,7 +114,7 @@ public class ApplicationResponseService(
         }
         
         var jsonString = JsonSerializer.Serialize(existingData);
-        session.SetString(SessionKeyFormData, jsonString);
+        sessionStore.SetString(SessionKeyFormData, jsonString);
     }
 
     private bool AreEquivalentFieldNames(string fieldName1, string fieldName2)
@@ -143,9 +141,9 @@ public class ApplicationResponseService(
     /// <summary>
     /// Gets accumulated form data with infected file filtering
     /// </summary>
-    public Dictionary<string, object> GetAccumulatedFormData(ISession session)
+    public Dictionary<string, object> GetAccumulatedFormData()
     {
-        var jsonString = session.GetString(SessionKeyFormData);
+        var jsonString = sessionStore.GetString(SessionKeyFormData);
         
         if (string.IsNullOrEmpty(jsonString))
         {
@@ -158,7 +156,7 @@ public class ApplicationResponseService(
                          ?? new Dictionary<string, object>();
             
             // Get applicationId from session for filename-based blacklist checking
-            var applicationId = session.GetString("ApplicationId");
+            var applicationId = sessionStore.GetString("ApplicationId");
             
             // Filter out any infected files from the data
             var filteredData = FilterInfectedFilesFromData(rawData, applicationId);
@@ -220,9 +218,9 @@ public class ApplicationResponseService(
         return value.ToString() ?? string.Empty;
     }
 
-    public void ClearAccumulatedFormData(ISession session)
+    public void ClearAccumulatedFormData()
     {
-        session.Remove(SessionKeyFormData);
+        sessionStore.Remove(SessionKeyFormData);
         logger.LogInformation("Cleared accumulated form data from session");
     }
 
@@ -235,7 +233,6 @@ public class ApplicationResponseService(
     {
         try
         {
-            var db = redis.GetDatabase();
             int filteredCount = 0;
             
             // Filter infected files from each field
@@ -266,14 +263,11 @@ public class ApplicationResponseService(
                             if (file.TryGetProperty("id", out var idProp) && 
                                 Guid.TryParse(idProp.GetString(), out var fileId))
                             {
-                                // Check by file ID
-                                var fileIdBlacklistKey = $"{FlexFormsCacheKeys.InfectedFilePrefix}{fileId}";
-                                if (db.KeyExists(fileIdBlacklistKey))
+                                if (infectedFileStore.IsFileInfected(fileId))
                                 {
                                     isInfected = true;
                                 }
                                 
-                                // Also check by filename if applicationId is available
                                 if (!isInfected && !string.IsNullOrEmpty(applicationId))
                                 {
                                     if (file.TryGetProperty("originalFileName", out var fileNameProp))
@@ -281,13 +275,10 @@ public class ApplicationResponseService(
                                         originalFileName = fileNameProp.GetString();
                                     }
                                     
-                                    if (!string.IsNullOrEmpty(originalFileName))
+                                    if (!string.IsNullOrEmpty(originalFileName)
+                                        && infectedFileStore.IsFileNameInfected(applicationId, originalFileName))
                                     {
-                                        var filenameBlacklistKey = $"{FlexFormsCacheKeys.InfectedFileNamePrefix}{applicationId}:{originalFileName}";
-                                        if (db.KeyExists(filenameBlacklistKey))
-                                        {
-                                            isInfected = true;
-                                        }
+                                        isInfected = true;
                                     }
                                 }
                                 
@@ -377,11 +368,11 @@ public class ApplicationResponseService(
         });
     }
 
-    private async Task<FormTemplate?> TryGetTemplateFromSessionAsync(ISession session, CancellationToken cancellationToken)
+    private async Task<FormTemplate?> TryGetTemplateFromSessionAsync(CancellationToken cancellationToken)
     {
         try
         {
-            var templateId = session.GetString("TemplateId");
+            var templateId = sessionStore.GetString("TemplateId");
             if (string.IsNullOrWhiteSpace(templateId))
             {
                 logger.LogWarning("No TemplateId in session when saving application response; question/dataType will use runtime fallbacks only");
@@ -397,16 +388,16 @@ public class ApplicationResponseService(
         }
     }
 
-    public Dictionary<string, string> GetTaskStatusFromSession(Guid applicationId, ISession session)
+    public Dictionary<string, string> GetTaskStatusFromSession(Guid applicationId)
     {
         var taskStatusData = new Dictionary<string, string>();
         
-        var sessionKeys = session.Keys.Where(k => k.StartsWith($"TaskStatus_{applicationId}_")).ToList();
+        var sessionKeys = sessionStore.Keys.Where(k => k.StartsWith($"TaskStatus_{applicationId}_")).ToList();
         
         foreach (var sessionKey in sessionKeys)
         {
             var taskId = sessionKey.Substring($"TaskStatus_{applicationId}_".Length);
-            var statusValue = session.GetString(sessionKey);
+            var statusValue = sessionStore.GetString(sessionKey);
             
             if (!string.IsNullOrEmpty(statusValue))
             {
@@ -417,22 +408,22 @@ public class ApplicationResponseService(
         return taskStatusData;
     }
 
-    public void SaveTaskStatusToSession(Guid applicationId, string taskId, string status, ISession session)
+    public void SaveTaskStatusToSession(Guid applicationId, string taskId, string status)
     {
         var sessionKey = $"TaskStatus_{applicationId}_{taskId}";
-        session.SetString(sessionKey, status);
+        sessionStore.SetString(sessionKey, status);
     }
 
-    public void StoreFormDataInSession(Dictionary<string, object> formData, ISession session)
+    public void StoreFormDataInSession(Dictionary<string, object> formData)
     {
         // Clear existing data and store new data
-        ClearAccumulatedFormData(session);
-        AccumulateFormData(formData, session);
+        ClearAccumulatedFormData();
+        AccumulateFormData(formData);
     }
 
-    public void SetCurrentAccumulatedApplicationId(Guid applicationId, ISession session)
+    public void SetCurrentAccumulatedApplicationId(Guid applicationId)
     {
-        session.SetString("CurrentAccumulatedApplicationId", applicationId.ToString());
+        sessionStore.SetString("CurrentAccumulatedApplicationId", applicationId.ToString());
     }
 
 } 

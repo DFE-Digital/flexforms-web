@@ -288,7 +288,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             var json = JsonSerializer.Serialize(files);
             var data = new Dictionary<string, object> { { fieldId, json } };
 
-            await applicationResponseService.SaveApplicationResponseAsync(appId, data, HttpContext.Session);
+            await applicationResponseService.SaveApplicationResponseAsync(appId, data);
         }
 
         /// <summary>
@@ -340,7 +340,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                     // 2. If still no files, check accumulated form data
                     if (string.IsNullOrWhiteSpace(sessionFilesJson))
                     {
-                        var alternativeAccumulatedData = applicationResponseService.GetAccumulatedFormData(HttpContext.Session);
+                        var alternativeAccumulatedData = applicationResponseService.GetAccumulatedFormData();
                         if (alternativeAccumulatedData.TryGetValue(fieldId, out var accFieldValue))
                         {
                             sessionFilesJson = accFieldValue?.ToString();
@@ -419,7 +419,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             }
 
             // If no session data, try to get from accumulated form data (for existing applications)
-            var accumulatedData = applicationResponseService.GetAccumulatedFormData(HttpContext.Session);
+            var accumulatedData = applicationResponseService.GetAccumulatedFormData();
             if (accumulatedData.TryGetValue(fieldId, out var fieldValue))
             {
                 var fieldValueStr = fieldValue?.ToString();

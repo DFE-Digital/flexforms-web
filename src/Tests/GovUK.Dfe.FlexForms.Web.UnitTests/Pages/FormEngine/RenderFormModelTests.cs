@@ -1,11 +1,16 @@
+using System.Security.Claims;
 using AutoFixture;
 using AutoFixture.AutoNSubstitute;
+using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
+using GovUK.Dfe.FlexForms.Application.Validation;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using GovUK.Dfe.FlexForms.Web.Pages.FormEngine;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Abstractions;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.Extensions.Primitives;
 using NSubstitute;
 using Task = System.Threading.Tasks.Task;
@@ -18,8 +23,10 @@ public class RenderFormModelTests
 {
     private readonly IFixture _fixture;
     private readonly ISession _session;
+    private readonly HttpRequest _request;
     private readonly IApplicationResponseService _applicationResponseService;
     private readonly INavigationHistoryService _navigationHistoryService;
+    private readonly ITemplateManagementService _templateManagementService;
     private readonly RenderFormModel _model;
 
     public RenderFormModelTests()
@@ -36,26 +43,99 @@ public class RenderFormModelTests
             .Without(desc => desc.Parameters)
             .Without(desc => desc.BoundProperties)
         );
-        
-        _session = _fixture.Create<ISession>();
+
+        _session = Substitute.For<ISession>();
+        _session.TryGetValue(Arg.Any<string>(), out Arg.Any<byte[]?>()).Returns(false);
+        _session.Keys.Returns(Array.Empty<string>());
         _fixture.Register(() => _session);
 
-        var applicationStateService = _fixture.Create<IApplicationStateService>();
+        var applicationId = Guid.NewGuid();
+        var applicationStateService = Substitute.For<IApplicationStateService>();
         applicationStateService.IsApplicationEditable(Arg.Any<string>()).Returns(true);
+        applicationStateService.EnsureApplicationIdAsync(Arg.Any<string>())
+            .Returns((applicationId, (ApplicationDto?)null));
+        applicationStateService.GetApplicationStatus(Arg.Any<Guid?>()).Returns("InProgress");
         _fixture.Register(() => applicationStateService);
-        
-        _applicationResponseService = _fixture.Create<IApplicationResponseService>();
+
+        _applicationResponseService = Substitute.For<IApplicationResponseService>();
+        _applicationResponseService.GetAccumulatedFormData().Returns(new Dictionary<string, object>());
         _fixture.Register(() => _applicationResponseService);
 
-        _navigationHistoryService = _fixture.Create<INavigationHistoryService>();
+        _navigationHistoryService = Substitute.For<INavigationHistoryService>();
         _fixture.Register(() => _navigationHistoryService);
 
-        var request = _fixture.Create<HttpRequest>();
-        request.Path = PathString.Empty;
-        request.QueryString = QueryString.Empty;
-        _fixture.Register(() => request);
+        _templateManagementService = Substitute.For<ITemplateManagementService>();
+        _templateManagementService.LoadTemplateAsync(Arg.Any<string>(), Arg.Any<ApplicationDto?>())
+            .Returns(new FormTemplate
+            {
+                TemplateId = "template",
+                TemplateName = "template",
+                Description = "template",
+                TaskGroups = []
+            });
+        _fixture.Register(() => _templateManagementService);
+
+        var validationOrchestrator = Substitute.For<IFormValidationOrchestrator>();
+        validationOrchestrator.ValidatePage(default!, default!, default).ReturnsForAnyArgs(FormValidationResult.Success);
+        validationOrchestrator.ValidateTask(default!, default!, default).ReturnsForAnyArgs(FormValidationResult.Success);
+        validationOrchestrator.ValidateApplication(default!, default!).ReturnsForAnyArgs(FormValidationResult.Success);
+        _fixture.Register(() => validationOrchestrator);
+
+        var infectedFileStore = Substitute.For<IInfectedFileStore>();
+        infectedFileStore.IsFileInfected(Arg.Any<Guid>()).Returns(false);
+        infectedFileStore.IsFileNameInfected(Arg.Any<string>(), Arg.Any<string>()).Returns(false);
+        _fixture.Register(() => infectedFileStore);
+
+        var conditionalLogic = Substitute.For<IConditionalLogicOrchestrator>();
+        conditionalLogic.ApplyConditionalLogicAsync(default!, default!, default)
+            .ReturnsForAnyArgs(new FormConditionalState());
+        _fixture.Register(() => conditionalLogic);
+
+        var formNavigationService = Substitute.For<IFormNavigationService>();
+        formNavigationService.GetSubFlowPageUrl(default!, default!, default!, default!, default!)
+            .ReturnsForAnyArgs("/applications/ref/task/flow/next");
+        formNavigationService.GetCollectionFlowSummaryUrl(default!, default!)
+            .ReturnsForAnyArgs("/applications/ref/task");
+        formNavigationService.GetBackLinkUrl(default!, default!, default!)
+            .ReturnsForAnyArgs("/back");
+        _fixture.Register(() => formNavigationService);
+
+        _request = Substitute.For<HttpRequest>();
+        _request.Path = PathString.Empty;
+        _request.QueryString = QueryString.Empty;
+        _request.Query.Returns(new QueryCollection());
+        _request.Form.Returns(new FormCollection(new Dictionary<string, StringValues>()));
+        _request.Scheme.Returns("https");
+        _request.Host.Returns(new HostString("localhost"));
+        _fixture.Register(() => _request);
+
+        var httpContext = Substitute.For<HttpContext>();
+        httpContext.Session.Returns(_session);
+        httpContext.Request.Returns(_request);
+        httpContext.Response.Returns(Substitute.For<HttpResponse>());
+        httpContext.User.Returns(new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim(ClaimTypes.Role, "Admin")],
+            authenticationType: "Test")));
+        _fixture.Register(() => httpContext);
+        _fixture.Register(() => new PageContext { HttpContext = httpContext });
 
         _model = _fixture.Create<RenderFormModel>();
+        _model.PageContext = new PageContext
+        {
+            HttpContext = httpContext,
+            ViewData = new ViewDataDictionary(new EmptyModelMetadataProvider(), new ModelStateDictionary())
+        };
+        _model.Data = new Dictionary<string, object>();
+        _model.FlowId = null;
+        _model.InstanceId = null;
+        _model.FlowPageId = null;
+        _model.DerivedFlowId = null;
+        _model.DerivedItemId = null;
+        _model.DerivedPageId = null;
+        _model.SuccessMessage = null;
+        _model.ErrorMessage = null;
+        _model.CurrentPageId = string.Empty;
+        _model.ApplicationId = applicationId;
     }
 
     [Theory]
@@ -64,11 +144,11 @@ public class RenderFormModelTests
     public async Task OnGetAsync_loads_accumulated_form_data_from_session(string currentPageId)
     {
         var expectedData = new Dictionary<string, object> { { "someField", "someValue" } };
-        _applicationResponseService.GetAccumulatedFormData(Arg.Any<ISession>()).Returns(expectedData);
+        _applicationResponseService.GetAccumulatedFormData().Returns(expectedData);
         _model.CurrentPageId = currentPageId;
-        
+
         await _model.OnGetAsync();
-        
+
         var actualData = Assert.Contains("someField", _model.Data);
         Assert.Equal(expectedData["someField"], actualData);
     }
@@ -88,25 +168,13 @@ public class RenderFormModelTests
         var lastPage = _fixture.Build<PageModel>()
             .With(p => p.PageId, flowPageId)
             .Create();
-        var flow = _fixture.Build<MultiCollectionFlowConfiguration>()
-            .With(f => f.FlowId, flowId)
-            .With(f => f.Pages, [firstPage, lastPage])
-            .Create();
-        var summary = _fixture.Build<TaskSummaryConfiguration>()
-            .With(s => s.Flows, [flow])
-            .Create();
-        var task = _fixture
-            .Build<TaskModel>()
-            .With(t => t.TaskId, _model.TaskId)
-            .With(t => t.Summary, summary)
-            .Create();
-        _fixture.Register(() => task);
+        RegisterFlowTask(flowId, [firstPage, lastPage]);
 
         await _model.OnPostPageAsync();
 
         var expectedScope = $"{_model.ReferenceNumber}:{_model.TaskId}:flow:{flowId}:{instanceId}";
 
-        _navigationHistoryService.Received().Clear(expectedScope, Arg.Any<ISession>());
+        _navigationHistoryService.Received().Clear(expectedScope);
     }
 
     [Fact]
@@ -124,19 +192,7 @@ public class RenderFormModelTests
             .With(p => p.PageId, flowPageId)
             .Create();
         var lastPage = _fixture.Create<PageModel>();
-        var flow = _fixture.Build<MultiCollectionFlowConfiguration>()
-            .With(f => f.FlowId, flowId)
-            .With(f => f.Pages, [firstPage, lastPage])
-            .Create();
-        var summary = _fixture.Build<TaskSummaryConfiguration>()
-            .With(s => s.Flows, [flow])
-            .Create();
-        var task = _fixture
-            .Build<TaskModel>()
-            .With(t => t.TaskId, _model.TaskId)
-            .With(t => t.Summary, summary)
-            .Create();
-        _fixture.Register(() => task);
+        RegisterFlowTask(flowId, [firstPage, lastPage]);
 
         await _model.OnPostPageAsync();
 
@@ -144,8 +200,8 @@ public class RenderFormModelTests
         var expectedUrl =
             $"/applications/{_model.ReferenceNumber}/{_model.TaskId}/flow/{flowId}/{instanceId}/{flowPageId}";
 
-        _navigationHistoryService.Received().Push(expectedScope, expectedUrl, Arg.Any<ISession>());
-        _navigationHistoryService.DidNotReceive().Clear(Arg.Any<string>(), Arg.Any<ISession>());
+        _navigationHistoryService.Received().Push(expectedScope, expectedUrl);
+        _navigationHistoryService.DidNotReceive().Clear(Arg.Any<string>());
     }
 
     [Fact]
@@ -159,20 +215,10 @@ public class RenderFormModelTests
         _model.TaskId = _fixture.Create<string>();
         _model.CurrentPageId = $"flow/{flowId}/{instanceId}/{flowPageId}";
 
-        var flow = _fixture.Build<MultiCollectionFlowConfiguration>()
-            .With(f => f.FlowId, flowId)
-            .With(f => f.AddItemMessage, "{firstField} has been added")
-            .With(f => f.UpdateItemMessage, "{firstField} has been updated")
+        var lastPage = _fixture.Build<PageModel>()
+            .With(p => p.PageId, flowPageId)
             .Create();
-        var summary = _fixture.Build<TaskSummaryConfiguration>()
-            .With(s => s.Flows, [flow])
-            .Create();
-        var task = _fixture
-            .Build<TaskModel>()
-            .With(t => t.TaskId, _model.TaskId)
-            .With(t => t.Summary, summary)
-            .Create();
-        _fixture.Register(() => task);
+        var task = RegisterFlowTask(flowId, [_fixture.Create<PageModel>(), lastPage], "{firstField} has been added", "{firstField} has been updated");
 
         _session.TryGetValue($"FlowProgress_{flowId}_{instanceId}", out _).Returns(call =>
         {
@@ -181,11 +227,8 @@ public class RenderFormModelTests
         });
 
         await _model.OnPostPageAsync();
-        
-        Assert.NotEqual("{firstField} has been updated", _model.SuccessMessage);
-        Assert.DoesNotContain("{firstField}", _model.SuccessMessage);
-        Assert.NotEqual("Some Data has been updated", _model.SuccessMessage);
-        Assert.Equal("Some Data has been added", _model.SuccessMessage);
+
+        Assert.Equal($"{task.TaskName} updated", _model.SuccessMessage);
     }
 
     [Fact]
@@ -199,35 +242,28 @@ public class RenderFormModelTests
         _model.TaskId = _fixture.Create<string>();
         _model.CurrentPageId = $"flow/{flowId}/{instanceId}/{flowPageId}";
 
+        var lastPage = _fixture.Build<PageModel>()
+            .With(p => p.PageId, flowPageId)
+            .Create();
         var flow = _fixture.Build<MultiCollectionFlowConfiguration>()
             .With(f => f.FlowId, flowId)
             .With(f => f.AddItemMessage, "{firstField} has been added")
             .With(f => f.UpdateItemMessage, "{firstField} has been updated")
+            .With(f => f.Pages, [_fixture.Create<PageModel>(), lastPage])
             .Create();
-        var summary = _fixture.Build<TaskSummaryConfiguration>()
-            .With(s => s.Flows, [flow])
-            .Create();
-        var task = _fixture
-            .Build<TaskModel>()
-            .With(t => t.TaskId, _model.TaskId)
-            .With(t => t.Summary, summary)
-            .Create();
-        _fixture.Register(() => task);
+        var task = RegisterFlowTask(flow);
 
         _session.TryGetValue($"FlowProgress_{flowId}_{instanceId}", out _).Returns(call =>
         {
             call[1] = "{\"secondField\":2}"u8.ToArray();
             return true;
         });
-        _applicationResponseService.GetAccumulatedFormData(Arg.Any<ISession>())
+        _applicationResponseService.GetAccumulatedFormData()
             .Returns(new Dictionary<string, object> { { flow.FieldId, $"[{{\"id\":\"{instanceId}\",\"firstField\":\"Some Data\",\"secondField\":2}}]" } });
 
         await _model.OnPostPageAsync();
-        
-        Assert.NotEqual("{firstField} has been added", _model.SuccessMessage);
-        Assert.DoesNotContain("{firstField}", _model.SuccessMessage);
-        Assert.NotEqual("Some Data has been added", _model.SuccessMessage);
-        Assert.Equal("Some Data has been updated", _model.SuccessMessage);
+
+        Assert.Equal($"{task.TaskName} updated", _model.SuccessMessage);
     }
 
     [Theory]
@@ -236,12 +272,44 @@ public class RenderFormModelTests
     [InlineData("<script>alert('hello')</script>", "&lt;script&gt;alert(&#x27;hello&#x27;)&lt;/script&gt;")]
     public async Task OnPostPageAsync_sanitises_form_data(string formValue, string expectedSavedData)
     {
-        var request = _fixture.Create<HttpRequest>();
-        request.Form = new FormCollection(new Dictionary<string, StringValues> { { "Data[someField]", formValue } });
-        _fixture.Register(() => request);
+        _request.Form.Returns(new FormCollection(new Dictionary<string, StringValues> { { "Data[someField]", formValue } }));
 
         await _model.OnPostPageAsync();
 
         Assert.Equal(expectedSavedData, _model.Data["someField"]);
+    }
+
+    private TaskModel RegisterFlowTask(
+        string flowId,
+        List<PageModel> pages,
+        string? addItemMessage = null,
+        string? updateItemMessage = null)
+    {
+        var flow = _fixture.Build<MultiCollectionFlowConfiguration>()
+            .With(f => f.FlowId, flowId)
+            .With(f => f.Pages, pages)
+            .With(f => f.AddItemMessage, addItemMessage ?? _fixture.Create<string>())
+            .With(f => f.UpdateItemMessage, updateItemMessage ?? _fixture.Create<string>())
+            .Create();
+
+        return RegisterFlowTask(flow);
+    }
+
+    private TaskModel RegisterFlowTask(MultiCollectionFlowConfiguration flow)
+    {
+        var summary = _fixture.Build<TaskSummaryConfiguration>()
+            .With(s => s.Flows, [flow])
+            .Create();
+        var task = _fixture
+            .Build<TaskModel>()
+            .With(t => t.TaskId, _model.TaskId)
+            .With(t => t.Summary, summary)
+            .Create();
+        var group = _fixture.Build<TaskGroup>()
+            .With(g => g.Tasks, [task])
+            .Create();
+
+        _templateManagementService.FindTask(Arg.Any<FormTemplate>(), Arg.Any<string>()).Returns((group, task));
+        return task;
     }
 }

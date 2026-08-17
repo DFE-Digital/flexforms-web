@@ -1,5 +1,6 @@
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.Models;
+using GovUK.Dfe.FlexForms.Web.Extensions;
 using GovUK.Dfe.FlexForms.Web.Pages.Shared;
 using GovUK.Dfe.FlexForms.Web.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -116,7 +117,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
         /// <returns>True if validation passes</returns>
         protected bool ValidateCurrentPage(Domain.Models.Page page, Dictionary<string, object> data)
         {
-            return _formValidationOrchestrator.ValidatePage(page, data, ModelState, Template);
+            return _formValidationOrchestrator.ValidatePage(page, data, Template).ApplyTo(ModelState);
         }
 
         /// <summary>
@@ -127,7 +128,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
         /// <returns>True if validation passes</returns>
         protected bool ValidateCurrentTask(Domain.Models.Task task, Dictionary<string, object> data)
         {
-            return _formValidationOrchestrator.ValidateTask(task, data, ModelState, Template);
+            return _formValidationOrchestrator.ValidateTask(task, data, Template).ApplyTo(ModelState);
         }
 
         /// <summary>

@@ -189,7 +189,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
             }
 
             // Clear any existing accumulated form data when starting a new application
-            applicationResponseService.ClearAccumulatedFormData(HttpContext.Session);
+            applicationResponseService.ClearAccumulatedFormData();
             HttpContext.Session.SetString("CurrentAccumulatedApplicationId", response.ApplicationId.ToString());
 
             if (User.Identity?.IsAuthenticated == true)

@@ -1,5 +1,4 @@
 using GovUK.Dfe.FlexForms.Application.Interfaces;
-using Microsoft.AspNetCore.Http;
 
 namespace GovUK.Dfe.FlexForms.Infrastructure.Services
 {
@@ -9,12 +8,10 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
     public class FormNavigationService : IFormNavigationService
     {
         private readonly INavigationHistoryService _history;
-        private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public FormNavigationService(INavigationHistoryService history, IHttpContextAccessor httpContextAccessor)
+        public FormNavigationService(INavigationHistoryService history)
         {
             _history = history;
-            _httpContextAccessor = httpContextAccessor;
         }
         /// <summary>
         /// Gets the URL for the next page in the form
@@ -98,10 +95,9 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
         {
             // Build scope: reference:task[:flow:instance]
             var scope = BuildScope(referenceNumber, taskId, currentPageId);
-            var session = _httpContextAccessor.HttpContext?.Session;
 
             // Prefer history when available
-            var last = session != null ? _history.Peek(scope, session) : null;
+            var last = _history.Peek(scope);
             if (!string.IsNullOrEmpty(last))
             {
                 // Append nav=back so GET can pop

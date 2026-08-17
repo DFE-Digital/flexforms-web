@@ -4,7 +4,6 @@ using GovUK.Dfe.FlexForms.Domain.Models;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.CoreLibs.Http.Models;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using Task = System.Threading.Tasks.Task;
@@ -18,17 +17,17 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
         IApplicationsClient applicationsClient,
         IApplicationResponseService applicationResponseService,
         IFieldRequirementService fieldRequirementService,
+        IFormSessionStore sessionStore,
         ILogger<ApplicationStateService> logger)
         : IApplicationStateService
     {
         public async Task<(Guid? ApplicationId, ApplicationDto? Application)> EnsureApplicationIdAsync(
-            string referenceNumber,
-            ISession session)
+            string referenceNumber)
         {
             if (string.IsNullOrWhiteSpace(referenceNumber))
                 throw new ApplicationAccessException(referenceNumber ?? string.Empty);
 
-            ClearStaleSessionDataIfReferenceChanged(referenceNumber, session);
+            ClearStaleSessionDataIfReferenceChanged(referenceNumber);
 
             ApplicationDto application;
             try
@@ -58,8 +57,8 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                 throw new ApplicationAccessException(referenceNumber);
             }
 
-            PersistApplicationToSession(application, referenceNumber, session);
-            await LoadResponseDataIntoSessionAsync(application, session);
+            PersistApplicationToSession(application, referenceNumber);
+            await LoadResponseDataIntoSessionAsync(application);
 
             logger.LogDebug(
                 "Loaded application {ApplicationId} from API for reference {ReferenceNumber}",
@@ -69,13 +68,13 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
             return (application.ApplicationId, application);
         }
 
-        public async Task LoadResponseDataIntoSessionAsync(ApplicationDto application, ISession session)
+        public async Task LoadResponseDataIntoSessionAsync(ApplicationDto application)
         {
             if (application.LatestResponse?.ResponseBody == null)
             {
                 logger.LogInformation("No existing response data found for application {ApplicationReference}", application.ApplicationReference);
-                applicationResponseService.ClearAccumulatedFormData(session);
-                applicationResponseService.SetCurrentAccumulatedApplicationId(application.ApplicationId, session);
+                applicationResponseService.ClearAccumulatedFormData();
+                applicationResponseService.SetCurrentAccumulatedApplicationId(application.ApplicationId);
                 return;
             }
 
@@ -119,7 +118,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                             
                             if (!string.IsNullOrEmpty(statusValue))
                             {
-                                applicationResponseService.SaveTaskStatusToSession(application.ApplicationId, taskId, statusValue, session);
+                                applicationResponseService.SaveTaskStatusToSession(application.ApplicationId, taskId, statusValue);
                                 logger.LogDebug("Restored task status: {TaskId} = {Status}", taskId, statusValue);
                             }
                         }
@@ -146,8 +145,8 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                 }
 
                 // Store in session using the same key structure as form submission
-                applicationResponseService.StoreFormDataInSession(formDataDict, session);
-                applicationResponseService.SetCurrentAccumulatedApplicationId(application.ApplicationId, session);
+                applicationResponseService.StoreFormDataInSession(formDataDict);
+                applicationResponseService.SetCurrentAccumulatedApplicationId(application.ApplicationId);
 
                 logger.LogInformation("Successfully loaded {FieldCount} fields from API into session for application {ApplicationReference}",
                     formDataDict.Count, application.ApplicationReference);
@@ -159,24 +158,24 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
             }
         }
 
-        private void ClearStaleSessionDataIfReferenceChanged(string referenceNumber, ISession session)
+        private void ClearStaleSessionDataIfReferenceChanged(string referenceNumber)
         {
-            var sessionReference = session.GetString("ApplicationReference");
+            var sessionReference = sessionStore.GetString("ApplicationReference");
             if (string.IsNullOrEmpty(sessionReference)
                 || string.Equals(sessionReference, referenceNumber, StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
 
-            applicationResponseService.ClearAccumulatedFormData(session);
-            session.Remove("ApplicationId");
-            session.Remove("ApplicationReference");
+            applicationResponseService.ClearAccumulatedFormData();
+            sessionStore.Remove("ApplicationId");
+            sessionStore.Remove("ApplicationReference");
         }
 
-        private void PersistApplicationToSession(ApplicationDto application, string referenceNumber, ISession session)
+        private void PersistApplicationToSession(ApplicationDto application, string referenceNumber)
         {
-            session.SetString("ApplicationId", application.ApplicationId.ToString());
-            session.SetString("ApplicationReference", application.ApplicationReference ?? referenceNumber);
+            sessionStore.SetString("ApplicationId", application.ApplicationId.ToString());
+            sessionStore.SetString("ApplicationReference", application.ApplicationReference ?? referenceNumber);
 
             var templateSchemaKey = $"TemplateSchema_{referenceNumber}";
             var templateVersionIdKey = $"TemplateVersionId_{referenceNumber}";
@@ -184,37 +183,37 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
 
             if (application.TemplateSchema?.JsonSchema != null)
             {
-                session.SetString(templateSchemaKey, application.TemplateSchema.JsonSchema);
-                session.SetString(templateVersionIdKey, application.TemplateVersionId.ToString());
-                session.SetString(templateVersionNoKey, application.TemplateSchema.VersionNumber ?? string.Empty);
+                sessionStore.SetString(templateSchemaKey, application.TemplateSchema.JsonSchema);
+                sessionStore.SetString(templateVersionIdKey, application.TemplateVersionId.ToString());
+                sessionStore.SetString(templateVersionNoKey, application.TemplateSchema.VersionNumber ?? string.Empty);
             }
 
             if (application.Status != null)
             {
                 var statusKey = $"ApplicationStatus_{application.ApplicationId}";
-                session.SetString(statusKey, application.Status.ToString());
+                sessionStore.SetString(statusKey, application.Status.ToString());
             }
 
             if (application.CreatedBy != null)
             {
-                session.SetString($"ApplicationLeadApplicantName_{application.ApplicationId}", application.CreatedBy.Name);
-                session.SetString($"ApplicationLeadApplicantEmail_{application.ApplicationId}", application.CreatedBy.Email);
-                session.SetString($"ApplicationLeadApplicantUserId_{application.ApplicationId}", application.CreatedBy.UserId.ToString());
+                sessionStore.SetString($"ApplicationLeadApplicantName_{application.ApplicationId}", application.CreatedBy.Name ?? string.Empty);
+                sessionStore.SetString($"ApplicationLeadApplicantEmail_{application.ApplicationId}", application.CreatedBy.Email ?? string.Empty);
+                sessionStore.SetString($"ApplicationLeadApplicantUserId_{application.ApplicationId}", application.CreatedBy.UserId.ToString());
             }
 
-            session.SetString(
+            sessionStore.SetString(
                 $"ApplicationFormVersion_{application.ApplicationId}",
                 string.IsNullOrEmpty(application.TemplateSchema?.VersionNumber)
                     ? "N/A"
                     : application.TemplateSchema.VersionNumber);
         }
 
-        public string GetApplicationStatus(Guid? applicationId, ISession session)
+        public string GetApplicationStatus(Guid? applicationId)
         {
             if (applicationId.HasValue)
             {
                 var statusKey = $"ApplicationStatus_{applicationId.Value}";
-                return session.GetString(statusKey) ?? "InProgress";
+                return sessionStore.GetString(statusKey) ?? "InProgress";
             }
             return "InProgress";
         }
@@ -227,7 +226,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                 || applicationStatus.Equals("Created", StringComparison.OrdinalIgnoreCase);
         }
 
-        public Domain.Models.TaskStatus CalculateTaskStatus(string taskId, FormTemplate template, Dictionary<string, object> formData, Guid? applicationId, ISession session, string applicationStatus)
+        public Domain.Models.TaskStatus CalculateTaskStatus(string taskId, FormTemplate template, Dictionary<string, object> formData, Guid? applicationId, string applicationStatus)
         {
             // If application is submitted, all tasks are completed
             if (applicationStatus.Equals("Submitted", StringComparison.OrdinalIgnoreCase))
@@ -239,7 +238,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
             if (applicationId.HasValue)
             {
                 var sessionKey = $"TaskStatus_{applicationId.Value}_{taskId}";
-                var statusString = session.GetString(sessionKey);
+                var statusString = sessionStore.GetString(sessionKey);
                 
                 if (!string.IsNullOrEmpty(statusString) && 
                     Enum.TryParse<Domain.Models.TaskStatus>(statusString, out var explicitStatus) &&
@@ -309,17 +308,17 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
             return Domain.Models.TaskStatus.NotStarted;
         }
 
-        public async Task SaveTaskStatusAsync(Guid applicationId, string taskId, Domain.Models.TaskStatus status, ISession session)
+        public async Task SaveTaskStatusAsync(Guid applicationId, string taskId, Domain.Models.TaskStatus status)
         {
             // Save task status to session
-            applicationResponseService.SaveTaskStatusToSession(applicationId, taskId, status.ToString(), session);
+            applicationResponseService.SaveTaskStatusToSession(applicationId, taskId, status.ToString());
             
             // Save all accumulated data (including task status) to API
             var formData = new Dictionary<string, object>(); // Empty form data since we're just updating task status
-            await applicationResponseService.SaveApplicationResponseAsync(applicationId, formData, session);
+            await applicationResponseService.SaveApplicationResponseAsync(applicationId, formData);
         }
 
-        public bool AreAllTasksCompleted(FormTemplate template, Dictionary<string, object> formData, Guid? applicationId, ISession session, string applicationStatus)
+        public bool AreAllTasksCompleted(FormTemplate template, Dictionary<string, object> formData, Guid? applicationId, string applicationStatus)
         {
             if (template?.TaskGroups == null)
             {
@@ -329,7 +328,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
             var allTasks = template.TaskGroups.SelectMany(g => g.Tasks).ToList();
             
             return allTasks.All(task => 
-                CalculateTaskStatus(task.TaskId, template, formData, applicationId, session, applicationStatus) == Domain.Models.TaskStatus.Completed);
+                CalculateTaskStatus(task.TaskId, template, formData, applicationId, applicationStatus) == Domain.Models.TaskStatus.Completed);
         }
 
         public object GetJsonElementValue(JsonElement element)

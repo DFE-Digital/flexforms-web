@@ -48,7 +48,7 @@ public class ContributorsInviteModel(
     {
 
         // Ensure we have a valid application ID
-        var (applicationId, application) = await applicationStateService.EnsureApplicationIdAsync(ReferenceNumber, HttpContext.Session);
+        var (applicationId, application) = await applicationStateService.EnsureApplicationIdAsync(ReferenceNumber);
 
         var redirect = await RedirectIfContributorPatternDisabledAsync(application);
         if (redirect != null)
@@ -65,7 +65,7 @@ public class ContributorsInviteModel(
     /// </summary>
     public async Task<IActionResult> OnPostSendInviteAsync()
     {
-        var (applicationId, application) = await applicationStateService.EnsureApplicationIdAsync(ReferenceNumber, HttpContext.Session);
+        var (applicationId, application) = await applicationStateService.EnsureApplicationIdAsync(ReferenceNumber);
 
         var redirect = await RedirectIfContributorPatternDisabledAsync(application);
         if (redirect != null)
@@ -105,7 +105,7 @@ public class ContributorsInviteModel(
     {
         logger.LogInformation("User cancelled contributor invitation for application reference {ReferenceNumber}", ReferenceNumber);
 
-        var (_, application) = await applicationStateService.EnsureApplicationIdAsync(ReferenceNumber, HttpContext.Session);
+        var (_, application) = await applicationStateService.EnsureApplicationIdAsync(ReferenceNumber);
         var redirect = await RedirectIfContributorPatternDisabledAsync(application);
         if (redirect != null)
         {

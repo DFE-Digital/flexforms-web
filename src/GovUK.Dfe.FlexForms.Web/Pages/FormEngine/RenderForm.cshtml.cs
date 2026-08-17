@@ -1,7 +1,6 @@
 using GovUK.Dfe.FlexForms.Application.Exceptions;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Application.Notifications;
-using GovUK.Dfe.FlexForms.Domain.Caching;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using GovUK.Dfe.FlexForms.Infrastructure.Services;
 using GovUK.Dfe.FlexForms.Web.Constants;
@@ -14,7 +13,6 @@ using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.Mvc;
-using StackExchange.Redis;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
@@ -46,7 +44,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
         IComplexFieldConfigurationService complexFieldConfigurationService,
         IDerivedCollectionFlowService derivedCollectionFlowService,
         IFieldRequirementService fieldRequirementService,
-        IConnectionMultiplexer redis,
+        IInfectedFileStore infectedFileStore,
         ILogger<RenderFormModel> logger,
         INavigationHistoryService navigationHistoryService,
         IRequestAppConfiguration requestConfiguration)
@@ -59,7 +57,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
         private readonly IFormErrorStore _formErrorStore = formErrorStore;
         private readonly IComplexFieldConfigurationService _complexFieldConfigurationService = complexFieldConfigurationService;
         private readonly IDerivedCollectionFlowService _derivedCollectionFlowService = derivedCollectionFlowService;
-        private readonly IConnectionMultiplexer _redis = redis;
+        private readonly IInfectedFileStore _infectedFileStore = infectedFileStore;
         private readonly IFieldRequirementService _fieldRequirementService = fieldRequirementService;
         private readonly INavigationHistoryService _navigationHistoryService = navigationHistoryService;
         private readonly IRequestAppConfiguration _requestConfiguration = requestConfiguration;
@@ -352,7 +350,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                 if (Request.Query.ContainsKey("nav") && string.Equals(Request.Query["nav"], "back", StringComparison.OrdinalIgnoreCase))
                 {
                     var scope = BuildHistoryScope(ReferenceNumber, TaskId, CurrentPageId);
-                    _navigationHistoryService.Pop(scope, HttpContext.Session);
+                    _navigationHistoryService.Pop(scope);
                 }
             }
             catch { }
@@ -525,17 +523,17 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                     }
                     
                     // Mark the task as completed in session and API
-                    await _applicationStateService.SaveTaskStatusAsync(ApplicationId.Value, CurrentTask.TaskId, Domain.Models.TaskStatus.Completed, HttpContext.Session);
+                    await _applicationStateService.SaveTaskStatusAsync(ApplicationId.Value, CurrentTask.TaskId, Domain.Models.TaskStatus.Completed);
                 }
                 else
                 {
                     // Task was unchecked - set it back to in progress if it has data, otherwise not started
-                    var currentStatus = _applicationStateService.CalculateTaskStatus(CurrentTask.TaskId, Template, FormData, ApplicationId, HttpContext.Session, ApplicationStatus);
+                    var currentStatus = _applicationStateService.CalculateTaskStatus(CurrentTask.TaskId, Template, FormData, ApplicationId, ApplicationStatus);
                     if (currentStatus == Domain.Models.TaskStatus.Completed)
                     {
                         // Only override if it was explicitly marked as completed - revert to calculated status
                         var calculatedStatus = HasAnyTaskData(CurrentTask) ? Domain.Models.TaskStatus.InProgress : Domain.Models.TaskStatus.NotStarted;
-                        await _applicationStateService.SaveTaskStatusAsync(ApplicationId.Value, CurrentTask.TaskId, calculatedStatus, HttpContext.Session);
+                        await _applicationStateService.SaveTaskStatusAsync(ApplicationId.Value, CurrentTask.TaskId, calculatedStatus);
                     }
                 }
             }
@@ -872,7 +870,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             if (IsCollectionFlow)
             {
                 var flowProgress = LoadFlowProgress(FlowId, InstanceId);
-                var accumulatedData = _applicationResponseService.GetAccumulatedFormData(HttpContext.Session);
+                var accumulatedData = _applicationResponseService.GetAccumulatedFormData();
                 
                 foreach (var key in Data.Keys.ToList())
                 {
@@ -1088,7 +1086,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                         }
 
                         // Load existing selections from accumulated session
-                        var acc = _applicationResponseService.GetAccumulatedFormData(HttpContext.Session);
+                        var acc = _applicationResponseService.GetAccumulatedFormData();
                         var list = new List<object>();
                         if (acc.TryGetValue(key, out var existing) && !string.IsNullOrWhiteSpace(existing?.ToString()))
                         {
@@ -1166,7 +1164,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                         // Update both normalized and Data_ forms to be safe
                         Data[key] = updatedJson;
                         Data[$"Data_{key}"] = updatedJson;
-                        _applicationResponseService.AccumulateFormData(new Dictionary<string, object> { [key] = updatedJson }, HttpContext.Session);
+                        _applicationResponseService.AccumulateFormData(new Dictionary<string, object> { [key] = updatedJson });
                     }
                 }
                 catch (Exception ex)
@@ -1180,7 +1178,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             bool isDerivedFlowSave = TryParseDerivedFlowRoute(CurrentPageId, out _, out _, out _);
             if (ApplicationId.HasValue && Data.Any() && !isSubFlow && !isDerivedFlowSave)
             {
-                await _applicationResponseService.SaveApplicationResponseAsync(ApplicationId.Value, Data, HttpContext.Session);
+                await _applicationResponseService.SaveApplicationResponseAsync(ApplicationId.Value, Data);
                 _logger.LogInformation("Successfully saved response for Application {ApplicationId}, Page {PageId}",
                     ApplicationId.Value, CurrentPageId);
             }
@@ -1192,13 +1190,13 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                 {
                     var scope = RenderFormModel.BuildHistoryScope(ReferenceNumber, TaskId, CurrentPageId);
                     var currentUrl = $"/applications/{ReferenceNumber}/{TaskId}/{CurrentPageId}";
-                    _navigationHistoryService.Push(scope, currentUrl, HttpContext.Session);
+                    _navigationHistoryService.Push(scope, currentUrl);
                 }
                 else if (!string.IsNullOrEmpty(TaskId))
                 {
                     var scope = RenderFormModel.BuildHistoryScope(ReferenceNumber, TaskId, CurrentPageId);
                     var currentUrl = $"/applications/{ReferenceNumber}/{TaskId}";
-                    _navigationHistoryService.Push(scope, currentUrl, HttpContext.Session);
+                    _navigationHistoryService.Push(scope, currentUrl);
                 }
             }
             catch { }
@@ -1231,13 +1229,12 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                             var accumulatedProgress = LoadFlowProgress(flowId, instanceId);
                             AppendCollectionItemToSession(flowPages, flowFieldId, instanceId, accumulatedProgress);
 
-                            var accData = _applicationResponseService.GetAccumulatedFormData(HttpContext.Session);
+                            var accData = _applicationResponseService.GetAccumulatedFormData();
                             if (accData.TryGetValue(flowFieldId, out var collectionValue))
                             {
                                 await _applicationResponseService.SaveApplicationResponseAsync(
                                     ApplicationId.Value,
-                                    new Dictionary<string, object> { [flowFieldId] = collectionValue },
-                                    HttpContext.Session);
+                                    new Dictionary<string, object> { [flowFieldId] = collectionValue });
                                 _logger.LogInformation("Saved partial collection item to database for flow {FlowId}, instance {InstanceId}, page {PageId}",
                                     flowId, instanceId, CurrentPageId);
                             }
@@ -1336,10 +1333,10 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                             if (ApplicationId.HasValue)
                             {
                                 // Trigger save for the collection field
-                                var acc = _applicationResponseService.GetAccumulatedFormData(HttpContext.Session);
+                                var acc = _applicationResponseService.GetAccumulatedFormData();
                                 if (acc.TryGetValue(flowFieldId, out var collectionValue))
                                 {
-                                    await _applicationResponseService.SaveApplicationResponseAsync(ApplicationId.Value, new Dictionary<string, object> { [flowFieldId] = collectionValue }, HttpContext.Session);
+                                    await _applicationResponseService.SaveApplicationResponseAsync(ApplicationId.Value, new Dictionary<string, object> { [flowFieldId] = collectionValue });
                                 }
                             }
                             // Clear the in-progress cache for this instance
@@ -1347,7 +1344,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
 
                             // Clear navigation history
                             var scope = BuildHistoryScope(ReferenceNumber, TaskId, CurrentPageId);
-                            _navigationHistoryService.Clear(scope, HttpContext.Session);
+                            _navigationHistoryService.Clear(scope);
                         }
                         var backToSummary = _formNavigationService.GetCollectionFlowSummaryUrl(CurrentTask.TaskId, ReferenceNumber);
                         return Redirect(backToSummary);
@@ -1414,7 +1411,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                                 [statusKey] = FormData[statusKey],
                                 [dataKey] = FormData[dataKey]
                             };
-                            await _applicationResponseService.SaveApplicationResponseAsync(ApplicationId.Value, derivedUpdates, HttpContext.Session);
+                            await _applicationResponseService.SaveApplicationResponseAsync(ApplicationId.Value, derivedUpdates);
                         }
                         else
                         {
@@ -1458,7 +1455,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                         await _applicationResponseService.SaveApplicationResponseAsync(ApplicationId.Value, new Dictionary<string, object>
                         {
                             [$"{TaskId}_completed"] = true
-                        }, HttpContext.Session);
+                        });
 
                         // Also set the task status to Completed (matches TaskSummary behaviour)
                         if (CurrentTask != null)
@@ -1466,8 +1463,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                             await _applicationStateService.SaveTaskStatusAsync(
                                 ApplicationId.Value,
                                 CurrentTask.TaskId,
-                                Domain.Models.TaskStatus.Completed,
-                                HttpContext.Session);
+                                Domain.Models.TaskStatus.Completed);
                         }
 
                         _logger.LogInformation("POST: About to redirect to task list using RedirectToPage with ReferenceNumber: {ReferenceNumber}", ReferenceNumber);
@@ -1480,10 +1476,10 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                         // If unchecked: set task status based on calculated state (in progress if any data exists, else not started)
                         if (CurrentTask != null && ApplicationId.HasValue)
                         {
-                            var hasAnyData = _applicationStateService.CalculateTaskStatus(CurrentTask.TaskId, Template, FormData, ApplicationId, HttpContext.Session, ApplicationStatus) 
+                            var hasAnyData = _applicationStateService.CalculateTaskStatus(CurrentTask.TaskId, Template, FormData, ApplicationId, ApplicationStatus) 
                                 != Domain.Models.TaskStatus.NotStarted;
                             var newStatus = hasAnyData ? Domain.Models.TaskStatus.InProgress : Domain.Models.TaskStatus.NotStarted;
-                            await _applicationStateService.SaveTaskStatusAsync(ApplicationId.Value, CurrentTask.TaskId, newStatus, HttpContext.Session);
+                            await _applicationStateService.SaveTaskStatusAsync(ApplicationId.Value, CurrentTask.TaskId, newStatus);
                             
                         }
                         
@@ -1541,7 +1537,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
 
                         // No conditional override - respect returnToSummaryPage
                         var summaryScope = RenderFormModel.BuildHistoryScope(ReferenceNumber, TaskId, CurrentPageId);
-                        _navigationHistoryService.Clear(summaryScope, HttpContext.Session);
+                        _navigationHistoryService.Clear(summaryScope);
 
                         var summaryUrl = _formNavigationService.GetTaskSummaryUrl(CurrentTask.TaskId, ReferenceNumber);
 
@@ -1600,7 +1596,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
 
                     // No next page found - go to task summary as fallback
                     var summaryFallbackScope = RenderFormModel.BuildHistoryScope(ReferenceNumber, TaskId, CurrentPageId);
-                    _navigationHistoryService.Clear(summaryFallbackScope, HttpContext.Session);
+                    _navigationHistoryService.Clear(summaryFallbackScope);
 
                     var fallbackUrl = _formNavigationService.GetTaskSummaryUrl(CurrentTask.TaskId, ReferenceNumber);
 
@@ -1694,19 +1690,17 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                             await _applicationStateService.SaveTaskStatusAsync(
                                 ApplicationId.Value,
                                 CurrentTask.TaskId,
-                                Domain.Models.TaskStatus.Completed,
-                                HttpContext.Session);
+                                Domain.Models.TaskStatus.Completed);
                         }
                         else
                         {
-                            var hasAnyData = _applicationStateService.CalculateTaskStatus(CurrentTask.TaskId, Template, FormData, ApplicationId, HttpContext.Session, ApplicationStatus)
+                            var hasAnyData = _applicationStateService.CalculateTaskStatus(CurrentTask.TaskId, Template, FormData, ApplicationId, ApplicationStatus)
                                 != Domain.Models.TaskStatus.NotStarted;
                             var newStatus = hasAnyData ? Domain.Models.TaskStatus.InProgress : Domain.Models.TaskStatus.NotStarted;
                             await _applicationStateService.SaveTaskStatusAsync(
                                 ApplicationId.Value,
                                 CurrentTask.TaskId,
-                                newStatus,
-                                HttpContext.Session);
+                                newStatus);
                         }
                     }
 
@@ -1783,7 +1777,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             _logger.LogInformation("RemoveCollectionItem handler executing confirmed removal for item {ItemId} from field {FieldId}", itemId, fieldId);
 
             // Get current collection from session first
-            var accumulatedData = _applicationResponseService.GetAccumulatedFormData(HttpContext.Session);
+            var accumulatedData = _applicationResponseService.GetAccumulatedFormData();
             
             Dictionary<string, object>? itemData = null;
             string? flowTitle = null;
@@ -1839,12 +1833,12 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                     
                     // Update the collection
                     var updatedJson = JsonSerializer.Serialize(items);
-                    _applicationResponseService.AccumulateFormData(new Dictionary<string, object> { [fieldId] = updatedJson }, HttpContext.Session);
+                    _applicationResponseService.AccumulateFormData(new Dictionary<string, object> { [fieldId] = updatedJson });
                     
                     // Save to API
                     if (ApplicationId.HasValue)
                     {
-                        await _applicationResponseService.SaveApplicationResponseAsync(ApplicationId.Value, new Dictionary<string, object> { [fieldId] = updatedJson }, HttpContext.Session);
+                        await _applicationResponseService.SaveApplicationResponseAsync(ApplicationId.Value, new Dictionary<string, object> { [fieldId] = updatedJson });
                     }
                 }
                 catch (ExternalApplicationsException)
@@ -2052,7 +2046,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
         /// </summary>
         private bool IsExistingCollectionItem(string fieldId, string instanceId)
         {
-            var accumulated = _applicationResponseService.GetAccumulatedFormData(HttpContext.Session);
+            var accumulated = _applicationResponseService.GetAccumulatedFormData();
             if (accumulated.TryGetValue(fieldId, out var collectionValue))
             {
                 var json = collectionValue?.ToString() ?? "[]";
@@ -2124,7 +2118,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
 
         private void AppendCollectionItemToSession(List<Domain.Models.Page> pages, string fieldId, string instanceId, Dictionary<string, object> itemData)
         {
-            var acc = _applicationResponseService.GetAccumulatedFormData(HttpContext.Session);
+            var acc = _applicationResponseService.GetAccumulatedFormData();
             var list = new List<Dictionary<string, object>>();
             if (acc.TryGetValue(fieldId, out var existing))
             {
@@ -2211,7 +2205,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
 
             var serialized = JsonSerializer.Serialize(list);
 
-            _applicationResponseService.AccumulateFormData(new Dictionary<string, object> { [fieldId] = serialized }, HttpContext.Session);
+            _applicationResponseService.AccumulateFormData(new Dictionary<string, object> { [fieldId] = serialized });
         }
 
         private static string GetFlowProgressSessionKey(string flowId, string instanceId) => $"FlowProgress_{flowId}_{instanceId}";
@@ -2318,7 +2312,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                 sessionApplicationId != currentApplicationId)
             {
                 // Clear accumulated data for the previous application
-                _applicationResponseService.ClearAccumulatedFormData(HttpContext.Session);
+                _applicationResponseService.ClearAccumulatedFormData();
                 _logger.LogInformation("Cleared accumulated form data for previous application {PreviousApplicationId}, now working with {CurrentApplicationId}",
                     sessionApplicationId, currentApplicationId);
             }
@@ -2334,7 +2328,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
         {
             // Get accumulated form data from session and populate the Data dictionary
             // Infected files are automatically filtered by the blacklist
-            var accumulatedData = _applicationResponseService.GetAccumulatedFormData(HttpContext.Session);
+            var accumulatedData = _applicationResponseService.GetAccumulatedFormData();
 
             if (accumulatedData.Any())
             {
@@ -2368,7 +2362,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                     // Only merge when in POST/change trigger (not during initial GET/load)
                     if (trigger == "change")
                     {
-                        var accumulatedData = _applicationResponseService.GetAccumulatedFormData(HttpContext.Session);
+                        var accumulatedData = _applicationResponseService.GetAccumulatedFormData();
                         foreach (var kvp in accumulatedData)
                         {
                             // Only add if not already in dataForConditionalLogic (current page data takes priority)
@@ -2444,7 +2438,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             
             if (string.IsNullOrEmpty(fieldId)) return;
 
-            var accumulated = _applicationResponseService.GetAccumulatedFormData(HttpContext.Session);
+            var accumulated = _applicationResponseService.GetAccumulatedFormData();
             if (accumulated.TryGetValue(fieldId, out var collectionValue))
             {
                 var json = collectionValue?.ToString() ?? "[]";
@@ -3198,7 +3192,6 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             
             try
             {
-                var db = _redis.GetDatabase();
                 var infectedFileIds = new HashSet<Guid>();
                 var appId = ApplicationId?.ToString() ?? HttpContext.Session.GetString("ApplicationId");
                 
@@ -3207,26 +3200,18 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                     files.Count,
                     appId);
                 
-                // Check each file against BOTH blacklist types:
-                // 1. By file ID (FlexForms:InfectedFile:{fileId})
-                // 2. By filename (FlexForms:InfectedFileName:{applicationId}:{originalFileName})
                 foreach (var file in files)
                 {
-                    // Check by file ID
-                    var fileIdBlacklistKey = $"{FlexFormsCacheKeys.InfectedFilePrefix}{file.Id}";
-                    var fileIdExists = db.KeyExists(fileIdBlacklistKey);
-                    
-                    // Check by filename (fallback when file ID doesn't match)
-                    var filenameBlacklistKey = $"{FlexFormsCacheKeys.InfectedFileNamePrefix}{appId}:{file.OriginalFileName}";
-                    var filenameExists = db.KeyExists(filenameBlacklistKey);
+                    var fileIdExists = _infectedFileStore.IsFileInfected(file.Id);
+                    var filenameExists = !string.IsNullOrEmpty(appId)
+                        && !string.IsNullOrEmpty(file.OriginalFileName)
+                        && _infectedFileStore.IsFileNameInfected(appId, file.OriginalFileName);
                     
                     _logger.LogInformation(
-                        "FilterInfectedFilesFromList: File {FileId} ({FileName}) - FileIdKey='{FileIdKey}' exists={FileIdExists}, FilenameKey='{FilenameKey}' exists={FilenameExists}",
+                        "FilterInfectedFilesFromList: File {FileId} ({FileName}) - FileIdInfected={FileIdExists}, FilenameInfected={FilenameExists}",
                         file.Id,
                         file.OriginalFileName,
-                        fileIdBlacklistKey,
                         fileIdExists,
-                        filenameBlacklistKey,
                         filenameExists);
                     
                     if (fileIdExists || filenameExists)
@@ -3341,7 +3326,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                 // This handles the initial load or page refresh scenarios
                 try
                 {
-                    var accumulatedData = applicationResponseService.GetAccumulatedFormData(HttpContext.Session);
+                    var accumulatedData = applicationResponseService.GetAccumulatedFormData();
 
 
                     foreach (var kvp in accumulatedData)
@@ -3462,7 +3447,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                 try
                 {
                     _logger.LogInformation("GetFilesForFieldAsync: REGULAR FORM - Falling back to accumulated data");
-                    var accumulatedData = applicationResponseService.GetAccumulatedFormData(HttpContext.Session);
+                    var accumulatedData = applicationResponseService.GetAccumulatedFormData();
                     
                     if (accumulatedData.TryGetValue(fieldId, out var fieldValue))
                     {
@@ -3532,9 +3517,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             // If it is, we should ALLOW re-upload (the old infected file should be replaced)
             try
             {
-                var db = _redis.GetDatabase();
-                var filenameBlacklistKey = $"{FlexFormsCacheKeys.InfectedFileNamePrefix}{appId}:{fileName}";
-                if (db.KeyExists(filenameBlacklistKey))
+                if (_infectedFileStore.IsFileNameInfected(appId.ToString(), fileName))
                 {
                     _logger.LogInformation(
                         "File '{FileName}' is in infected blacklist, allowing re-upload",
@@ -3613,7 +3596,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             var json = JsonSerializer.Serialize(files);
             var data = new Dictionary<string, object> { { fieldId, json } };
 
-            await _applicationResponseService.SaveApplicationResponseAsync(appId, data, HttpContext.Session);
+            await _applicationResponseService.SaveApplicationResponseAsync(appId, data);
         }
 
         /// <summary>

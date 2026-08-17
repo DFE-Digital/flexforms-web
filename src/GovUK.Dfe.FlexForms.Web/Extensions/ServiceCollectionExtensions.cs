@@ -74,6 +74,8 @@ namespace GovUK.Dfe.FlexForms.Web.Extensions
             services.AddScoped<IFormNavigationService, FormNavigationService>();
             services.AddScoped<INavigationHistoryService, NavigationHistoryService>();
             services.AddScoped<IFormDataManager, FormDataManager>();
+            services.AddScoped<IFormSessionStore, HttpFormSessionStore>();
+            services.AddSingleton<IInfectedFileStore, RedisInfectedFileStore>();
             services.AddScoped<IFieldRequirementService, FieldRequirementService>();
             services.AddScoped<IFormValidationOrchestrator, GovUK.Dfe.FlexForms.Infrastructure.Services.FormValidationOrchestrator>();
             services.AddScoped<IFormConfigurationService, FormConfigurationService>();

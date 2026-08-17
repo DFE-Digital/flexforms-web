@@ -1,6 +1,5 @@
 using System.Text.Json;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
 namespace GovUK.Dfe.FlexForms.Infrastructure.Services
@@ -9,16 +8,18 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
     /// Session-backed implementation of INavigationHistoryService.
     /// Stores a capped stack per scope key.
     /// </summary>
-    public class NavigationHistoryService(ILogger<NavigationHistoryService> logger) : INavigationHistoryService
+    public class NavigationHistoryService(
+        IFormSessionStore sessionStore,
+        ILogger<NavigationHistoryService> logger) : INavigationHistoryService
     {
         private const string SessionPrefix = "NavHistory_";
         private const int MaxDepth = 25;
 
-        public void Push(string scopeKey, string url, ISession session)
+        public void Push(string scopeKey, string url)
         {
             if (string.IsNullOrWhiteSpace(scopeKey) || string.IsNullOrWhiteSpace(url)) return;
             var key = SessionPrefix + scopeKey;
-            var stack = Load(session, key);
+            var stack = Load(key);
 
             // Avoid pushing duplicates of the latest entry
             if (stack.Count == 0 || !string.Equals(stack[^1], url, StringComparison.OrdinalIgnoreCase))
@@ -26,40 +27,39 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                 stack.Add(url);
                 if (stack.Count > MaxDepth)
                 {
-                    // Trim oldest
                     stack.RemoveAt(0);
                 }
-                Save(session, key, stack);
+                Save(key, stack);
             }
         }
 
-        public string? Peek(string scopeKey, ISession session)
+        public string? Peek(string scopeKey)
         {
             if (string.IsNullOrWhiteSpace(scopeKey)) return null;
             var key = SessionPrefix + scopeKey;
-            var stack = Load(session, key);
+            var stack = Load(key);
             return stack.Count > 0 ? stack[^1] : null;
         }
 
-        public string? Pop(string scopeKey, ISession session)
+        public string? Pop(string scopeKey)
         {
             if (string.IsNullOrWhiteSpace(scopeKey)) return null;
             var key = SessionPrefix + scopeKey;
-            var stack = Load(session, key);
+            var stack = Load(key);
             if (stack.Count == 0) return null;
             var last = stack[^1];
             stack.RemoveAt(stack.Count - 1);
-            Save(session, key, stack);
+            Save(key, stack);
             return last;
         }
 
-        public void Clear(string scopeKey, ISession session)
+        public void Clear(string scopeKey)
         {
             if (string.IsNullOrWhiteSpace(scopeKey)) return;
             var key = SessionPrefix + scopeKey;
             try
             {
-                session.Remove(key);
+                sessionStore.Remove(key);
             }
             catch (Exception ex)
             {
@@ -67,13 +67,12 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
             }
         }
 
-        private static List<string> Load(ISession session, string key)
+        private List<string> Load(string key)
         {
             try
             {
-                var bytes = session.Get(key);
-                if (bytes == null) return new List<string>();
-                var json = System.Text.Encoding.UTF8.GetString(bytes);
+                var json = sessionStore.GetString(key);
+                if (string.IsNullOrEmpty(json)) return new List<string>();
                 var list = JsonSerializer.Deserialize<List<string>>(json);
                 return list ?? new List<string>();
             }
@@ -83,13 +82,11 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
             }
         }
 
-        private static void Save(ISession session, string key, List<string> values)
+        private void Save(string key, List<string> values)
         {
             try
             {
-                var json = JsonSerializer.Serialize(values);
-                var bytes = System.Text.Encoding.UTF8.GetBytes(json);
-                session.Set(key, bytes);
+                sessionStore.SetString(key, JsonSerializer.Serialize(values));
             }
             catch
             {
@@ -98,5 +95,3 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
         }
     }
 }
-
-

@@ -3,7 +3,7 @@
 @using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response
 @inject IHttpContextAccessor httpContext;
 @inject GovUK.Dfe.FlexForms.Web.Interfaces.IFormErrorStore FormErrorStore
-@inject StackExchange.Redis.IConnectionMultiplexer redis
+@inject GovUK.Dfe.FlexForms.Application.Interfaces.IInfectedFileStore infectedFileStore
 @using Microsoft.AspNetCore.Http.Extensions
 @using Microsoft.AspNetCore.Http
 @using System.Linq
@@ -49,23 +49,14 @@
         
         try
         {
-            var db = redis.GetDatabase();
             var infectedFileIds = new HashSet<Guid>();
             var appId = ViewData["applicationId"] as string ?? Context.Session.GetString("ApplicationId");
-            
-            // Check each file against BOTH blacklist types:
-            // 1. By file ID (DfE:InfectedFile:{fileId})
-            // 2. By filename (DfE:InfectedFileName:{applicationId}:{originalFileName})
+
             foreach (var file in files)
             {
-                // Check by file ID
-                var fileIdBlacklistKey = $"DfE:InfectedFile:{file.Id}";
-                var fileIdExists = db.KeyExists(fileIdBlacklistKey);
-                
-                // Check by filename (fallback when file ID doesn't match)
-                var filenameBlacklistKey = $"DfE:InfectedFileName:{appId}:{file.OriginalFileName}";
-                var filenameExists = db.KeyExists(filenameBlacklistKey);
-                
+                var fileIdExists = infectedFileStore.IsFileInfected(file.Id);
+                var filenameExists = infectedFileStore.IsFileNameInfected(appId ?? string.Empty, file.OriginalFileName ?? string.Empty);
+
                 if (fileIdExists || filenameExists)
                 {
                     infectedFileIds.Add(file.Id);
