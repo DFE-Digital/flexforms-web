@@ -52,4 +52,19 @@ public class InfectedUploadFilterTests
         Assert.Single(result!);
         Assert.Equal("ok.pdf", result[0].OriginalFileName);
     }
+
+    [Fact]
+    public void FilterList_returns_empty_when_source_is_null_or_empty()
+    {
+        Assert.Empty(_filter.FilterList(null, "app-1"));
+        Assert.Empty(_filter.FilterList([], "app-1"));
+    }
+
+    [Fact]
+    public void FilterUploadDataJson_returns_original_value_when_not_a_file_list()
+    {
+        const string raw = "not-json";
+        Assert.Equal(raw, _filter.FilterUploadDataJson(raw, "app-1"));
+        Assert.Equal(string.Empty, _filter.FilterUploadDataJson(null, "app-1"));
+    }
 }
