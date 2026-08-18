@@ -1,11 +1,10 @@
 @page "/applications/{referenceNumber}/{taskId?}/{*pageId}"
-@using GovUK.Dfe.FlexForms.Infrastructure.Services
 @using GovUK.Dfe.FlexForms.Application.Interfaces
+@using GovUK.Dfe.FlexForms.Domain.FormEngine
 @using GovUk.Frontend.AspNetCore.TagHelpers
 @model RenderFormModel
 @{
     ViewData["Title"] = "New application";
-    var allTasksCompleted = Model.AreAllTasksCompleted();
 }
 
 @section BeforeContent {
@@ -38,8 +37,7 @@
         @await Html.PartialAsync("FormEngine/_FormPage", Model)
         break;
     case FormState.TaskSummary:
-        // If this task declares a multiCollectionFlow summary, render the custom summary
-        if (Model.CurrentTask?.Summary?.Mode?.ToLowerInvariant() == "multicollectionflow")
+        if (FormStepPolicy.IsCollectionFlowSummary(Model.CurrentTask))
         {
             @await Html.PartialAsync("FormEngine/_CollectionFlowSummary", Model)
         }

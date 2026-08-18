@@ -1,5 +1,7 @@
 using GovUK.Dfe.CoreLibs.Http.Models;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
+using GovUK.Dfe.FlexForms.Web.Services;
+using GovUK.Dfe.FlexForms.Web.Telemetry;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
@@ -17,37 +19,43 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
 
             var r = ex.Result;
 
-            logger.LogWarning("API exception for MVC action. StatusCode: {StatusCode}, ErrorId: {ErrorId}, ExceptionType: {ExceptionType}, Message: {Message}",
-                r.StatusCode, r.ErrorId, r.ExceptionType, r.Message);
-
-            if (r.StatusCode is 401)
+            string? templateId = context.HttpContext.Session.GetString("TemplateId");
+            if (r.Context is not null
+                && r.Context.TryGetValue(FlexFormsLogContextKeys.TemplateId, out var contextTemplate)
+                && contextTemplate is not null)
             {
-
-                    
-                context.Result = new UnauthorizedResult();
-                context.ExceptionHandled = true;
-                return;
-            }
-            if (r.StatusCode is 403)
-            {
-                var userId = context.HttpContext.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "Anonymous";
-                var userClaims = string.Join(", ", context.HttpContext.User?.Claims?.Select(c => $"{c.Type}:{c.Value}") ?? Array.Empty<string>());
-                
-
-                    
-                context.Result = new ForbidResult();
-                context.ExceptionHandled = true;
-                return;
+                templateId = contextTemplate.ToString();
             }
 
-            // Build ProblemDetails for client consumers
+            logger.LogWarning(
+                "API exception for MVC action. StatusCode={StatusCode} ErrorId={ErrorId} CorrelationId={CorrelationId} TenantId={TenantId} UserEmail={UserEmail} TemplateId={TemplateId} ExceptionType={ExceptionType} Message={Message}",
+                r.StatusCode,
+                r.ErrorId,
+                context.HttpContext.Request.Headers.TryGetValue(CorrelationIdForwardingHandler.HeaderName, out var correlationHeader)
+                    ? correlationHeader.ToString()
+                    : r.CorrelationId,
+                r.TenantId,
+                r.UserEmail ?? context.HttpContext.User?.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value,
+                templateId,
+                r.ExceptionType,
+                r.Message);
+
             var problem = new ProblemDetails
             {
-                Title = string.IsNullOrWhiteSpace(r.Message) ? "API error" : r.Message,
+                Title = string.IsNullOrWhiteSpace(r.Message)
+                    ? (r.StatusCode is 401 or 403 ? "Access denied" : "API error")
+                    : r.Message,
                 Status = r.StatusCode,
             };
             problem.Extensions["errorId"] = r.ErrorId;
             problem.Extensions["exceptionType"] = r.ExceptionType;
+
+            if (r.StatusCode is 401 or 403)
+            {
+                context.Result = new ObjectResult(problem) { StatusCode = r.StatusCode };
+                context.ExceptionHandled = true;
+                return;
+            }
 
             if (r.StatusCode is 429)
             {

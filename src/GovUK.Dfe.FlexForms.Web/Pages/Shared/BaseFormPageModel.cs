@@ -51,7 +51,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Shared
         /// </summary>
         protected async Task EnsureApplicationIdAsync()
         {
-            var (applicationId, application) = await _applicationStateService.EnsureApplicationIdAsync(ReferenceNumber, HttpContext.Session);
+            var (applicationId, application) = await _applicationStateService.EnsureApplicationIdAsync(ReferenceNumber);
             ApplicationId = applicationId;
             CurrentApplication = application;
         }
@@ -69,7 +69,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Shared
         /// </summary>
         protected void LoadFormDataFromSession()
         {
-            FormData = _applicationResponseService.GetAccumulatedFormData(HttpContext.Session);
+            FormData = _applicationResponseService.GetAccumulatedFormData();
         }
 
         /// <summary>
@@ -77,7 +77,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Shared
         /// </summary>
         protected void LoadApplicationStatus()
         {
-            ApplicationStatus = _applicationStateService.GetApplicationStatus(ApplicationId, HttpContext.Session);
+            ApplicationStatus = _applicationStateService.GetApplicationStatus(ApplicationId);
         }
 
         /// <summary>
@@ -222,7 +222,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Shared
         /// </summary>
         public Domain.Models.TaskStatus GetTaskStatusFromSession(string taskId)
         {
-            return _applicationStateService.CalculateTaskStatus(taskId, Template, FormData, ApplicationId, HttpContext.Session, ApplicationStatus);
+            return _applicationStateService.CalculateTaskStatus(taskId, Template, FormData, ApplicationId, ApplicationStatus);
         }
 
         /// <summary>
@@ -230,7 +230,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Shared
         /// </summary>
         public bool AreAllTasksCompleted()
         {
-            return _applicationStateService.AreAllTasksCompleted(Template, FormData, ApplicationId, HttpContext.Session, ApplicationStatus);
+            return _applicationStateService.AreAllTasksCompleted(Template, FormData, ApplicationId, ApplicationStatus);
         }
 
         /// <summary>

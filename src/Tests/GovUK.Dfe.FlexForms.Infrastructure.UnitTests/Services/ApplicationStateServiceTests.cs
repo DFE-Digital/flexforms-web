@@ -5,7 +5,6 @@ using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.CoreLibs.Http.Models;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
@@ -18,39 +17,39 @@ public class ApplicationStateServiceTests
     private readonly IApplicationResponseService _applicationResponseService = Substitute.For<IApplicationResponseService>();
     private readonly IFieldRequirementService _fieldRequirementService = Substitute.For<IFieldRequirementService>();
 
-    private ApplicationStateService CreateService() =>
-        new(_applicationsClient, _applicationResponseService, _fieldRequirementService, NullLogger<ApplicationStateService>.Instance);
+    private ApplicationStateService CreateService(IFormSessionStore sessionStore) =>
+        new(_applicationsClient, _applicationResponseService, _fieldRequirementService, sessionStore, NullLogger<ApplicationStateService>.Instance);
 
     [Fact]
     public async Task EnsureApplicationIdAsync_AlwaysCallsApi_EvenWhenSessionHasCachedApplication()
     {
         const string reference = "APP-001";
         var applicationId = Guid.NewGuid();
-        var session = CreateSession(session =>
+        var sessionStore = CreateSessionStore(store =>
         {
-            session.SetString("ApplicationId", applicationId.ToString());
-            session.SetString("ApplicationReference", reference);
-            session.SetString($"TemplateSchema_{reference}", "{\"templateId\":\"t1\"}");
-            session.SetString($"TemplateVersionId_{reference}", Guid.NewGuid().ToString());
+            store.SetString("ApplicationId", applicationId.ToString());
+            store.SetString("ApplicationReference", reference);
+            store.SetString($"TemplateSchema_{reference}", "{\"templateId\":\"t1\"}");
+            store.SetString($"TemplateVersionId_{reference}", Guid.NewGuid().ToString());
         });
 
         var apiApplication = CreateApplication(reference, applicationId);
         _applicationsClient.GetApplicationByReferenceAsync(reference).Returns(apiApplication);
 
-        var service = CreateService();
-        var (returnedId, returnedApplication) = await service.EnsureApplicationIdAsync(reference, session);
+        var service = CreateService(sessionStore);
+        var (returnedId, returnedApplication) = await service.EnsureApplicationIdAsync(reference);
 
         Assert.Equal(applicationId, returnedId);
         Assert.Same(apiApplication, returnedApplication);
         await _applicationsClient.Received(1).GetApplicationByReferenceAsync(reference);
-        _applicationResponseService.Received(1).ClearAccumulatedFormData(session);
+        _applicationResponseService.Received(1).ClearAccumulatedFormData();
     }
 
     [Fact]
     public async Task EnsureApplicationIdAsync_ThrowsApplicationAccessException_WhenApiReturns404()
     {
         const string reference = "APP-MISSING";
-        var session = CreateSession();
+        var sessionStore = CreateSessionStore();
 
         _applicationsClient.GetApplicationByReferenceAsync(reference)
             .Throws(new ExternalApplicationsException<ExceptionResponse>(
@@ -61,10 +60,10 @@ public class ApplicationStateServiceTests
                 new ExceptionResponse { StatusCode = 404 },
                 null));
 
-        var service = CreateService();
+        var service = CreateService(sessionStore);
 
         var exception = await Assert.ThrowsAsync<ApplicationAccessException>(
-            () => service.EnsureApplicationIdAsync(reference, session));
+            () => service.EnsureApplicationIdAsync(reference));
 
         Assert.Equal(reference, exception.ApplicationReference);
     }
@@ -76,7 +75,7 @@ public class ApplicationStateServiceTests
     [InlineData("Deleted", false)]
     public void IsApplicationEditable_AllowsCreatedAndInProgress(string status, bool expected)
     {
-        var service = CreateService();
+        var service = CreateService(CreateSessionStore());
 
         Assert.Equal(expected, service.IsApplicationEditable(status));
     }
@@ -85,7 +84,7 @@ public class ApplicationStateServiceTests
     public async Task EnsureApplicationIdAsync_ThrowsApplicationAccessException_WhenApiReturns403()
     {
         const string reference = "APP-FORBIDDEN";
-        var session = CreateSession();
+        var sessionStore = CreateSessionStore();
 
         _applicationsClient.GetApplicationByReferenceAsync(reference)
             .Throws(new ExternalApplicationsException<ExceptionResponse>(
@@ -96,30 +95,30 @@ public class ApplicationStateServiceTests
                 new ExceptionResponse { StatusCode = 403 },
                 null));
 
-        var service = CreateService();
+        var service = CreateService(sessionStore);
 
         await Assert.ThrowsAsync<ApplicationAccessException>(
-            () => service.EnsureApplicationIdAsync(reference, session));
+            () => service.EnsureApplicationIdAsync(reference));
     }
 
     [Fact]
     public async Task EnsureApplicationIdAsync_ClearsFormData_WhenReferenceChanges()
     {
-        var session = CreateSession(session =>
+        var sessionStore = CreateSessionStore(store =>
         {
-            session.SetString("ApplicationReference", "APP-OLD");
-            session.SetString("ApplicationId", Guid.NewGuid().ToString());
+            store.SetString("ApplicationReference", "APP-OLD");
+            store.SetString("ApplicationId", Guid.NewGuid().ToString());
         });
 
         const string newReference = "APP-NEW";
         var apiApplication = CreateApplication(newReference, Guid.NewGuid());
         _applicationsClient.GetApplicationByReferenceAsync(newReference).Returns(apiApplication);
 
-        var service = CreateService();
-        await service.EnsureApplicationIdAsync(newReference, session);
+        var service = CreateService(sessionStore);
+        await service.EnsureApplicationIdAsync(newReference);
 
-        _applicationResponseService.Received(1).ClearAccumulatedFormData(session);
-        Assert.Equal(newReference, session.GetString("ApplicationReference"));
+        _applicationResponseService.Received(2).ClearAccumulatedFormData();
+        Assert.Equal(newReference, sessionStore.GetString("ApplicationReference"));
     }
 
     private static ApplicationDto CreateApplication(string reference, Guid applicationId) =>
@@ -144,32 +143,23 @@ public class ApplicationStateServiceTests
             }
         };
 
-    private static ISession CreateSession(Action<ISession>? configure = null)
+    private static InMemoryFormSessionStore CreateSessionStore(Action<IFormSessionStore>? configure = null)
     {
-        var session = new TestSession();
-        configure?.Invoke(session);
-        return session;
+        var store = new InMemoryFormSessionStore();
+        configure?.Invoke(store);
+        return store;
     }
 
-    private sealed class TestSession : ISession
+    private sealed class InMemoryFormSessionStore : IFormSessionStore
     {
-        private readonly Dictionary<string, byte[]> _store = new(StringComparer.OrdinalIgnoreCase);
-        private bool _isAvailable = true;
+        private readonly Dictionary<string, string> _store = new(StringComparer.OrdinalIgnoreCase);
 
-        public bool IsAvailable => _isAvailable;
-        public string Id { get; set; } = Guid.NewGuid().ToString();
-        public IEnumerable<string> Keys => _store.Keys;
+        public string? GetString(string key) => _store.TryGetValue(key, out var value) ? value : null;
 
-        public void Clear() => _store.Clear();
-
-        public Task CommitAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
-
-        public Task LoadAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public void SetString(string key, string value) => _store[key] = value;
 
         public void Remove(string key) => _store.Remove(key);
 
-        public void Set(string key, byte[] value) => _store[key] = value;
-
-        public bool TryGetValue(string key, out byte[] value) => _store.TryGetValue(key, out value!);
+        public IReadOnlyCollection<string> Keys => _store.Keys.ToList();
     }
 }

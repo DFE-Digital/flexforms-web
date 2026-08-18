@@ -15,14 +15,17 @@ public static class AdminAccessHelper
     public const string CanManageTemplatesPolicy = "CanManageTemplates";
     public const string CanManageUsersPolicy = "CanManageUsers";
     public const string CanManageTenantSettingsPolicy = "CanManageTenantSettings";
+    public const string CanManagePlatformTenantsPolicy = "CanManagePlatformTenants";
 
     public const string PermissionClaimType = "permission";
 
     /// <summary>Claim value for tenant-wide template manager custom roles.</summary>
     public const string TemplateManageAnyClaim = "Template:Any:Manage";
 
-    /// <summary>Claim value for tenant-wide user manager custom roles.</summary>
-    public const string UserManageAnyClaim = "User:Any:Manage";
+    /// <summary>Claim value for tenant-wide application listing (Caseworker / Case Manager).</summary>
+    public const string ApplicationAnyReadClaim = "Application:Any:Read";
+
+    public const string CanReadAnyApplicationPolicy = "CanReadAnyApplication";
 
     /// <summary>True for SuperAdmin only.</summary>
     public static bool IsSuperAdmin(ClaimsPrincipal? user) =>
@@ -49,6 +52,14 @@ public static class AdminAccessHelper
     public static bool CanManageTemplates(ClaimsPrincipal? user) =>
         IsAdmin(user)
         || HasAnyManageClaim(user, "Template");
+
+    /// <summary>
+    /// True when the user can list all applications for the active template
+    /// (Admin/SuperAdmin, or Application:Any:Read — e.g. Caseworker).
+    /// </summary>
+    public static bool CanReadAnyApplication(ClaimsPrincipal? user) =>
+        IsAdmin(user)
+        || HasPermissionClaim(user, ApplicationAnyReadClaim);
 
     /// <summary>
     /// True when the user is Admin/SuperAdmin or has any User:*:Manage claim.
@@ -79,9 +90,16 @@ public static class AdminAccessHelper
         IsAdmin(user);
 
     /// <summary>
-    /// TenantConfig settings editor — SuperAdmin only (decrypted secrets).
+    /// TenantConfig settings editor for the current tenant — Admin or SuperAdmin.
+    /// Platform-wide tools (new tenant, platform tenants) stay SuperAdmin-only.
     /// </summary>
     public static bool CanManageTenantSettings(ClaimsPrincipal? user) =>
+        IsAdmin(user);
+
+    /// <summary>
+    /// Create tenant / list all platform tenants — SuperAdmin only.
+    /// </summary>
+    public static bool CanManagePlatformTenants(ClaimsPrincipal? user) =>
         IsSuperAdmin(user);
 
     /// <summary>
@@ -135,6 +153,21 @@ public static class AdminAccessHelper
     /// <summary>
     /// Matches claims shaped as <c>{resourceType}:{key}:Manage</c> (Any or specific id/email).
     /// </summary>
+    public static bool HasNotificationAccess(ClaimsPrincipal? user, string accessType)
+    {
+        if (IsAdmin(user))
+            return true;
+
+        if (user is null || string.IsNullOrWhiteSpace(accessType))
+            return false;
+
+        var suffix = $":{accessType}";
+        return user.Claims.Any(c =>
+            string.Equals(c.Type, PermissionClaimType, StringComparison.OrdinalIgnoreCase)
+            && c.Value.StartsWith("Notifications:", StringComparison.OrdinalIgnoreCase)
+            && c.Value.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
+    }
+
     public static bool HasAnyManageClaim(ClaimsPrincipal? user, string resourceType)
     {
         if (user is null || string.IsNullOrWhiteSpace(resourceType))

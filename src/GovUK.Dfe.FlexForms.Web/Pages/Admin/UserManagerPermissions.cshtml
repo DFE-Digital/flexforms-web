@@ -31,7 +31,8 @@
             Special keys:
             <code class="govuk-!-font-size-16">Any</code> is allowed for
             <strong>Application — Read</strong>, <strong>ApplicationFiles — Read</strong>
-            (CaseReader-style tenant-wide read), and <strong>Template — Write</strong>
+            (CaseReader-style tenant-wide read), <strong>FileValidation — Write</strong>
+            (tenant function callback), and <strong>Template — Write</strong>
             (create applications on any template).
             Manage is not available here — use Role Manager instead.
         </p>
@@ -63,6 +64,7 @@
                         <label class="govuk-label" asp-for="NewResourceKey">Resource key</label>
                         <div class="govuk-hint">
                             Application or ApplicationFiles: application id, or <code class="govuk-!-font-size-16">Any</code> with Read.
+                            FileValidation: template id, or <code class="govuk-!-font-size-16">Any</code> with Write (integration callback).
                             Template: template id, or <code class="govuk-!-font-size-16">Any</code> with Write (create apps).
                             User or Notifications: user email.
                             Manage is not available for individual users — assign it via a tenant role.

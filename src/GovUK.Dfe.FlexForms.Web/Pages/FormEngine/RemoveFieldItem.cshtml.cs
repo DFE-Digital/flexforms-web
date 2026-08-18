@@ -20,7 +20,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                 return BadRequest("Field ID and valid index are required");
             }
 
-            var acc = _applicationResponseService.GetAccumulatedFormData(HttpContext.Session);
+            var acc = _applicationResponseService.GetAccumulatedFormData();
             if (acc.TryGetValue(fieldId, out var existing))
             {
                 var json = existing?.ToString() ?? "[]";
@@ -31,7 +31,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                     {
                         list.RemoveAt(index);
                         var updated = JsonSerializer.Serialize(list);
-                        _applicationResponseService.AccumulateFormData(new Dictionary<string, object> { [fieldId] = updated }, HttpContext.Session);
+                        _applicationResponseService.AccumulateFormData(new Dictionary<string, object> { [fieldId] = updated });
                     }
                 }
                 catch (Exception ex)

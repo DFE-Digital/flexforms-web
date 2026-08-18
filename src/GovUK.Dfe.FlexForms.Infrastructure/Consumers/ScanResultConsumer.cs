@@ -8,7 +8,9 @@ using GovUK.Dfe.CoreLibs.Messaging.Contracts.Messages.Events;
 using GovUK.Dfe.CoreLibs.Messaging.MassTransit.Helpers;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Api.Client.Security;
+using GovUK.Dfe.FlexForms.Application.Notifications;
 using GovUK.Dfe.FlexForms.Domain.Caching;
+using GovUK.Dfe.FlexForms.Infrastructure.Messaging;
 using MassTransit;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -19,8 +21,8 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Consumers
 {
     /// <summary>
     /// Consumer for file scan results from the virus scanner service.
-    /// Listens to the file-scanner-results topic with subscription extweb.
-    /// Handles infected files by cleaning them up from Redis sessions and notifying users.
+    /// Listens to the shared file-scanner-results topic. Tenant is bound from message
+    /// headers/metadata before this consumer runs; template and requesting user are matched in code.
     /// </summary>
     public sealed class ScanResultConsumer(
         IApplicationsClient applicationsClient,
@@ -46,9 +48,9 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Consumers
             // This allows developers to run locally without interfering with each other
             if (InstanceIdentifierHelper.IsLocalEnvironment())
             {
-                var messageInstanceId = scanResult.Metadata?.ContainsKey("InstanceIdentifier") == true 
-                    ? scanResult.Metadata["InstanceIdentifier"]?.ToString() 
-                    : null;
+            var messageInstanceId = ScanEventRouting.GetMetadata(
+                scanResult.Metadata,
+                ScanEventRouting.InstanceIdentifierMetadata);
                 
                 var localInstanceId = InstanceIdentifierHelper.GetInstanceIdentifier(configuration);
                 
@@ -70,7 +72,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Consumers
             // Check if the file is infected
             if (IsInfected(scanResult))
             {
-                await HandleInfectedFileAsync(scanResult, ResolveNotificationContext(scanResult, context));
+                await HandleInfectedFileAsync(context);
             }
             else if (scanResult.Outcome == VirusScanOutcome.Clean)
             {
@@ -101,8 +103,9 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Consumers
         /// <summary>
         /// Handles an infected file by cleaning it up and notifying the user
         /// </summary>
-        private async Task HandleInfectedFileAsync(ScanResultEvent scanResult, string notificationContext)
+        private async Task HandleInfectedFileAsync(ConsumeContext<ScanResultEvent> context)
         {
+            var scanResult = context.Message;
             try
             {
                 if (!Guid.TryParse(scanResult.FileId, out var fileId))
@@ -113,58 +116,55 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Consumers
                     return;
                 }
 
-                // Extract metadata
-                if (scanResult.Metadata == null)
+                var tenantId = ScanEventRouting.ResolveTenantId(context.Headers, scanResult.Metadata);
+                if (string.IsNullOrWhiteSpace(tenantId))
                 {
-                    logger.LogWarning("No Metadata found for infected file {FileId}", fileId);
+                    logger.LogWarning(
+                        "Skipping infected file {FileId}: no TenantId on message",
+                        fileId);
                     return;
                 }
 
-                if (!scanResult.Metadata.ContainsKey("Reference"))
+                var requestedUserId = ScanEventRouting.ResolveUserId(context.Headers, scanResult.Metadata);
+                if (requestedUserId is null)
+                {
+                    logger.LogWarning("No userId found for infected file {FileId}", fileId);
+                    return;
+                }
+
+                var reference = ScanEventRouting.GetMetadata(scanResult.Metadata, ScanEventRouting.ReferenceMetadata);
+                if (string.IsNullOrWhiteSpace(reference))
                 {
                     logger.LogWarning("No Reference found in Metadata for infected file {FileId}", fileId);
                     return;
                 }
 
-                if (!scanResult.Metadata.ContainsKey("userId"))
+                var applicationId = ScanEventRouting.GetMetadataGuid(
+                    scanResult.Metadata,
+                    ScanEventRouting.ApplicationIdMetadata);
+
+                var originalFileName = ScanEventRouting.GetMetadata(
+                    scanResult.Metadata,
+                    ScanEventRouting.OriginalFileNameMetadata) ?? scanResult.FileName;
+
+                var templateId = ScanEventRouting.ResolveTemplateId(context.Headers, scanResult.Metadata);
+                var notificationContext = ResolveNotificationContext(context);
+
+                if (applicationId is null)
                 {
-                    logger.LogWarning("No userId found in Metadata for infected file {FileId}", fileId);
+                    logger.LogWarning("No applicationId found in Metadata for infected file {FileId}", fileId);
                     return;
                 }
-
-                var reference = scanResult.Metadata["Reference"]?.ToString();
-                if (string.IsNullOrWhiteSpace(reference))
-                {
-                    logger.LogWarning("Empty Reference in Metadata for infected file {FileId}", fileId);
-                    return;
-                }
-
-                var userId = scanResult.Metadata["userId"]?.ToString();
-                if (string.IsNullOrWhiteSpace(userId))
-                {
-                    logger.LogWarning("Empty userId in Metadata for infected file {FileId}", fileId);
-                    return;
-                }
-
-                // Get applicationId from Metadata (for cache clearing)
-                Guid? applicationId = null;
-                if (scanResult.Metadata.ContainsKey("applicationId") && 
-                    Guid.TryParse(scanResult.Metadata["applicationId"]?.ToString(), out var appId))
-                {
-                    applicationId = appId;
-                }
-
-                var originalFileName = scanResult.Metadata.ContainsKey("originalFileName") 
-                    ? scanResult.Metadata["originalFileName"]?.ToString() 
-                    : scanResult.FileName;
 
                 logger.LogWarning(
-                    "Processing infected file - FileId: {FileId}, FileName: {FileName}, OriginalFileName: {OriginalFileName}, Reference: {Reference}, UserId: {UserId}, MalwareName: {MalwareName}",
+                    "Processing infected file - FileId: {FileId}, FileName: {FileName}, OriginalFileName: {OriginalFileName}, Reference: {Reference}, TenantId: {TenantId}, TemplateId: {TemplateId}, UserId: {UserId}, MalwareName: {MalwareName}",
                     fileId,
                     scanResult.FileName,
                     originalFileName,
                     reference,
-                    userId,
+                    tenantId,
+                    templateId,
+                    requestedUserId,
                     scanResult.MalwareName);
 
                 // Use service-to-service authentication for all API calls (database cleanup + notification)
@@ -196,7 +196,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Consumers
 
                     // Clean up infected file from database and clear Redis cache
                     // Pass the original filename so we can match files by name (not just by blob storage ID)
-                    await RemoveInfectedFileFromDatabaseAndCacheAsync(reference, applicationId, fileId, originalFileName, userId);
+                    await RemoveInfectedFileFromDatabaseAndCacheAsync(reference, applicationId, fileId, originalFileName, requestedUserId.Value.ToString());
 
                     // CRITICAL: Create blacklist entries for ALL database record IDs, not just the blob storage ID
                     // This ensures the web app's FilterInfectedFilesFromList can find and filter these files
@@ -223,8 +223,9 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Consumers
                         applicationId ?? Guid.Empty,
                         originalFileName,
                         scanResult.MalwareName!,
-                        new Guid(userId),
-                        notificationContext);
+                        requestedUserId,
+                        notificationContext,
+                        templateId);
                 }
 
                 logger.LogInformation(
@@ -423,10 +424,9 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Consumers
             catch (Exception ex)
             {
                 logger.LogError(ex,
-                    "Error cleaning up infected file {FileId} from database for application reference {Reference}",
+                    "Error cleaning up infected file {FileId} from database for application reference {Reference}. Continuing so Redis cleanup and notification can still run.",
                     fileId,
                     reference);
-                throw;
             }
         }
 
@@ -725,76 +725,67 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Consumers
         /// Resolves the notification context for a multi-tenant platform host.
         /// Prefer message metadata, then MassTransit tenant headers — never host APPLICATION_NAME.
         /// </summary>
-        private static string ResolveNotificationContext(ScanResultEvent scanResult, ConsumeContext context)
+        private static string ResolveNotificationContext(ConsumeContext<ScanResultEvent> context)
         {
-            if (scanResult.Metadata is not null)
-            {
-                foreach (var key in new[] { "ApplicationName", "TenantName", "applicationName", "tenantName" })
-                {
-                    if (scanResult.Metadata.TryGetValue(key, out var value))
-                    {
-                        var text = value?.ToString();
-                        if (!string.IsNullOrWhiteSpace(text))
-                        {
-                            return text;
-                        }
-                    }
-                }
-            }
-
-            var tenantName = context.Headers.Get<string>("TenantName");
-            if (!string.IsNullOrWhiteSpace(tenantName))
-            {
-                return tenantName!;
-            }
-
-            return "platform";
+            return ScanEventRouting.GetMetadata(context.Message.Metadata, ScanEventRouting.ApplicationNameMetadata)
+                ?? ScanEventRouting.ResolveTenantName(context.Headers, context.Message.Metadata)
+                ?? "platform";
         }
 
-        /// <summary>
-        /// Creates a user notification about the infected file
-        /// </summary>
         private async Task CreateMalwareNotificationAsync(
             Guid fileId,
             Guid applicationId,
             string? fileName,
             string malwareName,
             Guid? userId,
-            string notificationContext)
+            string notificationContext,
+            Guid? templateId)
         {
             try
             {
+                var context = NotificationScopeContext.Build(
+                    notificationContext,
+                    "malware-detection",
+                    fileId.ToString());
+
+                var metadata = new Dictionary<string, object>
+                {
+                    ["fileId"] = fileId.ToString(),
+                    ["fileName"] = fileName ?? string.Empty,
+                    ["malwareName"] = malwareName,
+                    ["applicationId"] = applicationId.ToString(),
+                    ["detectedAt"] = DateTimeOffset.UtcNow.ToString("o")
+                };
+
+                if (templateId.HasValue)
+                    metadata["templateId"] = templateId.Value.ToString();
+
                 var notification = new AddNotificationRequest
                 {
                     Message = $"The selected file '{fileName}' contains a virus called [{malwareName}]. We have deleted the file. Upload a new one.",
                     Category = "malware-detection",
-                    Context = notificationContext,
+                    Context = context,
                     Type = NotificationType.Error,
                     AutoDismiss = false,
-                    Metadata = new Dictionary<string, object>
-                    {
-                        ["fileId"] = fileId.ToString(),
-                        ["fileName"] = fileName,
-                        ["malwareName"] = malwareName,
-                        ["applicationId"] = applicationId.ToString(),
-                        ["detectedAt"] = DateTimeOffset.UtcNow.ToString("o")
-                    },
+                    ReplaceExistingContext = true,
+                    Metadata = metadata,
                     UserId = userId
                 };
 
                 await notificationsClient.CreateNotificationAsync(notification);
 
                 logger.LogInformation(
-                    "Created malware notification for file {FileId} ({FileName})",
+                    "Created malware notification for file {FileId} ({FileName}) user {UserId} template {TemplateId}",
                     fileId,
-                    fileName);
+                    fileName,
+                    userId,
+                    templateId);
             }
             catch (Exception ex)
             {
                 logger.LogError(ex,
                     "Error creating malware notification for file {FileId}",
                     fileId);
-                // Don't re-throw - notification failure shouldn't fail the entire process
             }
         }
 

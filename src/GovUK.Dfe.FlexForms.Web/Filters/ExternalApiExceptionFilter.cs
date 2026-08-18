@@ -1,19 +1,22 @@
+using GovUK.Dfe.FlexForms.Web.Services;
+using GovUK.Dfe.FlexForms.Web.Telemetry;
 using GovUK.Dfe.FlexForms.Application.Exceptions;
 using GovUK.Dfe.FlexForms.Web.Constants;
 using GovUK.Dfe.FlexForms.Web.Pages.FormEngine;
 using GovUK.Dfe.CoreLibs.Http.Models;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
+using GovUK.Dfe.FlexForms.Web.Interfaces;
+using GovUK.Dfe.FlexForms.Web.Tenancy;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 using System.Text.Json;
-using GovUK.Dfe.FlexForms.Web.Interfaces;
 
 namespace GovUK.Dfe.FlexForms.Web.Filters
 {
-    public class ExternalApiPageExceptionFilter : IAsyncPageFilter
+    public class ExternalApiPageExceptionFilter(ILogger<ExternalApiPageExceptionFilter> logger) : IAsyncPageFilter
     {
-        
         public Task OnPageHandlerSelectionAsync(PageHandlerSelectedContext context)
             => Task.CompletedTask;
 
@@ -21,8 +24,6 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
             PageHandlerExecutingContext context,
             PageHandlerExecutionDelegate next)
         {
-            
-            // DETECT UPLOAD/FILE REQUESTS BEFORE EXECUTION
             var uploadInfo = DetectUploadRequest(context);
             if (uploadInfo.isUpload)
             {
@@ -55,9 +56,18 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
                 var statusCode = response?.StatusCode ?? apiException.StatusCode;
                 var message = response?.Message ?? apiException.Message;
 
+                LogApiException(context.HttpContext, response, statusCode, message);
+
                 if (TryHandleApplicationFileAccessDenied(context.HttpContext, page, statusCode, message, out var fileAccessResult))
                 {
                     executedContext.Result = fileAccessResult;
+                    executedContext.ExceptionHandled = true;
+                    return;
+                }
+
+                if (IsFileOperation(context.HttpContext))
+                {
+                    executedContext.Result = MapUnhandledApiException(page, statusCode, message, context.HttpContext);
                     executedContext.ExceptionHandled = true;
                     return;
                 }
@@ -78,62 +88,52 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
 
                 var r = response;
 
-                // 1) Validation: attempt to map structured validation errors into ModelState
                 if (r.StatusCode is 400 or 422)
                 {
-                    
                     if (TryAddModelStateErrorsFromContext(page, r))
                     {
-                        
                         executedContext.Result = new PageResult();
                         executedContext.ExceptionHandled = true;
-                        
                         return;
                     }
                 }
 
                 if (r.StatusCode == 400 || r.StatusCode == 409)
                 {
-                    
                     AddNonFieldError(page, r.Message);
 
-                    // SPECIAL HANDLING FOR UPLOAD REQUESTS: Use stored upload info
-                    
                     var storedUploadInfo = context.HttpContext.Items.TryGetValue("UploadRequestInfo", out var storedInfo) 
                         ? ((bool isUpload, string fieldId))storedInfo 
                         : (false, string.Empty);
                     
                     if (storedUploadInfo.Item1)
                     {
-                        
                         try 
                         {
-                            var formErrorStore = context.HttpContext.RequestServices.GetService<GovUK.Dfe.FlexForms.Web.Interfaces.IFormErrorStore>();
+                            var formErrorStore = context.HttpContext.RequestServices.GetService<IFormErrorStore>();
                             if (formErrorStore != null)
                             {
                                 formErrorStore.Save(storedUploadInfo.Item2, page.ModelState);
                                 
-                                // Get the return URL from the request
                                 var returnUrl = context.HttpContext.Request.Form["ReturnUrl"].ToString();
                                 if (!string.IsNullOrEmpty(returnUrl))
                                 {
-                                    
-                                    executedContext.Result = new Microsoft.AspNetCore.Mvc.RedirectResult(returnUrl);
+                                    executedContext.Result = new RedirectResult(returnUrl);
                                     executedContext.ExceptionHandled = true;
                                     return;
                                 }
                             }
                         }
-                        catch (Exception)
+                        catch (Exception ex)
                         {
-                            
+                            logger.LogWarning(ex,
+                                "Failed to persist upload validation errors for field {FieldId}",
+                                storedUploadInfo.Item2);
                         }
                     }
 
-                    
                     executedContext.Result = new PageResult();
                     executedContext.ExceptionHandled = true;
-                    
                     return;
                 }
 
@@ -155,9 +155,6 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
 
                 if (r.StatusCode == 401)
                 {
-                    var logger = context.HttpContext.RequestServices.GetService<ILogger<ExternalApiPageExceptionFilter>>();
-                    var userId = context.HttpContext.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "Anonymous";
-
                     page.TempData["ApiErrorId"] = r.ErrorId;
                     executedContext.Result = new RedirectToPageResult("/Error/Forbidden");
                     executedContext.ExceptionHandled = true;
@@ -166,14 +163,10 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
 
                 if (r.StatusCode == 403)
                 {
-                    var logger = context.HttpContext.RequestServices.GetService<ILogger<ExternalApiPageExceptionFilter>>();
-                    var userId = context.HttpContext.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "Anonymous";
-
                     page.TempData["ApiErrorId"] = r.ErrorId;
                     if (!string.IsNullOrWhiteSpace(r.Message))
                         page.TempData["AccessDeniedReason"] = r.Message;
 
-                    // Treat forbidden application view access the same as not found
                     if (IsApplicationRequest(context.HttpContext.Request.Path)
                         && !IsMutatingHttpMethod(context.HttpContext.Request))
                     {
@@ -182,7 +175,6 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
                         return;
                     }
 
-                    // Check if this is likely a token issue and redirect to logout
                     if (IsAuthenticationFailureMessage(r.Message))
                     {
                         executedContext.Result = new RedirectToPageResult("/Logout", new { reason = "token_expired" });
@@ -196,7 +188,6 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
                     return;
                 }
 
-                // Handle 5xx errors (server errors)
                 if (r.StatusCode >= 500)
                 {
                     page.TempData["ApiErrorId"] = r.ErrorId;
@@ -205,13 +196,49 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
                     return;
                 }
                 
-                // All other errors go to General error page
                 page.TempData["ApiErrorId"] = r.ErrorId;
                 page.TempData["ErrorMessage"] = r.Message;
                 executedContext.Result = new RedirectToPageResult("/Error/General");
                 executedContext.ExceptionHandled = true;
             }
-            
+        }
+
+        private void LogApiException(
+            HttpContext httpContext,
+            ExceptionResponse? response,
+            int statusCode,
+            string? message)
+        {
+            var correlationId = httpContext.Request.Headers.TryGetValue(CorrelationIdForwardingHandler.HeaderName, out var headerValue)
+                ? headerValue.ToString()
+                : response?.CorrelationId;
+
+            var tenantContext = httpContext.RequestServices.GetService<ITenantRequestContext>();
+            var tenantId = response?.TenantId ?? tenantContext?.TenantId?.ToString();
+            var userEmail = response?.UserEmail
+                ?? httpContext.User.FindFirstValue(ClaimTypes.Email)
+                ?? httpContext.User.Identity?.Name;
+            var templateId = httpContext.Session.GetString("TemplateId");
+            if (response?.Context is not null
+                && response.Context.TryGetValue(FlexFormsLogContextKeys.TemplateId, out var contextTemplate)
+                && contextTemplate is not null)
+            {
+                templateId = contextTemplate.ToString();
+            }
+            var path = httpContext.Request.Path.Value;
+            var logLevel = statusCode >= 500 ? LogLevel.Error : LogLevel.Warning;
+
+            logger.Log(
+                logLevel,
+                "External API error. StatusCode={StatusCode} ErrorId={ErrorId} CorrelationId={CorrelationId} TenantId={TenantId} UserEmail={UserEmail} TemplateId={TemplateId} Path={Path} Message={Message}",
+                statusCode,
+                response?.ErrorId,
+                correlationId,
+                tenantId,
+                userEmail,
+                templateId,
+                path,
+                message);
         }
 
         private static void AddNonFieldError(PageModel page, string message)
@@ -227,7 +254,6 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
             if (r.Context is null || r.Context.Count == 0)
                 return false;
 
-            // Common keys that might hold validation dictionaries
             var possibleKeys = new[] { "validationErrors", "errors", "fieldErrors", "modelState" };
             foreach (var key in possibleKeys)
             {
@@ -240,7 +266,6 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
                     {
                         foreach (var prop in element.EnumerateObject())
                         {
-                            // Accept arrays or single string
                             if (prop.Value.ValueKind == JsonValueKind.Array)
                             {
                                 foreach (var msg in prop.Value.EnumerateArray().Select(v => v.GetString()).Where(s => !string.IsNullOrWhiteSpace(s)))
@@ -260,7 +285,6 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
                 }
             }
 
-            // Fallback: add high-level message/details if present
             if (!string.IsNullOrWhiteSpace(r.Message))
             {
                 page.ModelState.AddModelError("Error", r.Message);
@@ -281,14 +305,54 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
             return (false, string.Empty);
         }
 
+        private static bool IsFileOperation(HttpContext httpContext) =>
+            httpContext.Items.TryGetValue("FileOperationInfo", out var storedInfo)
+            && storedInfo is ValueTuple<bool, string, string> info
+            && info.Item1;
+
+        private static string? ResolveHandlerName(PageHandlerExecutingContext context)
+        {
+            var name = context.HandlerMethod?.Name;
+            if (!string.IsNullOrWhiteSpace(name))
+                return name;
+
+            if (context.HttpContext.Request.Query.TryGetValue("handler", out var queryHandler)
+                && !string.IsNullOrWhiteSpace(queryHandler))
+                return queryHandler.ToString();
+
+            if (context.HttpContext.Request.HasFormContentType
+                && context.HttpContext.Request.Form.TryGetValue("handler", out var formHandler)
+                && !string.IsNullOrWhiteSpace(formHandler))
+                return formHandler.ToString();
+
+            return null;
+        }
+
+        private static string NormalizeHandlerName(string? handlerName)
+        {
+            if (string.IsNullOrWhiteSpace(handlerName))
+                return string.Empty;
+
+            var name = handlerName.Trim();
+            if (name.StartsWith("OnPost", StringComparison.OrdinalIgnoreCase))
+                name = name["OnPost".Length..];
+            else if (name.StartsWith("OnGet", StringComparison.OrdinalIgnoreCase))
+                name = name["OnGet".Length..];
+
+            if (name.EndsWith("Async", StringComparison.OrdinalIgnoreCase))
+                name = name[..^"Async".Length];
+
+            return name;
+        }
+
         private static (bool isFileOp, string operation, string fieldId) DetectFileOperationRequest(PageHandlerExecutingContext context)
         {
-            var handlerName = context.HandlerMethod?.Name;
+            var handlerName = NormalizeHandlerName(ResolveHandlerName(context));
             var operation = handlerName switch
             {
-                "OnPostUploadFileAsync" => "upload",
-                "OnPostDownloadFileAsync" => "download",
-                "OnPostDeleteFileAsync" => "delete",
+                "UploadFile" => "upload",
+                "DownloadFile" => "download",
+                "DeleteFile" => "delete",
                 _ => string.Empty
             };
 
@@ -356,20 +420,26 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
 
             if (fileOpInfo.Item2 is "upload" or "delete")
             {
-                var returnUrl = httpContext.Request.Form["ReturnUrl"].ToString();
-                if (!string.IsNullOrEmpty(returnUrl) && !string.IsNullOrEmpty(fileOpInfo.Item3))
+                var returnUrl = httpContext.Request.HasFormContentType
+                    ? httpContext.Request.Form["ReturnUrl"].ToString()
+                    : string.Empty;
+                if (string.IsNullOrEmpty(returnUrl))
+                    returnUrl = httpContext.Request.Headers.Referer.ToString();
+
+                var errorKey = !string.IsNullOrEmpty(fileOpInfo.Item3) ? fileOpInfo.Item3 : "Error";
+                try
                 {
-                    try
+                    var formErrorStore = httpContext.RequestServices.GetService<IFormErrorStore>();
+                    formErrorStore?.Save(errorKey, page.ModelState);
+                    if (!string.IsNullOrEmpty(returnUrl))
                     {
-                        var formErrorStore = httpContext.RequestServices.GetService<IFormErrorStore>();
-                        formErrorStore?.Save(fileOpInfo.Item3, page.ModelState);
                         result = new RedirectResult(returnUrl);
                         return true;
                     }
-                    catch (Exception)
-                    {
-                        // Fall through to page result
-                    }
+                }
+                catch (Exception)
+                {
+                    // Fall through to page result
                 }
             }
 
@@ -399,6 +469,11 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
             }
 
             if (!IsApplicationRequest(httpContext.Request.Path) || !IsMutatingHttpMethod(httpContext.Request))
+            {
+                return false;
+            }
+
+            if (IsFileOperation(httpContext))
             {
                 return false;
             }

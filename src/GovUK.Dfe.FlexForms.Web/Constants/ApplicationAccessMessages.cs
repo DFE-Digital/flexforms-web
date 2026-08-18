@@ -23,6 +23,9 @@ public static class ApplicationAccessMessages
     public const string NoNotificationDeletePermission =
         "You do not have permission to delete notifications.";
 
+    public const string NoNotificationWritePermission =
+        "You do not have permission to update notifications.";
+
     /// <summary>
     /// Shown when a user cannot view a page or resource.
     /// </summary>

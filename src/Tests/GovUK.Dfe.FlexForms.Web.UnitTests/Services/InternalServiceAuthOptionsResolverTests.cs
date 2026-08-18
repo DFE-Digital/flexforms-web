@@ -96,4 +96,38 @@ public class InternalServiceAuthOptionsResolverTests
         Assert.Equal("host-secret-key-32chars-minimum!!", options.SecretKey);
         Assert.Equal("host@service.com", options.Services.Single().Email);
     }
+
+    [Fact]
+    public void Resolve_ShouldUseAmbientTenant_WhenHttpContextMissing()
+    {
+        var tenantConfig = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["InternalServiceAuth:SecretKey"] = "tenant-secret-key-32chars-minimum!",
+                ["InternalServiceAuth:Issuer"] = "tenant-issuer",
+                ["InternalServiceAuth:Audience"] = "tenant-audience",
+                ["InternalServiceAuth:Services:0:Email"] = "tenant@service.com",
+                ["InternalServiceAuth:Services:0:ApiKey"] = "tenant-api-key"
+            })
+            .Build();
+
+        var tenantContext = Substitute.For<ITenantRequestContext>();
+        tenantContext.TenantName.Returns("Transfers");
+        tenantContext.TenantConfiguration.Returns(tenantConfig);
+
+        var accessor = Substitute.For<IHttpContextAccessor>();
+        accessor.HttpContext.Returns((HttpContext?)null);
+
+        var resolver = new InternalServiceAuthOptionsResolver(
+            accessor,
+            new ConfigurationBuilder().Build(),
+            NullLogger<InternalServiceAuthOptionsResolver>.Instance);
+
+        using (AmbientTenantRequestContext.Use(tenantContext))
+        {
+            var options = resolver.Resolve();
+            Assert.Equal("tenant-secret-key-32chars-minimum!", options.SecretKey);
+            Assert.Equal("tenant@service.com", options.Services.Single().Email);
+        }
+    }
 }

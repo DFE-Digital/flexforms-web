@@ -55,6 +55,32 @@ public class TenantApiClientSettingsProviderTests
     }
 
     [Fact]
+    public void GetSettings_ShouldUseAmbientTenant_WhenHttpContextMissing()
+    {
+        var tenantId = Guid.Parse("22222222-2222-4222-8222-222222222222");
+        var tenantContext = new TenantRequestContext { TenantId = tenantId };
+
+        var httpContextAccessor = Substitute.For<IHttpContextAccessor>();
+        httpContextAccessor.HttpContext.Returns((HttpContext?)null);
+
+        var hostConfiguration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ExternalApplicationsApiClient:BaseUrl"] = "https://host.example/"
+            })
+            .Build();
+
+        var settingsProvider = new TenantApiClientSettingsProvider(httpContextAccessor, hostConfiguration);
+
+        using (AmbientTenantRequestContext.Use(tenantContext))
+        {
+            var settings = settingsProvider.GetSettings();
+            Assert.Equal("https://host.example/", settings.BaseUrl);
+            Assert.Equal(tenantId, settings.TenantId);
+        }
+    }
+
+    [Fact]
     public void GetSettings_ShouldFallBackToHost_WhenTenantConfigurationMissing()
     {
         var httpContextAccessor = Substitute.For<IHttpContextAccessor>();

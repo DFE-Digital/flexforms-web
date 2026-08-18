@@ -1,7 +1,6 @@
 using System.ComponentModel.DataAnnotations;
-using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
-using GovUK.Dfe.FlexForms.Api.Client.Contracts;
+using GovUK.Dfe.FlexForms.Application.Admin;
 using GovUK.Dfe.FlexForms.Web.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,11 +12,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 /// Registers a user into the tenant with a role and optional form access.
 /// </summary>
 [Authorize(Policy = AdminAccessHelper.CanManageUsersPolicy)]
-public sealed class UserManagerAddModel(
-    IUsersClient usersClient,
-    ITemplatesClient templatesClient,
-    IRolesClient rolesClient,
-    ILogger<UserManagerAddModel> logger) : PageModel
+public sealed class UserManagerAddModel(IUserManagerAddAdmin userManagerAddAdmin) : PageModel
 {
     [BindProperty]
     [Required(ErrorMessage = "Enter the user's name")]
@@ -42,98 +37,62 @@ public sealed class UserManagerAddModel(
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
-        await LoadLookupsAsync(cancellationToken);
+        var state = CaptureWorkState();
+        await userManagerAddAdmin.LoadAsync(state, cancellationToken);
+        ApplyWorkState(state);
+        ApplyErrors(state);
     }
 
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
     {
-        await LoadLookupsAsync(cancellationToken);
+        var state = CaptureWorkState();
+        await userManagerAddAdmin.LoadAsync(state, cancellationToken);
+        ApplyWorkState(state);
+        ApplyErrors(state);
 
         if (!ModelState.IsValid)
             return Page();
 
-        if (!AssignableRoles.Contains(Role, StringComparer.OrdinalIgnoreCase))
-        {
-            ModelState.AddModelError(nameof(Role), "Select a valid role for this tenant.");
-            return Page();
-        }
-
-        var isSystemUserRole = string.Equals(Role, "User", StringComparison.OrdinalIgnoreCase);
-        if (isSystemUserRole && (SelectedTemplateIds is null || SelectedTemplateIds.Count == 0))
-        {
-            ModelState.AddModelError(nameof(SelectedTemplateIds), "Select at least one form for the User role.");
-            return Page();
-        }
-
-        try
-        {
-            var created = await usersClient.AssignUserRoleAsync(
-                new AssignUserRoleRequest
-                {
-                    Name = Name.Trim(),
-                    Email = Email.Trim(),
-                    Role = Role,
-                    TemplateIds = SelectedTemplateIds
-                },
-                cancellationToken);
-
-            if (created?.UserId is Guid userId && SelectedTemplateIds is { Count: > 0 })
-            {
-                await usersClient.UpdateUserTemplateAccessAsync(
-                    userId,
-                    new UpdateUserTemplateAccessRequest { TemplateIds = SelectedTemplateIds },
-                    cancellationToken);
-            }
-
-            TempData["UserManagerSuccess"] = $"User {Email.Trim()} has been added with role {Role}.";
-            return RedirectToPage("/Admin/UserManager");
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to add user {Email}", Email);
-            ModelState.AddModelError(string.Empty, UserManagerModel.GetErrorMessage(ex, "Could not add the user."));
-            return Page();
-        }
+        return MapOutcome(await userManagerAddAdmin.AddAsync(state, cancellationToken), state);
     }
 
-    private async Task LoadLookupsAsync(CancellationToken cancellationToken)
+    private UserManagerAddWorkState CaptureWorkState() =>
+        new()
+        {
+            Name = Name,
+            Email = Email,
+            Role = Role,
+            SelectedTemplateIds = SelectedTemplateIds,
+            IncludeTenantAdmin = AdminAccessHelper.IsSuperAdmin(User)
+        };
+
+    private void ApplyWorkState(UserManagerAddWorkState state)
     {
-        await LoadTemplatesAsync(cancellationToken);
-        await LoadRolesAsync(cancellationToken);
+        Name = state.Name;
+        Email = state.Email;
+        Role = state.Role;
+        SelectedTemplateIds = state.SelectedTemplateIds;
+        AvailableTemplates = state.AvailableTemplates;
+        AssignableRoles = state.AssignableRoles;
     }
 
-    private async Task LoadTemplatesAsync(CancellationToken cancellationToken)
+    private void ApplyErrors(UserManagerAddWorkState state)
     {
-        try
-        {
-            var templates = await templatesClient.GetAccessibleTemplatesAsync(cancellationToken);
-            AvailableTemplates = templates?.OrderBy(t => t.Name).ToList() ?? [];
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to load templates for add user");
-            ModelState.AddModelError(string.Empty, UserManagerModel.GetErrorMessage(ex, "Could not load available forms."));
-            AvailableTemplates = [];
-        }
+        foreach (var error in state.Errors)
+            ModelState.AddModelError(error.FieldKey, error.Message);
     }
 
-    private async Task LoadRolesAsync(CancellationToken cancellationToken)
+    private IActionResult MapOutcome(AdminPageOutcome outcome, UserManagerAddWorkState state)
     {
-        try
-        {
-            var roles = await rolesClient.ListAsync(cancellationToken);
-            AssignableRoles = AdminAccessHelper.GetUserManagerAssignableRoles(
-                User,
-                roles?.Select(r => (r.Name, r.IsSystem)));
+        ApplyWorkState(state);
+        foreach (var error in outcome.Errors)
+            ModelState.AddModelError(error.FieldKey, error.Message);
 
-            if (string.IsNullOrWhiteSpace(Role) || !AssignableRoles.Contains(Role, StringComparer.OrdinalIgnoreCase))
-                Role = AssignableRoles.FirstOrDefault() ?? "User";
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to load roles for add user");
-            ModelState.AddModelError(string.Empty, UserManagerModel.GetErrorMessage(ex, "Could not load available roles."));
-            AssignableRoles = AdminAccessHelper.GetUserManagerAssignableRoles(User, null);
-        }
+        if (outcome.SuccessMessage != null)
+            TempData["UserManagerSuccess"] = outcome.SuccessMessage;
+
+        return outcome.Kind == AdminPageOutcomeKind.RedirectToPage
+            ? RedirectToPage("/Admin/UserManager")
+            : Page();
     }
 }

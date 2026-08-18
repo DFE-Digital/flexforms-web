@@ -1,0 +1,18 @@
+@model GovUK.Dfe.FlexForms.Web.ViewModels.FormEngine.CollectionItemRemoveViewModel
+@using GovUK.Dfe.FlexForms.Web.Extensions
+<form method="post" style="display: inline;" asp-page="/FormEngine/RenderForm" asp-page-handler="RemoveCollectionItem">
+    <input type="hidden" name="referenceNumber" value="@Model.ReferenceNumber" />
+    <input type="hidden" name="taskId" value="@Model.TaskId" />
+    <input type="hidden" name="flowId" value="@Model.FlowId" />
+    <input type="hidden" name="fieldId" value="@Model.FieldId" />
+    <input type="hidden" name="itemId" value="@Model.ItemId" />
+    <input type="hidden" name="itemTitle" value="@Model.ItemTitle" />
+    <input type="hidden" name="CurrentTask.TaskName" value="@Model.TaskName" />
+    @Html.RenderLinkConfirmationButton(
+        buttonText: "Remove",
+        handler: "RemoveCollectionItem",
+        displayFields: "itemTitle",
+        title: Model.ConfirmationTitle,
+        requiredMessage: Model.RequiredMessage,
+        buttonId: Model.ButtonId)
+</form>

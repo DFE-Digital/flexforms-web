@@ -1,7 +1,7 @@
-using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Web;
+using GovUK.Dfe.FlexForms.Application.FormEngine;
 using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc.Rendering;
 
@@ -125,12 +125,7 @@ public static partial class DisplayHelpers
     /// </summary>
     /// <param name="input">The input string containing potentially unsafe text.</param>
     /// <returns>A sanitised string with HTML encoded content and normalised line breaks.</returns>
-    public static string SanitiseHtmlInput(string input)
-    {
-        var lines = input.Split("\r\n").SelectMany(s => s.Split('\r')).SelectMany(s => s.Split('\n'));
-
-        return string.Join("<br>", lines.Select(HtmlEncoder.Default.Encode));
-    }
+    public static string SanitiseHtmlInput(string input) => HtmlInputSanitiser.Sanitise(input);
 
     /// <summary>
     /// Converts a sanitised HTML input string back to its original form by decoding HTML entities

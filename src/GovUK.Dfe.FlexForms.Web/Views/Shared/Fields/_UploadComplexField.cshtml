@@ -3,7 +3,7 @@
 @using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response
 @inject IHttpContextAccessor httpContext;
 @inject GovUK.Dfe.FlexForms.Web.Interfaces.IFormErrorStore FormErrorStore
-@inject StackExchange.Redis.IConnectionMultiplexer redis
+@inject GovUK.Dfe.FlexForms.Application.Interfaces.IInfectedFileStore infectedFileStore
 @using Microsoft.AspNetCore.Http.Extensions
 @using Microsoft.AspNetCore.Http
 @using System.Linq
@@ -49,23 +49,14 @@
         
         try
         {
-            var db = redis.GetDatabase();
             var infectedFileIds = new HashSet<Guid>();
             var appId = ViewData["applicationId"] as string ?? Context.Session.GetString("ApplicationId");
-            
-            // Check each file against BOTH blacklist types:
-            // 1. By file ID (DfE:InfectedFile:{fileId})
-            // 2. By filename (DfE:InfectedFileName:{applicationId}:{originalFileName})
+
             foreach (var file in files)
             {
-                // Check by file ID
-                var fileIdBlacklistKey = $"DfE:InfectedFile:{file.Id}";
-                var fileIdExists = db.KeyExists(fileIdBlacklistKey);
-                
-                // Check by filename (fallback when file ID doesn't match)
-                var filenameBlacklistKey = $"DfE:InfectedFileName:{appId}:{file.OriginalFileName}";
-                var filenameExists = db.KeyExists(filenameBlacklistKey);
-                
+                var fileIdExists = infectedFileStore.IsFileInfected(file.Id);
+                var filenameExists = infectedFileStore.IsFileNameInfected(appId ?? string.Empty, file.OriginalFileName ?? string.Empty);
+
                 if (fileIdExists || filenameExists)
                 {
                     infectedFileIds.Add(file.Id);
@@ -221,6 +212,7 @@
                     <th scope="col" class="govuk-table__header">File name</th>
                     <th scope="col" class="govuk-table__header">File size</th>
                     <th scope="col" class="govuk-table__header">File type</th>
+                    <th scope="col" class="govuk-table__header">Status</th>
                     <th scope="col" class="govuk-table__header">Action</th>
                 </tr>
             </thead>
@@ -246,6 +238,23 @@
                             </td>
                             <td class="govuk-table__cell">@FormatFileSize(file.FileSize)</td>
                             <td class="govuk-table__cell">@(System.IO.Path.GetExtension(file.OriginalFileName)?.TrimStart('.').ToUpperInvariant() ?? "Unknown")</td>
+                            <td class="govuk-table__cell" data-file-validation-status="@file.Id">
+                                @{
+                                    var validationLabel = GovUK.Dfe.FlexForms.Web.Services.FileValidationUi.StatusText(file.ValidationStatus);
+                                }
+                                @if (!string.IsNullOrWhiteSpace(validationLabel))
+                                {
+                                    <span>@validationLabel</span>
+                                    @if (!string.IsNullOrWhiteSpace(file.ValidationMessage))
+                                    {
+                                        <span class="govuk-hint"> — @file.ValidationMessage</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span>—</span>
+                                }
+                            </td>
                             <td class="govuk-table__cell">
                                 <form method="post" asp-page="/FormEngine/RenderForm" asp-route-referenceNumber="@referenceNumber" asp-route-taskId="@taskId" asp-route-pageId="@actualPageId" asp-page-handler="DeleteFile" style="display:inline">
                                     <input type="hidden" name="FileId" value="@file.Id" />
@@ -275,7 +284,7 @@
                 else
                 {
                     <tr class="govuk-table__row">
-                        <td class="govuk-table__cell" colspan="4">No files uploaded yet</td>
+                        <td class="govuk-table__cell" colspan="5">No files uploaded yet</td>
                     </tr>
                 }
             </tbody>

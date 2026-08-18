@@ -1,6 +1,5 @@
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums;
-using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
-using GovUK.Dfe.FlexForms.Api.Client.Contracts;
+using GovUK.Dfe.FlexForms.Application.Admin;
 using GovUK.Dfe.FlexForms.Web.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,11 +12,9 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 /// Does not affect permissions inherited from the user's role.
 /// </summary>
 [Authorize(Policy = AdminAccessHelper.CanManageUsersPolicy)]
-public sealed class UserManagerPermissionsModel(
-    IUsersClient usersClient,
-    ILogger<UserManagerPermissionsModel> logger) : PageModel
+public sealed class UserManagerPermissionsModel(IUserManagerPermissionsAdmin userManagerPermissionsAdmin) : PageModel
 {
-    public const string AnyResourceKey = RoleManagerPermissionsModel.AnyResourceKey;
+    public const string AnyResourceKey = AdminPermissionGrants.AnyResourceKey;
 
     [BindProperty(SupportsGet = true)]
     public Guid UserId { get; set; }
@@ -48,206 +45,63 @@ public sealed class UserManagerPermissionsModel(
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
-        var loaded = await LoadAsync(cancellationToken);
-        return loaded ? Page() : RedirectToPage("/Admin/UserManager");
+        var state = CaptureWorkState();
+        var outcome = await userManagerPermissionsAdmin.LoadAsync(state, cancellationToken);
+        ApplyWorkState(state);
+        return MapOutcome(outcome);
     }
 
     public async Task<IActionResult> OnPostAddAsync(CancellationToken cancellationToken)
     {
-        if (!await LoadUserMetaAsync(cancellationToken))
-            return RedirectToPage("/Admin/UserManager");
-
-        SelectedGrants = NormalizeGrants(SelectedGrants);
-
-        var resourceKey = NewResourceKey?.Trim() ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(resourceKey))
-        {
-            ModelState.AddModelError(nameof(NewResourceKey), "Enter a resource key.");
-            return Page();
-        }
-
-        var validationError = ValidateUserGrant(NewResourceType, resourceKey, NewAccessType);
-        if (validationError is not null)
-        {
-            ModelState.AddModelError(nameof(NewResourceKey), validationError);
-            return Page();
-        }
-
-        var key = RoleManagerPermissionsModel.EncodeGrantKey(NewResourceType, resourceKey, NewAccessType);
-        if (SelectedGrants.Contains(key, StringComparer.OrdinalIgnoreCase))
-        {
-            ModelState.AddModelError(
-                string.Empty,
-                $"{NewResourceType} / {resourceKey} / {NewAccessType} is already in the list.");
-            return Page();
-        }
-
-        SelectedGrants.Add(key);
-        SelectedGrants = NormalizeGrants(SelectedGrants);
-
-        return await SaveAndReloadAsync(cancellationToken);
+        var state = CaptureWorkState();
+        var outcome = await userManagerPermissionsAdmin.AddGrantAsync(state, cancellationToken);
+        ApplyWorkState(state);
+        return MapOutcome(outcome);
     }
 
     public async Task<IActionResult> OnPostRemoveAsync(string grantKey, CancellationToken cancellationToken)
     {
-        // Remove form does not post Add fields; clear implicit required errors for them.
         ModelState.Remove(nameof(NewResourceKey));
         ModelState.Remove(nameof(NewResourceType));
         ModelState.Remove(nameof(NewAccessType));
 
-        if (!await LoadUserMetaAsync(cancellationToken))
-            return RedirectToPage("/Admin/UserManager");
-
-        SelectedGrants = NormalizeGrants(SelectedGrants);
-        SelectedGrants.RemoveAll(g => string.Equals(g, grantKey, StringComparison.OrdinalIgnoreCase));
-
-        return await SaveAndReloadAsync(cancellationToken);
+        var state = CaptureWorkState();
+        var outcome = await userManagerPermissionsAdmin.RemoveGrantAsync(state, grantKey, cancellationToken);
+        ApplyWorkState(state);
+        return MapOutcome(outcome);
     }
 
-    private async Task<IActionResult> SaveAndReloadAsync(CancellationToken cancellationToken)
+    private UserManagerPermissionsWorkState CaptureWorkState() =>
+        new()
+        {
+            UserId = UserId,
+            SelectedGrants = SelectedGrants,
+            NewResourceType = NewResourceType,
+            NewResourceKey = NewResourceKey,
+            NewAccessType = NewAccessType
+        };
+
+    private void ApplyWorkState(UserManagerPermissionsWorkState state)
     {
-        foreach (var grant in SelectedGrants.Select(ParseGrantKey).Where(g => g is not null))
-        {
-            var error = ValidateUserGrant(
-                grant!.Value.ResourceType,
-                grant.Value.ResourceKey,
-                grant.Value.AccessType);
-            if (error is not null)
-            {
-                ModelState.AddModelError(string.Empty, error);
-                return Page();
-            }
-        }
-
-        try
-        {
-            var grants = SelectedGrants
-                .Select(ParseGrantKey)
-                .Where(g => g is not null)
-                .Select(g => g!)
-                .Select(g => new RolePermissionGrantDto
-                {
-                    ResourceType = g.Value.ResourceType,
-                    ResourceKey = g.Value.ResourceKey,
-                    AccessType = g.Value.AccessType
-                })
-                .ToList();
-
-            await usersClient.SetUserPermissionsAsync(
-                UserId,
-                new SetUserPermissionsRequest { Permissions = grants },
-                cancellationToken);
-
-            NewResourceKey = string.Empty;
-            // Always re-load from the API so the list reflects tenant-filtered grants,
-            // not the posted form (which can contain stale cross-tenant entries).
-            await LoadPermissionsAsync(cancellationToken);
-            return Page();
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to save permissions for user {UserId}", UserId);
-            ModelState.AddModelError(string.Empty, UserManagerModel.GetErrorMessage(ex, "Could not save permissions."));
-            await LoadPermissionsAsync(cancellationToken);
-            return Page();
-        }
+        UserId = state.UserId;
+        UserName = state.UserName;
+        UserEmail = state.UserEmail;
+        SelectedGrants = state.SelectedGrants;
+        NewResourceType = state.NewResourceType;
+        NewResourceKey = state.NewResourceKey;
+        NewAccessType = state.NewAccessType;
     }
 
-    private async Task<bool> LoadAsync(CancellationToken cancellationToken)
+    private IActionResult MapOutcome(AdminPageOutcome outcome)
     {
-        if (!await LoadUserMetaAsync(cancellationToken))
-            return false;
+        foreach (var error in outcome.Errors)
+            ModelState.AddModelError(error.FieldKey, error.Message);
 
-        try
-        {
-            await LoadPermissionsAsync(cancellationToken);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to load permissions for user {UserId}", UserId);
-            TempData["UserManagerError"] = UserManagerModel.GetErrorMessage(ex, "Could not load user permissions.");
-            return false;
-        }
-    }
+        if (outcome.ErrorMessage != null)
+            TempData["UserManagerError"] = outcome.ErrorMessage;
 
-    private async Task LoadPermissionsAsync(CancellationToken cancellationToken)
-    {
-        var existing = await usersClient.GetUserPermissionsAsync(UserId, cancellationToken);
-        SelectedGrants = NormalizeGrants(
-            existing?
-                .Select(p => RoleManagerPermissionsModel.EncodeGrantKey(p.ResourceType, p.ResourceKey, p.AccessType))
-                .ToList() ?? []);
-    }
-
-    private async Task<bool> LoadUserMetaAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            var users = await usersClient.GetTenantUsersAsync(cancellationToken);
-            var user = users?.FirstOrDefault(u => u.UserId == UserId);
-            if (user is null)
-            {
-                TempData["UserManagerError"] = "User not found.";
-                return false;
-            }
-
-            UserName = user.Name;
-            UserEmail = user.Email;
-            return true;
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to load user {UserId}", UserId);
-            TempData["UserManagerError"] = UserManagerModel.GetErrorMessage(ex, "Could not load user.");
-            return false;
-        }
-    }
-
-    private static List<string> NormalizeGrants(IEnumerable<string>? grants) =>
-        (grants ?? [])
-            .Select(ParseGrantKey)
-            .Where(g => g is not null)
-            .Select(g => RoleManagerPermissionsModel.EncodeGrantKey(
-                g!.Value.ResourceType,
-                g.Value.ResourceKey,
-                g.Value.AccessType))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(g => g, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-    private static (ResourceType ResourceType, string ResourceKey, AccessType AccessType)? ParseGrantKey(string? key)
-    {
-        if (string.IsNullOrWhiteSpace(key))
-            return null;
-
-        var parts = key.Split('|', 3);
-        if (parts.Length != 3)
-            return null;
-
-        if (!Enum.TryParse<ResourceType>(parts[0], ignoreCase: true, out var resourceType))
-            return null;
-
-        if (string.IsNullOrWhiteSpace(parts[1]))
-            return null;
-
-        if (!Enum.TryParse<AccessType>(parts[2], ignoreCase: true, out var accessType))
-            return null;
-
-        return (resourceType, parts[1].Trim(), accessType);
-    }
-
-    /// <summary>
-    /// Same shape rules as role grants, but Manage is never allowed on an individual user.
-    /// </summary>
-    internal static string? ValidateUserGrant(ResourceType resourceType, string resourceKey, AccessType accessType)
-    {
-        if (accessType == AccessType.Manage)
-        {
-            return "Access type 'Manage' cannot be granted to an individual user. " +
-                   "Assign Manage via a tenant role instead.";
-        }
-
-        return RoleManagerPermissionsModel.ValidateGrant(resourceType, resourceKey, accessType);
+        return outcome.Kind == AdminPageOutcomeKind.RedirectToPage
+            ? RedirectToPage("/Admin/UserManager")
+            : Page();
     }
 }

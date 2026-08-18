@@ -3,12 +3,7 @@ using GovUK.Dfe.CoreLibs.Security.Authorization;
 using GovUK.Dfe.CoreLibs.Security.Configurations;
 using GovUK.Dfe.CoreLibs.Security.Interfaces;
 using GovUK.Dfe.CoreLibs.Security.OpenIdConnect;
-using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Application.Options;
-using GovUK.Dfe.FlexForms.Infrastructure.Parsers;
-using GovUK.Dfe.FlexForms.Infrastructure.Providers;
-using GovUK.Dfe.FlexForms.Infrastructure.Services;
-using GovUK.Dfe.FlexForms.Infrastructure.Stores;
 using GovUK.Dfe.FlexForms.Web.Authentication;
 using GovUK.Dfe.FlexForms.Web.Extensions;
 using GovUK.Dfe.FlexForms.Web.Filters;
@@ -30,6 +25,7 @@ using GovUK.Dfe.CoreLibs.Security.EntraSso;
 using GovUK.Dfe.CoreLibs.Security.TokenRefresh.Extensions;
 using System.IO.Compression;
 using GovUK.Dfe.FlexForms.Infrastructure.Consumers;
+using GovUK.Dfe.FlexForms.Web.Messaging;
 using GovUK.Dfe.CoreLibs.Messaging.Contracts.Messages.Events;
 using GovUK.Dfe.CoreLibs.Messaging.MassTransit.Extensions;
 using Microsoft.AspNetCore.Authentication;
@@ -41,8 +37,22 @@ using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using GovUK.Dfe.FlexForms.Web.Telemetry;
 using GovUK.Dfe.FlexForms.Web.Configuration;
+using GovUK.Dfe.CoreLibs.Http.Extensions;
+using Serilog;
+using Serilog.Events;
+using TelemetryConfiguration = Microsoft.ApplicationInsights.Extensibility.TelemetryConfiguration;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Host.UseSerilog((context, _, loggerConfiguration) =>
+{
+    loggerConfiguration
+        .MinimumLevel.Information()
+        .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+        .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
+        .Enrich.FromLogContext()
+        .WriteTo.Console();
+});
 
 builder.Configuration.AddJsonFile("appsettings.bootstrap.json", optional: true, reloadOnChange: true);
 
@@ -147,6 +157,9 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 
 builder.Services.AddApplicationInsightsTelemetry(configuration);
 
+builder.Logging.AddFilter<Microsoft.Extensions.Logging.ApplicationInsights.ApplicationInsightsLoggerProvider>(
+    (_, _) => false);
+
 // Filter out health check endpoints from Application Insights telemetry
 builder.Services.AddApplicationInsightsTelemetryProcessor<HealthCheckTelemetryFilter>();
 // Configure test authentication options
@@ -190,10 +203,19 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(optio
     options.ValueCountLimit = 1000;
 });
 
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddCorrelationId();
+builder.Services.AddScoped<IFlexFormsRequestScope, FlexFormsRequestScope>();
+
+builder.Services.AddScoped<ExternalApiPageExceptionFilter>();
+
+builder.Services.Configure<Microsoft.AspNetCore.Mvc.MvcOptions>(options =>
+{
+    options.Filters.AddService<ExternalApiPageExceptionFilter>();
+});
+
 builder.Services.AddRazorPages(options =>
 {
-    options.Conventions.ConfigureFilter(new ExternalApiPageExceptionFilter());
-
     options.Conventions.AuthorizeFolder("/", "OpenIdConnectPolicy");
     options.Conventions.AllowAnonymousToPage("/Logout");
 
@@ -493,8 +515,12 @@ builder.Services.AddAuthorization(options =>
         policy.RequireAssertion(ctx => AdminAccessHelper.CanManageUsers(ctx.User)));
     options.AddPolicy(AdminAccessHelper.CanManageTenantSettingsPolicy, policy =>
         policy.RequireAssertion(ctx => AdminAccessHelper.CanManageTenantSettings(ctx.User)));
+    options.AddPolicy(AdminAccessHelper.CanManagePlatformTenantsPolicy, policy =>
+        policy.RequireAssertion(ctx => AdminAccessHelper.CanManagePlatformTenants(ctx.User)));
     options.AddPolicy(AdminAccessHelper.CanManageEventMappingsPolicy, policy =>
         policy.RequireAssertion(ctx => AdminAccessHelper.CanManageEventMappings(ctx.User)));
+    options.AddPolicy(AdminAccessHelper.CanReadAnyApplicationPolicy, policy =>
+        policy.RequireAssertion(ctx => AdminAccessHelper.CanReadAnyApplication(ctx.User)));
 });
 
 builder.Services.AddScoped<ICustomClaimProvider, PermissionsClaimProvider>();
@@ -510,9 +536,6 @@ builder.Services.ConfigureHttpClientDefaults(http =>
 });
 
 builder.Services.AddTenantAwarePlatformServices(configuration);
-
-builder.Services.AddScoped<IContributorService, ContributorService>();
-builder.Services.AddScoped<IContributorPatternService, ContributorPatternService>();
 
 builder.Services.AddExternalApplicationsApiClients(configuration);
 
@@ -531,34 +554,11 @@ builder.Services.AddGovUkFrontend();
 builder.Services.AddSingleton<IActionContextAccessor, ActionContextAccessor>();
 builder.Services.AddScoped<IHtmlHelper, HtmlHelper>();
 builder.Services.AddWebLayerServices();
-builder.Services.AddScoped<IApplicationResponseService, ApplicationResponseService>();
 
 // Persist cookie tickets server-side so AuthenticationProperties (tokens) don't bloat the browser cookie
 builder.Services.AddSingleton<ITicketStore, DistributedCacheTicketStore>();
 builder.Services.AddSingleton<IPostConfigureOptions<CookieAuthenticationOptions>, ConfigureCookieTicketStore>();
 
-// New refactored services for Clean Architecture
-builder.Services.AddScoped<IFieldFormattingService, FieldFormattingService>();
-builder.Services.AddScoped<ITemplateManagementService, TemplateManagementService>();
-builder.Services.AddScoped<IApplicationStateService, ApplicationStateService>();
-builder.Services.AddScoped<IFileUploadService, FileUploadService>();
-
-// Conditional Logic Services
-builder.Services.AddScoped<IConditionalLogicEngine, ConditionalLogicEngine>();
-builder.Services.AddScoped<IConditionalLogicOrchestrator, ConditionalLogicOrchestrator>();
-
-// Derived Collection Flow Services
-builder.Services.AddScoped<IDerivedCollectionFlowService, DerivedCollectionFlowService>();
-
-builder.Services.AddScoped<IAutocompleteService, AutocompleteService>();
-builder.Services.AddScoped<ITemplateSelectionService, TemplateSelectionService>();
-builder.Services.AddScoped<IComplexFieldConfigurationService, ComplexFieldConfigurationService>();
-builder.Services.AddScoped<IComplexFieldRendererFactory, ComplexFieldRendererFactory>();
-builder.Services.AddScoped<IComplexFieldRenderer, AutocompleteComplexFieldRenderer>();
-builder.Services.AddScoped<IComplexFieldRenderer, CompositeComplexFieldRenderer>();
-builder.Services.AddScoped<IComplexFieldRenderer, UploadComplexFieldRenderer>();
-
-builder.Services.AddSingleton<ITemplateStore, ApiTemplateStore>(); 
 builder.Services.AddUserTokenService(configuration);
 
 // Always register Test Auth services so tenants can enable TestAuthentication in
@@ -574,9 +574,6 @@ builder.Services.AddScoped<IInternalServiceAuthenticationService, InternalServic
 
 builder.Services.AddServiceCaching(configuration);
 
-builder.Services.AddSingleton<IFormTemplateParser, JsonFormTemplateParser>();
-builder.Services.AddScoped<IFormTemplateProvider, FormTemplateProvider>();
-
 // Application terminology configuration (customisable per service, e.g. "application" vs "reform plan")
 builder.Services.Configure<ApplicationTerminologyOptions>(configuration.GetSection("ApplicationTerminology"));
 
@@ -585,15 +582,8 @@ builder.Services.Configure<NotificationBannerOptions>(configuration.GetSection("
 
 // Dashboard configuration (page size for application list pagination)
 builder.Services.Configure<DashboardOptions>(configuration.GetSection("Dashboard"));
-// Scoped so tenant-aware IOptions are not captured for the app lifetime.
-builder.Services.AddScoped<IApplicationTerminologyProvider, ApplicationTerminologyProvider>();
 
 builder.Services.AddTenantAwareOptionsAccessors(configuration);
-
-// Read-only event metadata for the Event mappings Admin page. Outbound mapped events are
-// published by the API from its own domain events, driven by the EventTriggers TenantConfig.
-builder.Services.AddScoped<ISchemaEventDefinitionProvider, SchemaEventDefinitionProvider>();
-builder.Services.AddSingleton<IEventTypeRegistry, EventTypeRegistry>();
 
 builder.Services.AddDfEMassTransit(
     configuration,
@@ -631,6 +621,7 @@ builder.Services.AddDfEMassTransit(
                 r.Interval(3, TimeSpan.FromSeconds(5)); // 3 retries, 5 seconds apart for real errors
             });
 
+            e.UseConsumeFilter(typeof(ScanResultTenantContextFilter<>), context);
             e.ConfigureConsumeTopology = false;
             e.ConfigureConsumer<ScanResultConsumer>(context);
         });
@@ -651,8 +642,21 @@ AppDomain.CurrentDomain.UnhandledException += (sender, args) =>
 
 var app = builder.Build();
 
+var telemetryConfig = app.Services.GetService<TelemetryConfiguration>();
+if (telemetryConfig is not null)
+{
+    Log.Logger = new LoggerConfiguration()
+        .MinimumLevel.Information()
+        .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+        .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
+        .Enrich.FromLogContext()
+        .WriteTo.Console()
+        .WriteTo.ApplicationInsights(telemetryConfig, new ExceptionTrackingTelemetryConverter())
+        .CreateLogger();
+}
+
 app.UseForwardedHeaders();
-app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseCorrelationId();
 app.UsePlatformTenantConfiguration();
 
 // Configure the HTTP request pipeline.
@@ -718,6 +722,7 @@ app.UseActivityBasedTokenRefresh(); // Session management: idle timeout 30min, a
 app.UsePermissionsCache();
 app.UseAuthorization();
 app.UseTemplateSelection();
+app.UseRequestTelemetryEnrichment();
 
 app.MapRazorPages();
 app.MapControllers();

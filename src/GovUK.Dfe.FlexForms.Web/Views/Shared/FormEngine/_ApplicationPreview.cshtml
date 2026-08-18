@@ -1,34 +1,18 @@
-@using System.Security.Claims
-@using System.Text.Json
 @model GovUK.Dfe.FlexForms.Web.Pages.FormEngine.RenderFormModel
-@inject GovUK.Dfe.FlexForms.Application.Interfaces.IDerivedCollectionFlowService DerivedFlowService
-@using GovUK.Dfe.FlexForms.Web.Tenancy
-@inject ITenantAppConfiguration AppConfig
-
+@using GovUK.Dfe.FlexForms.Web.ViewModels.FormEngine
 @{
-    var applicationId = Context.Session.GetString("ApplicationId");
-    var leadApplicantEmail = Context.Session.GetString($"ApplicationLeadApplicantEmail_{applicationId}");
-
-    // Use robust claim checking like authentication strategies do
-    var currentUserEmail = Context.User?.FindFirst(ClaimTypes.Email)?.Value 
-                        ?? Context.User?.FindFirst("email")?.Value
-                        ?? Context.User?.FindFirst("sub")?.Value
-                        ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                        ?? Context.User?.Identity?.Name;
-
-    var isLeadApplicant = string.Equals(currentUserEmail?.Trim(), leadApplicantEmail?.Trim(), StringComparison.InvariantCultureIgnoreCase);
-
-    bool submitIsDisabled = AppConfig.GetSection("Layout:SubmitAppDisabled").Exists();
+    var preview = Model.Preview;
+    var submit = preview?.Submit;
 }
 
-@if (submitIsDisabled)
+@if (submit?.SubmitDisabledByConfig == true)
 {
     <div class="govuk-notification-banner" role="region" aria-labelledby="govuk-notification-banner-title" data-module="govuk-notification-banner">
         <div class="govuk-notification-banner__header">
             <h2 class="govuk-notification-banner__title" id="govuk-notification-banner-title">Important</h2>
         </div>
         <div class="govuk-notification-banner__content">
-            @AppConfig["Layout:SubmitAppDisabled:BannerText"]
+            @submit.DisabledBannerText
             You can still work on your @AppTerminology.Singular and save it.
         </div>
     </div>
@@ -49,29 +33,24 @@
             </govuk-error-summary>
         }
 
-        @foreach (var group in Model.Template.TaskGroups.OrderBy(g => g.GroupOrder))
+        @if (preview != null)
         {
-
-            var groupNameHyphenated = group.GroupName.Replace(" ", "-").ToLower();
-
-            <h2 class="govuk-heading-m" id="group-@groupNameHyphenated" data-testid="group-@groupNameHyphenated">
-                @group.GroupName
-            </h2>
-
-            @foreach (var task in group.Tasks.OrderBy(t => t.TaskOrder))
+            @foreach (var group in preview.Groups)
             {
-                @if (task.Summary?.Mode?.Equals("derivedCollectionFlow", StringComparison.OrdinalIgnoreCase) == true || (task.Summary?.DerivedFlows != null && task.Summary.DerivedFlows.Any()))
-                {
-                    var taskNameHyphenated = task.TaskName.Replace(" ", "-").ToLower();
+                <h2 class="govuk-heading-m" id="group-@group.TestId" data-testid="group-@group.TestId">
+                    @group.GroupName
+                </h2>
 
-                    <div class="govuk-summary-card govuk-!-margin-bottom-6" id="task-@taskNameHyphenated-summary">
+                @foreach (var task in group.Tasks)
+                {
+                    <div class="govuk-summary-card govuk-!-margin-bottom-6" id="task-@task.TestId-summary">
                         <div class="govuk-summary-card__title-wrapper">
                             <h2 class="govuk-summary-card__title">@task.TaskName</h2>
-                            @if (Model.IsApplicationEditable())
+                            @if (submit?.IsEditable == true)
                             {
                                 <ul class="govuk-summary-card__actions">
                                     <li class="govuk-summary-card__action">
-                                        <a class="govuk-link" href="/applications/@Model.ReferenceNumber/@task.TaskId" id="task-@taskNameHyphenated-change-link">
+                                        <a class="govuk-link" href="@task.ChangeUrl" id="task-@task.TestId-change-link">
                                             Change<span class="govuk-visually-hidden"> @task.TaskName</span>
                                         </a>
                                     </li>
@@ -80,559 +59,9 @@
                         </div>
                         <div class="govuk-summary-card__content">
                             <dl class="govuk-summary-list">
-                                @foreach (var derivedFlow in (task.Summary.DerivedFlows ?? new List<GovUK.Dfe.FlexForms.Domain.Models.DerivedCollectionFlowConfiguration>()).OrderBy(f => f.SectionOrder))
+                                @foreach (var row in task.Rows)
                                 {
-                                    var derivedItems = DerivedFlowService.GenerateItemsFromSourceField(
-                                        derivedFlow.SourceFieldId, Model.FormData, derivedFlow);
-                                    
-                                    <div class="govuk-summary-list__row">
-                                        <dt class="govuk-summary-list__key" style="font-weight: bold;">
-                                            @derivedFlow.Title
-                                        </dt>
-                                        <dd class="govuk-summary-list__value">
-                                        </dd>
-                                    </div>
-                                    
-                                    @if (!derivedItems.Any())
-                                    {
-                                        <div class="govuk-summary-list__row">
-                                            <dt class="govuk-summary-list__key">
-                                                No items
-                                            </dt>
-                                            <dd class="govuk-summary-list__value">
-                                                <span class="govuk-hint">@(derivedFlow.EmptyStateMessage ?? "No items to display")</span>
-                                            </dd>
-                                        </div>
-                                    }
-                                    else
-                                    {
-                                        var statuses = DerivedFlowService.GetItemStatuses(derivedFlow.FieldId, Model.FormData);
-                                        @foreach (var (item, itemIndex) in derivedItems.Select((item, i) => (item, i)))
-                                        {
-                                            var declarationData = DerivedFlowService.GetItemDeclarationData(derivedFlow.FieldId, item.Id, Model.FormData);
-                                            var status = statuses.TryGetValue(item.Id, out var s) ? s : "Not signed yet";
-                                            
-                                            <div class="govuk-summary-list__row">
-                                                <dt class="govuk-summary-list__key" style="font-weight: bold;">
-                                                    @item.DisplayName
-                                                </dt>
-                                                <dd class="govuk-summary-list__value">
-                                                    @{
-                                                        var statusClass = status == "Signed" ? "govuk-tag govuk-tag--green" : "govuk-tag govuk-tag--blue";
-                                                    }
-                                                    <span class="@statusClass">@status</span>
-                                                </dd>
-                                            </div>
-                                            
-                                            @foreach (var page in (derivedFlow.Pages ?? new List<GovUK.Dfe.FlexForms.Domain.Models.Page>()).OrderBy(p => p.PageOrder))
-                                            {
-                                                @foreach (var field in page.Fields.OrderBy(f => f.Order))
-                                                {
-                                                    var fieldValue = declarationData.TryGetValue(field.FieldId, out var v) ? v?.ToString() : string.Empty;
-                                                    var hasValue = !string.IsNullOrEmpty(fieldValue);
-                                                    
-                                                    <div class="govuk-summary-list__row">
-                                                        <dt class="govuk-summary-list__key">
-                                                            @field.Label.Value
-                                                        </dt>
-                                                        <dd class="govuk-summary-list__value">
-                                                            @if (hasValue)
-                                                            {
-                                                                var isUploadField = fieldValue.StartsWith("[") && fieldValue.Contains("\"id\"");
-                                                                
-                                                                @if (isUploadField)
-                                                                {
-                                                                    try
-                                                                    {
-                                                                        var uploadFiles = System.Text.Json.JsonSerializer.Deserialize<List<GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response.UploadDto>>(fieldValue);
-                                                                        if (uploadFiles != null && uploadFiles.Any())
-                                                                        {
-                                                                            @foreach (var file in uploadFiles)
-                                                                            {
-                                                                                <div>
-                                                                                    <form method="post" asp-page="/FormEngine/RenderForm" asp-route-referenceNumber="@Model.ReferenceNumber" asp-route-taskId="@task.TaskId" asp-page-handler="DownloadFile" style="display:inline">
-                                                                                        <input type="hidden" name="FileId" value="@file.Id" />
-                                                                                        <input type="hidden" name="ApplicationId" value="@Model.ApplicationId" />
-                                                                                        <button type="submit" class="govuk-link" style="border: none; background: none; padding: 0; color: #1d70b8; text-decoration: underline; cursor: pointer;">
-                                                                                            @file.OriginalFileName
-                                                                                        </button>
-                                                                                    </form>
-                                                                                </div>
-                                                                            }
-                                                                        }
-                                                                        else
-                                                                        {
-                                                                            @Html.Raw(fieldValue.Replace("\r\n", "<br/>").Replace("\r", "<br/>").Replace("\n", "<br/>"))
-                                                                        }
-                                                                    }
-                                                                    catch
-                                                                    {
-                                                                        @Html.Raw(fieldValue.Replace("\r\n", "<br/>").Replace("\r", "<br/>").Replace("\n", "<br/>"))
-                                                                    }
-                                                                }
-                                                                else if (field.Type == "radios" && field.Options != null)
-                                                                {
-                                                                    var selectedOption = field.Options.FirstOrDefault(o => o.Value == fieldValue);
-                                                                    @Html.Raw(selectedOption?.Label ?? fieldValue)
-                                                                }
-                                                                else if (field.Type == "select" && field.Options != null)
-                                                                {
-                                                                    var selectedOption = field.Options.FirstOrDefault(o => o.Value == fieldValue);
-                                                                    @Html.Raw(selectedOption?.Label ?? fieldValue)
-                                                                }
-                                                                else if (field.Type == "checkboxes" && field.Options != null)
-                                                                {
-                                                                    var selectedValues = Model.GetFormattedFieldValues(field.FieldId);
-                                                                    var selectedLabels = field.Options
-                                                                        .Where(o => selectedValues.Contains(o.Value))
-                                                                        .Select(o => o.Label ?? o.Value)
-                                                                        .ToList();
-
-                                                                    if (selectedLabels.Any())
-                                                                    {
-                                                                        <ul class="govuk-list govuk-list--bullet">
-                                                                            @foreach (var label in selectedLabels)
-                                                                            {
-                                                                                <li>@label</li>
-                                                                            }
-                                                                        </ul>
-                                                                    }
-                                                                    else
-                                                                    {
-                                                                        @Html.Raw(fieldValue.Replace("\r\n", "<br/>").Replace("\r", "<br/>").Replace("\n", "<br/>"))
-                                                                    }
-                                                                }
-                                                                else
-                                                                {
-                                                                    @Html.Raw(fieldValue.Replace("\r\n", "<br/>").Replace("\r", "<br/>").Replace("\n", "<br/>"))
-                                                                }
-                                                            }
-                                                            else
-                                                            {
-                                                                <span class="govuk-hint">Not answered</span>
-                                                            }
-                                                        </dd>
-                                                    </div>
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            </dl>
-                        </div>
-                    </div>
-                }
-                else if (task.Summary?.Mode?.Equals("multiCollectionFlow", StringComparison.OrdinalIgnoreCase) == true)
-                {
-                    // Multi-collection flow task: Display all flows in one table
-                    var taskNameHyphenated = task.TaskName.Replace(" ", "-").ToLower();
-
-                    <div class="govuk-summary-card govuk-!-margin-bottom-6" id="task-@taskNameHyphenated-summary">
-                        <div class="govuk-summary-card__title-wrapper">
-                            <h2 class="govuk-summary-card__title">@task.TaskName</h2>
-                            @if (Model.IsApplicationEditable())
-                            {
-                                <ul class="govuk-summary-card__actions">
-                                    <li class="govuk-summary-card__action">
-                                        <a class="govuk-link" href="/applications/@Model.ReferenceNumber/@task.TaskId" id="task-@taskNameHyphenated-change-link">
-                                            Change<span class="govuk-visually-hidden"> @task.TaskName</span>
-                                        </a>
-                                    </li>
-                                </ul>
-                            }
-                        </div>
-                        <div class="govuk-summary-card__content">
-                            <dl class="govuk-summary-list">
-                                @foreach (var (flow, flowIndex) in (task.Summary.Flows ?? new List<GovUK.Dfe.FlexForms.Domain.Models.MultiCollectionFlowConfiguration>()).Select((f, i) => (f, i)))
-                                {
-                                    var fieldId = flow.FieldId;
-                                    Model.FormData.TryGetValue(fieldId, out var raw);
-                                    var json = raw?.ToString() ?? "[]";
-                                    
-                                    List<Dictionary<string, object>> items = new();
-                                    try { items = System.Text.Json.JsonSerializer.Deserialize<List<Dictionary<string, object>>>(json) ?? new(); } catch { }
-                                    
-                                    // Add flow header (no gray background, just bold text)
-                                    <div class="govuk-summary-list__row">
-                                        <dt class="govuk-summary-list__key" style="font-weight: bold;">
-                                            @flow.Title
-                                        </dt>
-                                        <dd class="govuk-summary-list__value">
-                                            <!-- Flow header -->
-                                        </dd>
-                                    </div>
-                                    
-                                    @if (items.Count == 0)
-                                    {
-                                        <div class="govuk-summary-list__row">
-                                            <dt class="govuk-summary-list__key">
-                                                No items added
-                                            </dt>
-                                            <dd class="govuk-summary-list__value">
-                                                <span class="govuk-hint">Not answered</span>
-                                            </dd>
-                                        </div>
-                                    }
-                                    else
-                                    {
-                                        @foreach (var (item, itemIndex) in items.Select((item, i) => (item, i)))
-                                        {
-                                            var itemNumber = itemIndex + 1;
-                                            var expandedItem = DisplayHelpers.ExpandEncodedJson(item);
-                                            var summaryColumns = flow.SummaryColumns ?? new List<GovUK.Dfe.FlexForms.Domain.Models.FlowSummaryColumn>();
-                                            Model.EnsureItemFieldVisibility(item, summaryColumns.Select(c => c.Field));
-                                            // Use itemTitleBinding to get the proper label (e.g., "Member", "Person") instead of "Item"
-                                            var itemLabel = flow.ItemKind ?? "Item";
-                                            var displayTitle = !string.IsNullOrEmpty(flow.ItemTitleBinding)
-                                                ? DisplayHelpers.InterpolateMessage($"{{{flow.ItemTitleBinding}}}", expandedItem)
-                                                : $"{itemLabel} {itemNumber}";
-                                            
-                                            // Add item header (no gray background, just bold text)
-                                            <div class="govuk-summary-list__row">
-                                                <dt class="govuk-summary-list__key" style="font-weight: bold;">
-                                                    @displayTitle
-                                                </dt>
-                                                <dd class="govuk-summary-list__value">
-                                                    <!-- Item header - no value needed -->
-                                                </dd>
-                                            </div>
-                                            
-                                            // Display each field for this collection item
-                                            @foreach (var col in summaryColumns.Where(c => !Model.IsFieldHiddenForItem(c.Field, item)))
-                                            {
-                                                var rawValue = DisplayHelpers.InterpolateMessage($"{{{col.Field}}}", expandedItem);
-                                                var value = rawValue == $"{{{col.Field}}}" ? string.Empty : rawValue;
-                                                
-                                                <div class="govuk-summary-list__row">
-                                                    <dt class="govuk-summary-list__key">
-                                                        @col.Label
-                                                    </dt>
-                                                    <dd class="govuk-summary-list__value">
-                                                        @if (!string.IsNullOrEmpty(value))
-                                                        {
-                                                            // Temporarily set the item's field value into FormData and use the normal formatter
-                                                            var originalValue = Model.FormData.TryGetValue(col.Field, out var orig) ? orig : null;
-                                                            Model.FormData[col.Field] = value;
-                                                            var formattedValues = Model.GetFormattedFieldValues(col.Field);
-                                                            if (originalValue != null)
-                                                                Model.FormData[col.Field] = originalValue;
-                                                            else
-                                                                Model.FormData.Remove(col.Field);
-
-                                                            // Check if this is an upload field by looking at the raw value
-                                                            var isUploadField = !string.IsNullOrEmpty(value) && value.StartsWith("[") && value.Contains("\"id\"");
-                                                            
-                                                            if (formattedValues.Count == 0)
-                                                            {
-                                                                <span class="govuk-hint">Not answered</span>
-                                                            }
-                                                            else if (formattedValues.Count == 1)
-                                                            {
-                                                                @if (isUploadField)
-                                                                {
-                                                                    // For upload fields, render as download link
-                                                                    try
-                                                                    {
-                                                                        var uploadFiles = System.Text.Json.JsonSerializer.Deserialize<List<GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response.UploadDto>>(value);
-                                                                        if (uploadFiles != null && uploadFiles.Any())
-                                                                        {
-                                                                            var file = uploadFiles.First();
-                                                                            <form method="post" asp-page="/FormEngine/RenderForm" asp-route-referenceNumber="@Model.ReferenceNumber" asp-route-taskId="@task.TaskId" asp-page-handler="DownloadFile" style="display:inline">
-                                                                                <input type="hidden" name="FileId" value="@file.Id" />
-                                                                                <input type="hidden" name="ApplicationId" value="@Model.ApplicationId" />
-                                                                                <button type="submit" class="govuk-link" style="border: none; background: none; padding: 0; color: #1d70b8; text-decoration: underline; cursor: pointer;">
-                                                                                    @file.OriginalFileName
-                                                                                </button>
-                                                                            </form>
-                                                                        }
-                                                                        else
-                                                                        {
-                                                                            @Html.Raw(formattedValues.First())
-                                                                        }
-                                                                    }
-                                                                    catch
-                                                                    {
-                                                                        @Html.Raw(formattedValues.First())
-                                                                    }
-                                                                }
-                                                                else
-                                                                {
-                                                                    @Html.Raw(formattedValues.First())
-                                                                }
-                                                            }
-                                                            else
-                                                            {
-                                                                @if (isUploadField)
-                                                                {
-                                                                    // For upload fields with multiple files, render each as download link
-                                                                    try
-                                                                    {
-                                                                        var uploadFiles = System.Text.Json.JsonSerializer.Deserialize<List<GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response.UploadDto>>(value);
-                                                                        if (uploadFiles != null && uploadFiles.Any())
-                                                                        {
-                                                                            @foreach (var file in uploadFiles)
-                                                                            {
-                                                                                <div>
-                                                                                    <form method="post" asp-page="/FormEngine/RenderForm" asp-route-referenceNumber="@Model.ReferenceNumber" asp-route-taskId="@task.TaskId" asp-page-handler="DownloadFile" style="display:inline">
-                                                                                        <input type="hidden" name="FileId" value="@file.Id" />
-                                                                                        <input type="hidden" name="ApplicationId" value="@Model.ApplicationId" />
-                                                                                        <button type="submit" class="govuk-link" style="border: none; background: none; padding: 0; color: #1d70b8; text-decoration: underline; cursor: pointer;">
-                                                                                            @file.OriginalFileName
-                                                                        </button>
-                                                                    </form>
-                                                                </div>
-                                                            }
-                                                        }
-                                                        else
-                                                        {
-                                                            foreach (var fv in formattedValues)
-                                                            {
-                                                                <div>@Html.Raw(fv)</div>
-                                                            }
-                                                        }
-                                                    }
-                                                    catch
-                                                    {
-                                                        foreach (var fv in formattedValues)
-                                                        {
-                                                            <div>@Html.Raw(fv)</div>
-                                                        }
-                                                    }
-                                                }
-                                                else
-                                                {
-                                                    foreach (var fv in formattedValues)
-                                                    {
-                                                        <div>@Html.Raw(fv)</div>
-                                                    }
-                                                }
-                                            }
-                                                        }
-                                                        else
-                                                        {
-                                                            <span class="govuk-hint">Not answered</span>
-                                                        }
-                                                    </dd>
-                                                </div>
-                                            }
-                                        }
-                                    }
-                                }
-                            </dl>
-                        </div>
-                    </div>
-                }
-                else
-                {
-                    // Regular task: Display page/field data in single summary card
-                    var taskNameHyphenated = task.TaskName.Replace(" ", "-").ToLower();
-
-                    <div class="govuk-summary-card govuk-!-margin-bottom-6" id="task-@taskNameHyphenated-summary">
-                        <div class="govuk-summary-card__title-wrapper">
-                            <h2 class="govuk-summary-card__title">@task.TaskName</h2>
-                            @if (Model.IsApplicationEditable())
-                            {
-                                <ul class="govuk-summary-card__actions">
-                                    <li class="govuk-summary-card__action">
-                                        <a class="govuk-link" href="/applications/@Model.ReferenceNumber/@task.TaskId" id="task-@taskNameHyphenated-change-link">
-                                            Change<span class="govuk-visually-hidden"> @task.TaskName</span>
-                                        </a>
-                                    </li>
-                                </ul>
-                            }
-                        </div>
-                        <div class="govuk-summary-card__content">
-                            <dl class="govuk-summary-list">
-                                @foreach (var page in (task.Pages ?? new List<GovUK.Dfe.FlexForms.Domain.Models.Page>()).OrderBy(p => p.PageOrder))
-                                {
-                                    @foreach (var field in page.Fields.OrderBy(f => f.Order).Where(f => !Model.IsFieldHidden(f.FieldId)))
-                                    {
-                                        var fieldValue = Model.GetFieldValue(field.FieldId);
-                                        var hasValue = Model.HasFieldValue(field.FieldId);
-                                
-                                                                                 if ((field.Type == "autocomplete" || field.Type == "complexField" || field.Type == "upload") && hasValue)
-                                         {
-                                             // Handle multiple autocomplete/complex field values as main header + individual rows
-                                             var formattedValues = Model.GetFormattedFieldValues(field.FieldId);
-                                             var itemLabel = Model.GetFieldItemLabel(field.FieldId);
-                                             var allowMultiple = Model.IsFieldAllowMultiple(field.FieldId);
-                                             
-                                             // Check if this is an upload field by looking at the raw value
-                                             var isUploadField = !string.IsNullOrEmpty(fieldValue) && fieldValue.StartsWith("[") && fieldValue.Contains("\"id\"");
-                                     
-                                             // Show main field header
-                                             <div class="govuk-summary-list__row">
-                                                 <dt class="govuk-summary-list__key">
-                                                     @field.Label.Value
-                                                 </dt>
-                                                 <dd class="govuk-summary-list__value">
-                                                     @if (formattedValues.Count == 0)
-                                                     {
-                                                         <span class="govuk-hint">Not answered</span>
-                                                     }
-                                                    else if (!allowMultiple)
-                                                    {
-                                                        @if (isUploadField)
-                                                        {
-                                                            // For upload fields, render as download link
-                                                            try
-                                                            {
-                                                                var uploadFiles = System.Text.Json.JsonSerializer.Deserialize<List<GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response.UploadDto>>(fieldValue);
-                                                                if (uploadFiles != null && uploadFiles.Any())
-                                                                {
-                                                                    var file = uploadFiles.First();
-                                                                    <form method="post" asp-page="/FormEngine/RenderForm" asp-route-referenceNumber="@Model.ReferenceNumber" asp-route-taskId="@task.TaskId" asp-page-handler="DownloadFile" style="display:inline">
-                                                                        <input type="hidden" name="FileId" value="@file.Id" />
-                                                                        <input type="hidden" name="ApplicationId" value="@Model.ApplicationId" />
-                                                                        <button type="submit" class="govuk-link" style="border: none; background: none; padding: 0; color: #1d70b8; text-decoration: underline; cursor: pointer;">
-                                                                            @file.OriginalFileName
-                                                                        </button>
-                                                                    </form>
-                                                                }
-                                                                 else
-                                                                 {
-                                                                     @Html.Raw(formattedValues.FirstOrDefault())
-                                                                 }
-                                                             }
-                                                             catch
-                                                             {
-                                                                 @Html.Raw(formattedValues.FirstOrDefault())
-                                                             }
-                                                         }
-                                                         else
-                                                         {
-
-                                                             var html = RenderAutocompleteSummary(DisplayHelpers.UnsanitiseHtmlInput(fieldValue));
-                                                             @Html.Raw(html)
-                                                         }
-                                                     }
-                                                 </dd>
-                                             </div>
-
-                                             // Show individual items if multiple selection is enabled
-                                             @if (allowMultiple && formattedValues.Count > 0)
-                                             {
-                                                @if (isUploadField)
-                                                {
-                                                    // For upload fields with multiple files, render each as download link
-                                                    try
-                                                    {
-                                                        var uploadFiles = System.Text.Json.JsonSerializer.Deserialize<List<GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response.UploadDto>>(fieldValue);
-                                                        if (uploadFiles != null && uploadFiles.Any())
-                                                        {
-                                                            @foreach (var (file, index) in uploadFiles.Select((f, i) => (f, i)))
-                                                            {
-                                                                <div class="govuk-summary-list__row">
-                                                                    <dt class="govuk-summary-list__key">
-                                                                        @itemLabel @(index + 1)
-                                                                    </dt>
-                                                                    <dd class="govuk-summary-list__value">
-                                                                        <form method="post" asp-page="/FormEngine/RenderForm" asp-route-referenceNumber="@Model.ReferenceNumber" asp-route-taskId="@task.TaskId" asp-page-handler="DownloadFile" style="display:inline">
-                                                                            <input type="hidden" name="FileId" value="@file.Id" />
-                                                                             <input type="hidden" name="ApplicationId" value="@Model.ApplicationId" />
-                                                                             <button type="submit" class="govuk-link" style="border: none; background: none; padding: 0; color: #1d70b8; text-decoration: underline; cursor: pointer;">
-                                                                                 @file.OriginalFileName
-                                                                             </button>
-                                                                         </form>
-                                                                     </dd>
-                                                                 </div>
-                                                             }
-                                                         }
-                                                     }
-                                                     catch
-                                                     {
-                                                         // Fallback to original behavior if parsing fails
-                                                         @foreach (var (value, index) in formattedValues.Select((v, i) => (v, i)))
-                                                         {
-                                                             <div class="govuk-summary-list__row">
-                                                                 <dt class="govuk-summary-list__key">
-                                                                     @itemLabel @(index + 1)
-                                                                 </dt>
-                                                                 <dd class="govuk-summary-list__value">
-                                                                     @Html.Raw(value)
-                                                                 </dd>
-                                                                 </div>
-                                                         }
-                                                     }
-                                                 }
-                                                 else
-                                                 {
-                                                     @foreach (var (value, index) in formattedValues.Select((v, i) => (v, i)))
-                                                     {
-                                                         <div class="govuk-summary-list__row">
-                                                             <dt class="govuk-summary-list__key">
-                                                                 @itemLabel @(index + 1)
-                                                             </dt>
-                                                             <dd class="govuk-summary-list__value">
-                                                                 @Html.Raw(value)
-                                                             </dd>
-                                                         </div>
-                                                     }
-                                                 }
-                                             }
-                                         }
-                                        else
-                                        {
-                                            <div class="govuk-summary-list__row">
-                                                <dt class="govuk-summary-list__key">
-                                                    @field.Label.Value
-                                                </dt>
-                                                <dd class="govuk-summary-list__value">
-                                                    @if (hasValue)
-                                                    {
-                                                        // Check if this is an upload field by looking at the raw value
-                                                        var isUploadField = !string.IsNullOrEmpty(fieldValue) && fieldValue.StartsWith("[") && fieldValue.Contains("\"id\"");
-                                                        
-                                                        @if (isUploadField)
-                                                        {
-                                                            // For upload fields, render as download link
-                                                            try
-                                                            {
-                                                                var uploadFiles = System.Text.Json.JsonSerializer.Deserialize<List<GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response.UploadDto>>(fieldValue);
-                                                                if (uploadFiles != null && uploadFiles.Any())
-                                                                {
-                                                                    var file = uploadFiles.First();
-                                                                    <form method="post" asp-page="/FormEngine/RenderForm" asp-route-referenceNumber="@Model.ReferenceNumber" asp-route-taskId="@task.TaskId" asp-page-handler="DownloadFile" style="display:inline">
-                                                                        <input type="hidden" name="FileId" value="@file.Id" />
-                                                                        <input type="hidden" name="ApplicationId" value="@Model.ApplicationId" />
-                                                                        <button type="submit" class="govuk-link" style="border: none; background: none; padding: 0; color: #1d70b8; text-decoration: underline; cursor: pointer;">
-                                                                            @file.OriginalFileName
-                                                                        </button>
-                                                                    </form>
-                                                                }
-                                                                else
-                                                                {
-                                                                    @Html.Raw(fieldValue.Replace("\r\n", "<br/>").Replace("\r", "<br/>").Replace("\n", "<br/>"))
-                                                                }
-                                                            }
-                                                            catch
-                                                            {
-                                                                @Html.Raw(fieldValue.Replace("\r\n", "<br/>").Replace("\r", "<br/>").Replace("\n", "<br/>"))
-                                                            }
-                                                        }
-                                                        else if (field.Type == "radios" && field.Options != null)
-                                                        {
-                                                            var selectedOption = field.Options.FirstOrDefault(o => o.Value == fieldValue);
-                                                            @(selectedOption?.Label ?? fieldValue)
-                                                        }
-                                                        else if (field.Type == "select" && field.Options != null)
-                                                        {
-                                                            var selectedOption = field.Options.FirstOrDefault(o => o.Value == fieldValue);
-                                                            @(selectedOption?.Label ?? fieldValue)
-                                                        }
-                                                        else
-                                                        {
-                                                            @Html.Raw(fieldValue.Replace("\r\n", "<br/>").Replace("\r", "<br/>").Replace("\n", "<br/>"))
-                                                        }
-                                                    }
-                                                    else
-                                                    {
-                                                        <span class="govuk-hint">Not answered</span>
-                                                    }
-                                                </dd>
-                                            </div>
-                                        }
-                                    }
+                                    @await Html.PartialAsync("FormEngine/_SummaryRow", row)
                                 }
                             </dl>
                         </div>
@@ -643,24 +72,53 @@
     </div>
 </div>
 
-@if (Model.IsApplicationEditable() && isLeadApplicant)
+@if (submit?.ShowSubmitSection == true)
 {
     <div class="govuk-!-margin-top-6">
         <h2 class="govuk-heading-m govuk-!-margin-top-9">Submit your @AppTerminology.Singular</h2>
 
-
-        @if (submitIsDisabled)
+        @if (submit.SubmitDisabledByConfig)
         {
-            <p class="govuk-body">@AppConfig["Layout:SubmitAppDisabled:HelpText"]</p>
+            <p class="govuk-body">@submit.DisabledHelpText</p>
             <p class="govuk-body">You'll see a <b>Submit</b> button here when they're open.</p>
             <p class="govuk-body">You can still work on your @AppTerminology.Singular and save it.</p>
+        }
+        else if (submit.FileValidationBlocksSubmit)
+        {
+            <div class="govuk-error-summary" data-module="govuk-error-summary">
+                <div role="alert">
+                    <h2 class="govuk-error-summary__title">There is a problem</h2>
+                    <div class="govuk-error-summary__body">
+                        <p class="govuk-body">You cannot submit until uploaded files pass validation.</p>
+                        <ul class="govuk-list govuk-error-summary__list">
+                            @foreach (var file in submit.BlockingFiles)
+                            {
+                                <li>
+                                    <span>@file.OriginalFileName</span>
+                                    @if (!string.IsNullOrWhiteSpace(file.ValidationMessage))
+                                    {
+                                        <span> — @file.ValidationMessage</span>
+                                    }
+                                    else if (file.ValidationStatus == GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums.FileValidationStatus.Pending)
+                                    {
+                                        <span> — validation is still running</span>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <button class="govuk-button" type="button" disabled="disabled" aria-disabled="true" id="submit-application-button">
+                Submit
+            </button>
         }
         else
         {
             <p class="govuk-body">By submitting this @AppTerminology.Singular you are confirming that, to the best of your knowledge, the details you are providing are correct.</p>
             <form method="post" asp-page-handler="SubmitApplication">
                 <input type="hidden" asp-for="ReferenceNumber"/>
-                @if (ViewContext.HttpContext.Request.Query.ContainsKey("preview"))
+                @if (submit.IncludePreviewQuery)
                 {
                     <input type="hidden" name="preview" value="true"/>
                 }
@@ -669,56 +127,13 @@
                 </govuk-button>
             </form>
         }
-
-
     </div>
 }
-else if (Model.IsApplicationEditable() && !isLeadApplicant)
+else if (submit?.ShowLeadApplicantInset == true)
 {
     <div class="govuk-!-margin-top-6">
         <div class="govuk-inset-text">
             <p class="govuk-body">Only the lead applicant can submit this @AppTerminology.Singular.</p>
         </div>
     </div>
-}
-
-@functions {
-    // Builds HTML matching confirmation page formatting for a single autocomplete selection
-    private static string RenderAutocompleteSummary(string rawValue)
-    {
-        if (string.IsNullOrWhiteSpace(rawValue)) return string.Empty;
-        try
-        {
-            using var doc = JsonDocument.Parse(rawValue);
-            if (doc.RootElement.ValueKind != JsonValueKind.Object)
-            {
-                return System.Net.WebUtility.HtmlEncode(rawValue);
-            }
-
-            var root = doc.RootElement;
-            string name = root.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() ?? string.Empty : string.Empty;
-            string postcode = root.TryGetProperty("postcode", out var pc) && pc.ValueKind == JsonValueKind.String ? pc.GetString() ?? string.Empty : string.Empty;
-            if (string.IsNullOrWhiteSpace(postcode) && root.TryGetProperty("postCode", out var pc2) && pc2.ValueKind == JsonValueKind.String) postcode = pc2.GetString() ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(postcode) && root.TryGetProperty("address", out var addr) && addr.ValueKind == JsonValueKind.Object)
-            {
-                if (addr.TryGetProperty("postcode", out var apc) && apc.ValueKind == JsonValueKind.String) postcode = apc.GetString() ?? string.Empty;
-                if (string.IsNullOrWhiteSpace(postcode) && addr.TryGetProperty("postCode", out var apc2) && apc2.ValueKind == JsonValueKind.String) postcode = apc2.GetString() ?? string.Empty;
-                if (string.IsNullOrWhiteSpace(postcode) && addr.TryGetProperty("postalCode", out var apc3) && apc3.ValueKind == JsonValueKind.String) postcode = apc3.GetString() ?? string.Empty;
-            }
-            string ukprn = root.TryGetProperty("ukprn", out var u) ? u.ToString() : string.Empty;
-            string ch = root.TryGetProperty("companiesHouseNumber", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString() ?? string.Empty : string.Empty;
-            if (string.IsNullOrWhiteSpace(ch) && root.TryGetProperty("companiesHousenumber", out var c2)) ch = c2.ToString();
-
-            var sb = new System.Text.StringBuilder();
-            if (!string.IsNullOrWhiteSpace(name)) sb.Append($"<strong class=\"govuk-!-font-weight-bold\">{System.Net.WebUtility.HtmlEncode(name)}</strong>");
-            if (!string.IsNullOrWhiteSpace(postcode)) sb.Append($"<br/>Postcode: {System.Net.WebUtility.HtmlEncode(postcode)}");
-            if (!string.IsNullOrWhiteSpace(ukprn)) sb.Append($"<br/>UKPRN: {System.Net.WebUtility.HtmlEncode(ukprn)}");
-            if (!string.IsNullOrWhiteSpace(ch)) sb.Append($"<br/>Companies house number: {System.Net.WebUtility.HtmlEncode(ch)}");
-            return sb.ToString();
-        }
-        catch
-        {
-            return System.Net.WebUtility.HtmlEncode(rawValue);
-        }
-    }
 }

@@ -1,34 +1,29 @@
 using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.CoreLibs.Caching.Helpers;
 using GovUK.Dfe.CoreLibs.Caching.Interfaces;
-using GovUK.Dfe.FlexForms.Application.Interfaces;
+using GovUK.Dfe.FlexForms.Application.Admin;
 using GovUK.Dfe.FlexForms.Domain.Models;
-using GovUK.Dfe.FlexForms.Web.Services;
-using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
-using GovUK.Dfe.FlexForms.Api.Client.Contracts;
+using GovUK.Dfe.FlexForms.Api.Client.Security;
+using GovUK.Dfe.FlexForms.Web.Services;
+using GovUK.Dfe.FlexForms.Web.Tenancy;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.Diagnostics.CodeAnalysis;
-using Microsoft.AspNetCore.Authentication;
 using Task = System.Threading.Tasks.Task;
-using GovUK.Dfe.FlexForms.Api.Client.Security;
-using GovUK.Dfe.FlexForms.Web.Tenancy;
 
 namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
 {
     [ExcludeFromCodeCoverage]
     [Authorize(Policy = AdminAccessHelper.CanAccessAdminAreaPolicy)]
     public class AdminModel(
-        IFormTemplateProvider templateProvider,
-        ITemplatesClient templatesClient,
-        ITemplateSelectionService templateSelectionService,
+        IAdminHome adminHome,
         ICacheService<IMemoryCacheType> cacheService,
         IHttpContextAccessor httpContextAccessor,
         IInternalUserTokenStore tokenStore,
-        ITenantAdminClient tenantAdminClient,
+        ITemplateSelectionService templateSelectionService,
         ITenantRequestContext tenantRequestContext,
         ILogger<AdminModel> logger)
         : PageModel
@@ -67,7 +62,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
         public bool CanViewTenantConfigurationSummary => AdminAccessHelper.CanViewTenantConfigurationSummary(User);
 
         /// <summary>
-        /// Tenant Admin card: organisation settings, events, and (for SuperAdmin) own-tenant config tools.
+        /// Tenant Admin card: organisation settings, events, and own-tenant config tools.
         /// </summary>
         public bool CanAccessTenantAdminSection =>
             CanManageOrganisationSettings
@@ -92,12 +87,13 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
             }
 
             DsiToken = await httpContextAccessor.HttpContext?.GetTokenAsync("id_token")!;
-            
+
             UserToken = tokenStore.GetToken();
 
-            await LoadTenantTemplatesAsync();
-            await LoadTemplateInformationAsync();
-            await LoadTenantConfigurationSummaryAsync();
+            CaptureSessionTemplate();
+            var state = CaptureWorkState();
+            await adminHome.LoadAsync(state);
+            ApplyWorkState(state);
             return Page();
         }
 
@@ -109,7 +105,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
             try
             {
                 HttpContext.Session.Clear();
-                
+
                 if (!string.IsNullOrEmpty(TemplateCacheKey))
                 {
                     cacheService.Remove(TemplateCacheKey);
@@ -118,7 +114,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
 
                 ShowSuccess = true;
                 SuccessMessage = "Successfully cleared all sessions and caches.";
-                
+
                 logger.LogInformation("Admin cleared all sessions and caches");
             }
             catch (Exception ex)
@@ -128,7 +124,6 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
                 ErrorMessage = "Failed to clear sessions and caches. Please try again.";
             }
 
-            await LoadTemplateInformationAsync(true);
             return RedirectToPage("/Applications/Dashboard");
         }
 
@@ -143,30 +138,13 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
             if (!CanManageTemplates)
                 return Forbid();
 
-            try
-            {
-                logger.LogInformation(
-                    "Setting template {TemplateId} live status to {IsLive}",
-                    templateId,
-                    isLive);
+            var outcome = await adminHome.SetTemplateLiveAsync(templateId, isLive);
 
-                await templatesClient.SetTemplateLiveAsync(
-                    templateId,
-                    new SetTemplateLiveRequest { IsLive = isLive });
+            if (outcome.SuccessMessage != null)
+                TempData["AdminSuccess"] = outcome.SuccessMessage;
 
-                TempData["AdminSuccess"] = isLive
-                    ? "Template is now live for end users."
-                    : "Template is no longer live for end users.";
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(
-                    ex,
-                    "Failed to set live status to {IsLive} for template {TemplateId}",
-                    isLive,
-                    templateId);
-                TempData["AdminError"] = "Failed to update template live status. Please try again.";
-            }
+            if (outcome.ErrorMessage != null)
+                TempData["AdminError"] = outcome.ErrorMessage;
 
             return RedirectToPage();
         }
@@ -176,115 +154,29 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
             if (!CanManageTemplates)
                 return Forbid();
 
-            try
-            {
-                var templates = await templateSelectionService.GetSelectableTemplatesAsync();
-                if (templates.All(t => t.TemplateId != templateId))
-                {
-                    HasError = true;
-                    ErrorMessage = "Template was not found in the tenant catalogue.";
-                    await LoadTenantTemplatesAsync();
-                    await LoadTemplateInformationAsync();
-                    return Page();
-                }
+            CaptureSessionTemplate();
+            var state = CaptureWorkState();
+            var outcome = await adminHome.OpenTemplateAsync(state, templateId);
+            ApplyWorkState(state);
 
-                var template = templates.First(t => t.TemplateId == templateId);
-                await templateSelectionService.SelectTemplateAsync(HttpContext, template);
-                return RedirectToPage("/Applications/Dashboard");
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to open template {TemplateId}", templateId);
-                HasError = true;
-                ErrorMessage = "Failed to open template. Please try again.";
-                await LoadTenantTemplatesAsync();
-                await LoadTemplateInformationAsync();
+            if (outcome.Kind == AdminPageOutcomeKind.StayOnPage)
                 return Page();
-            }
-        }
 
-        private async Task LoadTenantTemplatesAsync()
-        {
-            try
-            {
-                TenantTemplates = await templateSelectionService.GetSelectableTemplatesAsync();
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "Failed to load tenant templates for admin page");
-                TenantTemplates = [];
-            }
-        }
+            if (state.TemplateToOpen is null)
+                return Page();
 
-        private async Task LoadTemplateInformationAsync(bool afterSessionClear = false)
-        {
-            try
-            {
-                TestToken = HttpContext.Session.GetString("TestAuth:Token");
-
-                TemplateId = HttpContext.Session.GetString("TemplateId");
-
-                if (afterSessionClear)
-                    return;
-
-                if (string.IsNullOrEmpty(TemplateId))
-                {
-                    return;
-                }
-
-                TemplateCacheKey = $"FormTemplate_{CacheKeyHelper.GenerateHashedCacheKey(TemplateId)}";
-
-                var template = await templateProvider.GetTemplateAsync(TemplateId);
-                if (template != null)
-                {
-                    TemplateName = template.TemplateName;
-                    TemplateDescription = template.Description;
-                    TaskGroupCount = template.TaskGroups?.Count ?? 0;
-                }
-
-                var templateResponse = await templatesClient.GetLatestTemplateSchemaAsync(new Guid(TemplateId));
-                CurrentTemplateVersion = templateResponse?.VersionNumber;
-
-                logger.LogDebug("Loaded admin information for template {TemplateId}", TemplateId);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to load template information for admin page");
-                HasError = true;
-                ErrorMessage = "Failed to load template information. Please try again.";
-            }
-        }
-
-        private async Task LoadTenantConfigurationSummaryAsync()
-        {
-            if (!CanViewTenantConfigurationSummary)
-            {
-                return;
-            }
-
-            if (tenantRequestContext.TenantId is not { } tenantId || tenantId == Guid.Empty)
-            {
-                return;
-            }
-
-            try
-            {
-                TenantConfigurationSummary = await tenantAdminClient.GetEffectiveConfigurationAsync(tenantId);
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "Failed to load tenant configuration summary for admin dashboard");
-            }
+            await templateSelectionService.SelectTemplateAsync(HttpContext, state.TemplateToOpen);
+            return RedirectToPage("/Applications/Dashboard");
         }
 
         public string GetSessionKeysInfo()
         {
             var sessionKeys = new List<string>();
-            
+
             var commonKeys = new[]
             {
                 "TemplateId",
-                "ApplicationId", 
+                "ApplicationId",
                 "ApplicationReference",
                 "CurrentAccumulatedApplicationId"
             };
@@ -311,7 +203,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
             try
             {
                 var factoryCalled = false;
-                
+
                 await cacheService.GetOrAddAsync<FormTemplate>(
                     TemplateCacheKey,
                     async () =>
@@ -326,6 +218,38 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
             catch
             {
                 return "Unable to determine cache status";
+            }
+        }
+
+        private void CaptureSessionTemplate()
+        {
+            TestToken = HttpContext.Session.GetString("TestAuth:Token");
+            TemplateId = HttpContext.Session.GetString("TemplateId");
+            if (!string.IsNullOrEmpty(TemplateId))
+                TemplateCacheKey = $"FormTemplate_{CacheKeyHelper.GenerateHashedCacheKey(TemplateId)}";
+        }
+
+        private AdminHomeWorkState CaptureWorkState() =>
+            new()
+            {
+                TenantId = tenantRequestContext.TenantId,
+                IncludeTenantConfigurationSummary = CanViewTenantConfigurationSummary,
+                TemplateId = TemplateId
+            };
+
+        private void ApplyWorkState(AdminHomeWorkState state)
+        {
+            TemplateId = state.TemplateId ?? TemplateId;
+            TemplateName = state.TemplateName;
+            TemplateDescription = state.TemplateDescription;
+            TaskGroupCount = state.TaskGroupCount;
+            CurrentTemplateVersion = state.CurrentTemplateVersion;
+            TenantTemplates = state.TenantTemplates;
+            TenantConfigurationSummary = state.TenantConfigurationSummary;
+            if (state.HasError)
+            {
+                HasError = true;
+                ErrorMessage = state.ErrorMessage;
             }
         }
     }

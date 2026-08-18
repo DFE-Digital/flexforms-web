@@ -1,9 +1,5 @@
 using System.ComponentModel.DataAnnotations;
-using System.Text;
-using System.Text.Json;
-using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
-using GovUK.Dfe.CoreLibs.Http.Models;
-using GovUK.Dfe.FlexForms.Api.Client.Contracts;
+using GovUK.Dfe.FlexForms.Application.Admin;
 using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.FlexForms.Web.Services.Tenant;
 using GovUK.Dfe.FlexForms.Web.Tenancy;
@@ -18,23 +14,11 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 /// </summary>
 [Authorize(Roles = AdminAccessHelper.AuthorizeRoles)]
 public sealed class OrganisationSettingsModel(
-    ITenantAdminClient tenantAdminClient,
+    IOrganisationSettingsAdmin organisationSettingsAdmin,
     ITenantRequestContext tenantRequestContext,
     ITenantConfigurationCache tenantConfigurationCache,
-    ITenantIdResolver tenantIdResolver,
-    ILogger<OrganisationSettingsModel> logger) : PageModel
+    ITenantIdResolver tenantIdResolver) : PageModel
 {
-    private const string TargetWeb = "Web";
-    private const string CategoryTerminology = "ApplicationTerminology";
-    private const string CategoryBanner = "NotificationBanner";
-    private const string CategoryDashboard = "Dashboard";
-
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        WriteIndented = false
-    };
-
     public Guid TenantId { get; private set; }
 
     public string TenantName { get; private set; } = string.Empty;
@@ -62,11 +46,11 @@ public sealed class OrganisationSettingsModel(
 
     [BindProperty]
     [StringLength(200)]
-    public string BannerHeading { get; set; } = "Important";
+    public string? BannerHeading { get; set; } = "Important";
 
     [BindProperty]
     [StringLength(2000)]
-    public string BannerMessage { get; set; } = string.Empty;
+    public string? BannerMessage { get; set; } = string.Empty;
 
     [BindProperty]
     [Range(1, 500, ErrorMessage = "Page size must be between 1 and 500")]
@@ -85,7 +69,9 @@ public sealed class OrganisationSettingsModel(
             return Page();
         }
 
-        await LoadSettingsAsync(cancellationToken);
+        var state = CaptureWorkState();
+        await organisationSettingsAdmin.LoadAsync(state, cancellationToken);
+        ApplyWorkState(state);
         return Page();
     }
 
@@ -106,168 +92,72 @@ public sealed class OrganisationSettingsModel(
         BannerHeading = BannerHeading?.Trim() ?? "Important";
         BannerMessage = BannerMessage?.Trim() ?? string.Empty;
 
-        try
+        var outcome = await organisationSettingsAdmin.SaveAsync(CaptureWorkState(), cancellationToken);
+        return MapOutcome(outcome);
+    }
+
+    private IActionResult MapOutcome(AdminPageOutcome outcome)
+    {
+        if (outcome.RefreshLocalCaches)
         {
-            await UpsertCategoryAsync(
-                CategoryTerminology,
-                new { Singular = TerminologySingular, Plural = TerminologyPlural },
-                cancellationToken);
-
-            await UpsertCategoryAsync(
-                CategoryBanner,
-                new { Enabled = BannerEnabled, Heading = BannerHeading, Message = BannerMessage },
-                cancellationToken);
-
-            await UpsertCategoryAsync(
-                CategoryDashboard,
-                new { PageSize = DashboardPageSize, EnableApplicationFilters = DashboardEnableFilters },
-                cancellationToken);
-
-            await RefreshCachesAsync(cancellationToken);
-
-            TempData["OrganisationSettingsSuccess"] = "Organisation settings saved.";
-            return RedirectToPage();
+            tenantConfigurationCache.Invalidate(TenantId);
+            tenantIdResolver.InvalidateHostnameCache();
         }
-        catch (Exception ex)
+
+        if (outcome.SuccessMessage != null)
+            TempData["OrganisationSettingsSuccess"] = outcome.SuccessMessage;
+
+        if (outcome.Kind == AdminPageOutcomeKind.StayOnPage)
         {
-            logger.LogError(ex, "Failed to save organisation settings for {TenantId}", TenantId);
-            HasError = true;
-            ErrorMessage = GetErrorMessage(ex, "Could not save organisation settings.");
+            if (outcome.ErrorMessage != null)
+            {
+                HasError = true;
+                ErrorMessage = outcome.ErrorMessage;
+            }
+
             return Page();
         }
+
+        return RedirectToPage();
     }
 
-    private async Task UpsertCategoryAsync(string category, object payload, CancellationToken cancellationToken)
-    {
-        var json = JsonSerializer.Serialize(payload, JsonOptions);
-        await tenantAdminClient.UpsertSafeTenantSettingAsync(
-            TenantId,
-            new UpsertTenantSettingRequest(category, TargetWeb, ToBase64SettingsJson(json), IsSecret: false),
-            cancellationToken);
-    }
-
-    private async Task LoadSettingsAsync(CancellationToken cancellationToken)
-    {
-        try
+    private OrganisationSettingsWorkState CaptureWorkState() =>
+        new()
         {
-            var response = await tenantAdminClient.GetSafeTenantSettingsAsync(TenantId, cancellationToken);
-            TenantName = response.TenantName;
+            TenantId = TenantId,
+            TenantName = TenantName,
+            TerminologySingular = TerminologySingular,
+            TerminologyPlural = TerminologyPlural,
+            BannerEnabled = BannerEnabled,
+            BannerHeading = BannerHeading,
+            BannerMessage = BannerMessage,
+            DashboardPageSize = DashboardPageSize,
+            DashboardEnableFilters = DashboardEnableFilters
+        };
 
-            foreach (var setting in response.Settings ?? [])
-            {
-                ApplySettingJson(setting.Category, setting.SettingsJson);
-            }
-        }
-        catch (Exception ex)
+    private void ApplyWorkState(OrganisationSettingsWorkState state)
+    {
+        TenantId = state.TenantId;
+        TenantName = state.TenantName;
+        TerminologySingular = state.TerminologySingular;
+        TerminologyPlural = state.TerminologyPlural;
+        BannerEnabled = state.BannerEnabled;
+        BannerHeading = state.BannerHeading;
+        BannerMessage = state.BannerMessage;
+        DashboardPageSize = state.DashboardPageSize;
+        DashboardEnableFilters = state.DashboardEnableFilters;
+        if (state.HasError)
         {
-            logger.LogError(ex, "Failed to load organisation settings for {TenantId}", TenantId);
             HasError = true;
-            ErrorMessage = GetErrorMessage(ex, "Could not load organisation settings.");
+            ErrorMessage = state.ErrorMessage;
         }
-    }
-
-    private void ApplySettingJson(string category, string? settingsJson)
-    {
-        if (string.IsNullOrWhiteSpace(settingsJson))
-            return;
-
-        try
-        {
-            using var doc = JsonDocument.Parse(settingsJson);
-            var root = doc.RootElement;
-
-            if (string.Equals(category, CategoryTerminology, StringComparison.OrdinalIgnoreCase))
-            {
-                if (TryGetString(root, "Singular", out var singular))
-                    TerminologySingular = singular;
-                if (TryGetString(root, "Plural", out var plural))
-                    TerminologyPlural = plural;
-            }
-            else if (string.Equals(category, CategoryBanner, StringComparison.OrdinalIgnoreCase))
-            {
-                if (TryGetBool(root, "Enabled", out var enabled))
-                    BannerEnabled = enabled;
-                if (TryGetString(root, "Heading", out var heading))
-                    BannerHeading = heading;
-                if (TryGetString(root, "Message", out var message))
-                    BannerMessage = message;
-            }
-            else if (string.Equals(category, CategoryDashboard, StringComparison.OrdinalIgnoreCase))
-            {
-                if (TryGetInt(root, "PageSize", out var pageSize))
-                    DashboardPageSize = pageSize;
-                if (TryGetBool(root, "EnableApplicationFilters", out var filters))
-                    DashboardEnableFilters = filters;
-            }
-        }
-        catch (JsonException ex)
-        {
-            logger.LogWarning(ex, "Could not parse settings JSON for category {Category}", category);
-        }
-    }
-
-    private static bool TryGetString(JsonElement root, string name, out string value)
-    {
-        value = string.Empty;
-        if (!TryGetProperty(root, name, out var prop) || prop.ValueKind != JsonValueKind.String)
-            return false;
-        value = prop.GetString() ?? string.Empty;
-        return true;
-    }
-
-    private static bool TryGetBool(JsonElement root, string name, out bool value)
-    {
-        value = false;
-        if (!TryGetProperty(root, name, out var prop))
-            return false;
-
-        if (prop.ValueKind == JsonValueKind.True || prop.ValueKind == JsonValueKind.False)
-        {
-            value = prop.GetBoolean();
-            return true;
-        }
-
-        return false;
-    }
-
-    private static bool TryGetInt(JsonElement root, string name, out int value)
-    {
-        value = 0;
-        if (!TryGetProperty(root, name, out var prop) || prop.ValueKind != JsonValueKind.Number)
-            return false;
-        return prop.TryGetInt32(out value);
-    }
-
-    private static bool TryGetProperty(JsonElement root, string name, out JsonElement property)
-    {
-        if (root.TryGetProperty(name, out property))
-            return true;
-
-        foreach (var p in root.EnumerateObject())
-        {
-            if (string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase))
-            {
-                property = p.Value;
-                return true;
-            }
-        }
-
-        property = default;
-        return false;
-    }
-
-    private async Task RefreshCachesAsync(CancellationToken cancellationToken)
-    {
-        await tenantAdminClient.RefreshTenantConfigurationAsync(cancellationToken);
-        tenantConfigurationCache.Invalidate(TenantId);
-        tenantIdResolver.InvalidateHostnameCache();
     }
 
     private bool TryResolveTenant(out string? error)
     {
         if (tenantRequestContext.TenantId is not { } tenantId || tenantId == Guid.Empty)
         {
-            error = "Tenant context is not available for this request.";
+            error = OrganisationSettingsMessages.TenantContextMissing;
             return false;
         }
 
@@ -290,22 +180,5 @@ public sealed class OrganisationSettingsModel(
             HasError = true;
             ErrorMessage = error;
         }
-    }
-
-    internal static string ToBase64SettingsJson(string settingsJson) =>
-        Convert.ToBase64String(Encoding.UTF8.GetBytes(settingsJson));
-
-    internal static string GetErrorMessage(Exception ex, string fallback)
-    {
-        if (ex is ExternalApplicationsException<ExceptionResponse> apiEx
-            && !string.IsNullOrWhiteSpace(apiEx.Result?.Message))
-        {
-            return apiEx.Result.Message;
-        }
-
-        if (ex is ExternalApplicationsException clientEx && clientEx.StatusCode > 0)
-            return $"{fallback} (HTTP {clientEx.StatusCode})";
-
-        return fallback;
     }
 }

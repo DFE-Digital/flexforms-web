@@ -1,11 +1,5 @@
 using System.ComponentModel.DataAnnotations;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Nodes;
-using System.Text.Json.Serialization;
-using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
-using GovUK.Dfe.FlexForms.Api.Client.Contracts;
+using GovUK.Dfe.FlexForms.Application.Admin;
 using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.FlexForms.Web.Tenancy;
 using Microsoft.AspNetCore.Authorization;
@@ -17,18 +11,11 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 /// <summary>
 /// SuperAdmin form to clone the current tenant's TenantConfig into a new tenant.
 /// </summary>
-[Authorize(Policy = AdminAccessHelper.CanManageTenantSettingsPolicy)]
+[Authorize(Policy = AdminAccessHelper.CanManagePlatformTenantsPolicy)]
 public sealed class DuplicateTenantModel(
-    ITenantAdminClient tenantAdminClient,
-    ITenantRequestContext tenantRequestContext,
-    ILogger<DuplicateTenantModel> logger) : PageModel
+    IDuplicateTenantAdmin duplicateTenantAdmin,
+    ITenantRequestContext tenantRequestContext) : PageModel
 {
-    private static readonly JsonSerializerOptions PayloadSerializerOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-    };
-
     public Guid SourceTenantId { get; private set; }
 
     public string SourceTenantName { get; private set; } = string.Empty;
@@ -70,13 +57,13 @@ public sealed class DuplicateTenantModel(
     [Required(ErrorMessage = "Enter an Authorization secret key")]
     [MinLength(32, ErrorMessage = "Authorization secret key must be at least 32 characters")]
     [Display(Name = "Authorization SecretKey (API)")]
-    public string AuthorizationApiSecretKey { get; set; } = GenerateSecretKey();
+    public string AuthorizationApiSecretKey { get; set; } = DuplicateTenantAdminService.GenerateSecretKey();
 
     [BindProperty]
     [Required(ErrorMessage = "Enter an InternalServiceAuth secret key")]
     [MinLength(32, ErrorMessage = "InternalServiceAuth secret key must be at least 32 characters")]
     [Display(Name = "InternalServiceAuth SecretKey (API and Web)")]
-    public string InternalServiceAuthSecretKey { get; set; } = GenerateSecretKey();
+    public string InternalServiceAuthSecretKey { get; set; } = DuplicateTenantAdminService.GenerateSecretKey();
 
     /// <summary>
     /// One editable ApiKey per InternalServiceAuth Services[] email from the source tenant.
@@ -103,7 +90,9 @@ public sealed class DuplicateTenantModel(
                 ?? string.Empty;
         }
 
-        await LoadInternalServiceAuthServicesAsync(cancellationToken);
+        var state = CaptureWorkState();
+        await duplicateTenantAdmin.LoadInternalServiceAuthServicesAsync(state, cancellationToken);
+        ApplyWorkState(state);
         EnsureSecretsPopulated();
         return Page();
     }
@@ -119,12 +108,16 @@ public sealed class DuplicateTenantModel(
 
         // Keep service emails from the posted form when present; otherwise reload from source.
         if (InternalServiceAuthServiceApiKeys.Count == 0)
-            await LoadInternalServiceAuthServicesAsync(cancellationToken);
+        {
+            var state = CaptureWorkState();
+            await duplicateTenantAdmin.LoadInternalServiceAuthServicesAsync(state, cancellationToken);
+            ApplyWorkState(state);
+        }
 
-        AuthorizationApiSecretKey = GenerateSecretKey();
-        InternalServiceAuthSecretKey = GenerateSecretKey();
+        AuthorizationApiSecretKey = DuplicateTenantAdminService.GenerateSecretKey();
+        InternalServiceAuthSecretKey = DuplicateTenantAdminService.GenerateSecretKey();
         foreach (var service in InternalServiceAuthServiceApiKeys)
-            service.ApiKey = GenerateSecretKey();
+            service.ApiKey = DuplicateTenantAdminService.GenerateSecretKey();
 
         ModelState.Clear();
         return Page();
@@ -151,185 +144,95 @@ public sealed class DuplicateTenantModel(
             var service = InternalServiceAuthServiceApiKeys[i];
             service.Email = service.Email?.Trim() ?? string.Empty;
             service.ApiKey = service.ApiKey?.Trim() ?? string.Empty;
-
-            if (string.IsNullOrWhiteSpace(service.Email))
-                ModelState.AddModelError(
-                    $"{nameof(InternalServiceAuthServiceApiKeys)}[{i}].{nameof(InternalServiceAuthServiceSecretInput.Email)}",
-                    "Service email is required.");
-
-            if (string.IsNullOrWhiteSpace(service.ApiKey) || service.ApiKey.Length < 32)
-                ModelState.AddModelError(
-                    $"{nameof(InternalServiceAuthServiceApiKeys)}[{i}].{nameof(InternalServiceAuthServiceSecretInput.ApiKey)}",
-                    "Enter an ApiKey of at least 32 characters.");
         }
+
+        var state = CaptureWorkState();
+        foreach (var validationError in duplicateTenantAdmin.ValidateInput(state))
+            ModelState.AddModelError(validationError.FieldKey, validationError.Message);
 
         if (!ModelState.IsValid)
             return Page();
 
-        if (NewTenantId == Guid.Empty)
-        {
-            ModelState.AddModelError(nameof(NewTenantId), "Enter a valid tenant id.");
-            return Page();
-        }
+        var outcome = await duplicateTenantAdmin.CloneAsync(state, cancellationToken);
+        ApplyWorkState(state);
 
-        if (NewTenantId == SourceTenantId)
-        {
-            ModelState.AddModelError(nameof(NewTenantId), "New tenant id must be different from the current tenant.");
-            return Page();
-        }
+        foreach (var validationError in outcome.Errors)
+            ModelState.AddModelError(validationError.FieldKey, validationError.Message);
 
-        try
+        if (outcome.Kind == AdminPageOutcomeKind.StayOnPage)
         {
-            // WAF-safe: hostname, frontendOrigin, serviceName, and secrets live only inside Base64 payloadJson
-            // so Application Gateway does not see cleartext https:// ARGS (rule 931130 RFI).
-            var secretsPayload = new CloneTenantSecretsPayload
+            if (outcome.ErrorMessage != null)
             {
-                Hostname = Hostname,
-                FrontendOrigin = FrontendOrigin,
-                AuthorizationApiSecretKey = AuthorizationApiSecretKey,
-                InternalServiceAuthSecretKey = InternalServiceAuthSecretKey,
-                InternalServiceAuthServiceApiKeys = InternalServiceAuthServiceApiKeys
-                    .Select(s => new CloneTenantServiceApiKeyPayload
-                    {
-                        Email = s.Email,
-                        ApiKey = s.ApiKey
-                    })
-                    .ToList()
-            };
-
-            var payloadNode = JsonSerializer.SerializeToNode(secretsPayload, PayloadSerializerOptions)!.AsObject();
-            payloadNode["serviceName"] = ServiceName;
-
-            var body = new CloneTenantRequest(
-                NewTenantId,
-                NewTenantName,
-                ToBase64Utf8(payloadNode.ToJsonString(PayloadSerializerOptions)));
-
-            var response = await tenantAdminClient.CloneTenantAsync(SourceTenantId, body, cancellationToken);
-
-            TempData["TenantSettingsSuccess"] =
-                $"Created tenant '{response.NewTenantName}' ({response.NewTenantId}). " +
-                $"Copied {response.SettingsCopied} setting(s). Hostname: {response.Hostname}. " +
-                "Authorization and InternalServiceAuth secrets (SecretKey + service ApiKeys) were applied. " +
-                "Create a template for this tenant before users can access the dashboard.";
-
-            return RedirectToPage("/Admin/TenantSettings");
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(
-                ex,
-                "Failed to duplicate tenant {SourceTenantId} to {NewTenantId}",
-                SourceTenantId,
-                NewTenantId);
-            HasError = true;
-            ErrorMessage = GetCloneErrorMessage(ex);
-            return Page();
-        }
-    }
-
-    private async Task LoadInternalServiceAuthServicesAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            var response = await tenantAdminClient.GetTenantSettingsAsync(SourceTenantId, cancellationToken);
-            var template = response.Settings
-                .Where(s => string.Equals(s.Category, "InternalServiceAuth", StringComparison.OrdinalIgnoreCase))
-                .OrderByDescending(s => string.Equals(s.Target, "Api", StringComparison.OrdinalIgnoreCase))
-                .ThenBy(s => s.Target, StringComparer.OrdinalIgnoreCase)
-                .FirstOrDefault();
-
-            if (template is null || string.IsNullOrWhiteSpace(template.SettingsJson))
-            {
-                InternalServiceAuthServiceApiKeys = [];
-                return;
+                HasError = true;
+                ErrorMessage = outcome.ErrorMessage;
             }
 
-            InternalServiceAuthServiceApiKeys = ParseServiceEmails(template.SettingsJson)
-                .Select(email => new InternalServiceAuthServiceSecretInput
-                {
-                    Email = email,
-                    ApiKey = GenerateSecretKey()
-                })
-                .ToList();
+            return Page();
         }
-        catch (Exception ex)
-        {
-            logger.LogWarning(
-                ex,
-                "Could not load InternalServiceAuth services for tenant {TenantId}. Service ApiKey fields will be empty.",
-                SourceTenantId);
-            InternalServiceAuthServiceApiKeys = [];
-        }
-    }
 
-    private static IReadOnlyList<string> ParseServiceEmails(string settingsJson)
-    {
-        try
-        {
-            if (JsonNode.Parse(settingsJson) is not JsonObject root ||
-                root["Services"] is not JsonArray services)
-            {
-                return [];
-            }
-
-            return services
-                .OfType<JsonObject>()
-                .Select(s => s["Email"]?.GetValue<string>()?.Trim() ?? string.Empty)
-                .Where(email => !string.IsNullOrWhiteSpace(email))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-        }
-        catch (JsonException)
-        {
-            return [];
-        }
+        TempData["AdminSuccess"] = outcome.SuccessMessage;
+        return RedirectToPage("/Admin/Admin");
     }
 
     private void EnsureSecretsPopulated()
     {
         if (string.IsNullOrWhiteSpace(AuthorizationApiSecretKey))
-            AuthorizationApiSecretKey = GenerateSecretKey();
+            AuthorizationApiSecretKey = DuplicateTenantAdminService.GenerateSecretKey();
         if (string.IsNullOrWhiteSpace(InternalServiceAuthSecretKey))
-            InternalServiceAuthSecretKey = GenerateSecretKey();
+            InternalServiceAuthSecretKey = DuplicateTenantAdminService.GenerateSecretKey();
 
         foreach (var service in InternalServiceAuthServiceApiKeys)
         {
             if (string.IsNullOrWhiteSpace(service.ApiKey))
-                service.ApiKey = GenerateSecretKey();
+                service.ApiKey = DuplicateTenantAdminService.GenerateSecretKey();
         }
     }
 
-    private static string GenerateSecretKey(int byteLength = 48) =>
-        Convert.ToBase64String(RandomNumberGenerator.GetBytes(byteLength));
-
-    internal static string ToBase64Utf8(string value) =>
-        Convert.ToBase64String(Encoding.UTF8.GetBytes(value ?? string.Empty));
-
-    private static string GetCloneErrorMessage(Exception ex)
-    {
-        if (ex is ExternalApplicationsException clientEx)
+    private DuplicateTenantWorkState CaptureWorkState() =>
+        new()
         {
-            var body = clientEx.Response?.TrimStart() ?? string.Empty;
-            if (clientEx.StatusCode == 403 && body.StartsWith('<'))
+            SourceTenantId = SourceTenantId,
+            SourceTenantName = SourceTenantName,
+            NewTenantId = NewTenantId,
+            NewTenantName = NewTenantName,
+            ServiceName = ServiceName,
+            Hostname = Hostname,
+            FrontendOrigin = FrontendOrigin,
+            AuthorizationApiSecretKey = AuthorizationApiSecretKey,
+            InternalServiceAuthSecretKey = InternalServiceAuthSecretKey,
+            InternalServiceAuthServiceApiKeys = InternalServiceAuthServiceApiKeys
+                .Select(s => new DuplicateTenantServiceSecret
+                {
+                    Email = s.Email,
+                    ApiKey = s.ApiKey
+                })
+                .ToList()
+        };
+
+    private void ApplyWorkState(DuplicateTenantWorkState state)
+    {
+        SourceTenantId = state.SourceTenantId;
+        SourceTenantName = state.SourceTenantName;
+        InternalServiceAuthServiceApiKeys = state.InternalServiceAuthServiceApiKeys
+            .Select(s => new InternalServiceAuthServiceSecretInput
             {
-                return "Clone was blocked with HTTP 403 (HTML response). "
-                    + "This usually means Front Door / WAF rejected the request before the API. "
-                    + "Check WAF logs for POST /v1/admin/tenants/.../clone.";
-            }
+                Email = s.Email,
+                ApiKey = s.ApiKey
+            })
+            .ToList();
 
-            if (clientEx.StatusCode > 0)
-                return $"Could not duplicate tenant. (HTTP {clientEx.StatusCode})";
+        if (state.HasError)
+        {
+            HasError = true;
+            ErrorMessage = state.ErrorMessage;
         }
-
-        return TenantSettingsModel.GetErrorMessage(ex, "Could not duplicate tenant.");
     }
 
     private bool TryResolveSourceTenant(out string? error)
     {
         if (tenantRequestContext.TenantId is not { } tenantId || tenantId == Guid.Empty)
         {
-            error = "Tenant context is not available for this request.";
+            error = DuplicateTenantMessages.TenantContextMissing;
             return false;
         }
 

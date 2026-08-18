@@ -1,17 +1,13 @@
 using GovUK.Dfe.FlexForms.Web.Security;
+using GovUK.Dfe.FlexForms.Application.Admin;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.Models;
-using GovUK.Dfe.FlexForms.Domain.Templates;
 using GovUK.Dfe.FlexForms.Web.Services;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
-using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using System.Text;
-using System.Text.Json;
 using System.ComponentModel.DataAnnotations;
-using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using Task = System.Threading.Tasks.Task;
 using GovUK.Dfe.CoreLibs.Caching.Interfaces;
 using GovUK.Dfe.CoreLibs.Caching.Helpers;
@@ -23,20 +19,12 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 [RequestFormLimits(ValueLengthLimit = 52_428_800, ValueCountLimit = 1000)]
 public class TemplateManagerModel(
     IFormTemplateProvider formTemplateProvider,
-    ITemplatesClient templatesClient,
+    ITemplateManagerAdmin templateManagerAdmin,
     ITemplateSelectionService templateSelectionService,
     ICacheService<IMemoryCacheType> cacheService,
-    ITemplateValidationService templateValidationService,
     ILogger<TemplateManagerModel> logger) : PageModel
 {
     private const string TemplateVersionSessionKey = "TemplateVersionNumber";
-
-    private readonly IFormTemplateProvider _formTemplateProvider = formTemplateProvider;
-    private readonly ITemplatesClient _templatesClient = templatesClient;
-    private readonly ITemplateSelectionService _templateSelectionService = templateSelectionService;
-    private readonly ICacheService<IMemoryCacheType> _cacheService = cacheService;
-    private readonly ITemplateValidationService _templateValidationService = templateValidationService;
-    private readonly ILogger<TemplateManagerModel> _logger = logger;
 
     public FormTemplate? CurrentTemplate { get; set; }
     public string? CurrentVersionNumber { get; set; }
@@ -76,47 +64,50 @@ public class TemplateManagerModel(
         bool success = false,
         bool cleared = false,
         bool created = false,
-        bool granted = false,
-        string? suggestedVersion = null,
-        string? grantSummary = null)
+        string? suggestedVersion = null)
     {
         try
         {
-            _logger.LogInformation("TemplateManager GET started. Memory: {MemoryMB} MB",
+            logger.LogInformation("TemplateManager GET started. Memory: {MemoryMB} MB",
                 GC.GetTotalMemory(false) / 1024 / 1024);
 
             ShowAddVersionForm = showForm;
             ShowSuccess = success;
             ShowCacheCleared = cleared;
             ShowCreated = created;
-            ShowGrantedToAllUsers = granted;
-            GrantToAllUsersSummary = grantSummary;
+
+            if (TempData["TemplateManagerGrantSummary"] is string grantSummary)
+            {
+                ShowGrantedToAllUsers = true;
+                GrantToAllUsersSummary = grantSummary;
+            }
 
             await LoadTenantTemplatesAsync();
             var templateId = await ResolveSelectedTemplateIdAsync();
             if (templateId is null)
-            {
                 return Page();
-            }
 
-            await LoadTemplateDataAsync(templateId.Value);
+            var state = CaptureWorkState();
+            await templateManagerAdmin.LoadTemplateDataAsync(state, templateId.Value);
+            ApplyWorkState(state);
+            PersistSessionVersion(state);
 
             if (!string.IsNullOrEmpty(suggestedVersion))
             {
                 NewVersion = suggestedVersion;
-                _logger.LogInformation("Pre-populated NewVersion field with suggested version: {SuggestedVersion}", suggestedVersion);
+                logger.LogInformation("Pre-populated NewVersion field with suggested version: {SuggestedVersion}", suggestedVersion);
             }
 
-            PrefillNewSchemaIfEmpty(templateId.Value);
+            PrefillNewSchema(templateId.Value);
 
-            _logger.LogInformation("TemplateManager GET completed successfully. Memory: {MemoryMB} MB",
+            logger.LogInformation("TemplateManager GET completed successfully. Memory: {MemoryMB} MB",
                 GC.GetTotalMemory(false) / 1024 / 1024);
 
             return Page();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "CRITICAL ERROR in TemplateManager OnGetAsync. Memory: {MemoryMB} MB, Exception Type: {ExceptionType}",
+            logger.LogError(ex, "CRITICAL ERROR in TemplateManager OnGetAsync. Memory: {MemoryMB} MB, Exception Type: {ExceptionType}",
                 GC.GetTotalMemory(false) / 1024 / 1024, ex.GetType().FullName);
             throw;
         }
@@ -128,28 +119,27 @@ public class TemplateManagerModel(
         var templateId = await ResolveSelectedTemplateIdAsync();
         if (templateId is null)
         {
-            ModelState.AddModelError(string.Empty, "Select a template.");
+            ModelState.AddModelError(string.Empty, TemplateManagerMessages.SelectTemplate);
             return Page();
         }
 
-        if (!ValidateInput())
+        var state = CaptureWorkState();
+        var validation = templateManagerAdmin.ValidateNewVersion(state);
+        if (validation.Errors.Count > 0)
         {
+            ApplyValidationErrors(validation);
             ShowAddVersionForm = true;
-            await LoadTemplateDataAsync(templateId.Value);
-            PrefillNewSchemaIfEmpty(templateId.Value);
+            await templateManagerAdmin.LoadTemplateDataAsync(state, templateId.Value);
+            ApplyWorkState(state);
+            PrefillNewSchema(templateId.Value);
             return Page();
         }
 
-        await CreateNewTemplateVersionAsync(templateId.Value.ToString());
-
+        await templateManagerAdmin.CreateVersionAsync(state, templateId.Value);
         await InvalidateTemplateCacheAsync(templateId.Value.ToString());
 
-        // After create, open the newly saved version.
         HttpContext.Session.SetString(TemplateVersionSessionKey, NewVersion!);
         await HttpContext.Session.CommitAsync();
-
-        _logger.LogInformation("Successfully created template version {NewVersion} for {TemplateId}",
-            NewVersion, templateId);
 
         return RedirectToPage(new { success = true });
     }
@@ -161,12 +151,12 @@ public class TemplateManagerModel(
         if (SelectedTemplateId is null ||
             TenantTemplates.All(template => template.TemplateId != SelectedTemplateId.Value))
         {
-            ModelState.AddModelError(nameof(SelectedTemplateId), "Select a template for this tenant.");
+            ModelState.AddModelError(nameof(SelectedTemplateId), TemplateManagerMessages.SelectTenantTemplate);
             return Page();
         }
 
         var template = TenantTemplates.First(item => item.TemplateId == SelectedTemplateId.Value);
-        await _templateSelectionService.SelectTemplateAsync(HttpContext, template, cancellationToken);
+        await templateSelectionService.SelectTemplateAsync(HttpContext, template, cancellationToken);
         HttpContext.Session.Remove(TemplateVersionSessionKey);
         await HttpContext.Session.CommitAsync(cancellationToken);
         return RedirectToPage();
@@ -178,14 +168,16 @@ public class TemplateManagerModel(
         var templateId = await ResolveSelectedTemplateIdAsync(cancellationToken);
         if (templateId is null)
         {
-            ModelState.AddModelError(string.Empty, "Select a template.");
+            ModelState.AddModelError(string.Empty, TemplateManagerMessages.SelectTemplate);
             return Page();
         }
 
         if (string.IsNullOrWhiteSpace(SelectedVersionNumber))
         {
-            ModelState.AddModelError(nameof(SelectedVersionNumber), "Select a template version.");
-            await LoadTemplateDataAsync(templateId.Value);
+            ModelState.AddModelError(nameof(SelectedVersionNumber), TemplateManagerMessages.SelectVersion);
+            var state = CaptureWorkState();
+            await templateManagerAdmin.LoadTemplateDataAsync(state, templateId.Value, cancellationToken);
+            ApplyWorkState(state);
             return Page();
         }
 
@@ -200,14 +192,15 @@ public class TemplateManagerModel(
         var templateId = await ResolveSelectedTemplateIdAsync();
         if (templateId is not null)
         {
-            await LoadTemplateDataAsync(templateId.Value);
+            var state = CaptureWorkState();
+            await templateManagerAdmin.LoadTemplateDataAsync(state, templateId.Value);
+            ApplyWorkState(state);
 
-            // Suggest the next version from the latest published version, not the selected older one.
             var baseVersion = LatestVersionNumber ?? CurrentVersionNumber;
             if (!string.IsNullOrEmpty(baseVersion))
             {
-                var incrementedVersion = IncrementPatchVersion(baseVersion);
-                _logger.LogInformation(
+                var incrementedVersion = templateManagerAdmin.SuggestNextVersion(LatestVersionNumber, CurrentVersionNumber);
+                logger.LogInformation(
                     "Auto-incremented version from {LatestVersion} to {NewVersion} (selected schema version {SelectedVersion})",
                     baseVersion, incrementedVersion, CurrentVersionNumber);
 
@@ -225,202 +218,126 @@ public class TemplateManagerModel(
         if (templateId is null)
         {
             HasError = true;
-            ErrorMessage = "Select a template before granting access to all users.";
+            ErrorMessage = TemplateManagerMessages.GrantRequiresTemplate;
             return Page();
         }
 
-        try
+        var state = CaptureWorkState();
+        var outcome = await templateManagerAdmin.GrantToAllUsersAsync(state, templateId.Value, cancellationToken);
+        ApplyWorkState(state);
+
+        if (outcome.Kind == AdminPageOutcomeKind.StayOnPage)
         {
-            var result = await _templatesClient.GrantTemplateAccessToAllUsersAsync(
-                templateId.Value,
-                cancellationToken);
-
-            var summary =
-                $"Granted to {result.UsersGranted} user(s). " +
-                $"{result.UsersAlreadyHadAccess} already had access. " +
-                $"Total tenant users checked: {result.TotalUsers}.";
-
-            _logger.LogInformation(
-                "Granted template {TemplateId} to all tenant users. Granted={Granted}, AlreadyHad={AlreadyHad}, Total={Total}",
-                templateId,
-                result.UsersGranted,
-                result.UsersAlreadyHadAccess,
-                result.TotalUsers);
-
-            return RedirectToPage(new { granted = true, grantSummary = summary });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to grant template {TemplateId} to all tenant users", templateId);
             HasError = true;
-            ErrorMessage = "Failed to grant this template to all users in the tenant.";
-            await LoadTemplateDataAsync(templateId.Value);
+            ErrorMessage = outcome.ErrorMessage ?? TemplateManagerMessages.GrantFailed;
             return Page();
         }
-    }
 
-    /// <summary>
-    /// Increments the patch version of a semantic version string (e.g., 1.0.1 -> 1.0.2)
-    /// </summary>
-    private static string IncrementPatchVersion(string version)
-    {
-        try
-        {
-            var parts = version.Split('.');
-
-            if (parts.Length == 0)
-            {
-                return "1.0.1";
-            }
-            else if (parts.Length == 1)
-            {
-                return $"{parts[0]}.0.1";
-            }
-            else if (parts.Length == 2)
-            {
-                return $"{parts[0]}.{parts[1]}.1";
-            }
-            else
-            {
-                if (int.TryParse(parts[2], out var patchVersion))
-                {
-                    patchVersion++;
-                    return $"{parts[0]}.{parts[1]}.{patchVersion}";
-                }
-                else
-                {
-                    return $"{parts[0]}.{parts[1]}.1";
-                }
-            }
-        }
-        catch
-        {
-            return "1.0.1";
-        }
-    }
-
-    public IActionResult OnPostCancelAdd()
-    {
+        TempData["TemplateManagerGrantSummary"] = state.GrantToAllUsersSummary ?? outcome.SuccessMessage;
         return RedirectToPage();
     }
+
+    public IActionResult OnPostCancelAdd() => RedirectToPage();
 
     public async Task<IActionResult> OnPostClearAllAsync()
     {
         try
         {
             var templateId = HttpContext.Session.GetString("TemplateId");
-
             HttpContext.Session.Clear();
 
             if (!string.IsNullOrEmpty(templateId))
             {
                 var cacheKey = $"FormTemplate_{CacheKeyHelper.GenerateHashedCacheKey(templateId)}";
-                _cacheService.Remove(cacheKey);
-                _logger.LogInformation("Cleared template cache for key: {CacheKey}", cacheKey);
+                cacheService.Remove(cacheKey);
+                logger.LogInformation("Cleared template cache for key: {CacheKey}", cacheKey);
             }
 
-            _logger.LogInformation("Successfully cleared all sessions and caches from TemplateManager");
-
+            logger.LogInformation("Successfully cleared all sessions and caches from TemplateManager");
             return RedirectToPage("/Applications/Dashboard");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error clearing sessions and caches from TemplateManager");
+            logger.LogError(ex, "Error clearing sessions and caches from TemplateManager");
             HasError = true;
-            ErrorMessage = "Failed to clear sessions and caches.";
+            ErrorMessage = TemplateManagerMessages.ClearFailed;
             return Page();
         }
     }
 
-    private async Task LoadTemplateDataAsync(Guid templateId)
+    private TemplateManagerWorkState CaptureWorkState() =>
+        new()
+        {
+            SelectedTemplateId = SelectedTemplateId,
+            SelectedVersionNumber = SelectedVersionNumber,
+            NewVersion = NewVersion,
+            NewSchema = NewSchema,
+            AcknowledgeReportingImpact = AcknowledgeReportingImpact,
+            ShowAddVersionForm = ShowAddVersionForm,
+            TenantTemplates = TenantTemplates,
+            SessionVersionNumber = HttpContext.Session.GetString(TemplateVersionSessionKey)
+        };
+
+    private void ApplyWorkState(TemplateManagerWorkState state)
     {
-        try
+        SelectedTemplateId = state.SelectedTemplateId;
+        SelectedVersionNumber = state.SelectedVersionNumber;
+        NewVersion = state.NewVersion ?? NewVersion;
+        NewSchema = state.NewSchema ?? NewSchema;
+        CurrentTemplate = state.CurrentTemplate;
+        CurrentVersionNumber = state.CurrentVersionNumber;
+        LatestVersionNumber = state.LatestVersionNumber;
+        CurrentTemplateJson = state.CurrentTemplateJson;
+        AvailableVersions = state.AvailableVersions;
+        SelectedTemplate = state.SelectedTemplate;
+        if (state.HasError)
         {
-            _logger.LogDebug("Loading template data for {TemplateId}", templateId);
-
-            SelectedTemplate = TenantTemplates.First(template => template.TemplateId == templateId);
-            SelectedTemplateId = templateId;
-            LatestVersionNumber = SelectedTemplate.LatestVersionNumber;
-
-            var versions = await _templatesClient.GetTemplateVersionsAsync(templateId);
-            AvailableVersions = versions.ToList();
-
-            if (AvailableVersions.Count == 0)
-            {
-                CurrentVersionNumber = null;
-                SelectedVersionNumber = null;
-                CurrentTemplate = null;
-                CurrentTemplateJson = null;
-                return;
-            }
-
-            var requestedVersion = SelectedVersionNumber
-                ?? HttpContext.Session.GetString(TemplateVersionSessionKey);
-
-            var selectedVersion = AvailableVersions.FirstOrDefault(v =>
-                    !string.IsNullOrWhiteSpace(requestedVersion) &&
-                    string.Equals(v.VersionNumber, requestedVersion, StringComparison.OrdinalIgnoreCase))
-                ?? AvailableVersions[0];
-
-            SelectedVersionNumber = selectedVersion.VersionNumber;
-            CurrentVersionNumber = selectedVersion.VersionNumber;
-            LatestVersionNumber = AvailableVersions[0].VersionNumber;
-
-            HttpContext.Session.SetString(TemplateVersionSessionKey, selectedVersion.VersionNumber);
-
-            var apiResponse = await _templatesClient.GetTemplateSchemaByVersionAsync(
-                templateId,
-                selectedVersion.VersionNumber);
-
-            var schemaJson = apiResponse.JsonSchema;
-            if (string.IsNullOrWhiteSpace(schemaJson))
-            {
-                CurrentTemplate = null;
-                CurrentTemplateJson = null;
-                return;
-            }
-
-            var options = new JsonSerializerOptions { WriteIndented = true, PropertyNameCaseInsensitive = true };
-            CurrentTemplate = JsonSerializer.Deserialize<FormTemplate>(schemaJson, options);
-            CurrentTemplateJson = CurrentTemplate != null
-                ? JsonSerializer.Serialize(CurrentTemplate, options)
-                : PrettyPrintJson(schemaJson);
-
-            _logger.LogDebug(
-                "Loaded template {TemplateId} version {VersionNumber} with {TaskGroupCount} task groups",
-                templateId,
-                CurrentVersionNumber,
-                CurrentTemplate?.TaskGroups?.Count ?? 0);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error loading template data for {TemplateId}", templateId);
             HasError = true;
-            ErrorMessage = "There was an error loading the template data.";
+            ErrorMessage = state.ErrorMessage;
         }
     }
 
-    private static string PrettyPrintJson(string json)
+    private void PersistSessionVersion(TemplateManagerWorkState state)
     {
-        try
+        if (!string.IsNullOrWhiteSpace(state.SessionVersionNumber))
+            HttpContext.Session.SetString(TemplateVersionSessionKey, state.SessionVersionNumber);
+    }
+
+    private void PrefillNewSchema(Guid templateId)
+    {
+        var state = CaptureWorkState();
+        state.CurrentTemplateJson = CurrentTemplateJson;
+        state.SelectedTemplate = SelectedTemplate;
+        templateManagerAdmin.PrefillNewSchemaIfEmpty(state, templateId);
+        NewSchema = state.NewSchema;
+        NewVersion = state.NewVersion ?? NewVersion;
+        if (ShowAddVersionForm)
+            ModelState.Remove(nameof(NewSchema));
+    }
+
+    private void ApplyValidationErrors(AdminPageOutcome validation)
+    {
+        foreach (var error in validation.Errors)
         {
-            using var document = JsonDocument.Parse(json);
-            return JsonSerializer.Serialize(document.RootElement, new JsonSerializerOptions { WriteIndented = true });
-        }
-        catch
-        {
-            return json;
+            if (error.FieldKey == nameof(NewSchema)
+                && error.Message == TemplateManagerMessages.SchemaRequired
+                && ModelState[nameof(NewSchema)]?.Errors.Count > 0)
+            {
+                continue;
+            }
+
+            ModelState.AddModelError(error.FieldKey, error.Message);
         }
     }
 
     private async Task LoadTenantTemplatesAsync(CancellationToken cancellationToken = default)
     {
-        TenantTemplates = await _templateSelectionService.GetSelectableTemplatesAsync(cancellationToken);
+        TenantTemplates = await templateSelectionService.GetSelectableTemplatesAsync(cancellationToken);
     }
 
     private async Task<Guid?> ResolveSelectedTemplateIdAsync(CancellationToken cancellationToken = default)
     {
-        var sessionTemplateId = _templateSelectionService.GetSelectedTemplateId(HttpContext);
+        var sessionTemplateId = templateSelectionService.GetSelectedTemplateId(HttpContext);
         if (Guid.TryParse(sessionTemplateId, out var selectedId) &&
             TenantTemplates.Any(template => template.TemplateId == selectedId))
         {
@@ -431,93 +348,12 @@ public class TemplateManagerModel(
 
         var firstTemplate = TenantTemplates.FirstOrDefault();
         if (firstTemplate is null)
-        {
             return null;
-        }
 
-        await _templateSelectionService.SelectTemplateAsync(HttpContext, firstTemplate, cancellationToken);
+        await templateSelectionService.SelectTemplateAsync(HttpContext, firstTemplate, cancellationToken);
         SelectedTemplateId = firstTemplate.TemplateId;
         SelectedTemplate = firstTemplate;
         return firstTemplate.TemplateId;
-    }
-
-    private void PrefillNewSchemaIfEmpty(Guid templateId)
-    {
-        if (!ShowAddVersionForm || !string.IsNullOrWhiteSpace(NewSchema))
-        {
-            return;
-        }
-
-        if (!string.IsNullOrWhiteSpace(CurrentTemplateJson))
-        {
-            NewSchema = CurrentTemplateJson;
-        }
-        else
-        {
-            NewSchema = StarterFormTemplateSchema.CreateJson(
-                templateId.ToString(),
-                SelectedTemplate?.Name ?? "New template");
-            NewVersion ??= StarterFormTemplateSchema.DefaultVersionNumber;
-        }
-
-        ModelState.Remove(nameof(NewSchema));
-    }
-
-    private bool ValidateInput()
-    {
-        var isValid = true;
-
-        if (string.IsNullOrWhiteSpace(NewVersion))
-        {
-            ModelState.AddModelError(nameof(NewVersion), "Version number is required");
-            isValid = false;
-        }
-
-        if (string.IsNullOrWhiteSpace(NewSchema))
-        {
-            if (ModelState[nameof(NewSchema)]?.Errors.Count is null or 0)
-            {
-                ModelState.AddModelError(nameof(NewSchema), "JSON schema is required");
-            }
-
-            isValid = false;
-        }
-        else
-        {
-            var (templateIsValid, validationErrors) = _templateValidationService.ValidateTemplateJson(NewSchema);
-
-            if (!templateIsValid)
-            {
-                _logger.LogWarning("Template validation failed with {ErrorCount} errors", validationErrors.Count);
-
-                foreach (var error in validationErrors)
-                {
-                    ModelState.AddModelError(nameof(NewSchema), error);
-                }
-
-                isValid = false;
-            }
-            else
-            {
-                _logger.LogInformation("Template validation passed successfully");
-            }
-        }
-
-        if (!AcknowledgeReportingImpact)
-        {
-            ModelState.AddModelError(nameof(AcknowledgeReportingImpact),
-                "You must confirm that you understand the reporting impact before saving.");
-            isValid = false;
-        }
-
-        return isValid;
-    }
-
-    private async Task CreateNewTemplateVersionAsync(string templateId)
-    {
-        var base64Schema = Convert.ToBase64String(Encoding.UTF8.GetBytes(NewSchema!));
-        await _templatesClient.CreateTemplateVersionAsync(new Guid(templateId),
-            new CreateTemplateVersionRequest(VersionNumber: NewVersion!, JsonSchema: base64Schema));
     }
 
     private async Task InvalidateTemplateCacheAsync(string templateId)
@@ -525,31 +361,26 @@ public class TemplateManagerModel(
         try
         {
             var cacheKey = $"FormTemplate_{CacheKeyHelper.GenerateHashedCacheKey(templateId)}";
-            _logger.LogInformation("Attempting to invalidate cache for template {TemplateId} with key {CacheKey}",
+            logger.LogInformation("Attempting to invalidate cache for template {TemplateId} with key {CacheKey}",
                 templateId, cacheKey);
 
-            _cacheService.Remove(cacheKey);
-            _logger.LogInformation("Successfully invalidated cache for template {TemplateId} with key {CacheKey}",
+            cacheService.Remove(cacheKey);
+            logger.LogInformation("Successfully invalidated cache for template {TemplateId} with key {CacheKey}",
                 templateId, cacheKey);
 
-            await VerifyNewTemplateVersionAsync(templateId);
+            try
+            {
+                await formTemplateProvider.GetTemplateAsync(templateId);
+                logger.LogDebug("Successfully verified new template version is available for {TemplateId}", templateId);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to verify new template version for {TemplateId}", templateId);
+            }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to invalidate cache for template {TemplateId}", templateId);
-        }
-    }
-
-    private async Task VerifyNewTemplateVersionAsync(string templateId)
-    {
-        try
-        {
-            await _formTemplateProvider.GetTemplateAsync(templateId);
-            _logger.LogDebug("Successfully verified new template version is available for {TemplateId}", templateId);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to verify new template version for {TemplateId}", templateId);
+            logger.LogWarning(ex, "Failed to invalidate cache for template {TemplateId}", templateId);
         }
     }
 }

@@ -48,8 +48,44 @@ window.renderOrUpdate = function (n) {
     renderSingleNotification(n);
 };
 
+function fileValidationStatusLabel(status) {
+    const key = String(status ?? '').toLowerCase();
+    if (key === 'pending' || key === '1') return 'Validation pending';
+    if (key === 'passed' || key === '2') return 'Validated';
+    if (key === 'failed' || key === '3') return 'Validation failed';
+    return '';
+}
+
+function applyFileValidationStatus(notification) {
+    const category = notification?.category;
+    if (category && String(category).toLowerCase() !== 'file-validation') return;
+
+    const meta = notification?.metadata || {};
+    const fileId = meta.fileId || meta.FileId;
+    if (!fileId) return;
+
+    const cell = document.querySelector(`[data-file-validation-status="${fileId}"]`);
+    if (!cell) return;
+
+    const label = fileValidationStatusLabel(meta.status || meta.Status);
+    const detail = meta.message || meta.Message || '';
+    if (!label) return;
+
+    cell.replaceChildren();
+    const labelSpan = document.createElement('span');
+    labelSpan.textContent = label;
+    cell.appendChild(labelSpan);
+    if (detail) {
+        const hint = document.createElement('span');
+        hint.className = 'govuk-hint';
+        hint.textContent = ` — ${detail}`;
+        cell.appendChild(hint);
+    }
+}
+
 function renderSingleNotification(notification) {
     if (!notification || !notification.id) return;
+    applyFileValidationStatus(notification);
     
     const map = mapTypeToCss(notification.type);
     const id = `notification-${notification.id}`;

@@ -1,9 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
-using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
-using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Api.Client.Security;
+using GovUK.Dfe.FlexForms.Application.Admin;
 using GovUK.Dfe.FlexForms.Web.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -17,12 +16,9 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 /// </summary>
 [Authorize(Policy = AdminAccessHelper.CanManageUsersPolicy)]
 public sealed class UserManagerEditModel(
-    IUsersClient usersClient,
-    ITemplatesClient templatesClient,
-    IRolesClient rolesClient,
+    IUserManagerEditAdmin userManagerEditAdmin,
     IInternalUserTokenStore tokenStore,
-    IMemoryCache memoryCache,
-    ILogger<UserManagerEditModel> logger) : PageModel
+    IMemoryCache memoryCache) : PageModel
 {
     [BindProperty(SupportsGet = true)]
     public Guid UserId { get; set; }
@@ -44,135 +40,79 @@ public sealed class UserManagerEditModel(
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
-        var loaded = await LoadAsync(cancellationToken);
-        return loaded ? Page() : RedirectToPage("/Admin/UserManager");
+        var state = CaptureWorkState();
+        var outcome = await userManagerEditAdmin.LoadAsync(state, cancellationToken);
+        ApplyWorkState(state);
+        return MapOutcome(outcome);
     }
 
     public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
     {
-        await LoadLookupsAsync(cancellationToken);
+        var state = CaptureWorkState();
+        var loaded = await userManagerEditAdmin.LoadForUpdateAsync(state, cancellationToken);
+        ApplyWorkState(state);
+        if (loaded.Kind == AdminPageOutcomeKind.RedirectToPage)
+            return MapOutcome(loaded);
 
-        var users = await usersClient.GetTenantUsersAsync(cancellationToken);
-        var user = users?.FirstOrDefault(u => u.UserId == UserId);
-        if (user is null)
-        {
-            TempData["UserManagerError"] = "User not found in this tenant.";
-            return RedirectToPage("/Admin/UserManager");
-        }
-
-        UserName = user.Name;
-        UserEmail = user.Email;
+        foreach (var error in loaded.Errors)
+            ModelState.AddModelError(error.FieldKey, error.Message);
 
         if (!ModelState.IsValid)
             return Page();
 
-        if (!AssignableRoles.Contains(Role, StringComparer.OrdinalIgnoreCase))
-        {
-            ModelState.AddModelError(nameof(Role), "Select a valid role for this tenant.");
-            return Page();
-        }
+        var outcome = await userManagerEditAdmin.UpdateAsync(state, cancellationToken);
+        ApplyWorkState(state);
 
-        try
-        {
-            await usersClient.AssignUserRoleAsync(
-                new AssignUserRoleRequest
-                {
-                    Name = UserName,
-                    Email = UserEmail,
-                    Role = Role,
-                    TemplateIds = SelectedTemplateIds
-                },
-                cancellationToken);
+        if (outcome.Kind == AdminPageOutcomeKind.RedirectToPage && outcome.SuccessMessage != null)
+            InvalidateActorSessionIfSelf(state.UserEmail);
 
-            await usersClient.UpdateUserTemplateAccessAsync(
-                UserId,
-                new UpdateUserTemplateAccessRequest { TemplateIds = SelectedTemplateIds ?? [] },
-                cancellationToken);
-
-            // If the admin edited their own role, drop the cached OBO JWT and web permission claims
-            // immediately so the next request re-exchanges with the new membership.
-            var actingEmail = User.FindFirstValue(ClaimTypes.Email);
-            if (!string.IsNullOrWhiteSpace(actingEmail)
-                && string.Equals(actingEmail, UserEmail, StringComparison.OrdinalIgnoreCase))
-            {
-                tokenStore.ClearToken();
-                UserPermissionsCache.Invalidate(memoryCache, User);
-            }
-
-            TempData["UserManagerSuccess"] = "User role and form access updated.";
-            return RedirectToPage("/Admin/UserManager");
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to update user {UserId}", UserId);
-            ModelState.AddModelError(string.Empty, UserManagerModel.GetErrorMessage(ex, "Could not update the user."));
-            return Page();
-        }
+        return MapOutcome(outcome);
     }
 
-    private async Task<bool> LoadAsync(CancellationToken cancellationToken)
+    private UserManagerEditWorkState CaptureWorkState() =>
+        new()
+        {
+            UserId = UserId,
+            Role = Role,
+            SelectedTemplateIds = SelectedTemplateIds,
+            IncludeTenantAdmin = AdminAccessHelper.IsSuperAdmin(User)
+        };
+
+    private void ApplyWorkState(UserManagerEditWorkState state)
     {
-        try
-        {
-            await LoadLookupsAsync(cancellationToken);
-
-            var users = await usersClient.GetTenantUsersAsync(cancellationToken);
-            var user = users?.FirstOrDefault(u => u.UserId == UserId);
-            if (user is null)
-            {
-                TempData["UserManagerError"] = "User not found in this tenant.";
-                return false;
-            }
-
-            UserName = user.Name;
-            UserEmail = user.Email;
-            Role = user.Role;
-
-            if (!AssignableRoles.Contains(Role, StringComparer.OrdinalIgnoreCase)
-                && !string.IsNullOrWhiteSpace(Role))
-            {
-                AssignableRoles = AssignableRoles.Append(Role).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(r => r).ToList();
-            }
-
-            if (SelectedTemplateIds.Count == 0)
-                SelectedTemplateIds = user.Templates.Select(t => t.TemplateId).ToList();
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to load user {UserId} for edit", UserId);
-            TempData["UserManagerError"] = UserManagerModel.GetErrorMessage(ex, "Could not load user details.");
-            return false;
-        }
+        UserId = state.UserId;
+        UserName = state.UserName;
+        UserEmail = state.UserEmail;
+        Role = state.Role;
+        SelectedTemplateIds = state.SelectedTemplateIds;
+        AvailableTemplates = state.AvailableTemplates;
+        AssignableRoles = state.AssignableRoles;
     }
 
-    private async Task LoadLookupsAsync(CancellationToken cancellationToken)
+    private IActionResult MapOutcome(AdminPageOutcome outcome)
     {
-        try
-        {
-            var templates = await templatesClient.GetAccessibleTemplatesAsync(cancellationToken);
-            AvailableTemplates = templates?.OrderBy(t => t.Name).ToList() ?? [];
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to load templates for edit user");
-            ModelState.AddModelError(string.Empty, UserManagerModel.GetErrorMessage(ex, "Could not load available forms."));
-            AvailableTemplates = [];
-        }
+        foreach (var error in outcome.Errors)
+            ModelState.AddModelError(error.FieldKey, error.Message);
 
-        try
+        if (outcome.SuccessMessage != null)
+            TempData["UserManagerSuccess"] = outcome.SuccessMessage;
+
+        if (outcome.ErrorMessage != null)
+            TempData["UserManagerError"] = outcome.ErrorMessage;
+
+        return outcome.Kind == AdminPageOutcomeKind.RedirectToPage
+            ? RedirectToPage("/Admin/UserManager")
+            : Page();
+    }
+
+    private void InvalidateActorSessionIfSelf(string userEmail)
+    {
+        var actingEmail = User.FindFirstValue(ClaimTypes.Email);
+        if (!string.IsNullOrWhiteSpace(actingEmail)
+            && string.Equals(actingEmail, userEmail, StringComparison.OrdinalIgnoreCase))
         {
-            var roles = await rolesClient.ListAsync(cancellationToken);
-            AssignableRoles = AdminAccessHelper.GetUserManagerAssignableRoles(
-                User,
-                roles?.Select(r => (r.Name, r.IsSystem)));
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to load roles for edit user");
-            ModelState.AddModelError(string.Empty, UserManagerModel.GetErrorMessage(ex, "Could not load available roles."));
-            AssignableRoles = AdminAccessHelper.GetUserManagerAssignableRoles(User, null);
+            tokenStore.ClearToken();
+            UserPermissionsCache.Invalidate(memoryCache, User);
         }
     }
 }
