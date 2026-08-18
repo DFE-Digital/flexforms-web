@@ -36,16 +36,16 @@ function ensureElement(id) {
     return el;
 }
 
-window.renderOrUpdate = function (n) {
+window.renderOrUpdate = function (n, options) {
     // Handle case where notifications might be in an array (from SignalR)
     // If it's an array, render each notification
     if (Array.isArray(n)) {
-        n.forEach(notification => renderSingleNotification(notification));
+        n.forEach(notification => renderSingleNotification(notification, options));
         return;
     }
     
     // Otherwise render the single notification
-    renderSingleNotification(n);
+    renderSingleNotification(n, options);
 };
 
 function fileValidationStatusLabel(status) {
@@ -56,7 +56,11 @@ function fileValidationStatusLabel(status) {
     return '';
 }
 
-function applyFileValidationStatus(notification) {
+function isApplicationPreviewPage() {
+    return Boolean(document.querySelector('[data-application-preview]'));
+}
+
+function applyFileValidationStatus(notification, options) {
     const category = notification?.category;
     if (category && String(category).toLowerCase() !== 'file-validation') return;
 
@@ -65,27 +69,34 @@ function applyFileValidationStatus(notification) {
     if (!fileId) return;
 
     const cell = document.querySelector(`[data-file-validation-status="${fileId}"]`);
-    if (!cell) return;
+    if (cell) {
+        const label = fileValidationStatusLabel(meta.status || meta.Status);
+        const detail = meta.message || meta.Message || '';
+        if (label) {
+            cell.replaceChildren();
+            const labelSpan = document.createElement('span');
+            labelSpan.textContent = label;
+            cell.appendChild(labelSpan);
+            if (detail) {
+                const hint = document.createElement('span');
+                hint.className = 'govuk-hint';
+                hint.textContent = ` — ${detail}`;
+                cell.appendChild(hint);
+            }
+        }
+    }
 
-    const label = fileValidationStatusLabel(meta.status || meta.Status);
-    const detail = meta.message || meta.Message || '';
-    if (!label) return;
-
-    cell.replaceChildren();
-    const labelSpan = document.createElement('span');
-    labelSpan.textContent = label;
-    cell.appendChild(labelSpan);
-    if (detail) {
-        const hint = document.createElement('span');
-        hint.className = 'govuk-hint';
-        hint.textContent = ` — ${detail}`;
-        cell.appendChild(hint);
+    // Preview submit-gate copy is rendered from the last GET. Reload only for live
+    // hub events so unread replay after a reload cannot loop.
+    if (options?.live && isApplicationPreviewPage() && !window.__applicationPreviewValidationReload) {
+        window.__applicationPreviewValidationReload = true;
+        window.location.reload();
     }
 }
 
-function renderSingleNotification(notification) {
+function renderSingleNotification(notification, options) {
     if (!notification || !notification.id) return;
-    applyFileValidationStatus(notification);
+    applyFileValidationStatus(notification, options);
     
     const map = mapTypeToCss(notification.type);
     const id = `notification-${notification.id}`;
@@ -204,7 +215,7 @@ async function startHub() {
             .withAutomaticReconnect()
             .build();
 
-        connection.on("notification.upserted", n => window.renderOrUpdate(n));
+        connection.on("notification.upserted", n => window.renderOrUpdate(n, { live: true }));
         connection.on("notification.dismissed", ({ id }) => window.removeFromUi(id));
         connection.on("notification.cleared", () => window.clearUi());
 
@@ -294,7 +305,7 @@ window.addEventListener('DOMContentLoaded', () => {
         try {
             // Hook into existing handlers by wrapping render/remove/clear
             const origRender = window.renderOrUpdate;
-            window.renderOrUpdate = function(n) { origRender(n); refreshUnreadCount(); };
+            window.renderOrUpdate = function(n, options) { origRender(n, options); refreshUnreadCount(); };
             const origRemove = window.removeFromUi;
             window.removeFromUi = function(id) { origRemove(id); refreshUnreadCount(); };
             const origClear = window.clearUi;

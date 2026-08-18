@@ -81,6 +81,7 @@ public sealed class PrepareFormEngineGetService(
         }
 
         PopulateUploadFieldsFromSession(state);
+        await OverlayFileValidationFromDatabaseAsync(state, cancellationToken);
 
         state.ConditionalState = await FormEngineConditionalLogic.ApplyAsync(
             state.Template,
@@ -341,6 +342,58 @@ public sealed class PrepareFormEngineGetService(
                 continue;
 
             state.Data[fieldId] = JsonSerializer.Serialize(files);
+        }
+    }
+
+    private async Task OverlayFileValidationFromDatabaseAsync(
+        FormEngineWorkState state,
+        CancellationToken cancellationToken)
+    {
+        if (!state.ApplicationId.HasValue)
+            return;
+
+        IReadOnlyList<UploadDto>? dbFiles;
+        try
+        {
+            dbFiles = await applicationsClient.GetFilesForApplicationAsync(state.ApplicationId.Value, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(
+                ex,
+                "Could not refresh file validation status from API for application {ApplicationId}",
+                state.ApplicationId);
+            return;
+        }
+
+        if (dbFiles is null || dbFiles.Count == 0)
+            return;
+
+        var latestById = FileValidationStatusOverlay.IndexById(dbFiles);
+        if (latestById.Count == 0)
+            return;
+
+        FileValidationStatusOverlay.ApplyToFormData(state.FormData, latestById);
+        FileValidationStatusOverlay.ApplyToFormData(state.Data, latestById);
+        applicationResponseService.StoreFormDataInSession(state.FormData);
+
+        if (state.CurrentPage == null)
+            return;
+
+        var uploadFields = state.CurrentPage.Fields
+            .Where(f => f.Type == "complexField"
+                && f.ComplexField != null
+                && complexFieldConfigurationService.GetConfiguration(f.ComplexField.Id).FieldType
+                    .Equals("upload", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        foreach (var field in uploadFields)
+        {
+            var files = formFileFieldService.GetFiles(state.FileFieldContext, field.FieldId).ToList();
+            FileValidationStatusOverlay.ApplyToFiles(files, latestById);
+            formFileFieldService.SaveFiles(state.FileFieldContext, field.FieldId, files);
+            if (files.Count > 0)
+                state.Data[field.FieldId] = JsonSerializer.Serialize(files);
         }
     }
 

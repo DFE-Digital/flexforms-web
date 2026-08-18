@@ -145,7 +145,10 @@ public class UploadFileModel(
         try
         {
             var allDbFiles = await fileUploadService.GetFilesForApplicationAsync(appId);
-            return files.Where(sf => allDbFiles.Any(dbf => dbf.Id == sf.Id)).ToList();
+            var latestById = FileValidationStatusOverlay.IndexById(allDbFiles);
+            FileValidationStatusOverlay.ApplyToFiles(files, latestById);
+            formFileFieldService.SaveFiles(new FormFileFieldContext(appId, FlowId, InstanceId), fieldId, files);
+            return files.Where(sf => latestById.ContainsKey(sf.Id)).ToList();
         }
         catch (ExternalApplicationsException ex) when (ex.StatusCode is 401 or 403)
         {

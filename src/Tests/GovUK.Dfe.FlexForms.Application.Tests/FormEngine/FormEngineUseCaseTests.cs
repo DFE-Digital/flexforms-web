@@ -1,3 +1,6 @@
+using System.Collections.ObjectModel;
+using System.Text.Json;
+using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Application.FormEngine;
@@ -315,11 +318,16 @@ public class PrepareFormEngineGetServiceTests
 {
     private readonly ITemplateManagementService _templates = Substitute.For<ITemplateManagementService>();
     private readonly IApplicationResponseService _responses = Substitute.For<IApplicationResponseService>();
+    private readonly IApplicationsClient _applications = Substitute.For<IApplicationsClient>();
     private readonly PrepareFormEngineGetService _service;
 
     public PrepareFormEngineGetServiceTests()
     {
         _responses.GetAccumulatedFormData().Returns(new Dictionary<string, object> { ["name"] = "Ada" });
+        _applications.GetFilesForApplicationAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(new ObservableCollection<UploadDto>());
+        _applications.GetFileValidationGateAsync(Arg.Any<Guid>())
+            .Returns(new FileValidationGateDto { CanSubmit = true, BlockingFiles = [] });
         _service = new PrepareFormEngineGetService(
             _templates,
             _responses,
@@ -330,7 +338,7 @@ public class PrepareFormEngineGetServiceTests
             Substitute.For<IFormFileFieldService>(),
             Substitute.For<IComplexFieldConfigurationService>(),
             Substitute.For<IDerivedCollectionFlowService>(),
-            Substitute.For<IApplicationsClient>(),
+            _applications,
             Substitute.For<INavigationHistoryService>(),
             Substitute.For<IApplicationStateService>(),
             NullLogger<PrepareFormEngineGetService>.Instance);
@@ -362,6 +370,53 @@ public class PrepareFormEngineGetServiceTests
 
         Assert.Equal(FormEngineOutcomeKind.Redirect, result.Kind);
         Assert.Equal("~/applications/REF-1", result.RedirectUrl);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ShouldOverlayDatabaseValidationStatus_OnPreviewFormData()
+    {
+        var fileId = Guid.NewGuid();
+        var applicationId = Guid.NewGuid();
+        var pendingJson = JsonSerializer.Serialize(new List<UploadDto>
+        {
+            new()
+            {
+                Id = fileId,
+                OriginalFileName = "scan.xlsx",
+                ValidationStatus = FileValidationStatus.Pending
+            }
+        });
+        _applications.GetFilesForApplicationAsync(applicationId, Arg.Any<CancellationToken>())
+            .Returns(new ObservableCollection<UploadDto>
+            {
+                new()
+                {
+                    Id = fileId,
+                    OriginalFileName = "scan.xlsx",
+                    ValidationStatus = FileValidationStatus.Passed,
+                    ValidationMessage = "OK"
+                }
+            });
+        _applications.GetFileValidationGateAsync(applicationId)
+            .Returns(new FileValidationGateDto { CanSubmit = true, BlockingFiles = [] });
+
+        var state = new FormEngineWorkState
+        {
+            ReferenceNumber = "REF-1",
+            ApplicationId = applicationId,
+            Template = new FormTemplate { TemplateId = "tpl", TemplateName = "tpl", Description = "tpl", TaskGroups = [] },
+            FormData = new Dictionary<string, object> { ["evidence"] = pendingJson },
+            Data = new Dictionary<string, object>()
+        };
+
+        var result = await _service.ExecuteAsync(state, isPreview: true, isBackNav: false, isEditable: true);
+
+        Assert.Equal(FormEngineOutcomeKind.StayOnPage, result.Kind);
+        Assert.False(result.FileValidationBlocksSubmit);
+        var uploads = JsonSerializer.Deserialize<List<UploadDto>>(state.FormData["evidence"].ToString()!);
+        Assert.Equal(FileValidationStatus.Passed, uploads![0].ValidationStatus);
+        Assert.Equal("OK", uploads[0].ValidationMessage);
+        _responses.Received().StoreFormDataInSession(state.FormData);
     }
 }
 
