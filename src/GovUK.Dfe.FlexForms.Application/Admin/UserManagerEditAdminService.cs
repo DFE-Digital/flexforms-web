@@ -98,16 +98,25 @@ public sealed class UserManagerEditAdminService(
 
         try
         {
-            await usersClient.AssignUserRoleAsync(
-                new AssignUserRoleRequest
-                {
-                    Name = state.UserName,
-                    Email = state.UserEmail,
-                    Role = state.Role,
-                    TemplateIds = state.SelectedTemplateIds
-                },
-                createOnly: false,
-                cancellationToken);
+            var users = await usersClient.GetTenantUsersAsync(cancellationToken);
+            var current = users?.FirstOrDefault(u => u.UserId == state.UserId);
+            if (current is null)
+                return AdminPageOutcome.Redirect(errorMessage: UserManagerEditMessages.UserNotFound);
+
+            var roleChanged = !string.Equals(current.Role, state.Role, StringComparison.OrdinalIgnoreCase);
+            if (roleChanged)
+            {
+                await usersClient.AssignUserRoleAsync(
+                    new AssignUserRoleRequest
+                    {
+                        Name = state.UserName,
+                        Email = state.UserEmail,
+                        Role = state.Role,
+                        TemplateIds = state.SelectedTemplateIds
+                    },
+                    createOnly: false,
+                    cancellationToken);
+            }
 
             await usersClient.UpdateUserTemplateAccessAsync(
                 state.UserId,

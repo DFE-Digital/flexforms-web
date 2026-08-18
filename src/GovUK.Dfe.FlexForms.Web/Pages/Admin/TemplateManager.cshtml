@@ -213,12 +213,12 @@
 
         @if (showForm)
         {
-            <govuk-error-summary>
-                @if (!ViewData.ModelState.IsValid)
-                {
-                    @foreach (var modelError in ViewData.ModelState.Where(x => x.Value.Errors.Count > 0))
+            @if (!ViewData.ModelState.IsValid)
+            {
+                <govuk-error-summary>
+                    @foreach (var modelError in ViewData.ModelState.Where(x => x.Value?.Errors.Count > 0))
                     {
-                        @foreach (var error in modelError.Value.Errors)
+                        @foreach (var error in modelError.Value!.Errors)
                         {
                             var fieldName = modelError.Key;
                             var href = fieldName switch
@@ -234,8 +234,8 @@
                             </govuk-error-summary-item>
                         }
                     }
-                }
-            </govuk-error-summary>
+                </govuk-error-summary>
+            }
 
             <h2 class="govuk-heading-l">Add New Template Version</h2>
             
@@ -268,9 +268,14 @@
                     </div>
                     @if (ViewData.ModelState["NewSchema"]?.Errors.Any() == true)
                     {
-                        <p id="schema-error" class="govuk-error-message">
-                            <span class="govuk-visually-hidden">Error:</span> @ViewData.ModelState["NewSchema"].Errors.First().ErrorMessage
-                        </p>
+                        <div id="schema-error">
+                            @foreach (var schemaError in ViewData.ModelState["NewSchema"]!.Errors)
+                            {
+                                <p class="govuk-error-message">
+                                    <span class="govuk-visually-hidden">Error:</span> @schemaError.ErrorMessage
+                                </p>
+                            }
+                        </div>
                     }
                     <textarea class="govuk-textarea @(ViewData.ModelState["NewSchema"]?.Errors.Any() == true ? "govuk-textarea--error" : "")" 
                               asp-for="NewSchema" 

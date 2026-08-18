@@ -126,16 +126,12 @@ public class TemplateManagerModel(
         var state = CaptureWorkState();
         var validation = templateManagerAdmin.ValidateNewVersion(state);
         if (validation.Errors.Count > 0)
-        {
-            ApplyValidationErrors(validation);
-            ShowAddVersionForm = true;
-            await templateManagerAdmin.LoadTemplateDataAsync(state, templateId.Value);
-            ApplyWorkState(state);
-            PrefillNewSchema(templateId.Value);
-            return Page();
-        }
+            return await RedisplayAddVersionFormAsync(state, templateId.Value, validation);
 
-        await templateManagerAdmin.CreateVersionAsync(state, templateId.Value);
+        var created = await templateManagerAdmin.CreateVersionAsync(state, templateId.Value);
+        if (created.Kind == AdminPageOutcomeKind.StayOnPage || created.Errors.Count > 0)
+            return await RedisplayAddVersionFormAsync(state, templateId.Value, created);
+
         await InvalidateTemplateCacheAsync(templateId.Value.ToString());
 
         HttpContext.Session.SetString(TemplateVersionSessionKey, NewVersion!);
@@ -303,15 +299,30 @@ public class TemplateManagerModel(
             HttpContext.Session.SetString(TemplateVersionSessionKey, state.SessionVersionNumber);
     }
 
+    private async Task<IActionResult> RedisplayAddVersionFormAsync(
+        TemplateManagerWorkState state,
+        Guid templateId,
+        AdminPageOutcome outcome)
+    {
+        ApplyValidationErrors(outcome);
+        ShowAddVersionForm = true;
+        await templateManagerAdmin.LoadTemplateDataAsync(state, templateId);
+        ApplyWorkState(state);
+        return Page();
+    }
+
     private void PrefillNewSchema(Guid templateId)
     {
+        var schemaWasEmpty = string.IsNullOrWhiteSpace(NewSchema);
         var state = CaptureWorkState();
         state.CurrentTemplateJson = CurrentTemplateJson;
         state.SelectedTemplate = SelectedTemplate;
         templateManagerAdmin.PrefillNewSchemaIfEmpty(state, templateId);
         NewSchema = state.NewSchema;
         NewVersion = state.NewVersion ?? NewVersion;
-        if (ShowAddVersionForm)
+        // Only clear ModelState when we just prefilled an empty textarea on GET.
+        // Removing it after a failed save also wipes the schema validation messages.
+        if (ShowAddVersionForm && schemaWasEmpty)
             ModelState.Remove(nameof(NewSchema));
     }
 

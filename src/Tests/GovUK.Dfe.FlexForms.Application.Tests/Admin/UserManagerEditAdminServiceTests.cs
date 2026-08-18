@@ -70,8 +70,19 @@ public class UserManagerEditAdminServiceTests
     }
 
     [Fact]
-    public async Task UpdateAsync_ShouldAssignRoleAndTemplates_WhenInputIsValid()
+    public async Task UpdateAsync_ShouldAssignRoleAndTemplates_WhenRoleChanged()
     {
+        _users.GetTenantUsersAsync(Arg.Any<CancellationToken>()).Returns(
+        [
+            new TenantUserDto
+            {
+                UserId = _userId,
+                Name = "Ada Lovelace",
+                Email = "ada@example.com",
+                Role = "User"
+            }
+        ]);
+
         var result = await _service.UpdateAsync(_state);
 
         Assert.Equal(AdminPageOutcomeKind.RedirectToPage, result.Kind);
@@ -82,6 +93,34 @@ public class UserManagerEditAdminServiceTests
                 && r.Email == "ada@example.com"
                 && r.Role == "Caseworker"),
             false,
+            Arg.Any<CancellationToken>());
+        await _users.Received(1).UpdateUserTemplateAccessAsync(
+            _userId,
+            Arg.Any<UpdateUserTemplateAccessRequest>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldUpdateTemplatesOnly_WhenRoleIsUnchanged()
+    {
+        _users.GetTenantUsersAsync(Arg.Any<CancellationToken>()).Returns(
+        [
+            new TenantUserDto
+            {
+                UserId = _userId,
+                Name = "Ada Lovelace",
+                Email = "ada@example.com",
+                Role = "Caseworker"
+            }
+        ]);
+
+        var result = await _service.UpdateAsync(_state);
+
+        Assert.Equal(AdminPageOutcomeKind.RedirectToPage, result.Kind);
+        Assert.Equal(UserManagerEditMessages.Updated, result.SuccessMessage);
+        await _users.DidNotReceive().AssignUserRoleAsync(
+            Arg.Any<AssignUserRoleRequest>(),
+            Arg.Any<bool?>(),
             Arg.Any<CancellationToken>());
         await _users.Received(1).UpdateUserTemplateAccessAsync(
             _userId,

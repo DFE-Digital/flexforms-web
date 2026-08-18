@@ -256,6 +256,7 @@
     </div>
 }
 @section BeforeContent {
+    @await Component.InvokeAsync("NotificationBanner")
     @RenderSection("BeforeContent", required: false)
 }
 @{
@@ -333,8 +334,6 @@
     @Html.Raw(JavaScriptSnippet.FullScript)
 }
 
-@await Component.InvokeAsync("NotificationBanner")
-
 @await Html.PartialAsync("_NotificationDisplay")
 
 @RenderBody()
@@ -357,5 +356,13 @@
 <style>
     .govuk-hint.hint--default {
         color: var(--govuk-text-colour); /* black/default text colour */
+    }
+
+    .app-notification-banner {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+        align-self: stretch;
     }
 </style>

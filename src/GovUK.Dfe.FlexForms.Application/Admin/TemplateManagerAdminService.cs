@@ -163,16 +163,32 @@ public sealed class TemplateManagerAdminService(
         Guid templateId,
         CancellationToken cancellationToken = default)
     {
-        var base64Schema = Convert.ToBase64String(Encoding.UTF8.GetBytes(state.NewSchema!));
-        await templatesClient.CreateTemplateVersionAsync(
-            templateId,
-            new CreateTemplateVersionRequest(VersionNumber: state.NewVersion!, JsonSchema: base64Schema));
+        try
+        {
+            var base64Schema = Convert.ToBase64String(Encoding.UTF8.GetBytes(state.NewSchema!));
+            await templatesClient.CreateTemplateVersionAsync(
+                templateId,
+                new CreateTemplateVersionRequest(VersionNumber: state.NewVersion!, JsonSchema: base64Schema),
+                cancellationToken);
 
-        logger.LogInformation("Successfully created template version {NewVersion} for {TemplateId}",
-            state.NewVersion, templateId);
+            logger.LogInformation("Successfully created template version {NewVersion} for {TemplateId}",
+                state.NewVersion, templateId);
 
-        return AdminPageOutcome.Redirect(
-            routeValues: new Dictionary<string, string?> { ["success"] = "true" });
+            return AdminPageOutcome.Redirect(
+                routeValues: new Dictionary<string, string?> { ["success"] = "true" });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to save template version {NewVersion} for {TemplateId}",
+                state.NewVersion, templateId);
+            return AdminPageOutcome.Stay(
+                errors:
+                [
+                    new FormValidationError(
+                        nameof(TemplateManagerWorkState.NewSchema),
+                        AdminApiErrorMapper.Format(ex, TemplateManagerMessages.SaveFailed))
+                ]);
+        }
     }
 
     public string SuggestNextVersion(string? latestVersion, string? currentVersion) =>

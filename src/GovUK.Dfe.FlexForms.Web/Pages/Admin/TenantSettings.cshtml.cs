@@ -51,6 +51,8 @@ public sealed class TenantSettingsModel(
 
     public string? SuccessMessage { get; private set; }
 
+    public bool IsSuperAdmin => AdminAccessHelper.IsSuperAdmin(User);
+
     [BindProperty]
     public string NewCategory { get; set; } = string.Empty;
 

@@ -24,6 +24,8 @@ public static class TemplateManagerMessages
 
     public const string LoadFailed = "There was an error loading the template data.";
 
+    public const string SaveFailed = "Could not save this template version.";
+
     public const string ClearFailed = "Failed to clear sessions and caches.";
 
     public static string GrantedSummary(int granted, int alreadyHad, int total) =>
