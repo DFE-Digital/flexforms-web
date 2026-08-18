@@ -290,13 +290,16 @@
             </nav>
         }
 
-        <h2 class="govuk-heading-l govuk-!-margin-top-9">
-            Start a new @AppTerminology.Singular
-        </h2>
-        <p class="govuk-body">If you start an @AppTerminology.Singular, you will be the lead applicant for it.</p>
-        <form method="post">
-            <button class="govuk-button govuk-!-margin-bottom-9" type="submit" asp-page-handler="CreateApplication" id="start-new-application-button">Start new @AppTerminology.Singular</button>
-        </form>
+        @if (Model.CanStartNewApplication)
+        {
+            <h2 class="govuk-heading-l govuk-!-margin-top-9">
+                Start a new @AppTerminology.Singular
+            </h2>
+            <p class="govuk-body">If you start an @AppTerminology.Singular, you will be the lead applicant for it.</p>
+            <form method="post">
+                <button class="govuk-button govuk-!-margin-bottom-9" type="submit" asp-page-handler="CreateApplication" id="start-new-application-button">Start new @AppTerminology.Singular</button>
+            </form>
+        }
     </div>
 </div>
 @*

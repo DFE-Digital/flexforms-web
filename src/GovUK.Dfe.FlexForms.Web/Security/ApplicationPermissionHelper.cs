@@ -45,6 +45,22 @@ public static class ApplicationPermissionHelper
             || HasPermission(user, "Application:Any:Read");
     }
 
+    /// <summary>
+    /// True when the user can start a new application on the selected template.
+    /// Invited contributors have Template:Read only and must not see this action.
+    /// </summary>
+    public static bool CanCreateApplicationsForTemplate(ClaimsPrincipal? user, Guid templateId)
+    {
+        if (user?.Identity?.IsAuthenticated != true || templateId == Guid.Empty)
+            return false;
+
+        if (AdminAccessHelper.IsAdmin(user))
+            return true;
+
+        return HasPermission(user, $"Template:{templateId}:Write")
+            || HasPermission(user, "Template:Any:Write");
+    }
+
     private static bool HasPermission(ClaimsPrincipal user, string expected) =>
         user.Claims.Any(c =>
             c.Type == PermissionClaimType

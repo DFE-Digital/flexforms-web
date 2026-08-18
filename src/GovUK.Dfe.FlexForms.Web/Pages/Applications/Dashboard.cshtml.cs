@@ -83,6 +83,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
         public bool FiltersEnabled => dashboardOptions.Value.EnableApplicationFilters;
         public bool IsSearchActive => FiltersEnabled && SearchFilters.HasActiveFilters;
         public bool ShowFiltersPanel => IsSearchActive;
+        public bool CanStartNewApplication { get; private set; }
 
         public async SystemTask OnGetAsync(ApplicationStatus? status = null)
         {
@@ -97,7 +98,10 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
             StatusFilters = statusFilters.OrderBy(x => x.Key).ToList();
             SelectedStatusFilter = status;
             ValidateSearchFilters();
-            Columns = await dashboardApplications.ResolveColumnsAsync(ResolveTemplateId());
+            var templateId = ResolveTemplateId();
+            CanStartNewApplication = templateId.HasValue
+                && ApplicationPermissionHelper.CanCreateApplicationsForTemplate(User, templateId.Value);
+            Columns = await dashboardApplications.ResolveColumnsAsync(templateId);
             LoadUserDetails();
             await LoadApplicationsAsync();
         }
@@ -141,6 +145,20 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
                 HasError = true;
                 ErrorMessage = DashboardMessages.TemplateNotConfigured;
                 logger.LogWarning("TemplateId not available when creating application");
+                return Page();
+            }
+
+            if (!ApplicationPermissionHelper.CanCreateApplicationsForTemplate(User, templateGuid.Value))
+            {
+                HasError = true;
+                ErrorMessage = DashboardMessages.CannotStartApplication;
+                logger.LogWarning(
+                    "User without template write access attempted to create an application for {TemplateId}",
+                    templateGuid.Value);
+                CanStartNewApplication = false;
+                Columns = await dashboardApplications.ResolveColumnsAsync(templateGuid);
+                LoadUserDetails();
+                await LoadApplicationsAsync();
                 return Page();
             }
 

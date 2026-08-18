@@ -6,4 +6,5 @@ namespace GovUK.Dfe.FlexForms.Application.Dashboard;
 public static class DashboardMessages
 {
     public const string TemplateNotConfigured = "Template is not configured. Please refresh the page.";
+    public const string CannotStartApplication = "You do not have permission to start a new application.";
 }
