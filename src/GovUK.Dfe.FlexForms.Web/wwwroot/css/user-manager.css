@@ -8,16 +8,31 @@
     width: 100%;
 }
 
+.user-manager-audit-table .govuk-table__cell {
+    vertical-align: top;
+}
+
 .user-manager-audit-table__when {
     width: 11rem;
 }
 
 .user-manager-audit-table__action {
-    width: 8rem;
+    width: 14rem;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .user-manager-audit-table__role {
-    width: 7rem;
+    width: 12rem;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.user-manager-audit-table__action .govuk-tag {
+    white-space: normal;
+    max-width: 100%;
+    height: auto;
+    line-height: 1.25;
 }
 
 .user-manager-audit-table__email,

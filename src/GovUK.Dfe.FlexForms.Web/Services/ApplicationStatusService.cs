@@ -31,13 +31,21 @@ namespace GovUK.Dfe.FlexForms.Web.Services
 
             var cacheKey = $"CustomApplicationStatuses_{CacheKeyHelper.GenerateHashedCacheKey(templateId.ToString())}";
             var methodName = nameof(GetCustomApplicationStatusesAsync);
-            return await _cacheService.GetOrAddAsync(
-            cacheKey,
-            async () =>
+            try
             {
-                return await _templatesClient.GetCustomApplicationStatusesAsync(templateId.Value);
-            },
-            methodName);
+                return await _cacheService.GetOrAddAsync(
+                    cacheKey,
+                    () => _templatesClient.GetCustomApplicationStatusesAsync(templateId.Value),
+                    methodName);
+            }
+            catch (ExternalApplicationsException ex) when (ex.StatusCode is 401 or 403)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Could not load custom application statuses for template {TemplateId}; using default labels",
+                    templateId);
+                return new List<CustomApplicationStatusDto>();
+            }
         }
 
         public KeyValuePair<ApplicationStatus, string> GetCalculatedApplicationStatusAsync(ApplicationDto application, IReadOnlyList<CustomApplicationStatusDto> customStatuses)

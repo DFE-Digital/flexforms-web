@@ -1,3 +1,4 @@
+using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Application.Admin;
@@ -49,11 +50,63 @@ public class TemplateManagerAdminServiceTests
         var result = _service.ValidateNewVersion(state);
 
         Assert.Contains(result.Errors, e => e.Message == "schema broken");
+        Assert.Contains(result.Errors, e => e.FieldKey == nameof(TemplateManagerWorkState.NewSchema));
+    }
+
+    [Fact]
+    public void PrefillNewSchemaIfEmpty_ShouldKeepPostedSchema()
+    {
+        var posted = """{ "name": "broken" }""";
+        var state = new TemplateManagerWorkState
+        {
+            ShowAddVersionForm = true,
+            NewSchema = posted,
+            CurrentTemplateJson = """{ "name": "current" }"""
+        };
+
+        _service.PrefillNewSchemaIfEmpty(state, Guid.NewGuid());
+
+        Assert.Equal(posted, state.NewSchema);
+    }
+
+    [Fact]
+    public async Task CreateVersionAsync_ShouldStayWithError_WhenApiRejectsSchema()
+    {
+        var templateId = Guid.NewGuid();
+        _templates.CreateTemplateVersionAsync(
+                templateId,
+                Arg.Any<CreateTemplateVersionRequest>(),
+                Arg.Any<CancellationToken>())
+            .Returns<TemplateSchemaDto>(_ => throw new InvalidOperationException("Version already exists"));
+
+        var result = await _service.CreateVersionAsync(
+            new TemplateManagerWorkState { NewVersion = "1.0.2", NewSchema = "{}" },
+            templateId);
+
+        Assert.Equal(AdminPageOutcomeKind.StayOnPage, result.Kind);
+        Assert.Contains(result.Errors, e =>
+            e.FieldKey == nameof(TemplateManagerWorkState.NewSchema)
+            && e.Message == TemplateManagerMessages.SaveFailed);
     }
 
     [Fact]
     public void SuggestNextVersion_ShouldPreferLatestVersion()
     {
         Assert.Equal("1.0.3", _service.SuggestNextVersion("1.0.2", "1.0.0"));
+    }
+
+    [Fact]
+    public async Task GrantToAllUsersAsync_ShouldReturnGrantedSummary()
+    {
+        var templateId = Guid.NewGuid();
+        _templates.GrantTemplateAccessToAllUsersAsync(templateId, Arg.Any<CancellationToken>())
+            .Returns(new GrantTemplateAccessToAllUsersResponse(templateId, 5, 3, 2));
+
+        var state = new TemplateManagerWorkState();
+        var result = await _service.GrantToAllUsersAsync(state, templateId);
+
+        Assert.Equal(AdminPageOutcomeKind.RedirectToPage, result.Kind);
+        Assert.Equal(TemplateManagerMessages.GrantedSummary(3, 2, 5), result.SuccessMessage);
+        Assert.Equal(TemplateManagerMessages.GrantedSummary(3, 2, 5), state.GrantToAllUsersSummary);
     }
 }

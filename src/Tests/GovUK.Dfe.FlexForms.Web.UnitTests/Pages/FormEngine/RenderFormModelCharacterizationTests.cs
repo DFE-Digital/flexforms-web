@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Security.Claims;
 using System.Text.Json;
 using AutoFixture;
@@ -145,6 +146,8 @@ public class RenderFormModelCharacterizationTests
         _applicationsClient = Substitute.For<IApplicationsClient>();
         _applicationsClient.GetFileValidationGateAsync(Arg.Any<Guid>())
             .Returns(new FileValidationGateDto { CanSubmit = true, BlockingFiles = [] });
+        _applicationsClient.GetFilesForApplicationAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(new ObservableCollection<UploadDto>());
         _applicationsClient.SubmitApplicationAsync(Arg.Any<Guid>())
             .Returns(new ApplicationDto { ApplicationReference = "REF-1" });
         _fixture.Register(() => _applicationsClient);

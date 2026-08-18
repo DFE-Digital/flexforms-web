@@ -51,9 +51,12 @@
                     Refresh settings
                 </button>
             </form>
-            <a asp-page="/Admin/PlatformTenants" class="govuk-button govuk-button--secondary" data-module="govuk-button">
-                Platform tenants
-            </a>
+            @if (Model.IsSuperAdmin)
+            {
+                <a asp-page="/Admin/PlatformTenants" class="govuk-button govuk-button--secondary" data-module="govuk-button">
+                    Platform tenants
+                </a>
+            }
         </div>
 
         @if (Model.TenantHealth is not null)
