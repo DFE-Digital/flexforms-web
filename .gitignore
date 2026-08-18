@@ -186,3 +186,4 @@ backend.vars
 
 LocalNuget
 Nuget.Config
+Directory.Build.targets.user
