@@ -1,0 +1,54 @@
+@model GovUK.Dfe.FlexForms.Web.ViewModels.FormEngine.SummaryValueViewModel
+@using GovUK.Dfe.FlexForms.Web.ViewModels.FormEngine
+@switch (Model.Kind)
+{
+    case SummaryDisplayKind.NotAnswered:
+        <span class="govuk-hint">Not answered</span>
+        break;
+    case SummaryDisplayKind.Empty:
+        break;
+    case SummaryDisplayKind.Html:
+        @Html.Raw(Model.Html)
+        break;
+    case SummaryDisplayKind.Text:
+        @Model.Text
+        break;
+    case SummaryDisplayKind.HtmlList:
+        @foreach (var item in Model.HtmlItems)
+        {
+            <div>@Html.Raw(item)</div>
+        }
+        break;
+    case SummaryDisplayKind.Checkboxes:
+        <ul class="govuk-list govuk-list--bullet">
+            @foreach (var option in Model.Checkboxes)
+            {
+                <li>@option</li>
+            }
+        </ul>
+        break;
+    case SummaryDisplayKind.AutocompleteHtml:
+        @Html.Raw(Model.Html)
+        break;
+    case SummaryDisplayKind.StatusTag:
+        {
+            var statusClass = Model.StatusIsSigned ? "govuk-tag govuk-tag--green" : "govuk-tag govuk-tag--blue";
+            <span class="@statusClass">@Model.StatusText</span>
+            break;
+        }
+    case SummaryDisplayKind.UploadFiles:
+        @foreach (var file in Model.Files)
+        {
+            if (Model.WrapFilesInDivs)
+            {
+                <div>
+                    @await Html.PartialAsync("FormEngine/_FileDownloadButton", file)
+                </div>
+            }
+            else
+            {
+                @await Html.PartialAsync("FormEngine/_FileDownloadButton", file)
+            }
+        }
+        break;
+}

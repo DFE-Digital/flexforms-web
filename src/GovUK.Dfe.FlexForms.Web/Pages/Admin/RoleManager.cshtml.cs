@@ -1,8 +1,6 @@
 using System.ComponentModel.DataAnnotations;
-using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
-using GovUK.Dfe.CoreLibs.Http.Models;
-using GovUK.Dfe.FlexForms.Api.Client.Contracts;
+using GovUK.Dfe.FlexForms.Application.Admin;
 using GovUK.Dfe.FlexForms.Web.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,9 +12,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 /// Lists and creates tenant roles.
 /// </summary>
 [Authorize(Roles = AdminAccessHelper.AuthorizeRoles)]
-public sealed class RoleManagerModel(
-    IRolesClient rolesClient,
-    ILogger<RoleManagerModel> logger) : PageModel
+public sealed class RoleManagerModel(IRoleManagerAdmin roleManagerAdmin) : PageModel
 {
     public IReadOnlyList<TenantRoleDto> Roles { get; private set; } = [];
 
@@ -36,75 +32,40 @@ public sealed class RoleManagerModel(
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         ApplyTempData();
-        await LoadRolesAsync(cancellationToken);
+        var state = CaptureWorkState();
+        await roleManagerAdmin.LoadAsync(state, cancellationToken);
+        ApplyWorkState(state);
     }
 
     public async Task<IActionResult> OnPostCreateAsync(CancellationToken cancellationToken)
     {
-        await LoadRolesAsync(cancellationToken);
+        var state = CaptureWorkState();
+        await roleManagerAdmin.LoadAsync(state, cancellationToken);
+        ApplyWorkState(state);
 
         if (!ModelState.IsValid)
             return Page();
 
-        try
-        {
-            var created = await rolesClient.CreateAsync(
-                new CreateTenantRoleRequest { Name = NewRoleName.Trim() },
-                cancellationToken);
-
-            TempData["RoleManagerSuccess"] = $"Role '{created.Name}' has been created.";
-            return RedirectToPage();
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to create role {Name}", NewRoleName);
-            ModelState.AddModelError(string.Empty, GetErrorMessage(ex, "Could not create the role."));
-            return Page();
-        }
+        var outcome = await roleManagerAdmin.CreateAsync(state, cancellationToken);
+        ApplyWorkState(state);
+        return MapOutcome(outcome);
     }
 
     public async Task<IActionResult> OnPostCreateFromTemplateAsync(
         string templateKey,
         CancellationToken cancellationToken)
     {
-        templateKey = templateKey?.Trim() ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(templateKey))
-        {
-            TempData["RoleManagerError"] = "Choose a role template.";
-            return RedirectToPage();
-        }
-
-        try
-        {
-            var created = await rolesClient.CreateFromTemplateAsync(
-                new CreateTenantRoleFromTemplateRequest(templateKey),
-                cancellationToken);
-            TempData["RoleManagerSuccess"] =
-                $"Role '{created.Name}' has been created from the {templateKey} template.";
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to create role from template {TemplateKey}", templateKey);
-            TempData["RoleManagerError"] = GetErrorMessage(ex, "Could not create the role from template.");
-        }
-
-        return RedirectToPage();
+        var outcome = await roleManagerAdmin.CreateFromTemplateAsync(
+            CaptureWorkState(),
+            templateKey,
+            cancellationToken);
+        return MapOutcome(outcome);
     }
 
     public async Task<IActionResult> OnPostDeleteAsync(Guid roleId, CancellationToken cancellationToken)
     {
-        try
-        {
-            await rolesClient.DeleteAsync(roleId, cancellationToken);
-            TempData["RoleManagerSuccess"] = "Role deleted.";
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to delete role {RoleId}", roleId);
-            TempData["RoleManagerError"] = GetErrorMessage(ex, "Could not delete the role.");
-        }
-
-        return RedirectToPage();
+        var outcome = await roleManagerAdmin.DeleteAsync(CaptureWorkState(), roleId, cancellationToken);
+        return MapOutcome(outcome);
     }
 
     public async Task<IActionResult> OnPostRenameAsync(
@@ -112,27 +73,38 @@ public sealed class RoleManagerModel(
         string name,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            TempData["RoleManagerError"] = "Enter a role name.";
-            return RedirectToPage();
-        }
+        var outcome = await roleManagerAdmin.RenameAsync(CaptureWorkState(), roleId, name, cancellationToken);
+        return MapOutcome(outcome);
+    }
 
-        try
-        {
-            await rolesClient.RenameAsync(
-                roleId,
-                new RenameTenantRoleRequest { Name = name.Trim() },
-                cancellationToken);
-            TempData["RoleManagerSuccess"] = "Role renamed.";
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to rename role {RoleId}", roleId);
-            TempData["RoleManagerError"] = GetErrorMessage(ex, "Could not rename the role.");
-        }
+    private RoleManagerWorkState CaptureWorkState() =>
+        new() { NewRoleName = NewRoleName };
 
-        return RedirectToPage();
+    private void ApplyWorkState(RoleManagerWorkState state)
+    {
+        Roles = state.Roles;
+        NewRoleName = state.NewRoleName;
+        if (state.HasError)
+        {
+            HasError = true;
+            ErrorMessage = state.ErrorMessage;
+        }
+    }
+
+    private IActionResult MapOutcome(AdminPageOutcome outcome)
+    {
+        foreach (var error in outcome.Errors)
+            ModelState.AddModelError(error.FieldKey, error.Message);
+
+        if (outcome.SuccessMessage != null)
+            TempData["RoleManagerSuccess"] = outcome.SuccessMessage;
+
+        if (outcome.ErrorMessage != null)
+            TempData["RoleManagerError"] = outcome.ErrorMessage;
+
+        return outcome.Kind == AdminPageOutcomeKind.RedirectToPage
+            ? RedirectToPage()
+            : Page();
     }
 
     private void ApplyTempData()
@@ -148,35 +120,5 @@ public sealed class RoleManagerModel(
             HasError = true;
             ErrorMessage = error;
         }
-    }
-
-    private async Task LoadRolesAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            var roles = await rolesClient.ListAsync(cancellationToken);
-            Roles = roles?
-                .OrderBy(r => r.IsSystem ? 0 : 1)
-                .ThenBy(r => r.Name)
-                .ToList() ?? [];
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to load tenant roles");
-            HasError = true;
-            ErrorMessage = GetErrorMessage(ex, "Could not load roles for this tenant.");
-            Roles = [];
-        }
-    }
-
-    internal static string GetErrorMessage(Exception ex, string fallback)
-    {
-        if (ex is ExternalApplicationsException<ExceptionResponse> apiEx
-            && !string.IsNullOrWhiteSpace(apiEx.Result?.Message))
-        {
-            return apiEx.Result.Message;
-        }
-
-        return fallback;
     }
 }

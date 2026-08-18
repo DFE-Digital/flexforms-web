@@ -1,7 +1,6 @@
 @model RenderFormModel
 @{
     var task = Model.CurrentTask;
-    var summary = task?.Summary;
 }
 
 @if (!string.IsNullOrEmpty(Model.SuccessMessage))
@@ -63,13 +62,9 @@
     <div class="govuk-grid-column-two-thirds">
         <h1 class="govuk-heading-l">@task?.TaskName</h1>
 
-        @if (summary?.Flows != null)
+        @foreach (var flow in Model.CollectionFlows)
         {
-            // Multi-flow mode: render each flow section
-            @foreach (var flow in summary.Flows)
-            {
-                @await Html.PartialAsync("~/Views/Shared/FormEngine/_SingleCollectionFlow.cshtml", new Tuple<RenderFormModel, GovUK.Dfe.FlexForms.Domain.Models.MultiCollectionFlowConfiguration>(Model, flow))
-            }
+            @await Html.PartialAsync("FormEngine/_SingleCollectionFlow", flow)
         }
 
         @if (Model.IsApplicationEditable())

@@ -1,13 +1,10 @@
 using GovUK.Dfe.FlexForms.Web.Security;
-using GovUK.Dfe.FlexForms.Application.Interfaces;
+using GovUK.Dfe.FlexForms.Application.Admin;
 using GovUK.Dfe.FlexForms.Domain.Models;
-using GovUK.Dfe.FlexForms.Web.Services;
 using GovUK.Dfe.CoreLibs.Caching.Helpers;
 using GovUK.Dfe.CoreLibs.Caching.Interfaces;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums;
-using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
-using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -20,13 +17,8 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
     [ExcludeFromCodeCoverage]
     [Authorize(Policy = AdminAccessHelper.CanManageTemplatesPolicy)]
     public class CustomStatusLabelOverridesModel(
-        IApplicationStatusService applicationStatusService,
-        IFormTemplateProvider formTemplateProvider,
-        ICacheService<IMemoryCacheType> cacheService,
-        ITemplatesClient templatesClient,
-        ITemplateSelectionService templateSelectionService,
-        ILogger<CustomStatusLabelOverridesModel> logger)
-        : PageModel
+        ICustomStatusLabelOverridesAdmin customStatusLabelOverridesAdmin,
+        ICacheService<IMemoryCacheType> cacheService) : PageModel
     {
         public bool ShowSuccess { get; set; }
         public bool HasError { get; set; }
@@ -52,35 +44,40 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
             ApplicationStatus status = ApplicationStatus.Created)
         {
             ShowSuccess = success;
-            await LoadAvailableTemplatesAsync();
+            var state = CaptureWorkState();
+            await customStatusLabelOverridesAdmin.LoadAvailableTemplatesAsync(state);
 
             var templateId = ResolveTemplateId();
             if (templateId == null)
             {
+                ApplyWorkState(state);
                 return Page();
             }
 
             SelectedTemplateId = templateId.Value;
-            await LoadTemplateDataAsync(templateId.Value);
+            state.SelectedTemplateId = templateId.Value;
+            await customStatusLabelOverridesAdmin.LoadTemplateDataAsync(state, templateId.Value);
             SelectedBaseStatus = status;
-            BaseStatuses = applicationStatusService.GetBaseApplicationStatuses().OrderBy(x => x.Key);
-            var statuses = await applicationStatusService.GetCustomApplicationStatusesAsync(templateId.Value);
-            BaseStatusOverrideValue = applicationStatusService.GetStatusLabel(status, statuses);
+            await customStatusLabelOverridesAdmin.LoadStatusOverrideAsync(state, templateId.Value, status);
+            ApplyWorkState(state);
             return Page();
         }
 
         public async Task<IActionResult> OnPostAsync()
         {
-            await LoadAvailableTemplatesAsync();
+            var state = CaptureWorkState();
+            await customStatusLabelOverridesAdmin.LoadAvailableTemplatesAsync(state);
 
             var templateId = ResolveTemplateId();
             if (templateId == null)
             {
-                ModelState.AddModelError(nameof(SelectedTemplateId), "Please select a template.");
+                ModelState.AddModelError(nameof(SelectedTemplateId), CustomStatusLabelOverridesMessages.SelectTemplate);
+                ApplyWorkState(state);
                 return Page();
             }
 
             SelectedTemplateId = templateId.Value;
+            state.SelectedTemplateId = templateId.Value;
 
             ApplicationStatus appStatus = ApplicationStatus.Created;
             var query = HttpContext.Request.Query;
@@ -96,19 +93,17 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
 
             if (!ValidateInput())
             {
-                await LoadTemplateDataAsync(templateId.Value);
-                BaseStatuses = applicationStatusService.GetBaseApplicationStatuses().OrderBy(x => x.Key);
+                await customStatusLabelOverridesAdmin.LoadTemplateDataAsync(state, templateId.Value);
+                customStatusLabelOverridesAdmin.PopulateBaseStatuses(state);
+                ApplyWorkState(state);
                 return Page();
             }
 
-            await applicationStatusService.OverrideApplicationStatusLabels(templateId.Value,
-                new CustomApplicationStatusRequest
-                {
-                    Label = BaseStatusOverrideValue,
-                    ApplicationStatus = SelectedBaseStatus
-                });
+            await customStatusLabelOverridesAdmin.OverrideAsync(
+                templateId.Value,
+                SelectedBaseStatus,
+                BaseStatusOverrideValue);
 
-            logger.LogInformation("Successfully overridden application status for {TemplateId}", templateId);
             cacheService.Remove(
                 $"CustomApplicationStatuses_{CacheKeyHelper.GenerateHashedCacheKey(templateId.Value.ToString())}");
 
@@ -141,31 +136,31 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
             if (string.IsNullOrWhiteSpace(BaseStatusOverrideValue))
             {
                 ModelState.AddModelError(nameof(BaseStatusOverrideValue),
-                    "An override value is required and cannot be empty");
+                    CustomStatusLabelOverridesMessages.OverrideRequired);
                 return false;
             }
 
             return true;
         }
 
-        private async Task LoadAvailableTemplatesAsync()
-        {
-            try
+        private CustomStatusLabelOverridesWorkState CaptureWorkState() =>
+            new()
             {
-                AvailableTemplates = await templateSelectionService.GetSelectableTemplatesAsync();
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "Failed to load available templates for custom status page");
-                AvailableTemplates = [];
-            }
-        }
+                SelectedTemplateId = SelectedTemplateId,
+                SelectedBaseStatus = SelectedBaseStatus,
+                BaseStatusOverrideValue = BaseStatusOverrideValue
+            };
 
-        private async Task LoadTemplateDataAsync(Guid templateId)
+        private void ApplyWorkState(CustomStatusLabelOverridesWorkState state)
         {
-            var apiResponse = await templatesClient.GetLatestTemplateSchemaAsync(templateId);
-            CurrentVersionNumber = apiResponse.VersionNumber;
-            CurrentTemplate = await formTemplateProvider.GetTemplateAsync(templateId.ToString());
+            SelectedTemplateId = state.SelectedTemplateId;
+            CurrentTemplate = state.CurrentTemplate;
+            CurrentVersionNumber = state.CurrentVersionNumber;
+            AvailableTemplates = state.AvailableTemplates;
+            if (state.BaseStatuses.Count > 0)
+                BaseStatuses = state.BaseStatuses;
+            if (!string.IsNullOrEmpty(state.BaseStatusOverrideValue))
+                BaseStatusOverrideValue = state.BaseStatusOverrideValue;
         }
     }
 }

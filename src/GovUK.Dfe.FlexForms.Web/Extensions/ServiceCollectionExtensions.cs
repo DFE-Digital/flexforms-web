@@ -1,11 +1,12 @@
+using GovUK.Dfe.FlexForms.Application.Admin;
+using GovUK.Dfe.FlexForms.Application.Dashboard;
+using GovUK.Dfe.FlexForms.Application.FormEngine;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
-using GovUK.Dfe.FlexForms.Infrastructure.Parsers;
-using GovUK.Dfe.FlexForms.Infrastructure.Providers;
-using GovUK.Dfe.FlexForms.Infrastructure.Services;
-using GovUK.Dfe.FlexForms.Infrastructure.Stores;
+using GovUK.Dfe.FlexForms.Infrastructure;
 using GovUK.Dfe.FlexForms.Web.Configuration;
 using GovUK.Dfe.FlexForms.Web.Interfaces;
 using GovUK.Dfe.FlexForms.Web.Services;
+using GovUK.Dfe.FlexForms.Web.ViewModels.FormEngine;
 using GovUK.Dfe.FlexForms.Api.Client;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Api.Client.Extensions;
@@ -47,48 +48,44 @@ namespace GovUK.Dfe.FlexForms.Web.Extensions
 
         public static IServiceCollection AddWebLayerServices(this IServiceCollection services)
         {
-            // Web layer services
+            services.AddInfrastructureDependencyGroup();
+
             services.AddScoped<IFieldRendererService, FieldRendererService>();
             services.AddScoped<IFormErrorStore, FormErrorStore>();
-
-            // Infrastructure/application services used by web
-            services.AddScoped<IApplicationResponseService, ApplicationResponseService>();
-            services.AddScoped<IFieldFormattingService, FieldFormattingService>();
-            services.AddScoped<ITemplateManagementService, TemplateManagementService>();
-            services.AddScoped<IContributorPatternService, ContributorPatternService>();
-            services.AddScoped<IApplicationStateService, ApplicationStateService>();
-            services.AddScoped<IFileUploadService, FileUploadService>();
             services.AddScoped<IAutocompleteService, AutocompleteService>();
             services.AddScoped<IApplicationStatusService, ApplicationStatusService>();
-            services.AddScoped<IComplexFieldConfigurationService, ComplexFieldConfigurationService>();
-            services.AddScoped<IComplexFieldRendererFactory, ComplexFieldRendererFactory>();
-            services.AddScoped<IComplexFieldRenderer, AutocompleteComplexFieldRenderer>();
-            services.AddScoped<IComplexFieldRenderer, CompositeComplexFieldRenderer>();
-            services.AddScoped<IComplexFieldRenderer, UploadComplexFieldRenderer>();
-            services.AddSingleton<ITemplateStore, ApiTemplateStore>();
-            services.AddSingleton<IFormTemplateParser, JsonFormTemplateParser>();
-            services.AddScoped<IFormTemplateProvider, FormTemplateProvider>();
+            services.AddScoped<ITemplateSelectionService, TemplateSelectionService>();
 
-            // Form Engine Services
-            services.AddScoped<IFormStateManager, FormStateManager>();
-            services.AddScoped<IFormNavigationService, FormNavigationService>();
-            services.AddScoped<INavigationHistoryService, NavigationHistoryService>();
-            services.AddScoped<IFormDataManager, FormDataManager>();
-            services.AddScoped<IFieldRequirementService, FieldRequirementService>();
-            services.AddScoped<IFormValidationOrchestrator, GovUK.Dfe.FlexForms.Infrastructure.Services.FormValidationOrchestrator>();
-            services.AddScoped<IFormConfigurationService, FormConfigurationService>();
-            services.AddScoped<ITemplateValidationService, TemplateValidationService>();
-            services.AddHttpContextAccessor();
-
-            // Confirmation Services
-            services.AddScoped<IButtonConfirmationService, ButtonConfirmationService>();
-            services.AddScoped<IConfirmationDataService, ConfirmationDataService>();
-
-            // Feedback services
-            services.AddScoped<IFeedbackService, FeedbackService>();
+            services.AddScoped<ICollectionFlowProgressStore, CollectionFlowProgressStore>();
+            services.AddScoped<IInfectedUploadFilter, InfectedUploadFilter>();
+            services.AddScoped<IFormFileFieldService, FormFileFieldService>();
+            services.AddSingleton<IPostedFormDataBinder, PostedFormDataBinder>();
+            services.AddScoped<ICompleteFormTask, CompleteFormTaskService>();
+            services.AddScoped<ISubmitFormApplication, SubmitFormApplicationService>();
+            services.AddScoped<IPrepareFormEngineGet, PrepareFormEngineGetService>();
+            services.AddScoped<ISaveFormPage, SaveFormPageService>();
+            services.AddScoped<IRemoveCollectionItem, RemoveCollectionItemService>();
+            services.AddScoped<IUploadFormFile, UploadFormFileService>();
+            services.AddScoped<IDeleteFormFile, DeleteFormFileService>();
+            services.AddScoped<IDownloadFormFile, DownloadFormFileService>();
+            services.AddScoped<ITenantSettingsAdmin, TenantSettingsAdminService>();
+            services.AddScoped<IEventMappingsAdmin, EventMappingsAdminService>();
+            services.AddScoped<ITemplateManagerAdmin, TemplateManagerAdminService>();
+            services.AddScoped<IDuplicateTenantAdmin, DuplicateTenantAdminService>();
+            services.AddScoped<IAdminHome, AdminHomeService>();
+            services.AddScoped<IOrganisationSettingsAdmin, OrganisationSettingsAdminService>();
+            services.AddScoped<ICustomStatusLabelOverridesAdmin, CustomStatusLabelOverridesAdminService>();
+            services.AddScoped<IContributorManagementAdmin, ContributorManagementAdminService>();
+            services.AddScoped<IDashboardApplications, DashboardApplicationsService>();
+            services.AddScoped<IUserManagerAdmin, UserManagerAdminService>();
+            services.AddScoped<IUserManagerAddAdmin, UserManagerAddAdminService>();
+            services.AddScoped<IUserManagerEditAdmin, UserManagerEditAdminService>();
+            services.AddScoped<IUserManagerPermissionsAdmin, UserManagerPermissionsAdminService>();
+            services.AddScoped<IRoleManagerAdmin, RoleManagerAdminService>();
+            services.AddScoped<IRoleManagerPermissionsAdmin, RoleManagerPermissionsAdminService>();
+            services.AddScoped<IFormEnginePresentationComposer, FormEnginePresentationComposer>();
 
             return services;
         }
     }
 }
-

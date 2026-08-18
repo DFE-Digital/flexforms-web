@@ -34,7 +34,7 @@ public class ContributorsModel(
     /// </summary>
     public async Task<IActionResult> OnGetAsync()
     {
-        var (applicationId, application) = await applicationStateService.EnsureApplicationIdAsync(ReferenceNumber, HttpContext.Session);
+        var (applicationId, application) = await applicationStateService.EnsureApplicationIdAsync(ReferenceNumber);
 
         var redirect = await RedirectIfContributorPatternDisabledAsync(application);
         if (redirect != null)
@@ -66,7 +66,7 @@ public class ContributorsModel(
     /// </summary>
     public async Task<IActionResult> OnPostAddContributor()
     {
-        var (_, application) = await applicationStateService.EnsureApplicationIdAsync(ReferenceNumber, HttpContext.Session);
+        var (_, application) = await applicationStateService.EnsureApplicationIdAsync(ReferenceNumber);
         var redirect = await RedirectIfContributorPatternDisabledAsync(application);
         if (redirect != null)
         {
@@ -86,7 +86,7 @@ public class ContributorsModel(
         {
             if (!ApplicationId.HasValue)
             {
-                var (applicationId, application) = await applicationStateService.EnsureApplicationIdAsync(ReferenceNumber, HttpContext.Session);
+                var (applicationId, application) = await applicationStateService.EnsureApplicationIdAsync(ReferenceNumber);
                 ApplicationId = applicationId;
 
                 var redirect = await RedirectIfContributorPatternDisabledAsync(application);
@@ -169,7 +169,7 @@ public class ContributorsModel(
 
             if (!ApplicationId.HasValue)
             {
-                var (applicationId, application) = await applicationStateService.EnsureApplicationIdAsync(ReferenceNumber, HttpContext.Session);
+                var (applicationId, application) = await applicationStateService.EnsureApplicationIdAsync(ReferenceNumber);
                 ApplicationId = applicationId;
 
                 var redirect = await RedirectIfContributorPatternDisabledAsync(application);

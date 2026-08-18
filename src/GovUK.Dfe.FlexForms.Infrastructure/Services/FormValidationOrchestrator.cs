@@ -1,6 +1,8 @@
+using GovUK.Dfe.FlexForms.Application.FormEngine;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
+using GovUK.Dfe.FlexForms.Application.Validation;
+using GovUK.Dfe.FlexForms.Domain.FormEngine;
 using GovUK.Dfe.FlexForms.Domain.Models;
-using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.Extensions.Logging;
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
@@ -30,144 +32,79 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
             _fieldRequirementService = fieldRequirementService;
         }
 
-        /// <summary>
-        /// Validates a single page
-        /// </summary>
-        /// <param name="page">The page to validate</param>
-        /// <param name="data">The form data</param>
-        /// <param name="modelState">The model state to add errors to</param>
-        /// <param name="template">Optional template for field requirement policy</param>
-        /// <returns>True if validation passes</returns>
-        public bool ValidatePage(Page page, Dictionary<string, object> data, ModelStateDictionary modelState, FormTemplate? template = null)
+        public FormValidationResult ValidatePage(Page page, Dictionary<string, object> data, FormTemplate? template = null)
         {
-            if (page?.Fields == null)
+            var errors = new List<FormValidationError>();
+            CollectPageErrors(page, data, errors, template);
+            return new FormValidationResult(errors);
+        }
+
+        public FormValidationResult ValidateTask(Task task, Dictionary<string, object> data, FormTemplate? template = null)
+        {
+            var errors = new List<FormValidationError>();
+            CollectTaskErrors(task, data, errors, template);
+            return new FormValidationResult(errors);
+        }
+
+        public FormValidationResult ValidateApplication(FormTemplate template, Dictionary<string, object> data)
+        {
+            var errors = new List<FormValidationError>();
+            if (template?.TaskGroups == null)
+                return FormValidationResult.Success;
+
+            foreach (var group in template.TaskGroups)
             {
-                return true;
+                foreach (var task in group.Tasks)
+                    CollectTaskErrors(task, data, errors);
             }
 
-            var isValid = true;
+            return new FormValidationResult(errors);
+        }
+
+        public FormValidationResult ValidateField(Field field, object value, string fieldKey)
+        {
+            return ValidateField(field, value, null, fieldKey, null);
+        }
+
+        public FormValidationResult ValidateField(Field field, object value, Dictionary<string, object>? formData, string fieldKey)
+        {
+            return ValidateField(field, value, formData, fieldKey, null);
+        }
+
+        public FormValidationResult ValidateField(Field field, object value, Dictionary<string, object>? formData, string fieldKey, FormTemplate? template)
+        {
+            var errors = new List<FormValidationError>();
+            ValidateFieldCore(field, value, formData, errors, fieldKey, template);
+            return new FormValidationResult(errors);
+        }
+
+        private void CollectPageErrors(Page page, Dictionary<string, object> data, List<FormValidationError> errors, FormTemplate? template = null)
+        {
+            if (page?.Fields == null)
+                return;
+
             foreach (var field in page.Fields)
             {
                 var key = field.FieldId;
                 data.TryGetValue(key, out var rawValue);
 
-
-                if (field.Type == "checkboxes") {
-                    if (!ValidateField(field, rawValue ?? string.Empty, data, modelState, key, template))
-                    {
-                        isValid = false;
-                    }
-                }
+                if (field.Type == "checkboxes")
+                    ValidateFieldCore(field, rawValue ?? string.Empty, data, errors, key, template);
                 else
-                {
-                    var value = rawValue?.ToString() ?? string.Empty;
-                    if (!ValidateField(field, value, data, modelState, key, template))
-                    {
-                        isValid = false;
-                    }
-                }
-
-                
+                    ValidateFieldCore(field, rawValue?.ToString() ?? string.Empty, data, errors, key, template);
             }
-
-            return isValid;
         }
 
-        /// <summary>
-        /// Validates a single task
-        /// </summary>
-        /// <param name="task">The task to validate</param>
-        /// <param name="data">The form data</param>
-        /// <param name="modelState">The model state to add errors to</param>
-        /// <param name="template">Optional template for field requirement policy</param>
-        /// <returns>True if validation passes</returns>
-        public bool ValidateTask(Task task, Dictionary<string, object> data, ModelStateDictionary modelState, FormTemplate? template = null)
+        private void CollectTaskErrors(Task task, Dictionary<string, object> data, List<FormValidationError> errors, FormTemplate? template = null)
         {
             if (task?.Pages == null)
-            {
-                return true;
-            }
+                return;
 
-            var isValid = true;
             foreach (var page in task.Pages)
-            {
-                if (!ValidatePage(page, data, modelState, template))
-                {
-                    isValid = false;
-                }
-            }
-
-            return isValid;
+                CollectPageErrors(page, data, errors, template);
         }
 
-        /// <summary>
-        /// Validates the entire application
-        /// </summary>
-        /// <param name="template">The form template</param>
-        /// <param name="data">The form data</param>
-        /// <param name="modelState">The model state to add errors to</param>
-        /// <returns>True if validation passes</returns>
-        public bool ValidateApplication(FormTemplate template, Dictionary<string, object> data, ModelStateDictionary modelState)
-        {
-            if (template?.TaskGroups == null)
-            {
-                return true;
-            }
-
-            var isValid = true;
-            foreach (var group in template.TaskGroups)
-            {
-                foreach (var task in group.Tasks)
-                {
-                    if (!ValidateTask(task, data, modelState))
-                    {
-                        isValid = false;
-                    }
-                }
-            }
-
-            return isValid;
-        }
-
-        /// <summary>
-        /// Validates a single field
-        /// </summary>
-        /// <param name="field">The field to validate</param>
-        /// <param name="value">The field value</param>
-        /// <param name="modelState">The model state to add errors to</param>
-        /// <param name="fieldKey">The field key for model state</param>
-        /// <returns>True if validation passes</returns>
-        public bool ValidateField(Field field, object value, ModelStateDictionary modelState, string fieldKey)
-        {
-            // Call the overloaded method with null data and template for backward compatibility
-            return ValidateField(field, value, null, modelState, fieldKey, null);
-        }
-
-        /// <summary>
-        /// Validates a single field with full form data context for conditional validation
-        /// </summary>
-        /// <param name="field">The field to validate</param>
-        /// <param name="value">The field value</param>
-        /// <param name="formData">The complete form data for conditional evaluation</param>
-        /// <param name="modelState">The model state to add errors to</param>
-        /// <param name="fieldKey">The field key for model state</param>
-        /// <returns>True if validation passes</returns>
-        public bool ValidateField(Field field, object value, Dictionary<string, object>? formData, ModelStateDictionary modelState, string fieldKey)
-        {
-            return ValidateField(field, value, formData, modelState, fieldKey, null);
-        }
-
-        /// <summary>
-        /// Validates a single field with full form data context, conditional validation, and template-based requirement policy
-        /// </summary>
-        /// <param name="field">The field to validate</param>
-        /// <param name="value">The field value</param>
-        /// <param name="formData">The complete form data for conditional evaluation</param>
-        /// <param name="modelState">The model state to add errors to</param>
-        /// <param name="fieldKey">The field key for model state</param>
-        /// <param name="template">The template containing the default field requirement policy</param>
-        /// <returns>True if validation passes</returns>
-        public bool ValidateField(Field field, object value, Dictionary<string, object>? formData, ModelStateDictionary modelState, string fieldKey, FormTemplate? template)
+        private bool ValidateFieldCore(Field field, object value, Dictionary<string, object>? formData, List<FormValidationError> errors, string fieldKey, FormTemplate? template)
         {
             var normalizedCheckboxValues = field.Type == "checkboxes"
                 ? CheckboxValueNormalizer.Normalize(value)
@@ -182,7 +119,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
             if (field.Type == "complexField" && field.ComplexField != null)
             {
                 // Pass template to complex field validation so it can check global required policy
-                return ValidateComplexField(field, value, formData, modelState, fieldKey, template);
+                return ValidateComplexField(field, value, formData, errors, fieldKey, template);
             }
 
             // Check if field is required based on template policy (before explicit validation rules)
@@ -199,7 +136,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                     if (string.IsNullOrWhiteSpace(stringValue))
                     {
                         var fieldLabel = field.Label?.Value ?? field.FieldId;
-                        modelState.AddModelError(fieldKey, $"{fieldLabel} is required");
+                        errors.Add(new FormValidationError(fieldKey, $"{fieldLabel} is required"));
                         isValid = false;
                     }
                 }
@@ -226,13 +163,13 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
 
                     if (missingParts)
                     {
-                        modelState.AddModelError(fieldKey, $"{validationLabel} must include a day, month and year");
+                        errors.Add(new FormValidationError(fieldKey, $"{validationLabel} must include a day, month and year"));
                         isValid = false;
                     }
                     else if (!DateTime.TryParseExact(stringValue, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
                     {
                         // All parts present and numeric but not a real calendar date
-                        modelState.AddModelError(fieldKey, $"{validationLabel} must be a real date");
+                        errors.Add(new FormValidationError(fieldKey, $"{validationLabel} must be a real date"));
                         isValid = false;
                     }
                 }
@@ -246,7 +183,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                     var emailAttr = new EmailAddressAttribute();
                     if (!emailAttr.IsValid(stringValue))
                     {
-                        modelState.AddModelError(fieldKey, "Enter an email address in the correct format, for example, name@example.com");
+                        errors.Add(new FormValidationError(fieldKey, "Enter an email address in the correct format, for example, name@example.com"));
                         isValid = false;
                     }
                 }
@@ -263,7 +200,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                         if (!isValidOption)
                         {
                             var message = GetCustomRequiredMessage(field) ?? "Select an option from the list";
-                            modelState.AddModelError(fieldKey, message);
+                            errors.Add(new FormValidationError(fieldKey, message));
                             isValid = false;
                             break;
                         }
@@ -276,7 +213,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                         if (!isValidOption)
                         {
                             var message = GetCustomRequiredMessage(field) ?? "Select an option from the list";
-                            modelState.AddModelError(fieldKey, message);
+                            errors.Add(new FormValidationError(fieldKey, message));
                             isValid = false;
                         }
                         
@@ -319,7 +256,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                         case "required":
                             if (string.IsNullOrWhiteSpace(stringValue))
                             {
-                                modelState.AddModelError(fieldKey, rule.Message);
+                                errors.Add(new FormValidationError(fieldKey, rule.Message));
                                 isValid = false;
                             }
                             break;
@@ -330,7 +267,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                                 var regexMatch = Regex.IsMatch(stringValue, pattern, RegexOptions.None, TimeSpan.FromMilliseconds(200));
                                 if (!regexMatch)
                                 {
-                                    modelState.AddModelError(fieldKey, rule.Message);
+                                    errors.Add(new FormValidationError(fieldKey, rule.Message));
                                     isValid = false;
                                 }
                             }
@@ -343,7 +280,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                                 var plainTextForMaxLengthValidation = FormSanitisedTextNormalizer.ToPlainTextForCharacterCountValidation(stringValue);
                                 if (plainTextForMaxLengthValidation.Length > maxLength)
                                 {
-                                    modelState.AddModelError(fieldKey, rule.Message);
+                                    errors.Add(new FormValidationError(fieldKey, rule.Message));
                                     isValid = false;
                                 }
                             }
@@ -351,7 +288,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                         case "maxWords":
                             if (!ValidateWordCount(stringValue, rule))
                             {
-                                modelState.AddModelError(fieldKey, rule.Message);
+                                errors.Add(new FormValidationError(fieldKey, rule.Message));
                                 isValid = false;
                             }
                             break;
@@ -373,11 +310,11 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
         /// <param name="field">The complex field to validate</param>
         /// <param name="value">The field value</param>
         /// <param name="formData">The complete form data for conditional evaluation</param>
-        /// <param name="modelState">The model state to add errors to</param>
+        /// <param name="errors">The model state to add errors to</param>
         /// <param name="fieldKey">The field key for model state</param>
         /// <param name="template">The template containing the default field requirement policy</param>
         /// <returns>True if validation passes</returns>
-        private bool ValidateComplexField(Field field, object? value, Dictionary<string, object>? formData, ModelStateDictionary modelState, string fieldKey, FormTemplate? template = null)
+        private bool ValidateComplexField(Field field, object? value, Dictionary<string, object>? formData, List<FormValidationError> errors, string fieldKey, FormTemplate? template = null)
         {
             var stringValue = value?.ToString() ?? string.Empty;
             var isValid = true;
@@ -400,7 +337,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                     if (!hasFiles)
                     {
                         var fieldLabel = field.Label?.Value ?? field.FieldId;
-                        modelState.AddModelError(fieldKey, $"{fieldLabel} is required");
+                        errors.Add(new FormValidationError(fieldKey, $"{fieldLabel} is required"));
                         isValid = false;
                     }
                 }
@@ -410,7 +347,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                     if (string.IsNullOrWhiteSpace(stringValue))
                     {
                         var fieldLabel = field.Label?.Value ?? field.FieldId;
-                        modelState.AddModelError(fieldKey, $"{fieldLabel} is required");
+                        errors.Add(new FormValidationError(fieldKey, $"{fieldLabel} is required"));
                         isValid = false;
                     }
                 }
@@ -467,7 +404,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                                     errorMessage = "Please upload a file.";
                                 }
                                 
-                                modelState.AddModelError(fieldKey, errorMessage);
+                                errors.Add(new FormValidationError(fieldKey, errorMessage));
                                 isValid = false;
                             }
                         }
@@ -476,7 +413,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                             // For other complex fields (autocomplete), check if value is empty
                             if (string.IsNullOrWhiteSpace(stringValue))
                             {
-                                modelState.AddModelError(fieldKey, rule.Message);
+                                errors.Add(new FormValidationError(fieldKey, rule.Message));
                                 isValid = false;
                             }
                         }
@@ -491,7 +428,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                                 var target = ExtractAutocompleteDisplayText(stringValue);
                                 if (!Regex.IsMatch(target, pattern, RegexOptions.None, TimeSpan.FromMilliseconds(200)))
                                 {
-                                    modelState.AddModelError(fieldKey, rule.Message);
+                                    errors.Add(new FormValidationError(fieldKey, rule.Message));
                                     isValid = false;
                                 }
                             }
@@ -506,7 +443,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                                 var plainTextForMaxLengthValidation = FormSanitisedTextNormalizer.ToPlainTextForCharacterCountValidation(stringValue);
                                 if (plainTextForMaxLengthValidation.Length > maxLength)
                                 {
-                                    modelState.AddModelError(fieldKey, rule.Message);
+                                    errors.Add(new FormValidationError(fieldKey, rule.Message));
                                     isValid = false;
                                 }
                             }
@@ -519,7 +456,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                     case "maxwords":
                         if (!isUploadField && !ValidateWordCount(stringValue, rule))
                         {
-                            modelState.AddModelError(fieldKey, rule.Message);
+                            errors.Add(new FormValidationError(fieldKey, rule.Message));
                             isValid = false;
                         }
                         break;
@@ -583,7 +520,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
             }
 
             // Handle special session data placeholder - this indicates NO files uploaded yet
-            if (value == "UPLOAD_FIELD_SESSION_DATA")
+            if (value == FormEngineConstants.UploadFieldSessionPlaceholder)
             {
                 return false;
             }

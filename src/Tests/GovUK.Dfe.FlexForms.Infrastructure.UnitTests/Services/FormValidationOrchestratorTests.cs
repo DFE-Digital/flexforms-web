@@ -1,8 +1,9 @@
 using AutoFixture;
 using AutoFixture.AutoNSubstitute;
+using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using GovUK.Dfe.FlexForms.Infrastructure.Services;
-using Microsoft.AspNetCore.Mvc.ModelBinding;
+using NSubstitute;
 
 namespace GovUK.Dfe.FlexForms.Infrastructure.UnitTests.Services;
 
@@ -16,6 +17,10 @@ public class FormValidationOrchestratorTests
         _fixture = new Fixture().Customize(new AutoNSubstituteCustomization { ConfigureMembers = true });
         
         _fixture.Customize<Condition>(ob => ob.Without(rule => rule.Conditions));
+
+        var fieldRequirementService = Substitute.For<IFieldRequirementService>();
+        fieldRequirementService.IsFieldRequired(Arg.Any<Field>(), Arg.Any<FormTemplate>()).Returns(false);
+        _fixture.Register(() => fieldRequirementService);
         
         _orchestrator = _fixture.Create<FormValidationOrchestrator>();
     }
@@ -43,13 +48,12 @@ public class FormValidationOrchestratorTests
             .Create();
         
         var formData = _fixture.Create<Dictionary<string, object>?>();
-        var modelState = _fixture.Create<ModelStateDictionary>();
         var fieldKey = field.FieldId;
         var formTemplate = _fixture.Create<FormTemplate>();
 
-        var result = _orchestrator.ValidateField(field, submittedValue, formData, modelState, fieldKey, formTemplate);
+        var result = _orchestrator.ValidateField(field, submittedValue, formData, fieldKey, formTemplate);
         
-        Assert.True(result);
+        Assert.True(result.IsValid);
     }
     
     [Theory]
@@ -75,15 +79,13 @@ public class FormValidationOrchestratorTests
             .Create();
         
         var formData = _fixture.Create<Dictionary<string, object>?>();
-        var modelState = _fixture.Create<ModelStateDictionary>();
         var fieldKey = field.FieldId;
         var formTemplate = _fixture.Create<FormTemplate>();
 
-        var result = _orchestrator.ValidateField(field, submittedValue, formData, modelState, fieldKey, formTemplate);
+        var result = _orchestrator.ValidateField(field, submittedValue, formData, fieldKey, formTemplate);
         
-        Assert.False(result);
-        Assert.NotNull(modelState[fieldKey]);
-        Assert.Equal("This field is required", modelState[fieldKey]!.Errors[0].ErrorMessage);
+        Assert.False(result.IsValid);
+        Assert.Equal("This field is required", result.Errors[0].Message);
     }
     
     [Theory]
@@ -104,15 +106,13 @@ public class FormValidationOrchestratorTests
             .Create();
         
         var formData = _fixture.Create<Dictionary<string, object>?>();
-        var modelState = _fixture.Create<ModelStateDictionary>();
         var fieldKey = field.FieldId;
         var formTemplate = _fixture.Create<FormTemplate>();
 
-        var result = _orchestrator.ValidateField(field, "not-an-option", formData, modelState, fieldKey, formTemplate);
+        var result = _orchestrator.ValidateField(field, "not-an-option", formData, fieldKey, formTemplate);
         
-        Assert.False(result);
-        Assert.NotNull(modelState[fieldKey]);
-        Assert.Equal("Select an option from the list", modelState[fieldKey]!.Errors[0].ErrorMessage);
+        Assert.False(result.IsValid);
+        Assert.Equal("Select an option from the list", result.Errors[0].Message);
     }
     
     [Theory]
@@ -135,14 +135,13 @@ public class FormValidationOrchestratorTests
             .Create();
         
         var formData = _fixture.Create<Dictionary<string, object>?>();
-        var modelState = _fixture.Create<ModelStateDictionary>();
         var fieldKey = field.FieldId;
         var formTemplate = _fixture.Create<FormTemplate>();
 
-        var result = _orchestrator.ValidateField(field, submittedValue, formData, modelState, fieldKey, formTemplate);
+        var result = _orchestrator.ValidateField(field, submittedValue, formData, fieldKey, formTemplate);
         
-        Assert.True(result);
-        Assert.Null(modelState[fieldKey]);
+        Assert.True(result.IsValid);
+        Assert.Empty(result.Errors);
     }
 
     [Fact]
@@ -160,17 +159,16 @@ public class FormValidationOrchestratorTests
             .Create();
 
         var formData = _fixture.Create<Dictionary<string, object>?>();
-        var modelState = new ModelStateDictionary();
         var fieldKey = field.FieldId;
         var formTemplate = _fixture.Create<FormTemplate>();
 
         // User sees five characters (EMAT + U+2019); submitted value may arrive as an HTML numeric character reference.
         const string submittedEncoded = "EMAT&#x2019;";
 
-        var result = _orchestrator.ValidateField(field, submittedEncoded, formData, modelState, fieldKey, formTemplate);
+        var result = _orchestrator.ValidateField(field, submittedEncoded, formData, fieldKey, formTemplate);
 
-        Assert.True(result);
-        Assert.Null(modelState[fieldKey]);
+        Assert.True(result.IsValid);
+        Assert.Empty(result.Errors);
     }
 
     [Fact]
@@ -188,16 +186,15 @@ public class FormValidationOrchestratorTests
             .Create();
 
         var formData = _fixture.Create<Dictionary<string, object>?>();
-        var modelState = new ModelStateDictionary();
         var fieldKey = field.FieldId;
         var formTemplate = _fixture.Create<FormTemplate>();
 
         const string submittedEncoded = "EMAT&#x2019;";
 
-        var result = _orchestrator.ValidateField(field, submittedEncoded, formData, modelState, fieldKey, formTemplate);
+        var result = _orchestrator.ValidateField(field, submittedEncoded, formData, fieldKey, formTemplate);
 
-        Assert.False(result);
-        Assert.Equal("Too many characters", modelState[fieldKey]!.Errors[0].ErrorMessage);
+        Assert.False(result.IsValid);
+        Assert.Equal("Too many characters", result.Errors[0].Message);
     }
 
     [Fact]
@@ -219,14 +216,13 @@ public class FormValidationOrchestratorTests
             .Create();
 
         var formData = _fixture.Create<Dictionary<string, object>?>();
-        var modelState = new ModelStateDictionary();
         var fieldKey = field.FieldId;
         var formTemplate = _fixture.Create<FormTemplate>();
 
-        var result = _orchestrator.ValidateField(field, sanitisedAsStored, formData, modelState, fieldKey, formTemplate);
+        var result = _orchestrator.ValidateField(field, sanitisedAsStored, formData, fieldKey, formTemplate);
 
-        Assert.True(result);
-        Assert.Null(modelState[fieldKey]);
+        Assert.True(result.IsValid);
+        Assert.Empty(result.Errors);
     }
 
     [Fact]
@@ -246,13 +242,12 @@ public class FormValidationOrchestratorTests
             .Create();
 
         var formData = _fixture.Create<Dictionary<string, object>?>();
-        var modelState = new ModelStateDictionary();
         var fieldKey = field.FieldId;
         var formTemplate = _fixture.Create<FormTemplate>();
 
-        var result = _orchestrator.ValidateField(field, sanitisedAsStored, formData, modelState, fieldKey, formTemplate);
+        var result = _orchestrator.ValidateField(field, sanitisedAsStored, formData, fieldKey, formTemplate);
 
-        Assert.False(result);
+        Assert.False(result.IsValid);
     }
 
     [Fact]
@@ -301,11 +296,10 @@ public class FormValidationOrchestratorTests
             .Create();
 
         var formData = _fixture.Create<Dictionary<string, object>?>();
-        var modelState = new ModelStateDictionary();
         var fieldKey = field.FieldId;
         var formTemplate = _fixture.Create<FormTemplate>();
 
-        return _orchestrator.ValidateField(field, sanitisedText, formData, modelState, fieldKey, formTemplate);
+        return _orchestrator.ValidateField(field, sanitisedText, formData, fieldKey, formTemplate).IsValid;
     }
 
     private bool ValidateComplexFieldWordCount(string sanitisedText, short limit)
@@ -322,10 +316,9 @@ public class FormValidationOrchestratorTests
             .Create();
 
         var formData = _fixture.Create<Dictionary<string, object>?>();
-        var modelState = new ModelStateDictionary();
         var fieldKey = field.FieldId;
         var formTemplate = _fixture.Create<FormTemplate>();
 
-        return _orchestrator.ValidateField(field, sanitisedText, formData, modelState, fieldKey, formTemplate);
+        return _orchestrator.ValidateField(field, sanitisedText, formData, fieldKey, formTemplate).IsValid;
     }
 }

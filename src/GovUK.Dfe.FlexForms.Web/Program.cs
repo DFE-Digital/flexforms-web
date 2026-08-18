@@ -3,12 +3,7 @@ using GovUK.Dfe.CoreLibs.Security.Authorization;
 using GovUK.Dfe.CoreLibs.Security.Configurations;
 using GovUK.Dfe.CoreLibs.Security.Interfaces;
 using GovUK.Dfe.CoreLibs.Security.OpenIdConnect;
-using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Application.Options;
-using GovUK.Dfe.FlexForms.Infrastructure.Parsers;
-using GovUK.Dfe.FlexForms.Infrastructure.Providers;
-using GovUK.Dfe.FlexForms.Infrastructure.Services;
-using GovUK.Dfe.FlexForms.Infrastructure.Stores;
 using GovUK.Dfe.FlexForms.Web.Authentication;
 using GovUK.Dfe.FlexForms.Web.Extensions;
 using GovUK.Dfe.FlexForms.Web.Filters;
@@ -542,9 +537,6 @@ builder.Services.ConfigureHttpClientDefaults(http =>
 
 builder.Services.AddTenantAwarePlatformServices(configuration);
 
-builder.Services.AddScoped<IContributorService, ContributorService>();
-builder.Services.AddScoped<IContributorPatternService, ContributorPatternService>();
-
 builder.Services.AddExternalApplicationsApiClients(configuration);
 
 // Register authentication strategies and composite selector (per-request)
@@ -562,34 +554,11 @@ builder.Services.AddGovUkFrontend();
 builder.Services.AddSingleton<IActionContextAccessor, ActionContextAccessor>();
 builder.Services.AddScoped<IHtmlHelper, HtmlHelper>();
 builder.Services.AddWebLayerServices();
-builder.Services.AddScoped<IApplicationResponseService, ApplicationResponseService>();
 
 // Persist cookie tickets server-side so AuthenticationProperties (tokens) don't bloat the browser cookie
 builder.Services.AddSingleton<ITicketStore, DistributedCacheTicketStore>();
 builder.Services.AddSingleton<IPostConfigureOptions<CookieAuthenticationOptions>, ConfigureCookieTicketStore>();
 
-// New refactored services for Clean Architecture
-builder.Services.AddScoped<IFieldFormattingService, FieldFormattingService>();
-builder.Services.AddScoped<ITemplateManagementService, TemplateManagementService>();
-builder.Services.AddScoped<IApplicationStateService, ApplicationStateService>();
-builder.Services.AddScoped<IFileUploadService, FileUploadService>();
-
-// Conditional Logic Services
-builder.Services.AddScoped<IConditionalLogicEngine, ConditionalLogicEngine>();
-builder.Services.AddScoped<IConditionalLogicOrchestrator, ConditionalLogicOrchestrator>();
-
-// Derived Collection Flow Services
-builder.Services.AddScoped<IDerivedCollectionFlowService, DerivedCollectionFlowService>();
-
-builder.Services.AddScoped<IAutocompleteService, AutocompleteService>();
-builder.Services.AddScoped<ITemplateSelectionService, TemplateSelectionService>();
-builder.Services.AddScoped<IComplexFieldConfigurationService, ComplexFieldConfigurationService>();
-builder.Services.AddScoped<IComplexFieldRendererFactory, ComplexFieldRendererFactory>();
-builder.Services.AddScoped<IComplexFieldRenderer, AutocompleteComplexFieldRenderer>();
-builder.Services.AddScoped<IComplexFieldRenderer, CompositeComplexFieldRenderer>();
-builder.Services.AddScoped<IComplexFieldRenderer, UploadComplexFieldRenderer>();
-
-builder.Services.AddSingleton<ITemplateStore, ApiTemplateStore>(); 
 builder.Services.AddUserTokenService(configuration);
 
 // Always register Test Auth services so tenants can enable TestAuthentication in
@@ -605,9 +574,6 @@ builder.Services.AddScoped<IInternalServiceAuthenticationService, InternalServic
 
 builder.Services.AddServiceCaching(configuration);
 
-builder.Services.AddSingleton<IFormTemplateParser, JsonFormTemplateParser>();
-builder.Services.AddScoped<IFormTemplateProvider, FormTemplateProvider>();
-
 // Application terminology configuration (customisable per service, e.g. "application" vs "reform plan")
 builder.Services.Configure<ApplicationTerminologyOptions>(configuration.GetSection("ApplicationTerminology"));
 
@@ -616,15 +582,8 @@ builder.Services.Configure<NotificationBannerOptions>(configuration.GetSection("
 
 // Dashboard configuration (page size for application list pagination)
 builder.Services.Configure<DashboardOptions>(configuration.GetSection("Dashboard"));
-// Scoped so tenant-aware IOptions are not captured for the app lifetime.
-builder.Services.AddScoped<IApplicationTerminologyProvider, ApplicationTerminologyProvider>();
 
 builder.Services.AddTenantAwareOptionsAccessors(configuration);
-
-// Read-only event metadata for the Event mappings Admin page. Outbound mapped events are
-// published by the API from its own domain events, driven by the EventTriggers TenantConfig.
-builder.Services.AddScoped<ISchemaEventDefinitionProvider, SchemaEventDefinitionProvider>();
-builder.Services.AddSingleton<IEventTypeRegistry, EventTypeRegistry>();
 
 builder.Services.AddDfEMassTransit(
     configuration,

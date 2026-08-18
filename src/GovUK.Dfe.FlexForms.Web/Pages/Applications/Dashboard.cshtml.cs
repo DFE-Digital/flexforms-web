@@ -5,7 +5,6 @@ using GovUK.Dfe.FlexForms.Web.Models.Applications;
 using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.FlexForms.Web.Services;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums;
-using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using Microsoft.AspNetCore.Authorization;
@@ -25,12 +24,9 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
     public class DashboardModel(
         ILogger<DashboardModel> logger,
         IApplicationStatusService applicationStatusService,
-        IApplicationsClient applicationsClient,
+        IDashboardApplications dashboardApplications,
         IUsersClient usersClient,
-        IHttpContextAccessor httpContextAccessor,
         IApplicationResponseService applicationResponseService,
-        IContributorPatternService contributorPatternService,
-        IFormTemplateProvider formTemplateProvider,
         IMemoryCache memoryCache,
         IOptions<DashboardOptions> dashboardOptions)
         : PageModel
@@ -88,20 +84,6 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
         public bool IsSearchActive => FiltersEnabled && SearchFilters.HasActiveFilters;
         public bool ShowFiltersPanel => IsSearchActive;
 
-        public class ApplicationWithCalculatedStatus
-        {
-            public ApplicationDto Application { get; set; } = null!;
-            public KeyValuePair<ApplicationStatus, string> CalculatedStatus { get; set; }
-            public IReadOnlyDictionary<string, string> CustomColumnValues { get; set; } =
-                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-            public Guid ApplicationId => Application.ApplicationId;
-            public string ApplicationReference => Application.ApplicationReference;
-            public string TemplateName => Application.TemplateName;
-            public DateTime DateCreated => Application.DateCreated;
-            public DateTime? DateSubmitted => Application.DateSubmitted;
-        }
-
         public async SystemTask OnGetAsync(ApplicationStatus? status = null)
         {
             var statusFilters = new List<KeyValuePair<ApplicationStatus, string>>();
@@ -115,8 +97,8 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
             StatusFilters = statusFilters.OrderBy(x => x.Key).ToList();
             SelectedStatusFilter = status;
             ValidateSearchFilters();
-            await LoadDashboardColumnsAsync();
-            await LoadUserDetailsAsync();
+            Columns = await dashboardApplications.ResolveColumnsAsync(ResolveTemplateId());
+            LoadUserDetails();
             await LoadApplicationsAsync();
         }
 
@@ -157,16 +139,13 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
             if (!templateGuid.HasValue)
             {
                 HasError = true;
-                ErrorMessage = "Template is not configured. Please refresh the page.";
+                ErrorMessage = DashboardMessages.TemplateNotConfigured;
                 logger.LogWarning("TemplateId not available when creating application");
                 return Page();
             }
 
-            var response = await applicationsClient.CreateApplicationAsync(new CreateApplicationRequest
-            {
-                InitialResponseBody = "{}",
-                TemplateId = templateGuid.Value
-            });
+            var created = await dashboardApplications.CreateAsync(templateGuid.Value);
+            var response = created.Application;
 
             HttpContext.Session.SetString("ApplicationId", response.ApplicationId.ToString());
             HttpContext.Session.SetString("ApplicationReference", response.ApplicationReference);
@@ -188,8 +167,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
                 HttpContext.Session.SetString($"ApplicationLeadApplicantUserId_{response.ApplicationId}", currentUserId);
             }
 
-            // Clear any existing accumulated form data when starting a new application
-            applicationResponseService.ClearAccumulatedFormData(HttpContext.Session);
+            applicationResponseService.ClearAccumulatedFormData();
             HttpContext.Session.SetString("CurrentAccumulatedApplicationId", response.ApplicationId.ToString());
 
             if (User.Identity?.IsAuthenticated == true)
@@ -200,34 +178,12 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
 
             logger.LogInformation("Created new application {ApplicationId} and cleared accumulated form data", response.ApplicationId);
 
-            // Note: Token management now handled automatically by TokenManagementMiddleware
-            var templateId = templateGuid.Value.ToString();
-            if (await contributorPatternService.IsEnabledAsync(templateId))
+            if (created.ContributorsEnabled)
             {
                 return RedirectToPage("/Applications/Contributors", new { referenceNumber = response.ApplicationReference });
             }
 
             return RedirectToPage("/FormEngine/RenderForm", new { referenceNumber = response.ApplicationReference });
-        }
-
-        private async SystemTask LoadDashboardColumnsAsync()
-        {
-            Columns = DashboardColumnResolver.DefaultColumns;
-
-            var templateGuid = ResolveTemplateId();
-            if (!templateGuid.HasValue)
-                return;
-
-            try
-            {
-                var template = await formTemplateProvider.GetTemplateAsync(templateGuid.Value.ToString());
-                Columns = DashboardColumnResolver.Resolve(template);
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "Failed to load dashboard columns from latest template {TemplateId}; using defaults", templateGuid);
-                Columns = DashboardColumnResolver.DefaultColumns;
-            }
         }
 
         private async SystemTask LoadApplicationsAsync()
@@ -241,48 +197,32 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
             var templateGuid = ResolveTemplateId();
             if (!templateGuid.HasValue)
             {
-                // Try again on next request; show empty state instead of erroring
                 logger.LogWarning("TemplateId not available when loading applications; rendering empty dashboard");
                 Applications = Array.Empty<ApplicationWithCalculatedStatus>();
                 return;
             }
 
-            var pageSize = dashboardOptions.Value.PageSize;
             var filters = FiltersEnabled ? SearchFilters : new DashboardApplicationSearch();
-            var result = await applicationsClient.GetMyApplicationsAsync(
-                templateId: templateGuid.Value,
-                pageNumber: CurrentPage,
-                pageSize: pageSize,
-                applicationReference: string.IsNullOrWhiteSpace(filters.SearchReference) ? null : filters.SearchReference,
-                dateStartedFrom: filters.DateStartedFrom,
-                dateStartedTo: filters.DateStartedTo,
-                dateSubmittedFrom: filters.DateSubmittedFrom,
-                dateSubmittedTo: filters.DateSubmittedTo,
-                status: filters.Status);
-
-            TotalPages = result.TotalPages;
-            CurrentPage = Math.Clamp(CurrentPage, 1, Math.Max(1, TotalPages));
-
-            var fieldColumns = Columns.Where(c => c.Kind == DashboardColumnKind.Field).ToList();
-
-            var applicationTasks = result.Items.AsEnumerable().Select(async app =>
+            var result = await dashboardApplications.ListAsync(new DashboardApplicationListQuery
             {
-                var formData = DashboardAnswerReader.ParseFormData(app.LatestResponse?.ResponseBody);
-                var customValues = fieldColumns.ToDictionary(
-                    c => c.Key,
-                    c => DashboardAnswerReader.GetDisplayValue(c.FieldId!, formData),
-                    StringComparer.OrdinalIgnoreCase);
-
-                return new ApplicationWithCalculatedStatus
-                {
-                    Application = app,
-                    CalculatedStatus = applicationStatusService.GetCalculatedApplicationStatusAsync(app, CustomStatuses),
-                    CustomColumnValues = customValues
-                };
+                TemplateId = templateGuid.Value,
+                CurrentPage = CurrentPage,
+                PageSize = dashboardOptions.Value.PageSize,
+                Scope = DashboardApplicationListScope.Mine,
+                IncludeCustomColumns = true,
+                Columns = Columns,
+                CustomStatuses = CustomStatuses,
+                SearchReference = filters.SearchReference,
+                DateStartedFrom = filters.DateStartedFrom,
+                DateStartedTo = filters.DateStartedTo,
+                DateSubmittedFrom = filters.DateSubmittedFrom,
+                DateSubmittedTo = filters.DateSubmittedTo,
+                Status = filters.Status
             });
 
-            Applications = [..(await SystemTask.WhenAll(applicationTasks))
-                .OrderByDescending(a => a.DateCreated)];
+            Applications = result.Applications;
+            TotalPages = result.TotalPages;
+            CurrentPage = result.CurrentPage;
         }
 
         private Guid? ResolveTemplateId()
@@ -295,12 +235,10 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
                     return guid;
                 }
 
-                // Fallback to configuration
                 var configuration = HttpContext.RequestServices.GetService(typeof(IRequestAppConfiguration)) as IRequestAppConfiguration;
                 var configured = configuration?["Template:Id"];
                 if (Guid.TryParse(configured, out var cfgGuid))
                 {
-                    // Persist into session for subsequent requests
                     HttpContext.Session.SetString("TemplateId", cfgGuid.ToString());
                     return cfgGuid;
                 }
@@ -313,7 +251,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
             return null;
         }
 
-        private SystemTask LoadUserDetailsAsync()
+        private void LoadUserDetails()
         {
             Email = User.FindFirst(ClaimTypes.Email)?.Value
                     ?? User.FindFirst("email")?.Value;
@@ -337,8 +275,6 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
                     OrganisationName = null;
                 }
             }
-
-            return SystemTask.CompletedTask;
         }
     }
 }

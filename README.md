@@ -24,12 +24,43 @@ Template authoring guide: [`docs/Form-Template-Designer-Manual.md`](docs/Form-Te
 
 ## Architecture overview
 
-| Layer | Project | Purpose |
-|-------|---------|---------|
-| Web | `GovUK.Dfe.FlexForms.Web` | Razor Pages, middleware, auth overlays, admin |
-| Application | `GovUK.Dfe.FlexForms.Application` | Interfaces; references `GovUK.Dfe.FlexForms.Api.Client` |
-| Domain | `GovUK.Dfe.FlexForms.Domain` | `FormTemplate` models, conditional logic, complex fields |
-| Infrastructure | `GovUK.Dfe.FlexForms.Infrastructure` | API template store, form services, MassTransit consumers |
+This repository follows **Clean Architecture**. Dependencies point inward: Domain has no external dependencies, Application depends only on Domain, and Infrastructure implements Application ports. The Web layer is a thin composition root and UI host.
+
+| Layer | Project | Depends on | Purpose |
+|-------|---------|------------|---------|
+| **Domain** | `GovUK.Dfe.FlexForms.Domain` | — | `FormTemplate` models, `FormRouteParser`, `FormStepPolicy`, `CheckboxValueNormalizer` |
+| **Application** | `GovUK.Dfe.FlexForms.Application` | Domain | Use-case services, port interfaces, work-state bags, outcome types, `AdminApiErrorMapper` |
+| **Infrastructure** | `GovUK.Dfe.FlexForms.Infrastructure` | Application | Adapter implementations (API clients, session stores, Redis, MassTransit consumers) |
+| **Web** | `GovUK.Dfe.FlexForms.Web` | Application, Infrastructure | Razor Pages (thin PageModels), middleware, auth, DI composition root |
+
+### Dependency rule
+
+```mermaid
+flowchart LR
+    Domain["Domain"]
+    Application["Application"]
+    Infrastructure["Infrastructure"]
+    Web["Web<br/>(composition root)"]
+
+    Web --> Application
+    Web --> Infrastructure
+    Infrastructure --> Application
+    Application --> Domain
+
+    style Domain fill:#e8f5e9,stroke:#2e7d32
+    style Application fill:#e3f2fd,stroke:#1565c0
+    style Infrastructure fill:#fff3e0,stroke:#e65100
+    style Web fill:#fce4ec,stroke:#c62828
+```
+
+These boundaries are enforced at build time by **NetArchTest guard tests** (`Architecture/CleanArchitectureGuardTests.cs`):
+
+- PageModels must not reference `GovUK.Dfe.FlexForms.Infrastructure`
+- Application must not reference Infrastructure or Web
+- Application must not take `ISession`, `ModelStateDictionary`, or `HttpContext`
+- Domain must not reference any outer layer
+
+### System context
 
 ```mermaid
 flowchart TB
@@ -219,6 +250,254 @@ See `Security/AdminAccessHelper.cs`.
 
 ---
 
+## Clean Architecture pattern (use cases)
+
+Every page in the application follows the same pattern. Business logic lives in the **Application** layer as a use-case service. The **PageModel** is a thin dispatcher that binds HTTP, calls the use case, and maps the result to `Page()` / `Redirect()` / `File()`.
+
+### Pattern overview (how a request flows through the layers)
+
+```mermaid
+sequenceDiagram
+    participant Browser
+    participant PM as PageModel<br/>(Web)
+    participant UC as Use-Case Service<br/>(Application)
+    participant API as API Client<br/>(Infrastructure)
+
+    Browser->>PM: HTTP GET / POST
+    PM->>PM: CaptureWorkState()
+    PM->>UC: service.ExecuteAsync(workState, ...)
+    UC->>API: API client call
+    API-->>UC: DTO response
+    UC->>UC: Validate, map, set workState fields
+    UC-->>PM: AdminPageOutcome / FormEngineOutcome
+    PM->>PM: ApplyWorkState(state)
+    PM->>PM: MapOutcome → Page() / Redirect() / File()
+    PM-->>Browser: HTML / redirect
+```
+
+### What lives where
+
+```mermaid
+flowchart TB
+    subgraph Web ["Web Layer (Razor Pages)"]
+        PM["PageModel"]
+        TD["TempData / Session"]
+        Auth["Authorization attributes"]
+        Cache["Local cache invalidation"]
+        Bind["BindProperty / ModelState"]
+    end
+
+    subgraph App ["Application Layer"]
+        IF["Interface<br/>(e.g. ITenantSettingsAdmin)"]
+        SVC["Service<br/>(e.g. TenantSettingsAdminService)"]
+        WS["WorkState bag<br/>(e.g. TenantSettingsWorkState)"]
+        OC["Outcome<br/>(AdminPageOutcome /<br/>FormEngineOutcome)"]
+        MSG["Messages class<br/>(user-facing copy)"]
+        ERR["AdminApiErrorMapper"]
+    end
+
+    subgraph Infra ["Infrastructure Layer"]
+        IMPL["Adapter implementations<br/>(API stores, Redis, session)"]
+    end
+
+    subgraph Dom ["Domain Layer"]
+        MOD["FormTemplate, Task, Page, Field"]
+        POL["FormRouteParser, FormStepPolicy"]
+        NORM["CheckboxValueNormalizer"]
+    end
+
+    PM --> IF
+    IF -.->|implemented by| SVC
+    SVC --> WS
+    SVC --> OC
+    SVC --> MSG
+    SVC --> ERR
+    SVC -.->|calls| IMPL
+    IMPL -.->|implements ports in| App
+    SVC --> MOD
+    SVC --> POL
+
+    style Web fill:#fce4ec,stroke:#c62828
+    style App fill:#e3f2fd,stroke:#1565c0
+    style Infra fill:#fff3e0,stroke:#e65100
+    style Dom fill:#e8f5e9,stroke:#2e7d32
+```
+
+### The four artefacts per feature
+
+Every feature (Admin page, form engine handler, dashboard) produces up to four files in `Application/`:
+
+| Artefact | Example | Purpose |
+|----------|---------|---------|
+| **Interface** | `ITenantSettingsAdmin` | Port the PageModel depends on |
+| **Service** | `TenantSettingsAdminService` | Implements the interface; calls API clients, applies business rules |
+| **WorkState** | `TenantSettingsWorkState` | Mutable bag of view-state. PageModel populates it before the call (`CaptureWorkState`), the service mutates it, PageModel reads it back (`ApplyWorkState`) |
+| **Messages** | `TenantSettingsMessages` | `const string` user-facing copy (error/success text). Keeps strings identical to the original PageModel for backward compatibility |
+
+Shared helpers:
+
+| Helper | Location | Purpose |
+|--------|----------|---------|
+| `AdminPageOutcome` | `Application/Admin/` | HTTP-agnostic result: `Stay`, `Redirect`, or `File` with optional success/error messages and cache-refresh flag |
+| `FormEngineOutcome` | `Application/FormEngine/` | Same idea for form engine: redirect URL, validation errors, file downloads, notification context |
+| `AdminApiErrorMapper` | `Application/Admin/` | Maps `ExternalApplicationsException` to user-friendly messages; optional WAF/gateway hint |
+
+### What stays on the PageModel
+
+The PageModel remains responsible for HTTP concerns that cannot cross into Application:
+
+- `[Authorize]` policies and `[BindProperty]` attributes
+- `TempData` read/write (PRG pattern)
+- Tenant resolution (`ITenantRequestContext`)
+- Local cache invalidation (`ITenantConfigurationCache`, `ITenantIdResolver`)
+- `ModelState` manipulation and `Page()` / `RedirectToPage()` / `File()` return
+- Session reads for presentation (e.g. `FormSessionKeys`)
+- `HttpContext.User` claims extraction (passed as values into the use case)
+
+### PageModel lifecycle (step by step)
+
+```csharp
+// 1. Capture current state into a work-state bag
+var state = CaptureWorkState();
+
+// 2. Call the Application use case
+var outcome = await tenantSettingsAdmin.UpdateAsync(
+    state, category, target, settingsJson, isSecret, cancellationToken);
+
+// 3. Copy mutated state back to PageModel properties
+ApplyWorkState(state);
+
+// 4. Map the outcome to an HTTP result
+return MapOutcome(outcome);
+```
+
+### Concrete example: Tenant Settings
+
+```mermaid
+flowchart LR
+    subgraph Web
+        TSM["TenantSettingsModel<br/>(PageModel, 250 lines)"]
+    end
+
+    subgraph Application
+        ITSA["ITenantSettingsAdmin"]
+        TSA["TenantSettingsAdminService"]
+        TSWS["TenantSettingsWorkState"]
+        APO["AdminPageOutcome"]
+        TSMsg["TenantSettingsMessages"]
+    end
+
+    subgraph Infrastructure
+        TAC["ITenantAdminClient<br/>(API client)"]
+    end
+
+    TSM -->|depends on| ITSA
+    ITSA -.->|implemented by| TSA
+    TSA -->|mutates| TSWS
+    TSA -->|returns| APO
+    TSA -->|uses copy from| TSMsg
+    TSA -->|calls| TAC
+
+    style Web fill:#fce4ec,stroke:#c62828
+    style Application fill:#e3f2fd,stroke:#1565c0
+    style Infrastructure fill:#fff3e0,stroke:#e65100
+```
+
+### Project folder structure
+
+```
+src/
+├── GovUK.Dfe.FlexForms.Domain/
+│   ├── Models/              # FormTemplate, Task, Page, Field, ...
+│   └── FormEngine/          # FormRouteParser, FormStepPolicy, CheckboxValueNormalizer
+│
+├── GovUK.Dfe.FlexForms.Application/
+│   ├── Interfaces/          # Ports: IFormSessionStore, IApplicationResponseService, ...
+│   ├── Admin/               # Admin use cases (one interface + service + workstate + messages per page)
+│   │   ├── ITenantSettingsAdmin + TenantSettingsAdminService
+│   │   ├── IUserManagerAdmin + UserManagerAdminService
+│   │   ├── IRoleManagerAdmin + RoleManagerAdminService
+│   │   ├── IDuplicateTenantAdmin + DuplicateTenantAdminService
+│   │   ├── IOrganisationSettingsAdmin + OrganisationSettingsAdminService
+│   │   ├── IAdminHome + AdminHomeService
+│   │   ├── ... (EventMappings, TemplateManager, CustomStatusLabels, ContributorManagement)
+│   │   ├── AdminPageOutcome              # shared outcome type
+│   │   ├── AdminApiErrorMapper           # shared error formatting
+│   │   └── AdminSettingsEncoding         # Base64 helper
+│   ├── Dashboard/           # IDashboardApplications, DashboardColumnResolver, DashboardAnswerReader
+│   ├── FormEngine/          # Form engine use cases
+│   │   ├── IPrepareFormEngineGet + PrepareFormEngineGetService
+│   │   ├── ISaveFormPage + SaveFormPageService
+│   │   ├── ICompleteFormTask + CompleteFormTaskService
+│   │   ├── ISubmitFormApplication + SubmitFormApplicationService
+│   │   ├── IUploadFormFile / IDeleteFormFile / IDownloadFormFile
+│   │   ├── IRemoveCollectionItem + RemoveCollectionItemService
+│   │   ├── FormEngineOutcome / FormEngineWorkState
+│   │   └── FormFileFieldService, InfectedUploadFilter, ...
+│   └── Validation/          # FormValidationResult, FormValidationError
+│
+├── GovUK.Dfe.FlexForms.Infrastructure/
+│   ├── DependencyInjection.cs   # AddInfrastructureDependencyGroup() — all adapter registrations
+│   ├── Services/            # ApplicationResponseService, FormStateManager, ConditionalLogicEngine, ...
+│   ├── Stores/              # HttpFormSessionStore, RedisInfectedFileStore, ApiTemplateStore
+│   ├── Parsers/             # JsonFormTemplateParser
+│   ├── Providers/           # FormTemplateProvider, SchemaEventDefinitionProvider
+│   ├── Consumers/           # ScanResultConsumer (MassTransit)
+│   └── Messaging/           # MessagingEventBusConfigurator
+│
+├── GovUK.Dfe.FlexForms.Web/
+│   ├── Pages/
+│   │   ├── FormEngine/      # RenderForm (partial class, ~340+300 lines), BaseFormEngineModel (~80 lines)
+│   │   ├── Admin/           # Thin PageModels: TenantSettings (250), UserManager (83), RoleManager (124), ...
+│   │   ├── Applications/    # Dashboard (280), Index, Contributors, ...
+│   │   └── Shared/          # BaseFormPageModel
+│   ├── Extensions/
+│   │   └── ServiceCollectionExtensions.cs  # AddWebLayerServices() → calls AddInfrastructureDependencyGroup()
+│   ├── Program.cs           # Composition root (auth, middleware, MassTransit)
+│   └── ...
+│
+└── Tests/
+    ├── GovUK.Dfe.FlexForms.Domain.Tests/           # 43 tests
+    ├── GovUK.Dfe.FlexForms.Application.Tests/      # 100 tests (Admin + FormEngine use cases)
+    ├── GovUK.Dfe.FlexForms.Infrastructure.UnitTests/ # 64 tests
+    └── GovUK.Dfe.FlexForms.Web.UnitTests/          # 228 tests (incl. architecture guard tests)
+```
+
+### DI wiring
+
+All Infrastructure adapters are registered in one place:
+
+```
+Infrastructure/DependencyInjection.cs  →  AddInfrastructureDependencyGroup()
+```
+
+The Web composition root calls it via:
+
+```
+Web/Extensions/ServiceCollectionExtensions.cs  →  AddWebLayerServices()
+    ↳ services.AddInfrastructureDependencyGroup()   // Infrastructure adapters
+    ↳ services.AddScoped<ITenantSettingsAdmin, ...>  // Application use cases
+    ↳ services.AddScoped<IFieldRendererService, ...> // Web-only services
+```
+
+`Program.cs` calls `AddWebLayerServices()` once. It no longer duplicates Infrastructure registrations.
+
+### Adding a new Admin page (recipe)
+
+1. Create in `Application/Admin/`:
+   - `IMyFeatureAdmin` (interface with XML docs)
+   - `MyFeatureAdminService` (sealed, primary constructor)
+   - `MyFeatureWorkState` (mutable bag)
+   - `MyFeatureMessages` (const strings)
+2. Register in `ServiceCollectionExtensions.AddWebLayerServices()`
+3. Thin the PageModel:
+   - Constructor takes `IMyFeatureAdmin` (not API clients)
+   - `CaptureWorkState()` → use case → `ApplyWorkState()` → `MapOutcome()`
+   - Keep authorization, TempData, cache invalidation on the PageModel
+4. Add tests in `Application.Tests/Admin/` (validation failures + happy path)
+
+---
+
 ## Form engine
 
 ### Domain model
@@ -263,17 +542,19 @@ Full authoring reference: [`docs/Form-Template-Designer-Manual.md`](docs/Form-Te
 
 ### Runtime flow
 
-| Concern | Implementation |
-|---------|----------------|
-| Entry route | `/applications/{referenceNumber}/{taskId?}/{*pageId}` → `RenderForm` |
-| Template load | `ITemplatesClient` → `ApiTemplateStore` → `JsonFormTemplateParser` |
-| Navigation | `FormStateManager`, `FormNavigationService` |
-| Save | Session accumulate → Base64 JSON → `AddApplicationResponseAsync` |
-| Conditional logic | `ConditionalLogicEngine` / orchestrator |
-| Collections | Multi + derived flow handlers on `RenderForm` |
-| Complex fields | Tenant `FormEngine:ComplexFields` (Trust/Academy search, uploads) |
-| File validation | Status column on upload fields; `GetFileValidationGateAsync` blocks preview submit when the API gate says so |
-| Submit | `SubmitApplicationAsync` + `ApplicationSubmissionOrchestrator` (e.g. publish event) |
+| Concern | Use case (Application) | Infrastructure adapter |
+|---------|------------------------|----------------------|
+| Entry / page load | `IPrepareFormEngineGet` | `IFormStateManager`, `IFormNavigationService`, `IFormTemplateProvider` |
+| Save answers | `ISaveFormPage` | `IApplicationResponseService`, `IFormValidationOrchestrator` |
+| Complete task | `ICompleteFormTask` | `IApplicationResponseService` |
+| Submit application | `ISubmitFormApplication` | `IApplicationsClient` |
+| Upload file | `IUploadFormFile` | `IFileUploadService` |
+| Delete file | `IDeleteFormFile` | `IFileUploadService`, `IInfectedFileStore` |
+| Download file | `IDownloadFormFile` | `IApplicationsClient` |
+| Remove collection item | `IRemoveCollectionItem` | `IFormSessionStore` |
+| Conditional logic | `FormEngineConditionalLogic` | `IConditionalLogicEngine` / `IConditionalLogicOrchestrator` |
+| Complex fields | — | `IComplexFieldConfigurationService`, `IComplexFieldRendererFactory` |
+| File validation gate | — | `GetFileValidationGateAsync` blocks preview submit when the API gate says so |
 
 ### Template selection
 
@@ -287,18 +568,27 @@ Full authoring reference: [`docs/Form-Template-Designer-Manual.md`](docs/Form-Te
 
 ## Admin area
 
-Hub: `/admin` (`CanAccessAdminArea`).
+Hub: `/admin` (`CanAccessAdminArea`). Each admin page follows the [Clean Architecture use-case pattern](#clean-architecture-pattern-use-cases) described above.
 
-| Tool | Route | Who |
-|------|-------|-----|
-| Template Manager | `/admin/template-manager` | Admin / SuperAdmin / Template Manage |
-| Create Template | `/admin/create-template` | Same |
-| Custom status labels | `/admin/custom-status-label-overrides` | Same |
-| User Manager | `/admin/user-manager` | Admin / SuperAdmin / User Manage |
-| Role Manager | `/admin/role-manager` | Admin / SuperAdmin |
-| Tenant Settings | `/admin/tenant-settings` | **SuperAdmin only** |
+| Tool | Route | Who | Application use case |
+|------|-------|-----|---------------------|
+| Admin Home | `/admin` | Admin / SuperAdmin | `IAdminHome` |
+| Template Manager | `/admin/template-manager` | Admin / SuperAdmin / Template Manage | `ITemplateManagerAdmin` |
+| Create Template | `/admin/create-template` | Same | `ITemplateManagerAdmin` |
+| Custom status labels | `/admin/custom-status-label-overrides` | Same | `ICustomStatusLabelOverridesAdmin` |
+| User Manager | `/admin/user-manager` | Admin / SuperAdmin / User Manage | `IUserManagerAdmin` |
+| Add User | `/admin/user-manager-add` | Same | `IUserManagerAddAdmin` |
+| Edit User | `/admin/user-manager-edit` | Same | `IUserManagerEditAdmin` |
+| User Permissions | `/admin/user-manager-permissions` | Same | `IUserManagerPermissionsAdmin` |
+| Role Manager | `/admin/role-manager` | Admin / SuperAdmin | `IRoleManagerAdmin` |
+| Role Permissions | `/admin/role-manager-permissions` | Same | `IRoleManagerPermissionsAdmin` |
+| Organisation Settings | `/admin/organisation-settings` | Admin / SuperAdmin | `IOrganisationSettingsAdmin` |
+| Contributor Management | `/admin/contributor-management` | Admin / SuperAdmin | `IContributorManagementAdmin` |
+| Duplicate Tenant | `/admin/duplicate-tenant` | **SuperAdmin only** | `IDuplicateTenantAdmin` |
+| Tenant Settings | `/admin/tenant-settings` | **SuperAdmin only** | `ITenantSettingsAdmin` |
+| Event Mappings | `/admin/event-mappings` | **SuperAdmin only** | `IEventMappingsAdmin` |
 
-Tenant Settings uses `ITenantAdminClient` (Base64 settings payloads), then refreshes API tenant cache and local `ITenantConfigurationCache`.
+All admin use cases return `AdminPageOutcome` and use `AdminApiErrorMapper` for consistent error presentation.
 
 ---
 
