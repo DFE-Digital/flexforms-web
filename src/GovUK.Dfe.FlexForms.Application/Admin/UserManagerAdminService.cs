@@ -48,8 +48,17 @@ public sealed class UserManagerAdminService(
     {
         try
         {
-            var users = await usersClient.GetTenantUsersAsync(cancellationToken);
-            state.Users = users?.OrderBy(u => u.Name).ToList() ?? [];
+            var page = await usersClient.GetTenantUsersAsync(
+                pageNumber: Math.Max(1, state.CurrentPage),
+                pageSize: UserManagerWorkState.PageSize,
+                userId: null,
+                email: null,
+                cancellationToken);
+
+            state.Users = page?.Items?.ToList() ?? [];
+            state.TotalCount = page?.TotalCount ?? 0;
+            state.TotalPages = page?.TotalPages ?? 0;
+            state.CurrentPage = page?.PageNumber > 0 ? page.PageNumber : 1;
         }
         catch (Exception ex)
         {
@@ -57,6 +66,8 @@ public sealed class UserManagerAdminService(
             state.HasError = true;
             state.ErrorMessage = AdminApiErrorMapper.Format(ex, UserManagerMessages.LoadFailed);
             state.Users = [];
+            state.TotalCount = 0;
+            state.TotalPages = 0;
         }
     }
 

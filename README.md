@@ -13,7 +13,7 @@ Template authoring guide: [`docs/Form-Template-Designer-Manual.md`](docs/Form-Te
 - **Platform bootstrap** — Host config from API at startup; per-request tenant config for Target `Web`
 - **Template-driven form engine** — Tasks, pages, fields, conditional logic, collection & derived flows
 - **Auth** — DfE Sign-In (OIDC) and optional Entra SSO, with cookie sessions and API token exchange
-- **Admin area** — Template Manager, User Manager, Role Manager, Tenant Settings (SuperAdmin)
+- **Admin area** — Template Manager, User Manager, Role Manager, Event mappings (Admin), Tenant Settings (SuperAdmin)
 - **Contributors** — Invite collaborators when `contributorPattern` is enabled on the template
 - **Files** — Upload via API; ClamAV scan results from Service Bus; optional tenant file-validation status
 - **Notifications** — API-backed notification centre + SignalR (malware, file delete, file validation)
@@ -586,9 +586,71 @@ Hub: `/admin` (`CanAccessAdminArea`). Each admin page follows the [Clean Archite
 | Contributor Management | `/admin/contributor-management` | Admin / SuperAdmin | `IContributorManagementAdmin` |
 | Duplicate Tenant | `/admin/duplicate-tenant` | **SuperAdmin only** | `IDuplicateTenantAdmin` |
 | Tenant Settings | `/admin/tenant-settings` | **SuperAdmin only** | `ITenantSettingsAdmin` |
-| Event Mappings | `/admin/event-mappings` | **SuperAdmin only** | `IEventMappingsAdmin` |
+| Event Mappings | `/admin/event-mappings` | Admin / SuperAdmin | `IEventMappingsAdmin` |
 
 All admin use cases return `AdminPageOutcome` and use `AdminApiErrorMapper` for consistent error presentation.
+
+Operator walkthrough (schemas, mappings, triggers, Azure Service Bus): [`docs/Tenant-Admin-User-Manual.md`](docs/Tenant-Admin-User-Manual.md#12-event-mappings) §12.
+
+### Event mapping (high-level design)
+
+Web **does not publish** domain events. It writes three Shared TenantConfig categories so the **API** can publish on submit/upload:
+
+| Category | Role |
+|----------|------|
+| `SchemaEvents` | Tenant-defined message type → Azure Service Bus **topic** + JSON Schema (documentation for consumers) |
+| `EventMappings` | Per template + event type: how form answers and platform metadata become payload properties |
+| `EventTriggers` | Bind `ApplicationSubmitted` / `FileUploaded` to a typed CoreLibs event or a schema event + `mappingId` |
+
+**Typed** events are CoreLibs contracts (`*Event`). Topic names come from CoreLibs `TopicNames` (for example `TransferApplicationSubmittedEvent` → `transfer-application-submitted`). **Schema** events are published as `SchemaEventEnvelope` to `topic:{topicName}` — that topic must exist in the API’s Service Bus namespace (production typically does not auto-create entities).
+
+Virus scan is **not** tenant-configurable: the API always publishes `ScanRequestedEvent` to `file-scanner-requests`. Web only consumes `ScanResultEvent` on `file-scanner-results`.
+
+```mermaid
+flowchart TB
+    subgraph web [FlexForms Web]
+        Admin["Admin Event mappings UI"]
+        User["Applicant submit / file upload"]
+    end
+
+    subgraph api [FlexForms API]
+        TC["TenantConfig<br/>SchemaEvents / EventMappings / EventTriggers"]
+        Handlers["Submit / upload handlers"]
+        Disp["EventTriggerDispatcher"]
+        Map["EventDataMapper"]
+        TypedPub["Typed: IEventPublisher"]
+        SchemaPub["Schema: MassTransit Send to topic:name"]
+        Scan["Always: ScanRequestedEvent"]
+    end
+
+    subgraph asb [Azure Service Bus]
+        TypedTopic["Typed topics<br/>e.g. transfer-application-submitted"]
+        SchemaTopic["Schema topics<br/>from tenant topicName"]
+        ScanReq["file-scanner-requests"]
+        ScanRes["file-scanner-results"]
+    end
+
+    Consumer["Tenant consumer<br/>subscription"]
+    Scanner["File scanner"]
+
+    Admin -->|Save Shared settings + refresh| TC
+    User --> Handlers
+    Handlers --> Disp
+    Disp --> Map
+    Map --> TypedPub
+    Map --> SchemaPub
+    TypedPub --> TypedTopic
+    SchemaPub --> SchemaTopic
+    TypedTopic --> Consumer
+    SchemaTopic --> Consumer
+    Handlers --> Scan
+    Scan --> ScanReq
+    ScanReq --> Scanner
+    Scanner --> ScanRes
+    ScanRes -->|MassTransit consumer| api
+```
+
+Publish is **best-effort**: a mapping or bus failure does not roll back the user’s submit/upload. Runtime mapping lookup is **template id + event type** (not mapping id). Empty EventTriggers means no extra publish besides scan-on-upload.
 
 ---
 
@@ -782,6 +844,8 @@ sequenceDiagram
 ## Related documentation
 
 - [`docs/Form-Template-Designer-Manual.md`](docs/Form-Template-Designer-Manual.md) — JSON template authoring
+- [`docs/Tenant-Admin-User-Manual.md`](docs/Tenant-Admin-User-Manual.md) — tenant Admin UI, including [event mappings §12](docs/Tenant-Admin-User-Manual.md#12-event-mappings)
+- [Event mapping (HLD)](#event-mapping-high-level-design) — Web vs API vs Azure Service Bus
 - [flexforms-api README](https://github.com/DFE-Digital/flexforms-api) — API, TenantConfig, roles, security, file-validation callback
 - DfE.CoreLibs `GovUK.Dfe.CoreLibs.Http/ExceptionHandler.md` — global exception handler + KQL support playbook
 - `terraform/README.md` — deployment

@@ -29,10 +29,19 @@ public sealed class UserManagerModel(IUserManagerAdmin userManagerAdmin) : PageM
 
     public string? AuditLogLoadErrorMessage { get; private set; }
 
+    public int TotalCount { get; private set; }
+
+    public int TotalPages { get; private set; }
+
+    public int PageSize { get; private set; } = UserManagerWorkState.PageSize;
+
+    [BindProperty(SupportsGet = true)]
+    public int CurrentPage { get; set; } = 1;
+
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
         ApplyTempData();
-        var state = new UserManagerWorkState();
+        var state = new UserManagerWorkState { CurrentPage = CurrentPage };
         await userManagerAdmin.LoadAsync(state, cancellationToken);
         ApplyWorkState(state);
     }
@@ -42,12 +51,18 @@ public sealed class UserManagerModel(IUserManagerAdmin userManagerAdmin) : PageM
         return MapOutcome(await userManagerAdmin.RemoveAsync(new UserManagerWorkState(), userId, cancellationToken));
     }
 
+    public string BuildPaginationHref(int page) => $"?currentPage={page}";
+
     private void ApplyWorkState(UserManagerWorkState state)
     {
         Users = state.Users;
         AccessAuditEntries = state.AccessAuditEntries;
         AuditLogLoadFailed = state.AuditLogLoadFailed;
         AuditLogLoadErrorMessage = state.AuditLogLoadErrorMessage;
+        TotalCount = state.TotalCount;
+        TotalPages = state.TotalPages;
+        PageSize = UserManagerWorkState.PageSize;
+        CurrentPage = state.CurrentPage == 0 ? 1 : state.CurrentPage;
         if (state.HasError)
         {
             HasError = true;
@@ -63,7 +78,7 @@ public sealed class UserManagerModel(IUserManagerAdmin userManagerAdmin) : PageM
         if (outcome.ErrorMessage != null)
             TempData["UserManagerError"] = outcome.ErrorMessage;
 
-        return RedirectToPage();
+        return RedirectToPage(new { currentPage = CurrentPage });
     }
 
     private void ApplyTempData()

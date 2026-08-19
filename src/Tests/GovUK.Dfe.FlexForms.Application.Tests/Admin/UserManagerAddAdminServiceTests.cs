@@ -20,7 +20,13 @@ public class UserManagerAddAdminServiceTests
     {
         _templates.GetAccessibleTemplatesAsync(Arg.Any<CancellationToken>()).Returns([]);
         _roles.ListAsync(Arg.Any<CancellationToken>()).Returns([]);
-        _users.GetTenantUsersAsync(Arg.Any<CancellationToken>()).Returns([]);
+        _users.GetTenantUsersAsync(
+                Arg.Any<int?>(),
+                Arg.Any<int?>(),
+                Arg.Any<Guid?>(),
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>())
+            .Returns(EmptyPage());
 
         _service = new UserManagerAddAdminService(
             _users,
@@ -70,10 +76,13 @@ public class UserManagerAddAdminServiceTests
     [Fact]
     public async Task AddAsync_ShouldStay_WhenEmailAlreadyExists()
     {
-        _users.GetTenantUsersAsync(Arg.Any<CancellationToken>()).Returns(
-        [
-            new TenantUserDto { Email = "ADA@example.com", Name = "Existing" }
-        ]);
+        _users.GetTenantUsersAsync(
+                Arg.Any<int?>(),
+                Arg.Any<int?>(),
+                Arg.Any<Guid?>(),
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Page(new TenantUserDto { Email = "ADA@example.com", Name = "Existing" }));
 
         var result = await _service.AddAsync(_state);
 
@@ -110,4 +119,16 @@ public class UserManagerAddAdminServiceTests
             Arg.Any<UpdateUserTemplateAccessRequest>(),
             Arg.Any<CancellationToken>());
     }
+
+    private static PagedResultOfTenantUserDto EmptyPage() => Page();
+
+    private static PagedResultOfTenantUserDto Page(params TenantUserDto[] items) =>
+        new()
+        {
+            Items = items,
+            TotalCount = items.Length,
+            PageNumber = 1,
+            PageSize = 1,
+            TotalPages = items.Length == 0 ? 0 : 1
+        };
 }

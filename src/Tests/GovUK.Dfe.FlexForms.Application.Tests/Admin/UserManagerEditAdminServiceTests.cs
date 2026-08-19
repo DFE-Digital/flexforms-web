@@ -46,7 +46,13 @@ public class UserManagerEditAdminServiceTests
     [Fact]
     public async Task LoadAsync_ShouldRedirect_WhenUserIsMissing()
     {
-        _users.GetTenantUsersAsync(Arg.Any<CancellationToken>()).Returns([]);
+        _users.GetTenantUsersAsync(
+                Arg.Any<int?>(),
+                Arg.Any<int?>(),
+                Arg.Any<Guid?>(),
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>())
+            .Returns(EmptyPage());
 
         var result = await _service.LoadAsync(_state);
 
@@ -72,16 +78,19 @@ public class UserManagerEditAdminServiceTests
     [Fact]
     public async Task UpdateAsync_ShouldAssignRoleAndTemplates_WhenRoleChanged()
     {
-        _users.GetTenantUsersAsync(Arg.Any<CancellationToken>()).Returns(
-        [
-            new TenantUserDto
+        _users.GetTenantUsersAsync(
+                Arg.Any<int?>(),
+                Arg.Any<int?>(),
+                Arg.Any<Guid?>(),
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Page(new TenantUserDto
             {
                 UserId = _userId,
                 Name = "Ada Lovelace",
                 Email = "ada@example.com",
                 Role = "User"
-            }
-        ]);
+            }));
 
         var result = await _service.UpdateAsync(_state);
 
@@ -103,16 +112,19 @@ public class UserManagerEditAdminServiceTests
     [Fact]
     public async Task UpdateAsync_ShouldUpdateTemplatesOnly_WhenRoleIsUnchanged()
     {
-        _users.GetTenantUsersAsync(Arg.Any<CancellationToken>()).Returns(
-        [
-            new TenantUserDto
+        _users.GetTenantUsersAsync(
+                Arg.Any<int?>(),
+                Arg.Any<int?>(),
+                Arg.Any<Guid?>(),
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Page(new TenantUserDto
             {
                 UserId = _userId,
                 Name = "Ada Lovelace",
                 Email = "ada@example.com",
                 Role = "Caseworker"
-            }
-        ]);
+            }));
 
         var result = await _service.UpdateAsync(_state);
 
@@ -127,4 +139,16 @@ public class UserManagerEditAdminServiceTests
             Arg.Any<UpdateUserTemplateAccessRequest>(),
             Arg.Any<CancellationToken>());
     }
+
+    private static PagedResultOfTenantUserDto EmptyPage() => Page();
+
+    private static PagedResultOfTenantUserDto Page(params TenantUserDto[] items) =>
+        new()
+        {
+            Items = items,
+            TotalCount = items.Length,
+            PageNumber = 1,
+            PageSize = 1,
+            TotalPages = items.Length == 0 ? 0 : 1
+        };
 }

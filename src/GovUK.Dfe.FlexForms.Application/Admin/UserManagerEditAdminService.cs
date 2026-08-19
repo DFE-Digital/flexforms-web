@@ -33,8 +33,7 @@ public sealed class UserManagerEditAdminService(
         {
             var errors = await LoadLookupsAsync(state, cancellationToken);
 
-            var users = await usersClient.GetTenantUsersAsync(cancellationToken);
-            var user = users?.FirstOrDefault(u => u.UserId == state.UserId);
+            var user = await TenantUserDirectory.GetByIdAsync(usersClient, state.UserId, cancellationToken);
             if (user is null)
                 return AdminPageOutcome.Redirect(errorMessage: UserManagerEditMessages.UserNotFound);
 
@@ -72,8 +71,7 @@ public sealed class UserManagerEditAdminService(
     {
         var errors = await LoadLookupsAsync(state, cancellationToken);
 
-        var users = await usersClient.GetTenantUsersAsync(cancellationToken);
-        var user = users?.FirstOrDefault(u => u.UserId == state.UserId);
+        var user = await TenantUserDirectory.GetByIdAsync(usersClient, state.UserId, cancellationToken);
         if (user is null)
             return AdminPageOutcome.Redirect(errorMessage: UserManagerEditMessages.UserNotFound);
 
@@ -98,8 +96,7 @@ public sealed class UserManagerEditAdminService(
 
         try
         {
-            var users = await usersClient.GetTenantUsersAsync(cancellationToken);
-            var current = users?.FirstOrDefault(u => u.UserId == state.UserId);
+            var current = await TenantUserDirectory.GetByIdAsync(usersClient, state.UserId, cancellationToken);
             if (current is null)
                 return AdminPageOutcome.Redirect(errorMessage: UserManagerEditMessages.UserNotFound);
 

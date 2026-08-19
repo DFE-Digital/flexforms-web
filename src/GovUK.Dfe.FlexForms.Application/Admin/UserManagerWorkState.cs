@@ -7,6 +7,8 @@ namespace GovUK.Dfe.FlexForms.Application.Admin;
 /// </summary>
 public sealed class UserManagerWorkState
 {
+    public const int PageSize = 10;
+
     public IReadOnlyList<TenantUserDto> Users { get; set; } = [];
 
     public IReadOnlyList<TenantAccessAuditEntryDto> AccessAuditEntries { get; set; } = [];
@@ -18,4 +20,10 @@ public sealed class UserManagerWorkState
     public bool AuditLogLoadFailed { get; set; }
 
     public string? AuditLogLoadErrorMessage { get; set; }
+
+    public int CurrentPage { get; set; } = 1;
+
+    public int TotalCount { get; set; }
+
+    public int TotalPages { get; set; }
 }

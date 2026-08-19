@@ -56,17 +56,20 @@
         </div>
 
         <h2 class="govuk-heading-l">
-            Users (@Model.Users.Count)
+            Users (@Model.TotalCount)
         </h2>
 
-        @if (Model.Users.Count == 0)
+        @if (Model.TotalCount == 0)
         {
             <p class="govuk-body">No users currently have form access in this tenant.</p>
         }
         else
         {
             <p class="govuk-hint">
-                @(Model.Users.Count == 1 ? "1 person has" : $"{Model.Users.Count} people have") access in this tenant.
+                @(Model.TotalCount == 1 ? "1 person has" : $"{Model.TotalCount} people have") access in this tenant.
+                Showing @(((Model.CurrentPage - 1) * Model.PageSize) + 1)
+                to @(Math.Min(Model.CurrentPage * Model.PageSize, Model.TotalCount))
+                of @Model.TotalCount.
             </p>
             @foreach (var user in Model.Users)
             {
@@ -177,6 +180,7 @@
                               class="govuk-!-margin-top-4"
                               onsubmit="return confirm('Remove this user from the tenant? Their form access for this tenant will be cleared.');">
                             <input type="hidden" name="userId" value="@user.UserId" />
+                            <input type="hidden" name="CurrentPage" value="@Model.CurrentPage" />
                             <button type="submit"
                                     class="govuk-button govuk-button--warning govuk-!-margin-bottom-0"
                                     data-module="govuk-button">
@@ -186,6 +190,55 @@
                         </form>
                     </div>
                 </div>
+            }
+
+            @if (Model.TotalPages > 1)
+            {
+                <nav class="govuk-pagination" aria-label="Pagination">
+                    @if (Model.CurrentPage > 1)
+                    {
+                        <div class="govuk-pagination__prev">
+                            <a class="govuk-link govuk-pagination__link" href="@Model.BuildPaginationHref(Model.CurrentPage - 1)" rel="prev">
+                                <svg class="govuk-pagination__icon govuk-pagination__icon--prev" xmlns="http://www.w3.org/2000/svg" height="13" width="15" focusable="false" aria-hidden="true" viewBox="0 0 15 13">
+                                    <path d="m6.5938-0.0078125-6.7266 6.7266 6.7441 6.4062 1.377-1.449-4.1856-3.9768h12.896v-2h-12.984l4.2931-4.293-1.414-1.414z" />
+                                </svg>
+                                <span class="govuk-pagination__link-title">Previous<span class="govuk-visually-hidden"> page</span></span>
+                            </a>
+                        </div>
+                    }
+                    <ul class="govuk-pagination__list">
+                        @for (var i = 1; i <= Model.TotalPages; i++)
+                        {
+                            if (i == Model.CurrentPage)
+                            {
+                                <li class="govuk-pagination__item govuk-pagination__item--current">
+                                    <a class="govuk-link govuk-pagination__link" href="@Model.BuildPaginationHref(i)" aria-label="Page @i" aria-current="page">@i</a>
+                                </li>
+                            }
+                            else if (i == 1 || i == Model.TotalPages || Math.Abs(i - Model.CurrentPage) <= 1)
+                            {
+                                <li class="govuk-pagination__item">
+                                    <a class="govuk-link govuk-pagination__link" href="@Model.BuildPaginationHref(i)" aria-label="Page @i">@i</a>
+                                </li>
+                            }
+                            else if (Math.Abs(i - Model.CurrentPage) == 2)
+                            {
+                                <li class="govuk-pagination__item govuk-pagination__item--ellipses">&ctdot;</li>
+                            }
+                        }
+                    </ul>
+                    @if (Model.CurrentPage < Model.TotalPages)
+                    {
+                        <div class="govuk-pagination__next">
+                            <a class="govuk-link govuk-pagination__link" href="@Model.BuildPaginationHref(Model.CurrentPage + 1)" rel="next">
+                                <span class="govuk-pagination__link-title">Next<span class="govuk-visually-hidden"> page</span></span>
+                                <svg class="govuk-pagination__icon govuk-pagination__icon--next" xmlns="http://www.w3.org/2000/svg" height="13" width="15" focusable="false" aria-hidden="true" viewBox="0 0 15 13">
+                                    <path d="m8.107-0.0078125-1.4136 1.414 4.2926 4.293h-12.986v2h12.896l-4.1855 3.9766 1.377 1.4492 6.7441-6.4062-6.7246-6.7246z" />
+                                </svg>
+                            </a>
+                        </div>
+                    }
+                </nav>
             }
         }
 
