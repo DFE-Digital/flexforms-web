@@ -22,6 +22,24 @@ You do not need to be a developer to use this manual. Where a change is made in 
 10. [Permissions — how they work](#10-permissions--how-they-work)
 11. [Organisation settings](#11-organisation-settings)
 12. [Event mappings](#12-event-mappings)
+    - [12.1 What this page is for](#121-what-this-page-is-for)
+    - [12.2 Events in plain English](#122-events-in-plain-english)
+    - [12.3 Azure Service Bus for people who have never used it](#123-azure-service-bus-for-people-who-have-never-used-it)
+    - [12.4 The three layers you must configure](#124-the-three-layers-you-must-configure)
+    - [12.5 Typed events vs schema events](#125-typed-events-vs-schema-events)
+    - [12.6 Recommended order of work](#126-recommended-order-of-work)
+    - [12.7 Schema events — what to type on the page](#127-schema-events--what-to-type-on-the-page)
+    - [12.8 Create the Service Bus topic and subscription](#128-create-the-service-bus-topic-and-subscription)
+    - [12.9 Field mappings — how answers become a message](#129-field-mappings--how-answers-become-a-message)
+    - [12.10 Mapping JSON reference](#1210-mapping-json-reference)
+    - [12.11 Worked examples](#1211-worked-examples)
+    - [12.12 Triggers — when the API actually publishes](#1212-triggers--when-the-api-actually-publishes)
+    - [12.13 What the published message looks like](#1213-what-the-published-message-looks-like)
+    - [12.14 How a downstream system should consume it](#1214-how-a-downstream-system-should-consume-it)
+    - [12.15 Virus scanning (always on)](#1215-virus-scanning-always-on)
+    - [12.16 Who can change this](#1216-who-can-change-this)
+    - [12.17 Event mappings checklist](#1217-event-mappings-checklist)
+    - [12.18 Troubleshooting event mappings](#1218-troubleshooting-event-mappings)
 13. [Tenant settings](#13-tenant-settings)
 14. [Applications (admin list)](#14-applications-admin-list)
 15. [What end users see](#15-what-end-users-see)
@@ -117,6 +135,7 @@ Use this if you are standing up a new form.
 7. When ready, **Make live**.
 8. Set **Organisation settings** (wording, banner, filters).
 9. Create **Caseworker** / **Template Manager** roles if colleagues need limited Admin access.
+10. If another system must receive submit or file-upload data, follow [Event mappings](#12-event-mappings) (schema, mapping, trigger, then Azure Service Bus topic and subscription).
 
 ---
 
@@ -408,7 +427,7 @@ Typical actions:
 
 Invite/remove of extra people on **one application** is done from that application’s task list when the template has `"contributorPattern": true`.
 
-Admins can also look up who is on an application at `/admin/contributor-management` (**Contributor management**). This page is not linked from the hub; use it if you have a reference number and need to see current contributors, then open the full invite UI if needed.
+Admins can also look up who is on an application, or look up a user by email to see the applications they created and who they invited, at **Admin → Users & Roles → Contributor management** (`/admin/contributor-management`).
 
 ---
 
@@ -573,21 +592,474 @@ Page: `/admin/event-mappings`
 
 ![Schema events, field mappings, and triggers](images/15-event-mappings.png)
 
-Use this if form submissions or file uploads should publish to **Service Bus** for downstream reporting.
+This chapter is the full guide. You can skip it if your tenant does **not** send form data to another system. If you do need reporting, data warehouse feeds, or a product-specific processor, read it even if you have never used Azure Service Bus.
 
-The page is for **this tenant only**. Platform “typed” event contracts are shared; your mappings and schema events are not.
+High-level design for developers: [Event mapping (HLD)](../README.md#event-mapping-high-level-design) in the Web README.
 
-You typically configure three layers:
+### 12.1 What this page is for
 
-1. **Schema events** (optional) — a tenant-defined event shape if a platform typed contract does not exist yet. Name + JSON schema. Must not clash with a platform typed name.
-2. **Field mappings** — which form fields (or file metadata) map onto that event. Choose **Template ID** and **Event type**, **Load mapping**, edit **Mapping JSON**, **Save mapping**. A mapping only publishes once a **trigger** points at it.
-3. **Triggers** — when the API publishes: **ApplicationSubmitted** and **FileUploaded**. Event kind **Typed** or **Schema**, plus mapping id. **Save trigger** / **Remove**.
+FlexForms stores answers in its own database. Other teams often need a **copy of selected answers** (or file metadata) at the moment someone **submits a form** or **uploads a file**.
 
-Virus scanning always publishes a scan-requested event; that cannot be turned off here.
+This page tells the FlexForms **API**:
 
-If you do not have a reporting pipeline, you can leave Event mappings empty. “No triggers configured yet” means nothing extra is published on submit or upload.
+1. **What shape** the outbound message should have (schema event, or a platform “typed” contract).
+2. **Which form fields** (and platform facts such as application reference) go into that message (field mapping).
+3. **When** to send it (trigger).
+
+Nothing is sent until **all three** are in place for that form. Saving only a mapping, or only a schema, does not publish.
+
+Configuration is stored in TenantConfig for **this tenant only** (categories `SchemaEvents`, `EventMappings`, `EventTriggers`, Target **Shared** so the API can read them). Other tenants cannot see your mappings.
+
+If you have no reporting pipeline, leave the page empty. **No triggers configured yet** means submit and upload do not publish extra messages. Virus scanning still runs (see [12.15](#1215-virus-scanning-always-on)).
+
+### 12.2 Events in plain English
+
+| Everyday idea | What FlexForms calls it |
+|---------------|-------------------------|
+| “Something just happened that another system should hear about.” | An **event** (a message). |
+| “The named moment we care about.” | A **trigger**: `ApplicationSubmitted` or `FileUploaded`. |
+| “The label on the message so receivers know which recipe to use.” | **Event type** (for example `TransferApplicationSubmittedEvent` or `LsrpPlanSubmitted`). |
+| “The pigeon-holes in Azure that messages land in.” | A Service Bus **topic**. |
+| “A named inbox hanging off that pigeon-hole.” | A **subscription**. Your receiving app listens on a subscription, not on the topic itself. |
+| “A recipe the platform team already coded in CoreLibs.” | A **typed** event. |
+| “A recipe you invent for this tenant, described with JSON Schema.” | A **schema** event. |
+| “How form answers are copied into the message.” | A **field mapping**. |
+
+The FlexForms **Web** app is only the editor. The FlexForms **API** is the publisher. Your downstream app is the consumer.
+
+Publishing is **best-effort**. If Service Bus is down or mapping JSON is wrong, the user’s submit or upload **still succeeds**. Failures are logged on the API. Always test in a non-production environment first.
+
+### 12.3 Azure Service Bus for people who have never used it
+
+Azure Service Bus is a Microsoft cloud **message broker**. Think of it as a post office:
+
+1. FlexForms API **posts a letter** (publish / send).
+2. The letter goes into a **topic** (a named pile, for example `lsrp-plan-submitted`).
+3. Each interested system has a **subscription** (its own copy of that pile).
+4. That system **reads letters** from its subscription.
+
+You do **not** create a Service Bus namespace on this Admin page. The platform already points the API at a namespace via `MassTransit` settings (connection string or managed identity). Ask the platform team for:
+
+- Namespace name (looks like `something.servicebus.windows.net`)
+- Confirmation that the API identity can **Send** to topics
+- Confirmation that your consumer identity can **Listen** on subscriptions
+
+**Topics you usually do not create yourself** (platform / virus scan):
+
+| Topic name | Used for |
+|------------|----------|
+| `file-scanner-requests` | API asks ClamAV to scan an upload (`ScanRequestedEvent`) |
+| `file-scanner-results` | Scanner reports clean or infected (`ScanResultEvent`) |
+
+**Typed product topics** (from CoreLibs `TopicNames` — the Admin catalogue shows the exact name):
+
+| Example event type | Topic name today |
+|--------------------|------------------|
+| `TransferApplicationSubmittedEvent` | `transfer-application-submitted` |
+
+If the catalogue shows **(no topic resolved)** for a typed event, MassTransit will not know where to publish it. Raise that with the platform team; they need a matching `TopicNames` constant in CoreLibs.
+
+**Schema event topics** are **your** names. You choose `topicName` in the schema definition (for example `lsrp-plan-submitted`). That topic **must exist** in the **same** namespace the API uses. Production usually does **not** auto-create entities.
+
+Naming tips for a new topic:
+
+- Lowercase letters, numbers, hyphens
+- Unique in the namespace
+- Stable — changing `topicName` later means creating a new topic and moving consumers
+
+### 12.4 The three layers you must configure
+
+Work from the bottom of the page conceptually, even though the screen lists schema first:
+
+```text
+1. Schema event   (only if you are not using a platform typed event)
+        ↓
+2. Field mapping  (template + event type + mapping JSON)
+        ↓
+3. Trigger        (when to publish + kind Typed or Schema + mapping id)
+        ↓
+4. Service Bus    (topic exists; consumer has a subscription)
+```
+
+| Layer | TenantConfig category | What it does |
+|-------|----------------------|--------------|
+| Schema events | `SchemaEvents` | Names your message type and which topic to use |
+| Field mappings | `EventMappings` | Copies form/metadata into properties |
+| Triggers | `EventTriggers` | Binds a lifecycle moment to an event type |
+
+The Admin page writes those categories for you. You can also inspect them under [Tenant settings](#13-tenant-settings), but prefer this page.
+
+**A mapping does not publish by itself.** You must add a trigger that uses the same event type (and the same `mappingId` you put in the JSON).
+
+At runtime the API finds the mapping by **template id + event type**. Keep `mappingId` identical on the mapping and the trigger so operators can tell them apart; do not reuse the same event type with two different mapping ids on one template (only one mapping is stored per template per event type).
+
+### 12.5 Typed events vs schema events
+
+| | **Typed** | **Schema** |
+|---|-----------|------------|
+| Who defines the contract | Platform (CoreLibs messaging contracts) | You, on this page |
+| Where you see the list | Expand **Platform typed-event catalogue** | **Saved schema events** table |
+| Topic | From CoreLibs (`TopicNames`) | Your `topicName` |
+| Payload | Deserialised into a C# class | `SchemaEventEnvelope` with a dictionary `payload` |
+| When to use | The event already exists (for example Transfers submit) | Your product is not in CoreLibs yet |
+| Name clash | Reserved names | Must **not** equal a typed event name |
+
+**Promote later:** when a schema event is stable, the platform can add a typed CoreLibs event. You would then create a typed mapping and trigger and retire the schema one.
+
+**Do not** create a schema event named `ScanRequestedEvent`, `ScanResultEvent`, or any name already in the typed catalogue (for example `TransferApplicationSubmittedEvent`). The page will reject a clash with a typed name.
+
+### 12.6 Recommended order of work
+
+1. Agree with the receiving team: **submit**, **file upload**, or both; which fields they need.
+2. Decide **typed** (use catalogue) or **schema** (invent a name + topic).
+3. If schema: create the **topic and subscription** in Azure ([12.8](#128-create-the-service-bus-topic-and-subscription)), then **Save schema event**.
+4. Open **Field mappings**: choose the **template** and **event type**, **Load mapping**, paste JSON, **Save mapping**.
+5. Add a **Trigger** (`ApplicationSubmitted` and/or `FileUploaded`), kind **Typed** or **Schema**, mapping id matching the JSON, **Save trigger**.
+6. Submit a test application (or upload a test file) in a non-prod tenant.
+7. Confirm a message appears on the subscription (Azure Portal **peek**, or your consumer logs).
+8. Ask the platform team to **Refresh** tenant configuration if a second API instance looks stale (this page already calls refresh on save).
+
+### 12.7 Schema events — what to type on the page
+
+**Schema event type name** is the `MessageType` consumers filter on. Use PascalCase without spaces, for example `LsrpPlanSubmitted`. This is **not** the Azure topic name.
+
+**Schema definition JSON** must be a JSON **object** with at least:
+
+| Property | Required | Meaning |
+|----------|----------|---------|
+| `topicName` | Yes | Exact Azure topic name |
+| `jsonSchema` | Yes | JSON Schema describing `payload` for humans and consumers. **The API does not validate the live payload against this schema at publish time.** |
+| `version` | No | Defaults to `1.0` if omitted. Copied onto the envelope and `SchemaVersion` header |
+| `description` | No | Shown in the saved table |
+
+Example definition (copy and adapt):
+
+```json
+{
+  "topicName": "lsrp-plan-submitted",
+  "version": "1.0",
+  "description": "LSRP plan submitted for reporting",
+  "jsonSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [ "applicationReference", "localAuthorityName" ],
+    "properties": {
+      "applicationReference": { "type": "string" },
+      "localAuthorityName": { "type": "string" },
+      "submittedOn": { "type": "string", "format": "date-time" },
+      "submittedByEmail": { "type": "string" }
+    }
+  }
+}
+```
+
+Click **Save schema event**. To change an existing one, **Edit definition**, then **Replace schema event**.
+
+`jsonSchema` is your contract with developers. Keep it in sync with `fieldMappings` keys.
+
+### 12.8 Create the Service Bus topic and subscription
+
+Do this in **Azure Portal** (or Bicep/Terraform) on the **same namespace** the API uses.
+
+#### Topic (schema events)
+
+1. Open the Service Bus **namespace**.
+2. **Topics** → **+ Topic**.
+3. **Name** = the `topicName` value (example `lsrp-plan-submitted`). Must match character-for-character.
+4. Leave default size/TTL unless the platform team specifies otherwise.
+5. Create.
+
+For **typed** events, the topic should already exist (example `transfer-application-submitted`). Do not invent a different name.
+
+#### Subscription (your consumer)
+
+1. Open the topic.
+2. **Subscriptions** → **+ Subscription**.
+3. Name it after the consuming app, for example `lsrp-reporting` or `data-warehouse`.
+4. Create.
+
+Each extra consumer needs its **own** subscription so they do not steal each other’s messages.
+
+#### Access
+
+| Who | Needs |
+|-----|--------|
+| FlexForms API | **Send** on the topic (namespace-level send is common) |
+| Your function / App Service / Logic App | **Listen** on the subscription (SAS policy or Azure RBAC `Azure Service Bus Data Receiver`) |
+
+Connection strings belong in the **consumer** app settings, not in FlexForms Admin.
+
+#### Optional: SQL filter on the subscription
+
+Schema messages set header `MessageType` to your event type name and `EventKind` to `Schema`. If several schema events share one topic (not recommended), a subscription filter can be `MessageType = 'LsrpPlanSubmitted'`. Prefer **one topic per schema event**.
+
+Typed messages set custom property `eventKind` = `Typed` and `serviceName` = `extapi-{TenantName}` (tenant name from TenantConfig, not the hostname).
+
+### 12.9 Field mappings — how answers become a message
+
+1. **Template ID** — only templates in **this tenant’s catalogue**.
+2. **Event type** — typed catalogue name or a saved schema event name.
+3. **Load mapping** — empty editor, or the last saved JSON.
+4. Edit **Mapping JSON**.
+5. **Save mapping**.
+
+The page may save the mapping under both the API template **GUID** and the schema’s string `templateId` (for example `form-001`) so submit-time lookup works either way.
+
+For **typed** events, expand **Expected properties** after load. Extra property names in JSON produce a **warning** (not a hard error). Missing properties are omitted if the source is empty.
+
+`sourceFieldId` for form answers must match the template field `fieldId` ([Form Template Designer Manual](Form-Template-Designer-Manual.md)).
+
+### 12.10 Mapping JSON reference
+
+Top-level object:
+
+```json
+{
+  "mappingId": "lsrp-plan-submitted-v1",
+  "eventType": "LsrpPlanSubmitted",
+  "description": "Optional note for other admins",
+  "fieldMappings": {
+    "propertyNameOnTheEvent": { }
+  }
+}
+```
+
+| Field | Rules |
+|-------|--------|
+| `mappingId` | Required. Use the same string on the trigger. |
+| `eventType` | Must match the dropdown (the page fills it if you omit it). |
+| `fieldMappings` | Required, non-empty. Keys = property names on the typed class **or** keys inside the schema `payload`. |
+
+Each entry in `fieldMappings` is a **source** object:
+
+| `sourceType` | What it reads | Extra fields |
+|--------------|---------------|--------------|
+| `DirectField` | One form answer | `sourceFieldId` |
+| `ComplexFieldProperty` | Nested value on a complex/autocomplete field | `sourceFieldId`, `nestedPath` (for example `ukprn`) |
+| `Metadata` | Platform facts, not a question | `sourceFieldId` = a metadata key ([12.11](#1211-worked-examples)) |
+| `Static` | Fixed or generated value | `transformationType`: `currentDateTime` / `currentDate`, or `defaultValue` |
+| `Computed` | Several fields combined | `sourceFieldIds`, `transformationType`: `concatenate`, `sum`, `count`, `any`, `checkEquals` (needs `transformationConfig.compareValue`) |
+| `Collection` | Repeating / collection-flow answers | `collectionMapping` (see below) |
+
+Optional on any source: `defaultValue` (used when empty, depending on source type).
+
+**Collection** (`sourceType`: `Collection`):
+
+```json
+"academies": {
+  "sourceType": "Collection",
+  "collectionMapping": {
+    "sourceCollectionFieldId": "detailsOfAcademies",
+    "extractFirst": false,
+    "itemMappings": {
+      "ukprn": {
+        "sourceType": "ComplexFieldProperty",
+        "sourceFieldId": "trustsSearch-field-flow",
+        "nestedPath": "ukprn"
+      }
+    }
+  }
+}
+```
+
+Set `extractFirst` true and `nestedPath` to pull a single nested value from the first row instead of an array.
+
+Empty mapped values are **skipped** (the property is omitted), except where collection mapping returns an empty list.
+
+### 12.11 Worked examples
+
+#### A. Schema event on submit (typical new product)
+
+Trigger: `ApplicationSubmitted`, kind `Schema`.
+
+```json
+{
+  "mappingId": "lsrp-plan-submitted-v1",
+  "eventType": "LsrpPlanSubmitted",
+  "description": "Reporting feed when a plan is submitted",
+  "fieldMappings": {
+    "applicationReference": {
+      "sourceType": "Metadata",
+      "sourceFieldId": "applicationReference"
+    },
+    "applicationId": {
+      "sourceType": "Metadata",
+      "sourceFieldId": "applicationId"
+    },
+    "localAuthorityName": {
+      "sourceType": "DirectField",
+      "sourceFieldId": "localAuthorityName"
+    },
+    "submittedByEmail": {
+      "sourceType": "Metadata",
+      "sourceFieldId": "submittedByEmail"
+    },
+    "submittedOn": {
+      "sourceType": "Metadata",
+      "sourceFieldId": "submittedOn"
+    }
+  }
+}
+```
+
+#### B. Typed Transfers submit
+
+Use event type `TransferApplicationSubmittedEvent` (kind **Typed**). Map **only** properties that exist on that contract (see **Expected properties** on the page). Topic is `transfer-application-submitted`. Your consumer must understand the CoreLibs event class, not `SchemaEventEnvelope`.
+
+#### C. File uploaded (schema or typed)
+
+Trigger: `FileUploaded`. Metadata keys that exist **only** on this trigger:
+
+| `sourceFieldId` | Meaning |
+|-----------------|--------|
+| `fileId` | File GUID |
+| `fileName` | Stored name |
+| `originalFileName` | Name the user uploaded |
+| `filePath` | Storage path without SAS |
+| `fileUri` | Read URI (short-lived SAS in hosted environments; `file://` locally). Prefer `filePath` / `fileId` if consumers should not receive a download URL |
+| `fileHash` | Content hash |
+| `fileSize` | Bytes |
+| `uploaderUserId` | Uploader GUID |
+| `uploaderEmail` | When known |
+| `uploadedOn` | UTC |
+
+Always available on **both** triggers: `applicationId`, `applicationReference`.
+
+Submit-only metadata: `submittedByUserId`, `submittedByEmail`, `submittedByFullName`, `submittedOn`.
+
+Example fragment:
+
+```json
+"fileName": { "sourceType": "Metadata", "sourceFieldId": "originalFileName" },
+"downloadUrl": { "sourceType": "Metadata", "sourceFieldId": "fileUri" },
+"schoolName": { "sourceType": "DirectField", "sourceFieldId": "schoolName" }
+```
+
+#### D. Static timestamp and concatenated fields
+
+```json
+"exportedAt": {
+  "sourceType": "Static",
+  "transformationType": "currentDateTime"
+},
+"fullName": {
+  "sourceType": "Computed",
+  "sourceFieldIds": [ "firstName", "lastName" ],
+  "transformationType": "concatenate"
+}
+```
+
+### 12.12 Triggers — when the API actually publishes
+
+| Trigger | Fires when |
+|---------|------------|
+| `ApplicationSubmitted` | The applicant (or an admin completing on their behalf) **submits** the application |
+| `FileUploaded` | A file is stored on an application (each upload can publish) |
+
+Fields on **Save trigger**:
+
+| Field | Meaning |
+|-------|---------|
+| Trigger | `ApplicationSubmitted` or `FileUploaded` |
+| Event kind | `Typed` or `Schema` — must match how you defined the event |
+| Event type | Catalogue or schema name |
+| Mapping ID | Same string as `mappingId` in the JSON |
+
+You can bind **more than one** event to the same trigger (array). Saving the same event type again **replaces** that binding.
+
+**Remove** deletes that trigger + event type pair. It does not delete the mapping or schema.
+
+Wrong kind (Schema trigger for a typed-only name, or Typed for a schema-only name) will fail at publish: typed lookup will not find a CoreLibs class, schema lookup will not find `SchemaEvents`.
+
+Legacy: old tenants might still have `ApplicationSubmission:PublishEvent` in Tenant Settings. New work should use **Triggers** on this page. The API still honours the legacy section for submit until you migrate.
+
+### 12.13 What the published message looks like
+
+#### Typed
+
+- Body: JSON for the CoreLibs event type.
+- MassTransit entity: the CoreLibs topic (example `transfer-application-submitted`).
+- Custom properties: `serviceName` = `extapi-{TenantName}`, `eventKind` = `Typed`.
+
+#### Schema
+
+Body is a **`SchemaEventEnvelope`**:
+
+```json
+{
+  "messageType": "LsrpPlanSubmitted",
+  "version": "1.0",
+  "topicName": "lsrp-plan-submitted",
+  "payload": {
+    "applicationReference": "LSRP-1001",
+    "localAuthorityName": "Example Council"
+  },
+  "metadata": {
+    "applicationId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+    "applicationReference": "LSRP-1001",
+    "templateId": "11111111-2222-3333-4444-555555555555"
+  }
+}
+```
+
+Headers include `MessageType`, `EventKind` (`Schema`), `serviceName`, `TenantId`, `TenantName`, and `SchemaVersion` when set.
+
+`payload` is only the keys you mapped. Envelope `metadata` always includes application id, reference, and template id even if you did not map them.
+
+### 12.14 How a downstream system should consume it
+
+Typical pattern:
+
+1. Azure Function, App Service, or Logic App with a Service Bus **subscription** trigger.
+2. Connection to the **same namespace**.
+3. If **schema**: deserialize `SchemaEventEnvelope`, read `payload`, optionally ignore messages whose `messageType` is unknown.
+4. If **typed**: use CoreLibs `Messaging.Contracts` (or equivalent JSON) for that event class.
+5. Be **idempotent** — retries can deliver the same message more than once.
+6. Do not block the FlexForms user; this is asynchronous.
+
+FlexForms Web does **not** subscribe to your reporting topics. It only consumes **scan results** (`file-scanner-results`) for malware notifications.
+
+### 12.15 Virus scanning (always on)
+
+Every upload still publishes `ScanRequestedEvent` to `file-scanner-requests`. You **cannot** disable that on this page (`ScanRequestedEvent` is rejected as a trigger event type). Infected files are handled by the platform scan result pipeline, separate from your reporting events.
+
+### 12.16 Who can change this
+
+**Admin** and **SuperAdmin** of the current tenant. Custom roles (Template Manager, User Manager) do not get this card unless they are also Admin.
+
+After save, the page refreshes tenant configuration so the API picks up changes without a full platform restart. If another API instance still looks old, use Tenant Settings **Refresh settings** or wait for the provider refresh interval.
+
+### 12.17 Event mappings checklist
+
+- [ ] Receiving team agreed fields and trigger (submit and/or upload)
+- [ ] Typed: topic exists (catalogue **Topic** column)
+- [ ] Schema: `topicName` created in Azure; subscription created; send/listen rights granted
+- [ ] Schema saved; name does not clash with typed events
+- [ ] Mapping saved for the correct **template** and **event type**
+- [ ] `mappingId` matches the trigger
+- [ ] Trigger kind is `Typed` or `Schema` correctly
+- [ ] Test submit/upload in non-prod; message peeked on the subscription
+- [ ] Consumer handles empty omitted properties and duplicate delivery
+
+### 12.18 Troubleshooting event mappings
+
+| What you see | What to check |
+|--------------|----------------|
+| No messages after submit | Is there an `ApplicationSubmitted` trigger? Mapping for that template + event type? Kind matching typed vs schema? |
+| No messages after upload | Need a `FileUploaded` trigger; submit trigger will not fire on upload |
+| Schema publish skipped in API logs | `SchemaEvents` missing or `topicName` empty; trigger kind not `Schema` |
+| Typed publish skipped | Event type not in CoreLibs catalogue; trigger kind not `Typed` |
+| Topic not found / unauthorized | Topic name mismatch; wrong namespace; API has no Send |
+| Consumer never fires | No subscription; listening to a different topic; competing consumer on the only subscription |
+| Empty payload properties | `fieldId` typo; metadata key only exists on the other trigger; empty answers are omitted |
+| Warning about unknown properties | Typed mapping keys that are not on the C# contract |
+| Cannot save schema name | Name collides with a typed event |
+| Still using old mapping | Refresh tenant config; clear that you saved under this tenant’s hostname |
+
+API logs (Application Insights) search for `Published schema event`, `Published typed`, `No EventTriggers configured`, `Schema event ... is not defined`, `Event type ... is not a known platform event`.
 
 ---
+
 
 ## 13. Tenant settings
 
@@ -771,6 +1243,7 @@ If you need a second tenant administrator, ask a SuperAdmin to assign the Admin 
 | Caseworker sees Applications in the nav but cannot list | They need `Application:Any:Read` (Create Caseworker role) and usually `ApplicationFiles:Any:Read` for files. They may also need template read for custom statuses. |
 | Dashboard missing a custom column | Check `fieldId` matches the question, you have no more than three field columns, and you saved a new template version. Older applications can show blank cells. |
 | Grant to all users succeeded but the banner showed zeros | Fixed in a recent release; counts should match people actually updated. |
+| Submit succeeded but reporting never received a message | See [12.18 Troubleshooting event mappings](#1218-troubleshooting-event-mappings). Check triggers, mapping, Service Bus topic/subscription, and API logs. |
 
 
 ---
@@ -788,6 +1261,15 @@ If you need a second tenant administrator, ask a SuperAdmin to assign the Admin 
 | **Target (Shared / Api / Web)** | Which app a Tenant Settings category applies to. |
 | **Tenant** | One organisation’s isolated environment. |
 | **Template** | The form definition, including versions. |
+| **Azure Service Bus (ASB)** | Cloud post office: FlexForms **sends** messages; other apps **read** them from a subscription. |
+| **Event kind** | **Typed** (platform C# contract) or **Schema** (tenant JSON envelope). |
+| **Event type** | Name on the message (`TransferApplicationSubmittedEvent`, `LsrpPlanSubmitted`, …). |
+| **Field mapping** | JSON that copies form answers / metadata onto event properties. Does not publish until a trigger exists. |
+| **mappingId** | Label shared by mapping JSON and the trigger. Runtime still loads by template + event type. |
+| **Schema event** | Tenant-defined event: type name, `topicName`, JSON Schema. Published as `SchemaEventEnvelope`. |
+| **Subscription** | Named inbox on a topic. Each consumer app needs its own. |
+| **Topic** | Named pile of messages in Service Bus. Typed names come from CoreLibs; schema names are yours. |
+| **Trigger** | `ApplicationSubmitted` or `FileUploaded` plus event kind, event type, and mapping id. |
 | **Typed event** | A platform-defined Service Bus contract. Opposite of a tenant **schema event**. |
 
 ---

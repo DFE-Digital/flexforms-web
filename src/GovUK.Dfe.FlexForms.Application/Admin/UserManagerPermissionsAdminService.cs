@@ -174,8 +174,7 @@ public sealed class UserManagerPermissionsAdminService(
     {
         try
         {
-            var users = await usersClient.GetTenantUsersAsync(cancellationToken);
-            var user = users?.FirstOrDefault(u => u.UserId == state.UserId);
+            var user = await TenantUserDirectory.GetByIdAsync(usersClient, state.UserId, cancellationToken);
             if (user is null)
                 return AdminPageOutcome.Redirect(errorMessage: UserManagerPermissionsMessages.UserNotFound);
 

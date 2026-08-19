@@ -10,7 +10,7 @@
 
         <h1 class="govuk-heading-xl">Contributor management</h1>
         <p class="govuk-body">
-            Look up contributors for an application by its reference number.
+            Look up who currently has access to an application, or look up a user by email to see the applications they created and who they invited.
         </p>
         <div class="govuk-inset-text">
             Application owners manage invite and remove from the application task list.
@@ -49,12 +49,12 @@
             </div>
         }
 
+        <form method="post" novalidate>
         <div class="govuk-summary-card">
             <div class="govuk-summary-card__title-wrapper">
                 <h2 class="govuk-summary-card__title">Find an application</h2>
             </div>
             <div class="govuk-summary-card__content">
-                <form method="post">
                     <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.ReferenceNumber)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
                         <label class="govuk-label govuk-label--m" asp-for="ReferenceNumber">Application reference number</label>
                         <div class="govuk-hint">Enter the full reference shown on the application</div>
@@ -65,10 +65,29 @@
                         <input class="govuk-input govuk-!-width-one-half @(ViewData.ModelState[nameof(Model.ReferenceNumber)]?.Errors.Any() == true ? "govuk-input--error" : "")"
                                asp-for="ReferenceNumber" id="ReferenceNumber" autocomplete="off" />
                     </div>
-                    <button type="submit" class="govuk-button" data-module="govuk-button">Look up contributors</button>
-                </form>
+                    <button type="submit" class="govuk-button" data-module="govuk-button" asp-page-handler="LookupByReference">Look up contributors</button>
             </div>
         </div>
+
+        <div class="govuk-summary-card">
+            <div class="govuk-summary-card__title-wrapper">
+                <h2 class="govuk-summary-card__title">Find a user</h2>
+            </div>
+            <div class="govuk-summary-card__content">
+                    <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.Email)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                        <label class="govuk-label govuk-label--m" asp-for="Email">Email address</label>
+                        <div class="govuk-hint">Enter the email of the person whose applications and invites you want to see</div>
+                        @if (ViewData.ModelState[nameof(Model.Email)]?.Errors.FirstOrDefault() is { } emailError)
+                        {
+                            <p class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @emailError.ErrorMessage</p>
+                        }
+                        <input class="govuk-input govuk-!-width-one-half @(ViewData.ModelState[nameof(Model.Email)]?.Errors.Any() == true ? "govuk-input--error" : "")"
+                               asp-for="Email" id="Email" type="email" autocomplete="off" />
+                    </div>
+                    <button type="submit" class="govuk-button" data-module="govuk-button" asp-page-handler="LookupByEmail">Look up applications and invites</button>
+            </div>
+        </div>
+        </form>
 
         @if (Model.LookupPerformed && !Model.HasError)
         {
@@ -115,6 +134,132 @@
                     Open full invite and remove UI
                 </a>
             </p>
+        }
+
+        @if (Model.EmailLookupPerformed && !Model.HasError)
+        {
+            <h2 class="govuk-heading-l">Applications created by this user</h2>
+            <p class="govuk-body">
+                <strong>@(string.IsNullOrWhiteSpace(Model.LookedUpUserName) ? Model.LookedUpUserEmail : Model.LookedUpUserName)</strong>
+                · @Model.LookedUpUserEmail
+                · User ID <code>@Model.LookedUpUserId</code>
+            </p>
+
+            @if (Model.CreatedApplications.Count == 0)
+            {
+                <p class="govuk-body">This user has not created any applications.</p>
+            }
+            else
+            {
+                <p class="govuk-body">
+                    Showing @(((Model.CurrentPage - 1) * Model.PageSize) + 1)
+                    to @(Math.Min(Model.CurrentPage * Model.PageSize, Model.TotalCount))
+                    of @Model.TotalCount applications.
+                </p>
+                @foreach (var application in Model.CreatedApplications)
+                {
+                    <div class="govuk-summary-card">
+                        <div class="govuk-summary-card__title-wrapper">
+                            <h3 class="govuk-summary-card__title">
+                                @application.ApplicationReference
+                                @if (!string.IsNullOrWhiteSpace(application.TemplateName))
+                                {
+                                    <text> · @application.TemplateName</text>
+                                }
+                            </h3>
+                        </div>
+                        <div class="govuk-summary-card__content">
+                            @if (application.Invitees.Count == 0)
+                            {
+                                <p class="govuk-body">No contributors have been invited to this application.</p>
+                            }
+                            else
+                            {
+                                <table class="govuk-table">
+                                    <caption class="govuk-table__caption govuk-table__caption--m">People invited</caption>
+                                    <thead class="govuk-table__head">
+                                        <tr class="govuk-table__row">
+                                            <th scope="col" class="govuk-table__header">Name</th>
+                                            <th scope="col" class="govuk-table__header">Email</th>
+                                            <th scope="col" class="govuk-table__header">User ID</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="govuk-table__body">
+                                        @foreach (var invitee in application.Invitees)
+                                        {
+                                            <tr class="govuk-table__row">
+                                                <td class="govuk-table__cell">
+                                                    @(string.IsNullOrWhiteSpace(invitee.Name) ? "—" : invitee.Name)
+                                                </td>
+                                                <td class="govuk-table__cell">
+                                                    <a class="govuk-link" href="mailto:@invitee.Email">@invitee.Email</a>
+                                                </td>
+                                                <td class="govuk-table__cell">
+                                                    <code>@invitee.UserId</code>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                            <p class="govuk-body">
+                                <a class="govuk-link" href="/applications/@Uri.EscapeDataString(application.ApplicationReference)/contributors">
+                                    Open full invite and remove UI
+                                </a>
+                            </p>
+                        </div>
+                    </div>
+                }
+
+                @if (Model.TotalPages > 1)
+                {
+                    <nav class="govuk-pagination" aria-label="Pagination">
+                        @if (Model.CurrentPage > 1)
+                        {
+                            <div class="govuk-pagination__prev">
+                                <a class="govuk-link govuk-pagination__link" href="@Model.BuildEmailLookupHref(Model.CurrentPage - 1)" rel="prev">
+                                    <svg class="govuk-pagination__icon govuk-pagination__icon--prev" xmlns="http://www.w3.org/2000/svg" height="13" width="15" focusable="false" aria-hidden="true" viewBox="0 0 15 13">
+                                        <path d="m6.5938-0.0078125-6.7266 6.7266 6.7441 6.4062 1.377-1.449-4.1856-3.9768h12.896v-2h-12.984l4.2931-4.293-1.414-1.414z" />
+                                    </svg>
+                                    <span class="govuk-pagination__link-title">Previous<span class="govuk-visually-hidden"> page</span></span>
+                                </a>
+                            </div>
+                        }
+                        <ul class="govuk-pagination__list">
+                            @for (var i = 1; i <= Model.TotalPages; i++)
+                            {
+                                if (i == Model.CurrentPage)
+                                {
+                                    <li class="govuk-pagination__item govuk-pagination__item--current">
+                                        <a class="govuk-link govuk-pagination__link" href="@Model.BuildEmailLookupHref(i)" aria-label="Page @i" aria-current="page">@i</a>
+                                    </li>
+                                }
+                                else if (i == 1 || i == Model.TotalPages || Math.Abs(i - Model.CurrentPage) <= 1)
+                                {
+                                    <li class="govuk-pagination__item">
+                                        <a class="govuk-link govuk-pagination__link" href="@Model.BuildEmailLookupHref(i)" aria-label="Page @i">@i</a>
+                                    </li>
+                                }
+                                else if (Math.Abs(i - Model.CurrentPage) == 2)
+                                {
+                                    <li class="govuk-pagination__item govuk-pagination__item--ellipses">&ctdot;</li>
+                                }
+                            }
+                        </ul>
+                        @if (Model.CurrentPage < Model.TotalPages)
+                        {
+                            <div class="govuk-pagination__next">
+                                <a class="govuk-link govuk-pagination__link" href="@Model.BuildEmailLookupHref(Model.CurrentPage + 1)" rel="next">
+                                    <span class="govuk-pagination__link-title">Next<span class="govuk-visually-hidden"> page</span></span>
+                                    <svg class="govuk-pagination__icon govuk-pagination__icon--next" xmlns="http://www.w3.org/2000/svg" height="13" width="15" focusable="false" aria-hidden="true" viewBox="0 0 15 13">
+                                        <path d="m8.107-0.0078125-1.4136 1.414 4.2926 4.293h-12.986v2h12.896l-4.1855 3.9766 1.377 1.4492 6.7441-6.4062-6.7246-6.7246z" />
+                                    </svg>
+                                </a>
+                            </div>
+                        }
+                    </nav>
+                }
+            }
         }
     </div>
 </div>

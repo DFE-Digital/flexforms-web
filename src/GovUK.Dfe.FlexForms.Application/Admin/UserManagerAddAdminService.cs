@@ -50,9 +50,7 @@ public sealed class UserManagerAddAdminService(
 
         try
         {
-            var existingUsers = await usersClient.GetTenantUsersAsync(cancellationToken);
-            if (existingUsers?.Any(u =>
-                    string.Equals(u.Email, state.Email.Trim(), StringComparison.OrdinalIgnoreCase)) == true)
+            if (await TenantUserDirectory.EmailExistsAsync(usersClient, state.Email, cancellationToken))
             {
                 return Stay(state, new FormValidationError(
                     nameof(UserManagerAddWorkState.Email),

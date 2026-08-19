@@ -1,11 +1,11 @@
 using AutoFixture;
-using AutoFixture.AutoNSubstitute;
 using AutoFixture.Kernel;
+using GovUK.Dfe.CoreLibs.Testing.AutoFixture.Customizations;
+using GovUK.Dfe.CoreLibs.Testing.Helpers;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using GovUK.Dfe.FlexForms.Web.Services;
 using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
@@ -23,11 +23,13 @@ public class FieldRendererServiceTests
 
     public FieldRendererServiceTests()
     {
-        _fixture = new Fixture().Customize(new AutoNSubstituteCustomization { ConfigureMembers = true });
+        _fixture = FixtureFactoryHelper.ConfigureFixtureFactory([
+            typeof(NSubstituteWithMembersCustomization),
+            typeof(OmitCircularReferenceCustomization),
+            typeof(RazorPageCustomization)
+        ]);
 
         _fixture.Customize<ValidationRule>(ob => ob.Without(rule => rule.Condition));
-        _fixture.Customize<ActionDescriptor>(ob =>
-            ob.Without(desc => desc.Parameters).Without(desc => desc.BoundProperties));
 
         _serviceProvider = Substitute.For<IServiceProvider>();
         _serviceProvider.GetService(Arg.Any<Type>())

@@ -1,7 +1,8 @@
 using System.Security.Claims;
 using AutoFixture;
-using AutoFixture.AutoNSubstitute;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
+using GovUK.Dfe.CoreLibs.Testing.AutoFixture.Customizations;
+using GovUK.Dfe.CoreLibs.Testing.Helpers;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Application.FormEngine;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
@@ -10,7 +11,6 @@ using GovUK.Dfe.FlexForms.Domain.FormEngine;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using GovUK.Dfe.FlexForms.Web.Pages.FormEngine;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
@@ -34,18 +34,13 @@ public class RenderFormModelTests
 
     public RenderFormModelTests()
     {
-        _fixture = new Fixture().Customize(new AutoNSubstituteCustomization { ConfigureMembers = true });
+        _fixture = FixtureFactoryHelper.ConfigureFixtureFactory([
+            typeof(NSubstituteWithMembersCustomization),
+            typeof(OmitCircularReferenceCustomization),
+            typeof(RazorPageCustomization)
+        ]);
 
         _fixture.Customize<Condition>(ob => ob.Without(rule => rule.Conditions));
-        _fixture.Customize<CompiledPageActionDescriptor>(ob => ob
-            .Without(desc => desc.HandlerMethods)
-            .Without(desc => desc.Parameters)
-            .Without(desc => desc.BoundProperties)
-        );
-        _fixture.Customize<ActionDescriptor>(ob => ob
-            .Without(desc => desc.Parameters)
-            .Without(desc => desc.BoundProperties)
-        );
 
         _session = Substitute.For<ISession>();
         _session.TryGetValue(Arg.Any<string>(), out Arg.Any<byte[]?>()).Returns(false);

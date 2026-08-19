@@ -18,10 +18,20 @@ public class UserManagerPermissionsAdminServiceTests
 
     public UserManagerPermissionsAdminServiceTests()
     {
-        _users.GetTenantUsersAsync(Arg.Any<CancellationToken>()).Returns(
-        [
-            new TenantUserDto { UserId = _userId, Name = "Ada", Email = "ada@example.com" }
-        ]);
+        _users.GetTenantUsersAsync(
+                Arg.Any<int?>(),
+                Arg.Any<int?>(),
+                Arg.Any<Guid?>(),
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new PagedResultOfTenantUserDto
+            {
+                Items = [new TenantUserDto { UserId = _userId, Name = "Ada", Email = "ada@example.com" }],
+                TotalCount = 1,
+                PageNumber = 1,
+                PageSize = 1,
+                TotalPages = 1
+            });
         _users.GetUserPermissionsAsync(_userId, Arg.Any<CancellationToken>()).Returns([]);
 
         _service = new UserManagerPermissionsAdminService(
