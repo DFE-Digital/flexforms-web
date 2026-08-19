@@ -32,9 +32,7 @@
 		<ProjectReference Include="..\GovUK.Dfe.FlexForms.Infrastructure\GovUK.Dfe.FlexForms.Infrastructure.csproj" />
 	</ItemGroup>
 
-	<Target Name="GetLatestPackages" BeforeTargets="Build" Condition="'$(SkipDockerCompose)' != 'true' and '$(LocalDevelopment)' == 'true'">
-		<Exec Command="dotnet nuget locals all --clear &amp;&amp; dotnet restore --force" />		
-	</Target>
+	
 	<Target Name="BuildDockerImage" AfterTargets="Build" Condition="'$(SkipDockerCompose)' != 'true' and '$(LocalDevelopment)' == 'true'">
 		<Exec Command="set &quot;REPO_PATH=$(SolutionDir)&quot; &amp;&amp; docker compose -f &quot;$(SolutionDir)docker-compose.yaml&quot; down" />
 
