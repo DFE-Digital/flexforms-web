@@ -1,6 +1,7 @@
 using System.Text;
 using AutoFixture;
-using AutoFixture.AutoNSubstitute;
+using GovUK.Dfe.CoreLibs.Testing.AutoFixture.Customizations;
+using GovUK.Dfe.CoreLibs.Testing.Helpers;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Web.Pages.Feedback;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
@@ -30,7 +31,10 @@ public abstract class FeedbackModelTests<T, TReq> where T : FeedbackModel<TReq> 
     
     protected FeedbackModelTests()
     {
-        Fixture = new Fixture().Customize(new AutoNSubstituteCustomization { ConfigureMembers = true });
+        Fixture = FixtureFactoryHelper.ConfigureFixtureFactory([
+            typeof(NSubstituteWithMembersCustomization),
+            typeof(HttpContextCustomization)
+        ]);
         
         FeedbackService = Fixture.Create<IFeedbackService>();
         Fixture.Inject(FeedbackService);

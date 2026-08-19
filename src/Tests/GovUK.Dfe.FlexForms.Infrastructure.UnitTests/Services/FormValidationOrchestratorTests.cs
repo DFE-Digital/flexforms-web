@@ -1,5 +1,6 @@
 using AutoFixture;
-using AutoFixture.AutoNSubstitute;
+using GovUK.Dfe.CoreLibs.Testing.AutoFixture.Customizations;
+using GovUK.Dfe.CoreLibs.Testing.Helpers;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using GovUK.Dfe.FlexForms.Infrastructure.Services;
@@ -14,7 +15,10 @@ public class FormValidationOrchestratorTests
 
     public FormValidationOrchestratorTests()
     {
-        _fixture = new Fixture().Customize(new AutoNSubstituteCustomization { ConfigureMembers = true });
+        _fixture = FixtureFactoryHelper.ConfigureFixtureFactory([
+            typeof(NSubstituteWithMembersCustomization),
+            typeof(OmitCircularReferenceCustomization)
+        ]);
         
         _fixture.Customize<Condition>(ob => ob.Without(rule => rule.Conditions));
 
