@@ -10,7 +10,7 @@
 
         <h1 class="govuk-heading-xl">Contributor management</h1>
         <p class="govuk-body">
-            Look up contributors for an application by its reference number.
+            Look up who currently has access to an application, or look up a user by email to see the applications they created and who they invited.
         </p>
         <div class="govuk-inset-text">
             Application owners manage invite and remove from the application task list.
@@ -49,12 +49,12 @@
             </div>
         }
 
+        <form method="post" novalidate>
         <div class="govuk-summary-card">
             <div class="govuk-summary-card__title-wrapper">
                 <h2 class="govuk-summary-card__title">Find an application</h2>
             </div>
             <div class="govuk-summary-card__content">
-                <form method="post">
                     <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.ReferenceNumber)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
                         <label class="govuk-label govuk-label--m" asp-for="ReferenceNumber">Application reference number</label>
                         <div class="govuk-hint">Enter the full reference shown on the application</div>
@@ -65,10 +65,29 @@
                         <input class="govuk-input govuk-!-width-one-half @(ViewData.ModelState[nameof(Model.ReferenceNumber)]?.Errors.Any() == true ? "govuk-input--error" : "")"
                                asp-for="ReferenceNumber" id="ReferenceNumber" autocomplete="off" />
                     </div>
-                    <button type="submit" class="govuk-button" data-module="govuk-button">Look up contributors</button>
-                </form>
+                    <button type="submit" class="govuk-button" data-module="govuk-button" asp-page-handler="LookupByReference">Look up contributors</button>
             </div>
         </div>
+
+        <div class="govuk-summary-card">
+            <div class="govuk-summary-card__title-wrapper">
+                <h2 class="govuk-summary-card__title">Find a user</h2>
+            </div>
+            <div class="govuk-summary-card__content">
+                    <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.Email)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                        <label class="govuk-label govuk-label--m" asp-for="Email">Email address</label>
+                        <div class="govuk-hint">Enter the email of the person whose applications and invites you want to see</div>
+                        @if (ViewData.ModelState[nameof(Model.Email)]?.Errors.FirstOrDefault() is { } emailError)
+                        {
+                            <p class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @emailError.ErrorMessage</p>
+                        }
+                        <input class="govuk-input govuk-!-width-one-half @(ViewData.ModelState[nameof(Model.Email)]?.Errors.Any() == true ? "govuk-input--error" : "")"
+                               asp-for="Email" id="Email" type="email" autocomplete="off" />
+                    </div>
+                    <button type="submit" class="govuk-button" data-module="govuk-button" asp-page-handler="LookupByEmail">Look up applications and invites</button>
+            </div>
+        </div>
+        </form>
 
         @if (Model.LookupPerformed && !Model.HasError)
         {
@@ -115,6 +134,78 @@
                     Open full invite and remove UI
                 </a>
             </p>
+        }
+
+        @if (Model.EmailLookupPerformed && !Model.HasError)
+        {
+            <h2 class="govuk-heading-l">Applications created by this user</h2>
+            <p class="govuk-body">
+                <strong>@(string.IsNullOrWhiteSpace(Model.LookedUpUserName) ? Model.LookedUpUserEmail : Model.LookedUpUserName)</strong>
+                · @Model.LookedUpUserEmail
+                · User ID <code>@Model.LookedUpUserId</code>
+            </p>
+
+            @if (Model.CreatedApplications.Count == 0)
+            {
+                <p class="govuk-body">This user has not created any applications.</p>
+            }
+            else
+            {
+                @foreach (var application in Model.CreatedApplications)
+                {
+                    <div class="govuk-summary-card">
+                        <div class="govuk-summary-card__title-wrapper">
+                            <h3 class="govuk-summary-card__title">
+                                @application.ApplicationReference
+                                @if (!string.IsNullOrWhiteSpace(application.TemplateName))
+                                {
+                                    <text> · @application.TemplateName</text>
+                                }
+                            </h3>
+                        </div>
+                        <div class="govuk-summary-card__content">
+                            @if (application.Invitees.Count == 0)
+                            {
+                                <p class="govuk-body">No contributors have been invited to this application.</p>
+                            }
+                            else
+                            {
+                                <table class="govuk-table">
+                                    <caption class="govuk-table__caption govuk-table__caption--m">People invited</caption>
+                                    <thead class="govuk-table__head">
+                                        <tr class="govuk-table__row">
+                                            <th scope="col" class="govuk-table__header">Name</th>
+                                            <th scope="col" class="govuk-table__header">Email</th>
+                                            <th scope="col" class="govuk-table__header">User ID</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="govuk-table__body">
+                                        @foreach (var invitee in application.Invitees)
+                                        {
+                                            <tr class="govuk-table__row">
+                                                <td class="govuk-table__cell">
+                                                    @(string.IsNullOrWhiteSpace(invitee.Name) ? "—" : invitee.Name)
+                                                </td>
+                                                <td class="govuk-table__cell">
+                                                    <a class="govuk-link" href="mailto:@invitee.Email">@invitee.Email</a>
+                                                </td>
+                                                <td class="govuk-table__cell">
+                                                    <code>@invitee.UserId</code>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                            <p class="govuk-body">
+                                <a class="govuk-link" href="/applications/@Uri.EscapeDataString(application.ApplicationReference)/contributors">
+                                    Open full invite and remove UI
+                                </a>
+                            </p>
+                        </div>
+                    </div>
+                }
+            }
         }
     </div>
 </div>

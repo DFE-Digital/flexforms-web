@@ -1,4 +1,3 @@
-using System.ComponentModel.DataAnnotations;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Application.Admin;
 using GovUK.Dfe.FlexForms.Web.Security;
@@ -9,7 +8,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 
 /// <summary>
-/// Lookup application contributors by reference number for tenant admins.
+/// Lookup application contributors by reference number, or look up who a user invited by email.
 /// </summary>
 [Authorize(Policy = AdminAccessHelper.CanManageUsersPolicy)]
 public sealed class ContributorManagementModel(IContributorManagementAdmin contributorManagementAdmin) : PageModel
@@ -28,24 +27,56 @@ public sealed class ContributorManagementModel(IContributorManagementAdmin contr
 
     public IReadOnlyList<UserDto> Contributors { get; private set; } = [];
 
+    public bool EmailLookupPerformed { get; private set; }
+
+    public Guid? LookedUpUserId { get; private set; }
+
+    public string? LookedUpUserName { get; private set; }
+
+    public string? LookedUpUserEmail { get; private set; }
+
+    public IReadOnlyList<CreatedApplicationInviteSummary> CreatedApplications { get; private set; } = [];
+
     [BindProperty]
-    [Required(ErrorMessage = "Enter an application reference number")]
-    [StringLength(100)]
-    public string ReferenceNumber { get; set; } = string.Empty;
+    public string? ReferenceNumber { get; set; }
+
+    [BindProperty]
+    public string? Email { get; set; }
 
     public void OnGet()
     {
     }
 
-    public async Task<IActionResult> OnPostAsync(CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostLookupByReferenceAsync(CancellationToken cancellationToken)
     {
+        ModelState.Clear();
         ReferenceNumber = ReferenceNumber?.Trim() ?? string.Empty;
 
-        if (!ModelState.IsValid)
+        if (string.IsNullOrWhiteSpace(ReferenceNumber))
+        {
+            ModelState.AddModelError(nameof(ReferenceNumber), "Enter an application reference number");
             return Page();
+        }
 
         var state = new ContributorManagementWorkState { ReferenceNumber = ReferenceNumber };
         await contributorManagementAdmin.LookupAsync(state, cancellationToken);
+        ApplyWorkState(state);
+        return Page();
+    }
+
+    public async Task<IActionResult> OnPostLookupByEmailAsync(CancellationToken cancellationToken)
+    {
+        ModelState.Clear();
+        Email = Email?.Trim() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(Email))
+        {
+            ModelState.AddModelError(nameof(Email), "Enter an email address");
+            return Page();
+        }
+
+        var state = new ContributorManagementWorkState { Email = Email };
+        await contributorManagementAdmin.LookupByEmailAsync(state, cancellationToken);
         ApplyWorkState(state);
         return Page();
     }
@@ -57,6 +88,13 @@ public sealed class ContributorManagementModel(IContributorManagementAdmin contr
         ApplicationId = state.ApplicationId;
         TemplateName = state.TemplateName;
         Contributors = state.Contributors;
+        EmailLookupPerformed = state.EmailLookupPerformed;
+        LookedUpUserId = state.LookedUpUserId;
+        LookedUpUserName = state.LookedUpUserName;
+        LookedUpUserEmail = state.LookedUpUserEmail;
+        CreatedApplications = state.CreatedApplications;
+        Email = string.IsNullOrWhiteSpace(state.Email) ? Email : state.Email;
+        ReferenceNumber = string.IsNullOrWhiteSpace(state.ReferenceNumber) ? ReferenceNumber : state.ReferenceNumber;
         if (state.HasError)
         {
             HasError = true;

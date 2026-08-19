@@ -19,6 +19,18 @@ public sealed class ContributorManagementWorkState
 
     public IReadOnlyList<UserDto> Contributors { get; set; } = [];
 
+    public bool EmailLookupPerformed { get; set; }
+
+    public string Email { get; set; } = string.Empty;
+
+    public Guid? LookedUpUserId { get; set; }
+
+    public string? LookedUpUserName { get; set; }
+
+    public string? LookedUpUserEmail { get; set; }
+
+    public IReadOnlyList<CreatedApplicationInviteSummary> CreatedApplications { get; set; } = [];
+
     public bool HasError { get; set; }
 
     public string? ErrorMessage { get; set; }

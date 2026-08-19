@@ -408,7 +408,7 @@ Typical actions:
 
 Invite/remove of extra people on **one application** is done from that application’s task list when the template has `"contributorPattern": true`.
 
-Admins can also look up who is on an application at `/admin/contributor-management` (**Contributor management**). This page is not linked from the hub; use it if you have a reference number and need to see current contributors, then open the full invite UI if needed.
+Admins can also look up who is on an application, or look up a user by email to see the applications they created and who they invited, at **Admin → Users & Roles → Contributor management** (`/admin/contributor-management`).
 
 ---
 
