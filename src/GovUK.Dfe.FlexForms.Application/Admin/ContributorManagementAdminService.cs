@@ -66,62 +66,56 @@ public sealed class ContributorManagementAdminService(
     {
         state.EmailLookupPerformed = true;
         state.LookedUpUserEmail = state.Email;
+        state.PageSize = ContributorManagementWorkState.EmailLookupPageSize;
+        state.CurrentPage = Math.Max(1, state.CurrentPage);
 
         try
         {
-            var tenantUsers = await usersClient.GetTenantUsersAsync(cancellationToken);
-            var tenantUser = tenantUsers?
-                .FirstOrDefault(u => string.Equals(u.Email, state.Email, StringComparison.OrdinalIgnoreCase));
-
-            if (tenantUser is null)
-            {
-                state.HasError = true;
-                state.ErrorMessage = ContributorManagementMessages.UserNotFound;
-                state.CreatedApplications = [];
-                return;
-            }
-
-            var applications = await applicationsClient.GetApplicationsForUserAsync(
+            var lookup = await usersClient.GetCreatedApplicationsByEmailAsync(
                 state.Email,
-                includeSchema: false,
-                templateId: null,
                 cancellationToken);
 
-            var created = new List<CreatedApplicationInviteSummary>();
-            foreach (var listing in applications.Items ?? Array.Empty<ApplicationDto>())
-            {
-                var detail = await applicationsClient.GetApplicationByReferenceAsync(
-                    listing.ApplicationReference,
-                    cancellationToken);
-
-                if (detail.CreatedBy?.UserId != tenantUser.UserId)
-                    continue;
-
-                var contributors = await applicationsClient.GetContributorsAsync(
-                    detail.ApplicationId,
-                    includePermissionDetails: false,
-                    cancellationToken);
-
-                created.Add(new CreatedApplicationInviteSummary
+            var created = (lookup.Applications ?? [])
+                .OrderByDescending(a => a.DateCreated)
+                .Select(application => new CreatedApplicationInviteSummary
                 {
-                    ApplicationId = detail.ApplicationId,
-                    ApplicationReference = string.IsNullOrWhiteSpace(detail.ApplicationReference)
-                        ? listing.ApplicationReference
-                        : detail.ApplicationReference,
-                    TemplateName = detail.TemplateName,
-                    Invitees = contributors?
-                        .OrderBy(c => c.Email)
-                        .ThenBy(c => c.Name)
-                        .ToList() ?? []
-                });
-            }
-
-            state.LookedUpUserId = tenantUser.UserId;
-            state.LookedUpUserName = tenantUser.Name;
-            state.LookedUpUserEmail = string.IsNullOrWhiteSpace(tenantUser.Email) ? state.Email : tenantUser.Email;
-            state.CreatedApplications = created
-                .OrderBy(a => a.ApplicationReference)
+                    ApplicationId = application.ApplicationId,
+                    ApplicationReference = application.ApplicationReference,
+                    TemplateName = application.TemplateName,
+                    Invitees = (application.Invitees ?? [])
+                        .OrderBy(i => i.Email)
+                        .ThenBy(i => i.Name)
+                        .Select(invitee => new UserDto
+                        {
+                            UserId = invitee.UserId,
+                            Name = invitee.Name,
+                            Email = invitee.Email
+                        })
+                        .ToList()
+                })
                 .ToList();
+
+            state.LookedUpUserId = lookup.UserId;
+            state.LookedUpUserName = lookup.Name;
+            state.LookedUpUserEmail = string.IsNullOrWhiteSpace(lookup.Email) ? state.Email : lookup.Email;
+            state.TotalCount = created.Count;
+            state.TotalPages = state.TotalCount == 0
+                ? 0
+                : (int)Math.Ceiling(state.TotalCount / (double)ContributorManagementWorkState.EmailLookupPageSize);
+
+            if (state.TotalPages > 0 && state.CurrentPage > state.TotalPages)
+                state.CurrentPage = state.TotalPages;
+
+            state.CreatedApplications = created
+                .Skip((state.CurrentPage - 1) * ContributorManagementWorkState.EmailLookupPageSize)
+                .Take(ContributorManagementWorkState.EmailLookupPageSize)
+                .ToList();
+        }
+        catch (ExternalApplicationsException ex) when (ex.StatusCode == 404)
+        {
+            state.HasError = true;
+            state.ErrorMessage = ContributorManagementMessages.UserNotFound;
+            state.CreatedApplications = [];
         }
         catch (Exception ex)
         {

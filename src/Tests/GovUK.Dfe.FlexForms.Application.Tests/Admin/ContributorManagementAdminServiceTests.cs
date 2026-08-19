@@ -71,36 +71,32 @@ public class ContributorManagementAdminServiceTests
         var inviteeId = Guid.NewGuid();
         var state = new ContributorManagementWorkState { Email = "owner@example.test" };
 
-        _users.GetTenantUsersAsync(Arg.Any<CancellationToken>()).Returns(
-        [
-            new TenantUserDto
+        _users.GetCreatedApplicationsByEmailAsync("owner@example.test", Arg.Any<CancellationToken>())
+            .Returns(new UserCreatedApplicationsLookupDto
             {
                 UserId = userId,
                 Name = "Owner",
-                Email = "owner@example.test"
-            }
-        ]);
-        _applications.GetApplicationsForUserAsync("owner@example.test", false, null, Arg.Any<CancellationToken>())
-            .Returns(new PagedResultOfApplicationDto
-            {
-                Items =
+                Email = "owner@example.test",
+                Applications =
                 [
-                    new ApplicationDto { ApplicationId = applicationId, ApplicationReference = "REF-9" }
+                    new CreatedApplicationWithInviteesDto
+                    {
+                        ApplicationId = applicationId,
+                        ApplicationReference = "REF-9",
+                        TemplateName = "Transfers",
+                        DateCreated = DateTime.UtcNow,
+                        Invitees =
+                        [
+                            new ApplicationInviteeDto
+                            {
+                                UserId = inviteeId,
+                                Name = "Invited",
+                                Email = "invitee@example.test"
+                            }
+                        ]
+                    }
                 ]
             });
-        _applications.GetApplicationByReferenceAsync("REF-9", Arg.Any<CancellationToken>())
-            .Returns(new ApplicationDto
-            {
-                ApplicationId = applicationId,
-                ApplicationReference = "REF-9",
-                TemplateName = "Transfers",
-                CreatedBy = new UserDto { UserId = userId, Email = "owner@example.test", Name = "Owner" }
-            });
-        _applications.GetContributorsAsync(applicationId, false, Arg.Any<CancellationToken>())
-            .Returns(
-            [
-                new UserDto { UserId = inviteeId, Name = "Invited", Email = "invitee@example.test" }
-            ]);
 
         await _service.LookupByEmailAsync(state);
 
@@ -108,78 +104,64 @@ public class ContributorManagementAdminServiceTests
         Assert.False(state.HasError);
         Assert.Equal(userId, state.LookedUpUserId);
         Assert.Equal("owner@example.test", state.LookedUpUserEmail);
+        Assert.Equal(1, state.TotalCount);
         var created = Assert.Single(state.CreatedApplications);
         Assert.Equal("REF-9", created.ApplicationReference);
         var invitee = Assert.Single(created.Invitees);
         Assert.Equal(inviteeId, invitee.UserId);
         Assert.Equal("invitee@example.test", invitee.Email);
+        await _applications.DidNotReceiveWithAnyArgs()
+            .GetApplicationsForUserAsync(default!, default, default, default);
     }
 
     [Fact]
-    public async Task LookupByEmailAsync_ShouldIgnoreApplicationsTheUserDidNotCreate()
+    public async Task LookupByEmailAsync_ShouldPaginateApplications()
     {
-        var userId = Guid.NewGuid();
-        var state = new ContributorManagementWorkState { Email = "owner@example.test" };
+        var applications = Enumerable.Range(1, 12)
+            .Select(i => new CreatedApplicationWithInviteesDto
+            {
+                ApplicationId = Guid.NewGuid(),
+                ApplicationReference = $"REF-{i:00}",
+                DateCreated = DateTime.UtcNow.AddDays(-i)
+            })
+            .ToList();
 
-        _users.GetTenantUsersAsync(Arg.Any<CancellationToken>()).Returns(
-        [
-            new TenantUserDto { UserId = userId, Name = "Owner", Email = "owner@example.test" }
-        ]);
-        _applications.GetApplicationsForUserAsync("owner@example.test", false, null, Arg.Any<CancellationToken>())
-            .Returns(new PagedResultOfApplicationDto
+        _users.GetCreatedApplicationsByEmailAsync("owner@example.test", Arg.Any<CancellationToken>())
+            .Returns(new UserCreatedApplicationsLookupDto
             {
-                Items =
-                [
-                    new ApplicationDto { ApplicationReference = "REF-OTHER" }
-                ]
-            });
-        _applications.GetApplicationByReferenceAsync("REF-OTHER", Arg.Any<CancellationToken>())
-            .Returns(new ApplicationDto
-            {
-                ApplicationReference = "REF-OTHER",
-                CreatedBy = new UserDto { UserId = Guid.NewGuid(), Email = "someone-else@example.test" }
+                UserId = Guid.NewGuid(),
+                Name = "Owner",
+                Email = "owner@example.test",
+                Applications = applications
             });
 
-        await _service.LookupByEmailAsync(state);
+        var page1 = new ContributorManagementWorkState { Email = "owner@example.test", CurrentPage = 1 };
+        await _service.LookupByEmailAsync(page1);
 
-        Assert.Empty(state.CreatedApplications);
-        Assert.Equal(userId, state.LookedUpUserId);
+        Assert.Equal(12, page1.TotalCount);
+        Assert.Equal(2, page1.TotalPages);
+        Assert.Equal(10, page1.CreatedApplications.Count);
+        Assert.Equal("REF-01", page1.CreatedApplications[0].ApplicationReference);
+
+        var page2 = new ContributorManagementWorkState { Email = "owner@example.test", CurrentPage = 2 };
+        await _service.LookupByEmailAsync(page2);
+
+        Assert.Equal(2, page2.CreatedApplications.Count);
+        Assert.Equal("REF-11", page2.CreatedApplications[0].ApplicationReference);
+        Assert.Equal("REF-12", page2.CreatedApplications[1].ApplicationReference);
     }
 
     [Fact]
     public async Task LookupByEmailAsync_ShouldSetError_WhenUserIsUnknown()
     {
         var state = new ContributorManagementWorkState { Email = "missing@example.test" };
-        _users.GetTenantUsersAsync(Arg.Any<CancellationToken>()).Returns([]);
-
-        await _service.LookupByEmailAsync(state);
-
-        Assert.True(state.HasError);
-        Assert.Equal(ContributorManagementMessages.UserNotFound, state.ErrorMessage);
-        await _applications.DidNotReceiveWithAnyArgs()
-            .GetApplicationsForUserAsync(default!, default, default, default);
-    }
-
-    [Fact]
-    public async Task LookupByEmailAsync_ShouldNotLookUpApplications_WhenUserBelongsToAnotherTenant()
-    {
-        var state = new ContributorManagementWorkState { Email = "other-tenant@example.test" };
-        _users.GetTenantUsersAsync(Arg.Any<CancellationToken>()).Returns(
-        [
-            new TenantUserDto
-            {
-                UserId = Guid.NewGuid(),
-                Name = "Someone else",
-                Email = "this-tenant@example.test"
-            }
-        ]);
+        _users.GetCreatedApplicationsByEmailAsync("missing@example.test", Arg.Any<CancellationToken>())
+            .Throws(new ExternalApplicationsException("not found", 404, "err", null!, null!));
 
         await _service.LookupByEmailAsync(state);
 
         Assert.True(state.HasError);
         Assert.Equal(ContributorManagementMessages.UserNotFound, state.ErrorMessage);
         Assert.Empty(state.CreatedApplications);
-        await _applications.DidNotReceiveWithAnyArgs()
-            .GetApplicationsForUserAsync(default!, default, default, default);
     }
 }

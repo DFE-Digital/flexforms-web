@@ -7,6 +7,8 @@ namespace GovUK.Dfe.FlexForms.Application.Admin;
 /// </summary>
 public sealed class ContributorManagementWorkState
 {
+    public const int EmailLookupPageSize = 10;
+
     public string ReferenceNumber { get; set; } = string.Empty;
 
     public bool LookupPerformed { get; set; }
@@ -30,6 +32,14 @@ public sealed class ContributorManagementWorkState
     public string? LookedUpUserEmail { get; set; }
 
     public IReadOnlyList<CreatedApplicationInviteSummary> CreatedApplications { get; set; } = [];
+
+    public int CurrentPage { get; set; } = 1;
+
+    public int PageSize { get; set; } = ContributorManagementWorkState.EmailLookupPageSize;
+
+    public int TotalCount { get; set; }
+
+    public int TotalPages { get; set; }
 
     public bool HasError { get; set; }
 
