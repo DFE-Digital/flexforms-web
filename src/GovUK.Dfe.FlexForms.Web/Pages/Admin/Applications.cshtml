@@ -98,7 +98,7 @@
                                             <span class="govuk-visually-hidden">@app.ApplicationReference (opens in new tab)</span>
                                         </a>                            
 
-                                        <form id="app-delete-form" method="post">
+                                        <form id="app-delete-form" method="post" onsubmit="return confirm('Are you sure you want to delete this application?');">
                                             <button type="submit" class="govuk-link app-link-button" asp-page-handler="DeleteAction" 
                                             asp-route-applicationId="@app.ApplicationId" asp-route-selectedTemplateId="@Model.SelectedTemplateId">
                                                 Delete
