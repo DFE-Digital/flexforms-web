@@ -89,11 +89,20 @@ public sealed class ContributorManagementModel(IContributorManagementAdmin contr
             return Page();
         }
 
-        return RedirectToPage(new { email = Email, currentPage = 1 });
+        // EscapeDataString so '+' and other reserved characters survive the GET round-trip
+        // (application/x-www-form-urlencoded treats bare '+' as a space).
+        return Redirect(BuildEmailLookupPath(Email, currentPage: 1));
     }
 
     public string BuildEmailLookupHref(int page) =>
-        $"?email={Uri.EscapeDataString(Email ?? string.Empty)}&currentPage={page}";
+        BuildEmailLookupPath(Email ?? string.Empty, page);
+
+    /// <summary>
+    /// Builds the contributor-management lookup URL with a correctly encoded email.
+    /// Bare '+' must become %2B; otherwise query binding treats '+' as a space.
+    /// </summary>
+    public static string BuildEmailLookupPath(string email, int currentPage) =>
+        $"/admin/contributor-management?email={Uri.EscapeDataString(email)}&currentPage={currentPage}";
 
     private async Task LookupByEmailAsync(CancellationToken cancellationToken)
     {
