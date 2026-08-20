@@ -10,7 +10,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 /// <summary>
 /// Lookup application contributors by reference number, or look up who a user invited by email.
 /// </summary>
-[Authorize(Policy = AdminAccessHelper.CanManageUsersPolicy)]
+[Authorize(Roles = AdminAccessHelper.AuthorizeRoles)]
 public sealed class ContributorManagementModel(IContributorManagementAdmin contributorManagementAdmin) : PageModel
 {
     public bool HasError { get; private set; }

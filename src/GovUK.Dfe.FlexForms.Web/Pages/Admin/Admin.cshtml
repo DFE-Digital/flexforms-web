@@ -156,6 +156,9 @@
                             <a asp-page="/Admin/UserManager" class="govuk-button" data-module="govuk-button" id="go-to-user-manager-button">
                                 User Manager
                             </a>
+                        }
+                        @if (Model.IsFullAdmin)
+                        {
                             <a asp-page="/Admin/ContributorManagement" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="go-to-contributor-management-button">
                                 Contributor management
                             </a>
