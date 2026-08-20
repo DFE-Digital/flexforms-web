@@ -40,7 +40,7 @@ jobs:
           GIT_REF=${{ github.ref_name }}
           GIT_BRANCH=${GIT_REF##*/}
           INPUT="${{ github.event.inputs.environment }}"
-          ENVIRONMENT=${INPUT:-"development"}
+          ENVIRONMENT=${INPUT:-"test"}
           CHECKED_OUT_SHA="$(git log -1 '--format=format:%H')"
           echo "environment=${ENVIRONMENT}" >> $GITHUB_OUTPUT
           echo "environment-lower=${ENVIRONMENT,,}" >> $GITHUB_OUTPUT
