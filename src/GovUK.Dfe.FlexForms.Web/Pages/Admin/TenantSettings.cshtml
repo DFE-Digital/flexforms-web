@@ -38,6 +38,10 @@
             <strong>@(string.IsNullOrWhiteSpace(Model.TenantName) ? Model.TenantId.ToString() : Model.TenantName)</strong>.
             Secret values are shown decrypted here and encrypted when saved with Secret checked.
         </p>
+        <p class="govuk-hint">
+            <code>ApplicationTemplates</code> and <code>Template</code> (HostMappings) are SuperAdmin-only.
+            Mapped GUIDs must exist in EA and be legacy (<code>TenantId</code> null) or owned by this tenant.
+        </p>
         <p class="govuk-body">
             To switch interactive login without a platform restart, set Web
             <code>TestAuthentication:Enabled</code>, <code>EntraSso:Enabled</code>, and/or an explicit
@@ -289,6 +293,8 @@
                             </td>
                             <td class="govuk-table__cell">@setting.Target</td>
                             <td class="govuk-table__cell">
+                                @if (Model.CanEditTemplateMappingCategory(setting.Category))
+                                {
                                 <form method="post" asp-page-handler="Update">
                                     <input type="hidden" name="category" value="@setting.Category" />
                                     <input type="hidden" name="target" value="@setting.Target" />
@@ -348,6 +354,12 @@
                                         Delete
                                     </button>
                                 </form>
+                                }
+                                else
+                                {
+                                    <p class="govuk-hint">SuperAdmin only — HostMappings cannot be edited by tenant Admin.</p>
+                                    <pre class="govuk-body" style="white-space: pre-wrap; word-break: break-word;">@setting.SettingsJson</pre>
+                                }
                             </td>
                         </tr>
                     }
