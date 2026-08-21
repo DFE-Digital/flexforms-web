@@ -224,12 +224,10 @@
                                             </strong>
                                             break;
                                         case DashboardColumnResolver.SystemAction:
-                                            if(app.CalculatedStatus.Key != ApplicationStatus.Deleted) {    
-                                                <a href="/applications/@app.ApplicationReference" class="govuk-link">
-                                                    @action
-                                                    <span class="govuk-visually-hidden">@app.ApplicationReference</span>
-                                                </a>
-                                            }
+                                            <a href="/applications/@app.ApplicationReference" class="govuk-link">
+                                                @action
+                                                <span class="govuk-visually-hidden">@app.ApplicationReference</span>
+                                            </a>
                                             break;
                                         default:
                                             @(app.CustomColumnValues.TryGetValue(column.Key, out var customValue) ? customValue : string.Empty)

@@ -166,13 +166,10 @@ else if (!Model.HasError && Model.Applications.Any())
                         </strong>
                     </td>
                         <td class="govuk-table__cell">
-                            @if (app.CalculatedStatus.Key != ApplicationStatus.Deleted)
-                            {
-                                <a href="/applications/@app.ApplicationReference" class="govuk-link">
-                                    @action
-                                    <span class=govuk-visually-hidden>@app.ApplicationReference</span>
-                                </a>    
-                            }
+                            <a href="/applications/@app.ApplicationReference" class="govuk-link">
+                                @action
+                                <span class=govuk-visually-hidden>@app.ApplicationReference</span>
+                            </a>    
                         </td>
                 </tr>
             }
