@@ -54,11 +54,11 @@
 
         <h1 class="govuk-heading-xl">Organisation settings</h1>
         <p class="govuk-body">
-            Update display terminology, the site-wide notification banner, and dashboard listing options for
+            Update display terminology, the site-wide notification banner, and dashboard options for
             <strong>@(string.IsNullOrWhiteSpace(Model.TenantName) ? Model.TenantId.ToString() : Model.TenantName)</strong>.
         </p>
         <p class="govuk-hint">
-            Changes apply after save. You may need to refresh the page to see banner or terminology updates.
+            Changes apply after save. You may need to refresh the page to see banner, terminology, or dashboard text updates.
         </p>
 
         <form method="post">
@@ -128,7 +128,7 @@
                     <h2 class="govuk-summary-card__title">Dashboard</h2>
                 </div>
                 <div class="govuk-summary-card__content">
-                    <p class="govuk-body">Control listing page size and whether application filters are shown.</p>
+                    <p class="govuk-body">Control listing options and the text shown on the applications dashboard.</p>
 
                     <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.DashboardPageSize)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
                         <label class="govuk-label" asp-for="DashboardPageSize">Page size</label>
@@ -150,6 +150,39 @@
                                 </label>
                             </div>
                         </div>
+                    </div>
+
+                    <h3 class="govuk-heading-s">Dashboard text</h3>
+                    <p class="govuk-hint">Leave a field blank to keep the default text based on application terminology.</p>
+
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="DashboardMainHeading">Main heading</label>
+                        <div class="govuk-hint">For example Your visits</div>
+                        <input class="govuk-input" asp-for="DashboardMainHeading" id="DashboardMainHeading" autocomplete="off" />
+                    </div>
+
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="DashboardInProgressHeading">In-progress heading</label>
+                        <div class="govuk-hint">For example Visits in progress</div>
+                        <input class="govuk-input" asp-for="DashboardInProgressHeading" id="DashboardInProgressHeading" autocomplete="off" />
+                    </div>
+
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="DashboardStartNewHeading">Start new heading</label>
+                        <div class="govuk-hint">For example Start a new visit</div>
+                        <input class="govuk-input" asp-for="DashboardStartNewHeading" id="DashboardStartNewHeading" autocomplete="off" />
+                    </div>
+
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="DashboardStartNewHint">Start new hint</label>
+                        <div class="govuk-hint">Supporting text under the start new heading</div>
+                        <textarea class="govuk-textarea" asp-for="DashboardStartNewHint" id="DashboardStartNewHint" rows="3"></textarea>
+                    </div>
+
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="DashboardStartNewButtonText">Start new button text</label>
+                        <div class="govuk-hint">For example Start new visit</div>
+                        <input class="govuk-input" asp-for="DashboardStartNewButtonText" id="DashboardStartNewButtonText" autocomplete="off" />
                     </div>
                 </div>
             </div>

@@ -271,7 +271,7 @@ The cache refreshes immediately. Repeat for each base status you want to rename 
 
 There is **no Admin screen** for dashboard columns. You add them in the template JSON, then save a new version in Template Manager.
 
-The applications dashboard (`/applications/dashboard`) heading is **Your {plural}** (see [Organisation settings](#11-organisation-settings)). The table columns come from the template’s `"dashboard"` section.
+The applications dashboard (`/applications/dashboard`) heading defaults to **Your {plural}** and can be overridden in [Organisation settings](#11-organisation-settings). The table columns come from the template’s `"dashboard"` section.
 
 ![Dashboard table with a mix of system and field columns](images/08-dashboard-custom-columns.png)
 
@@ -560,7 +560,7 @@ This is the safe, form-based way to change how the service **looks and reads**. 
 
 ![Application terminology, Notification banner, Dashboard](images/13-organisation-settings.png)
 
-Lead copy: update display terminology, the site-wide notification banner, and dashboard listing options. You may need to refresh the browser after save to see banner or wording changes.
+Lead copy: update display terminology, the site-wide notification banner, and dashboard options. You may need to refresh the browser after save to see banner, wording, or dashboard text changes.
 
 Select **Save settings** at the bottom.
 
@@ -575,8 +575,8 @@ Customise how “application” is labelled across the service (headings, button
 
 Effects you will notice:
 
-- Dashboard title **Your reform plans**
-- **Start a new reform plan**
+- Dashboard title **Your reform plans** (unless overridden in Dashboard text)
+- **Start a new reform plan** (unless overridden in Dashboard text)
 - Filter panel **Filter reform plans**
 - Admin applications list still says “applications” in the page title; day-to-day user language follows these terms
 
@@ -592,14 +592,19 @@ Show a GOV.UK notification banner on **every page** (for example “This is a te
 
 ![Banner under the header on the dashboard](images/14-notification-banner.png)
 
-### 11.3 Dashboard listing
+### 11.3 Dashboard
 
 | Field | Purpose |
 |-------|---------|
 | **Page size** | How many rows per page (1 to 500, default 50) |
 | **Enable application filters** | Shows the filter panel (reference, status, dates) |
+| **Main heading** | Dashboard H1 (for example `Your visits`). Leave blank to use **Your {plural}** |
+| **In-progress heading** | Heading above the list (for example `Visits in progress`). Leave blank to use **{Plural} in progress** |
+| **Start new heading** | Heading for the start section. Leave blank to use **Start a new {singular}** |
+| **Start new hint** | Supporting text under that heading. Leave blank for the default lead-applicant sentence |
+| **Start new button text** | Primary button label. Leave blank to use **Start new {singular}** |
 
-This does **not** change which columns appear. Columns come from the template JSON ([section 7](#7-dashboard-columns-via-the-template)).
+Listing options do **not** change which columns appear. Columns come from the template JSON ([section 7](#7-dashboard-columns-via-the-template)).
 
 ---
 
@@ -1115,7 +1120,7 @@ Prefer the dedicated screens first. If you must use this page, these categories 
 |----------|--------|------------------|-----------|
 | **ApplicationTerminology** | Web | Singular / plural labels | Organisation settings |
 | **NotificationBanner** | Web | Site-wide banner | Organisation settings |
-| **Dashboard** | Web | Page size and filters | Organisation settings |
+| **Dashboard** | Web | Page size, filters, and dashboard display text | Organisation settings |
 | **EventMappings** | Shared | Field mappings | Event mappings |
 | **SchemaEvents** | Shared | Tenant event shapes | Event mappings |
 | **EventTriggers** | Shared | Submit / upload publish bindings | Event mappings |
