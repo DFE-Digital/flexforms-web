@@ -22,23 +22,26 @@
 
         @if (Model.Templates.Count == 0)
         {
-            <p class="govuk-body">
-                @if (Model.IsAdmin)
-                {
-                    <text>There are no forms for this tenant yet. Create a template before users can access the dashboard.</text>
-                }
-                else
-                {
-                    <text>You don't have access to any Forms. Please ask the service admin to give you access to at least one Form.</text>
-                }
-            </p>
             @if (Model.IsAdmin)
             {
+                <p class="govuk-body">
+                    There are no forms for this tenant yet. Create a template before users can access the dashboard.
+                </p>
                 <p class="govuk-body">
                     <a class="govuk-button" href="/admin/create-template">Create a new template</a>
                 </p>
                 <p class="govuk-body">
                     <a class="govuk-link" href="/admin">Go to admin</a>
+                </p>
+            }
+            else
+            {
+                <div class="govuk-inset-text">
+                    You do not have access to any forms yet.
+                    Ask your service administrator to give you access to at least one form, then sign in again.
+                </div>
+                <p class="govuk-body">
+                    You can stay signed in. Once an administrator has granted access, refresh this page or sign out and sign back in.
                 </p>
             }
         }

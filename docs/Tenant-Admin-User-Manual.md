@@ -73,7 +73,7 @@ You should **not** normally change secrets, login providers, or database connect
 | **Admin** (this manual) | Almost everything for *this* tenant, except creating other tenants and listing all platform tenants |
 | **SuperAdmin** | Everything a tenant Admin can do, plus New tenant, Platform tenants, and assigning the Admin role |
 | **Template Manager** (custom role) | Template tools on the Admin hub (create, version, go live, custom status labels). Not users, roles, or tenant settings |
-| **User Manager** (custom role) | User Manager only. Not Role Manager or templates |
+| **User Manager** (custom role) | User Manager only. Not Role Manager, Contributor management, or templates |
 
 If you only see some of the cards described below, your account may be a custom role rather than full Admin.
 
@@ -113,7 +113,7 @@ What you see depends on your role. A full tenant Admin typically sees:
 |------|----------------|
 | **Tenant templates** | List of forms, Live / Not live, Open / Preview, Make live / Make not live |
 | **Template Management** | Create a new template, Template Manager, Choose / preview templates, Custom Status Labels |
-| **Users & Roles** | User Manager, Role Manager |
+| **Users & Roles** | User Manager (and Role Manager / Contributor management for Admin) |
 | **Applications** | Browse every application for a chosen template |
 | **Tenant Admin** | Organisation settings, Event mappings, Tenant Settings |
 | **System** | Clear All Sessions & Caches, plus optional diagnostics |
@@ -417,6 +417,24 @@ Typical actions:
 
 ### 8.6 Grant to all vs User Manager
 
+People who **auto-register** (first sign-in) do **not** get every live form:
+
+| Live templates on the tenant | What the new user can open |
+|------------------------------|----------------------------|
+| None | Nothing — they stay signed in and see a message to ask an admin for form access |
+| Exactly one | That form, automatically |
+| More than one | Nothing (same message), unless a default template is configured (see below) |
+
+They must still be able to sign in without a form. After you grant forms in User Manager, they should get access on the next page load (or after signing out and back in).
+
+To auto-assign one form when several are live, a SuperAdmin sets Tenant Settings category **SelfRegistration** (Target **Shared**):
+
+```json
+{ "DefaultTemplateId": "the-live-template-guid" }
+```
+
+Web `ExternalApplicationsApiClient:DefaultTemplateId` is also used if present. The default must itself be **live**. Otherwise the user is created with no form access and you pick templates in User Manager.
+
 | Need | Use |
 |------|-----|
 | Everyone in the tenant should use one form | Template Manager → **Grant to all users** |
@@ -427,7 +445,7 @@ Typical actions:
 
 Invite/remove of extra people on **one application** is done from that application’s task list when the template has `"contributorPattern": true`.
 
-Admins can also look up who is on an application, or look up a user by email to see the applications they created and who they invited, at **Admin → Users & Roles → Contributor management** (`/admin/contributor-management`).
+Admins and SuperAdmins can also look up who is on an application, or look up a user by email to see the applications they created and who they invited, at **Admin → Users & Roles → Contributor management** (`/admin/contributor-management`). Custom User Manager roles cannot open this page.
 
 ---
 
@@ -1235,6 +1253,7 @@ If you need a second tenant administrator, ask a SuperAdmin to assign the Admin 
 | No **Admin** link | You are not Admin, SuperAdmin, Template Manager, or User Manager. Ask a tenant Admin to grant a role. |
 | Admin hub missing Users & Roles | You likely have Template Manager only. |
 | Admin hub missing templates | You likely have User Manager only. |
+| No **Contributor management** button | Expected unless you are Admin or SuperAdmin. `User:Any:Manage` is User Manager only. |
 | “You do not have permission” on Platform tenants | Expected for tenant Admins. That button is SuperAdmin-only. |
 | Saved a template version but users still see the old form | **Make live** if it is still Not live; **Clear All Sessions & Caches**; users may need to refresh or pick the form again. |
 | Invalid JSON save with no explanation | You should now see an error summary and messages under JSON Schema. If not, hard-refresh the Template Manager page. |
