@@ -75,6 +75,12 @@ public class DynamicAuthenticationSchemeProvider(
         return GetSchemeAsync(GetDefaultIdpScheme());
     }
 
+    /// <summary>
+    /// Forbid must use the local session scheme (cookie / test), never the remote IdP.
+    /// Using OpenIdConnect/Entra as the forbid scheme recurses:
+    /// <c>RemoteAuthenticationHandler.Forbid</c> → default forbid → IdP again → stack overflow
+    /// (see aspnet/Security#1376). That crash takes down the whole process.
+    /// </summary>
     public override Task<AuthenticationScheme?> GetDefaultForbidSchemeAsync()
     {
         if (IsInternalServiceRequest())
@@ -87,7 +93,7 @@ public class DynamicAuthenticationSchemeProvider(
             return GetSchemeAsync(TestAuthenticationHandler.SchemeName);
         }
 
-        return GetSchemeAsync(GetDefaultIdpScheme());
+        return GetSchemeAsync(CookieAuthenticationDefaults.AuthenticationScheme);
     }
 
     public override Task<AuthenticationScheme?> GetDefaultSignInSchemeAsync()

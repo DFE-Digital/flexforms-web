@@ -15,6 +15,7 @@ using GovUK.Dfe.FlexForms.Api.Client.Extensions;
 using GovUK.Dfe.FlexForms.Api.Client.Security;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -465,6 +466,8 @@ builder.Services.PostConfigure<Microsoft.AspNetCore.Authentication.OpenIdConnect
     OpenIdConnectDefaults.AuthenticationScheme,
     options =>
     {
+        // Remote IdP forbid must forward to the cookie scheme — never back to OIDC.
+        options.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
         options.SignOutScheme = CookieAuthenticationDefaults.AuthenticationScheme;
         if (!options.SignedOutCallbackPath.HasValue)
         {
@@ -487,12 +490,20 @@ builder.Services.PostConfigure<Microsoft.AspNetCore.Authentication.OpenIdConnect
     EntraSsoDefaults.AuthenticationScheme,
     options =>
     {
+        options.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
         options.SignOutScheme = CookieAuthenticationDefaults.AuthenticationScheme;
         if (!options.SignedOutCallbackPath.HasValue)
         {
             options.SignedOutCallbackPath = "/signout-callback-entra";
         }
     });
+
+builder.Services.PostConfigure<CookieAuthenticationOptions>(CookieAuthenticationDefaults.AuthenticationScheme, options =>
+{
+    options.AccessDeniedPath = "/Error/Forbidden";
+});
+
+builder.Services.AddSingleton<IAuthorizationMiddlewareResultHandler, AdminAreaAuthorizationResultHandler>();
 
 builder.Services
     .AddApplicationAuthorization(
