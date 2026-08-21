@@ -209,13 +209,13 @@ public class DashboardModelTests
         // create model with filters disabled
         var options = Options.Create(new DashboardOptions { PageSize = 10, EnableApplicationFilters = false });
         var modelNoFilters = new GovUK.Dfe.FlexForms.Web.Pages.Applications.DashboardModel(
-            NullLogger<GovUK.Dfe.FlexForms.Web.Pages.Applications.DashboardModel>.Instance,
-            _applicationStatusService,
-            _dashboardApplications,
-            _usersClient,
-            _applicationResponseService,
-            _memoryCache,
-            options);
+            logger: NullLogger<GovUK.Dfe.FlexForms.Web.Pages.Applications.DashboardModel>.Instance,
+            applicationStatusService: _applicationStatusService,
+            dashboardApplications: _dashboardApplications,
+            usersClient: _usersClient,
+            applicationResponseService: _applicationResponseService,
+            memoryCache: _memoryCache,
+            dashboardOptions: options);
 
         var httpContext = Substitute.For<HttpContext>();
         httpContext.Session.Returns(_session);
