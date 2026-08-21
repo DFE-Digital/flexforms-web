@@ -3,6 +3,9 @@
 All notable changes to this service will be documented in this file.
 
 
+## [2.2.0]
+### Notes
+- Addition of application delete functionality for admin and super admins
 
 ## [2.1.0]
 ### Notes
