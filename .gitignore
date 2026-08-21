@@ -183,3 +183,7 @@ backend.vars
 /Benchmarks/Dfe.PersonsApi.Benchmarks/BenchmarkDotNet.Artifacts/results
 /.cursor/rules
 *.mdc
+
+LocalNuget
+Nuget.Config
+Directory.Build.targets.user

@@ -50,30 +50,11 @@
                             <label class="govuk-label govuk-label--m" for="search-status">
                                 Status
                             </label>
-                            <select class="govuk-select" id="search-status" name="status" data-testid="search-status">
-                                @if (Model.Status is null)
+                            <select class="govuk-select" id="search-status" name="status" data-testid="search-status" asp-for="SelectedStatusFilter">
+                                <option value="" selected>All statuses</option>
+                                @foreach (var status in Model.StatusFilters)
                                 {
-                                    <option value="" selected>All statuses</option>
-                                }
-                                else
-                                {
-                                    <option value="">All statuses</option>
-                                }
-                                @if (Model.Status == ApplicationStatus.InProgress)
-                                {
-                                    <option value="@((int)ApplicationStatus.InProgress)" selected>In progress</option>
-                                }
-                                else
-                                {
-                                    <option value="@((int)ApplicationStatus.InProgress)">In progress</option>
-                                }
-                                @if (Model.Status == ApplicationStatus.Submitted)
-                                {
-                                    <option value="@((int)ApplicationStatus.Submitted)" selected>Submitted</option>
-                                }
-                                else
-                                {
-                                    <option value="@((int)ApplicationStatus.Submitted)">Submitted</option>
+                                    <option value="@status.Key">@status.Value</option>
                                 }
                             </select>
                         </div>
@@ -184,12 +165,12 @@ else if (!Model.HasError && Model.Applications.Any())
                             @app.CalculatedStatus.Value
                         </strong>
                     </td>
-                    <td class="govuk-table__cell">
-                        <a href="/applications/@app.ApplicationReference" class="govuk-link">
-                            @action
-                            <span class=govuk-visually-hidden>@app.ApplicationReference</span>
-                        </a>
-                    </td>
+                        <td class="govuk-table__cell">
+                            <a href="/applications/@app.ApplicationReference" class="govuk-link">
+                                @action
+                                <span class=govuk-visually-hidden>@app.ApplicationReference</span>
+                            </a>    
+                        </td>
                 </tr>
             }
         </tbody>

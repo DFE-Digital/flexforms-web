@@ -7,6 +7,9 @@
         : string.Empty;
 }
 
+<link rel="stylesheet" href="~/css/application-listing.css" asp-append-version="true" />
+
+
 <div class="govuk-grid-row">
     <div class="govuk-grid-column-full">
         <a asp-page="/Admin/Admin" class="govuk-back-link">Back to Admin</a>
@@ -80,14 +83,28 @@
                                     <code class="govuk-!-font-size-14">@app.ApplicationId</code>
                                 </td>
                                 <td class="govuk-table__cell">@app.DateCreated.ToString("d MMMM yyyy HH:mm")</td>
-                                <td class="govuk-table__cell">
-                                    <a href="/applications/@app.ApplicationReference?templateId=@Model.SelectedTemplateId"
-                                       class="govuk-link"
-                                       target="_blank"
-                                       rel="noopener noreferrer">
-                                        Open
-                                        <span class="govuk-visually-hidden">@app.ApplicationReference (opens in new tab)</span>
-                                    </a>
+                                <td class="govuk-table__cell flex">
+                                    @if (app.Status == CoreLibs.Contracts.ExternalApplications.Enums.ApplicationStatus.Deleted)
+                                    {
+                                        <span class="govuk-tag govuk-tag--red">Deleted</span>
+                                    }
+                                    else
+                                    {
+                                        <a href="/applications/@app.ApplicationReference?templateId=@Model.SelectedTemplateId"
+                                        class="govuk-link app-link"
+                                        target="_blank"
+                                        rel="noopener noreferrer">
+                                            Open
+                                            <span class="govuk-visually-hidden">@app.ApplicationReference (opens in new tab)</span>
+                                        </a>                            
+
+                                        <form id="app-delete-form" method="post" onsubmit="return confirm('Are you sure you want to delete this application?');">
+                                            <button type="submit" class="govuk-link app-link-button" asp-page-handler="DeleteAction" 
+                                            asp-route-applicationId="@app.ApplicationId" asp-route-selectedTemplateId="@Model.SelectedTemplateId">
+                                                Delete
+                                            </button>
+                                        </form>
+                                    }
                                 </td>
                             </tr>
                         }
