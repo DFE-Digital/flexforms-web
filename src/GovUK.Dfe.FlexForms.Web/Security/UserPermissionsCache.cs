@@ -35,15 +35,17 @@ public static class UserPermissionsCache
     }
 
     /// <summary>
-    /// Loads the latest permissions from the API and stores them in the in-memory cache.
-    /// The API maintains its own Redis cache, which is invalidated when contributors are invited.
+    /// Returns cached permissions when present; otherwise loads from the API and caches for 5 minutes.
+    /// Pass <paramref name="forceRefresh"/> after mutations that change the caller's grants
+    /// (e.g. creating an application or template).
     /// </summary>
     public static async Task<UserAuthorizationDto?> RefreshAsync(
         IMemoryCache cache,
         IUsersClient usersClient,
         ClaimsPrincipal user,
         ILogger? logger = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool forceRefresh = false)
     {
         if (user.Identity?.IsAuthenticated != true)
         {
@@ -57,7 +59,15 @@ public static class UserPermissionsCache
         }
 
         var cacheKey = GetCacheKey(user);
-        Invalidate(cache, user);
+        if (!forceRefresh && cache.TryGetValue(cacheKey, out UserAuthorizationDto? cached) && cached is not null)
+        {
+            return cached;
+        }
+
+        if (forceRefresh)
+        {
+            Invalidate(cache, user);
+        }
 
         try
         {

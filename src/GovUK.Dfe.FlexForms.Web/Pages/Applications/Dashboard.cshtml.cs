@@ -211,7 +211,13 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
 
             if (User.Identity?.IsAuthenticated == true)
             {
-                await UserPermissionsCache.RefreshAsync(memoryCache, usersClient, User, logger, CancellationToken.None);
+                await UserPermissionsCache.RefreshAsync(
+                    memoryCache,
+                    usersClient,
+                    User,
+                    logger,
+                    CancellationToken.None,
+                    forceRefresh: true);
                 UserPermissionsCache.RemovePermissionClaims(User);
             }
 

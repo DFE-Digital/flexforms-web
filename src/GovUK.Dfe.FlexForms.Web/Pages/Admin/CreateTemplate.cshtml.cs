@@ -71,7 +71,8 @@ public sealed class CreateTemplateModel(
                 usersClient,
                 User,
                 logger,
-                cancellationToken);
+                cancellationToken,
+                forceRefresh: true);
 
             return RedirectToPage(
                 "/Admin/TemplateManager",

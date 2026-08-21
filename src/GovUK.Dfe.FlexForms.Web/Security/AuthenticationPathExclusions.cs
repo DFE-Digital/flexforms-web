@@ -1,8 +1,8 @@
 namespace GovUK.Dfe.FlexForms.Web.Security;
 
 /// <summary>
-/// Paths used by OIDC sign-in/sign-out that must not trigger permission loading,
-/// status-code rewrites, or other authenticated middleware side effects.
+/// Paths that must not trigger permission loading, status-code rewrites,
+/// or other authenticated middleware side effects.
 /// </summary>
 internal static class AuthenticationPathExclusions
 {
@@ -18,11 +18,36 @@ internal static class AuthenticationPathExclusions
         "/health",
         "/healthz",
         "/liveness",
-        "/readiness"
+        "/readiness",
+        "/css",
+        "/js",
+        "/lib",
+        "/assets",
+        "/images",
+        "/fonts",
+        "/favicon.ico"
+    ];
+
+    private static readonly string[] StaticExtensions =
+    [
+        ".js",
+        ".css",
+        ".map",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".svg",
+        ".ico",
+        ".woff",
+        ".woff2",
+        ".ttf",
+        ".eot",
+        ".webp"
     ];
 
     /// <summary>
-    /// Returns true when the request path is an authentication callback or logout endpoint.
+    /// Returns true when the request path is an auth callback, health probe, or static asset.
     /// </summary>
     public static bool ShouldSkip(PathString path)
     {
@@ -36,6 +61,14 @@ internal static class AuthenticationPathExclusions
         foreach (var excluded in Paths)
         {
             if (pathValue.StartsWith(excluded, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        foreach (var extension in StaticExtensions)
+        {
+            if (pathValue.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
