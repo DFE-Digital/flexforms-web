@@ -28,6 +28,7 @@ public class DashboardModelTests
     private readonly IApplicationResponseService _applicationResponseService = Substitute.For<IApplicationResponseService>();
     private readonly IMemoryCache _memoryCache = new MemoryCache(new MemoryCacheOptions());
     private readonly IOptions<DashboardOptions> _options = Options.Create(new DashboardOptions { PageSize = 10, EnableApplicationFilters = true });
+    private readonly IApplicationTerminologyProvider _terminology = Substitute.For<IApplicationTerminologyProvider>();
     private readonly DashboardModel _model;
     private readonly ISession _session = Substitute.For<ISession>();
 
@@ -43,6 +44,11 @@ public class DashboardModelTests
         _usersClient.GetMyPermissionsAsync(Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<UserAuthorizationDto?>(null));
 
+        _terminology.Singular.Returns("application");
+        _terminology.SingularCapitalised.Returns("Application");
+        _terminology.Plural.Returns("applications");
+        _terminology.PluralCapitalised.Returns("Applications");
+
         _model = new DashboardModel(
             NullLogger<DashboardModel>.Instance,
             _applicationStatusService,
@@ -50,7 +56,8 @@ public class DashboardModelTests
             _usersClient,
             _applicationResponseService,
             _memoryCache,
-            _options);
+            _options,
+            _terminology);
 
         var httpContext = Substitute.For<HttpContext>();
         httpContext.Session.Returns(_session);
@@ -215,7 +222,8 @@ public class DashboardModelTests
             usersClient: _usersClient,
             applicationResponseService: _applicationResponseService,
             memoryCache: _memoryCache,
-            dashboardOptions: options);
+            dashboardOptions: options,
+            terminology: _terminology);
 
         var httpContext = Substitute.For<HttpContext>();
         httpContext.Session.Returns(_session);
