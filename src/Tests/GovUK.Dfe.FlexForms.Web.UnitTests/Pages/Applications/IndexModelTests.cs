@@ -104,4 +104,58 @@ public class IndexModelTests
         Assert.Contains("DateStartedFrom", _model.ModelState);
         Assert.Empty(_model.Applications);
     }
+
+    [Fact]
+    public async Task OnGetAsync_admin_sees_deleted_status_in_status_filters()
+    {
+        // provide template
+        var templateId = Guid.NewGuid();
+        _session.TryGetValue("TemplateId", out Arg.Any<byte[]?>()).Returns(call =>
+        {
+            call[1] = Encoding.UTF8.GetBytes(templateId.ToString());
+            return true;
+        });
+
+        // admin user
+        _model.PageContext.HttpContext.User = new System.Security.Claims.ClaimsPrincipal(
+            new System.Security.Claims.ClaimsIdentity(new[] { new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Role, "Admin") }, "Test"));
+
+        _applicationStatusService.GetCustomApplicationStatusesAsync(Arg.Any<Guid?>())
+            .Returns(new List<CustomApplicationStatusDto>());
+
+        _dashboardApplications.ListAsync(Arg.Any<DashboardApplicationListQuery>())
+            .Returns(new DashboardApplicationListResult { Applications = new List<ApplicationWithCalculatedStatus>(), TotalPages = 1, CurrentPage = 1 });
+
+        await _model.OnGetAsync();
+
+        Assert.Contains(_model.StatusFilters, s => s.Key == ApplicationStatus.Deleted);
+    }
+
+    [Fact]
+    public async Task OnGetAsync_when_filters_disabled_loads_applications_without_validation()
+    {
+        var optionsNoFilters = Options.Create(new DashboardOptions { PageSize = 10, EnableApplicationFilters = false });
+        var modelNoFilters = new IndexModel(_dashboardApplications, _applicationStatusService, optionsNoFilters, NullLogger<IndexModel>.Instance);
+
+        var httpContext = Substitute.For<HttpContext>();
+        httpContext.Session.Returns(_session);
+        modelNoFilters.PageContext = new PageContext { HttpContext = httpContext, ViewData = new ViewDataDictionary(new EmptyModelMetadataProvider(), new ModelStateDictionary()) };
+        modelNoFilters.TempData = new TempDataDictionary(httpContext, Substitute.For<ITempDataProvider>());
+
+        _session.TryGetValue("TemplateId", out Arg.Any<byte[]?>()).Returns(call =>
+        {
+            call[1] = Encoding.UTF8.GetBytes(Guid.NewGuid().ToString());
+            return true;
+        });
+
+        _dashboardApplications.ListAsync(Arg.Any<DashboardApplicationListQuery>())
+            .Returns(new DashboardApplicationListResult { Applications = new List<ApplicationWithCalculatedStatus>(), TotalPages = 1, CurrentPage = 1 });
+
+        modelNoFilters.DateStartedFrom = "not-a-date";
+
+        await modelNoFilters.OnGetAsync();
+
+        Assert.True(modelNoFilters.ModelState.IsValid);
+        await _dashboardApplications.Received().ListAsync(Arg.Any<DashboardApplicationListQuery>());
+    }
 }

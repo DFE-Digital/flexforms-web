@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using AutoFixture;
 using AutoFixture.AutoNSubstitute;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
@@ -18,7 +13,6 @@ using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
-using NSubstitute.Core.Arguments;
 
 namespace GovUK.Dfe.FlexForms.Web.UnitTests.Pages.Admin;
 
@@ -52,6 +46,52 @@ public class ApplicationsModelTests
             ViewData = new ViewDataDictionary(new EmptyModelMetadataProvider(), new ModelStateDictionary())
         };
         _model.TempData = new TempDataDictionary(httpContext, Substitute.For<ITempDataProvider>());
+    }
+
+    [Fact]
+    public async Task OnGetAsync_when_template_load_fails_sets_error()
+    {
+        _templateSelectionService.GetSelectableTemplatesAsync(Arg.Any<CancellationToken>())
+            .Returns<Task<IReadOnlyList<TemplateDto>>>(_ => throw new Exception("boom"));
+
+        await _model.OnGetAsync(CancellationToken.None);
+
+        Assert.True(_model.HasError);
+        Assert.Equal("Failed to load templates. Please try again.", _model.ErrorMessage);
+        Assert.Empty(_model.Templates);
+    }
+
+    [Fact]
+    public async Task OnGetAsync_when_applications_load_fails_sets_error()
+    {
+        var templateId = Guid.NewGuid();
+        _model.SelectedTemplateId = templateId;
+
+        _templateSelectionService.GetSelectableTemplatesAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<TemplateDto>
+            {
+                new() { Name = "Test Template", TemplateId = templateId, CreatedOn = DateTime.UtcNow }
+            });
+
+        _applicationsClient.GetApplicationsByTemplateAsync(
+                Arg.Any<Guid>(),
+                Arg.Any<bool?>(),
+                Arg.Any<int?>(),
+                Arg.Any<int?>(),
+                Arg.Any<string?>(),
+                Arg.Any<DateTime?>(),
+                Arg.Any<DateTime?>(),
+                Arg.Any<DateTime?>(),
+                Arg.Any<DateTime?>(),
+                Arg.Any<GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums.ApplicationStatus?>(),
+                Arg.Any<CancellationToken>())
+            .Returns<Task<PagedResultOfApplicationDto>>(_ => throw new Exception("boom2"));
+
+        await _model.OnGetAsync(CancellationToken.None);
+
+        Assert.True(_model.HasError);
+        Assert.Equal("Failed to load applications for the selected template. Please try again.", _model.ErrorMessage);
+        Assert.Empty(_model.Applications);
     }
 
     [Fact]
