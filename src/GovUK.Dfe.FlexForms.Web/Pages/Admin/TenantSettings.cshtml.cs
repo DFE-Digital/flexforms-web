@@ -54,12 +54,11 @@ public sealed class TenantSettingsModel(
     public bool IsSuperAdmin => AdminAccessHelper.IsSuperAdmin(User);
 
     /// <summary>
-    /// ApplicationTemplates / Template HostMappings are SuperAdmin-only (shared EA tenancy control).
+    /// False for SuperAdmin-only categories (Templates HostMappings, ConnectionStrings, …)
+    /// when the current user is not SuperAdmin.
     /// </summary>
-    public bool CanEditTemplateMappingCategory(string? category) =>
-        IsSuperAdmin
-        || (!string.Equals(category, "ApplicationTemplates", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(category, "Template", StringComparison.OrdinalIgnoreCase));
+    public bool CanEditCategory(string? category) =>
+        IsSuperAdmin || !SuperAdminOnlyTenantSettingCategories.IsRestricted(category);
 
     [BindProperty]
     public string NewCategory { get; set; } = string.Empty;
@@ -96,10 +95,10 @@ public sealed class TenantSettingsModel(
         if (!TryResolveTenant(out var error))
             return StayWithTenantError(error);
 
-        if (!CanEditTemplateMappingCategory(category))
+        if (!CanEditCategory(category))
         {
             HasError = true;
-            ErrorMessage = "Only SuperAdmin can change ApplicationTemplates / Template HostMappings.";
+            ErrorMessage = $"Only SuperAdmin can change '{category}' settings.";
             var state = CaptureWorkState();
             await tenantSettingsAdmin.LoadAsync(state, cancellationToken);
             ApplyWorkState(state);
@@ -117,9 +116,9 @@ public sealed class TenantSettingsModel(
 
     public Task<IActionResult> OnPostDeleteAsync(string category, string target, CancellationToken cancellationToken)
     {
-        if (!CanEditTemplateMappingCategory(category))
+        if (!CanEditCategory(category))
         {
-            TempData["TenantSettingsError"] = "Only SuperAdmin can delete ApplicationTemplates / Template HostMappings.";
+            TempData["TenantSettingsError"] = $"Only SuperAdmin can delete '{category}' settings.";
             return Task.FromResult<IActionResult>(RedirectToPage());
         }
 
@@ -133,9 +132,9 @@ public sealed class TenantSettingsModel(
         bool isSecret,
         CancellationToken cancellationToken)
     {
-        if (!CanEditTemplateMappingCategory(category))
+        if (!CanEditCategory(category))
         {
-            TempData["TenantSettingsError"] = "Only SuperAdmin can update ApplicationTemplates / Template HostMappings.";
+            TempData["TenantSettingsError"] = $"Only SuperAdmin can update '{category}' settings.";
             return Task.FromResult<IActionResult>(RedirectToPage());
         }
 
@@ -145,9 +144,9 @@ public sealed class TenantSettingsModel(
 
     public Task<IActionResult> OnPostAddAsync(CancellationToken cancellationToken)
     {
-        if (!CanEditTemplateMappingCategory(NewCategory))
+        if (!CanEditCategory(NewCategory))
         {
-            TempData["TenantSettingsError"] = "Only SuperAdmin can add ApplicationTemplates / Template HostMappings.";
+            TempData["TenantSettingsError"] = $"Only SuperAdmin can add '{NewCategory}' settings.";
             return Task.FromResult<IActionResult>(RedirectToPage());
         }
 

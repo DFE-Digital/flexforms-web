@@ -39,8 +39,12 @@
             Secret values are shown decrypted here and encrypted when saved with Secret checked.
         </p>
         <p class="govuk-hint">
-            <code>ApplicationTemplates</code> and <code>Template</code> (HostMappings) are SuperAdmin-only.
-            Mapped GUIDs must exist in EA and be legacy (<code>TenantId</code> null) or owned by this tenant.
+            SuperAdmin-only categories:
+            @foreach (var name in SuperAdminOnlyTenantSettingCategories.All.OrderBy(c => c, StringComparer.OrdinalIgnoreCase))
+            {
+                <code>@name</code>@:&nbsp;
+            }
+            Tenant Admins can view them but cannot edit.
         </p>
         <p class="govuk-body">
             To switch interactive login without a platform restart, set Web
@@ -238,6 +242,10 @@
                             {
                                 <strong class="govuk-tag govuk-tag--red govuk-!-margin-left-1">Secret</strong>
                             }
+                            @if (SuperAdminOnlyTenantSettingCategories.IsRestricted(entry.Category))
+                            {
+                                <strong class="govuk-tag govuk-tag--purple govuk-!-margin-left-1">SuperAdmin</strong>
+                            }
                         </h3>
                         <p class="govuk-body">@entry.Description</p>
                         <p class="govuk-body">Targets: @string.Join(", ", entry.TypicalTargets)</p>
@@ -290,10 +298,14 @@
                         <tr class="govuk-table__row">
                             <td class="govuk-table__cell">
                                 <code class="govuk-!-font-size-16">@setting.Category</code>
+                                @if (SuperAdminOnlyTenantSettingCategories.IsRestricted(setting.Category))
+                                {
+                                    <strong class="govuk-tag govuk-tag--purple govuk-!-margin-left-1">SuperAdmin</strong>
+                                }
                             </td>
                             <td class="govuk-table__cell">@setting.Target</td>
                             <td class="govuk-table__cell">
-                                @if (Model.CanEditTemplateMappingCategory(setting.Category))
+                                @if (Model.CanEditCategory(setting.Category))
                                 {
                                 <form method="post" asp-page-handler="Update">
                                     <input type="hidden" name="category" value="@setting.Category" />
@@ -357,7 +369,7 @@
                                 }
                                 else
                                 {
-                                    <p class="govuk-hint">SuperAdmin only — HostMappings cannot be edited by tenant Admin.</p>
+                                    <p class="govuk-hint">SuperAdmin only — this category cannot be edited by tenant Admin.</p>
                                     <pre class="govuk-body" style="white-space: pre-wrap; word-break: break-word;">@setting.SettingsJson</pre>
                                 }
                             </td>
