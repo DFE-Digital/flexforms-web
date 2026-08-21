@@ -66,7 +66,7 @@ public class ApplicationsModel(
 
     public async Task<IActionResult> OnPostDeleteActionAsync(Guid selectedTemplateId, Guid applicationId, CancellationToken cancellationToken)
     {
-        await applicationsClient.DeleteApplicationAsync(applicationId);
+        await applicationsClient.DeleteApplicationAsync(applicationId, cancellationToken);
         CurrentPage = 1; // Reset to first page after deletion/un-deletion
         
         return RedirectToPage(new {selectedTemplateId, CurrentPage});
