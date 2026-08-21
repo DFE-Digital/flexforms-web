@@ -229,6 +229,12 @@ public class DashboardModelTests
 
         modelNoFilters.DateStartedFrom = "not-a-date";
 
+        // ensure awaited calls return non-null completed tasks
+        _applicationStatusService.GetCustomApplicationStatusesAsync(Arg.Any<Guid?>())
+            .Returns(Task.FromResult<IReadOnlyList<CustomApplicationStatusDto>>(new List<CustomApplicationStatusDto>()));
+        _dashboardApplications.ListAsync(Arg.Any<DashboardApplicationListQuery>())
+            .Returns(Task.FromResult(new DashboardApplicationListResult { Applications = new List<ApplicationWithCalculatedStatus>(), TotalPages = 1, CurrentPage = 1 }));
+
         await modelNoFilters.OnGetAsync();
 
         Assert.True(modelNoFilters.ModelState.IsValid);
