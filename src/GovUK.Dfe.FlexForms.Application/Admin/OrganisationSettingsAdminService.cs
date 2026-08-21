@@ -74,7 +74,16 @@ public sealed class OrganisationSettingsAdminService(
             await UpsertCategoryAsync(
                 state.TenantId,
                 CategoryDashboard,
-                new { PageSize = state.DashboardPageSize, EnableApplicationFilters = state.DashboardEnableFilters },
+                new
+                {
+                    PageSize = state.DashboardPageSize,
+                    EnableApplicationFilters = state.DashboardEnableFilters,
+                    MainHeading = state.DashboardMainHeading,
+                    InProgressHeading = state.DashboardInProgressHeading,
+                    StartNewHeading = state.DashboardStartNewHeading,
+                    StartNewHint = state.DashboardStartNewHint,
+                    StartNewButtonText = state.DashboardStartNewButtonText
+                },
                 cancellationToken);
 
             await tenantAdminClient.RefreshTenantConfigurationAsync(cancellationToken);
@@ -141,6 +150,16 @@ public sealed class OrganisationSettingsAdminService(
                     state.DashboardPageSize = pageSize;
                 if (TryGetBool(root, "EnableApplicationFilters", out var filters))
                     state.DashboardEnableFilters = filters;
+                if (TryGetString(root, "MainHeading", out var mainHeading))
+                    state.DashboardMainHeading = mainHeading;
+                if (TryGetString(root, "InProgressHeading", out var inProgressHeading))
+                    state.DashboardInProgressHeading = inProgressHeading;
+                if (TryGetString(root, "StartNewHeading", out var startNewHeading))
+                    state.DashboardStartNewHeading = startNewHeading;
+                if (TryGetString(root, "StartNewHint", out var startNewHint))
+                    state.DashboardStartNewHint = startNewHint;
+                if (TryGetString(root, "StartNewButtonText", out var startNewButtonText))
+                    state.DashboardStartNewButtonText = startNewButtonText;
             }
         }
         catch (JsonException ex)

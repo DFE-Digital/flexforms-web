@@ -21,7 +21,7 @@
     <div class="govuk-grid-column-full govuk-!-margin-bottom-6">
 
         <h1 class="govuk-heading-xl govuk-!-margin-bottom-9">
-            Your @AppTerminology.Plural
+            @Model.MainHeading
         </h1>
 
         @if (Model.HasError)
@@ -54,7 +54,7 @@
         }
 
         <h2 class="govuk-heading-l govuk-!-margin-bottom-3">
-            @AppTerminology.PluralCapitalised in progress
+            @Model.InProgressHeading
         </h2>
 
         @if (Model.FiltersEnabled)
@@ -293,11 +293,11 @@
         @if (Model.CanStartNewApplication)
         {
             <h2 class="govuk-heading-l govuk-!-margin-top-9">
-                Start a new @AppTerminology.Singular
+                @Model.StartNewHeading
             </h2>
-            <p class="govuk-body">If you start an @AppTerminology.Singular, you will be the lead applicant for it.</p>
+            <p class="govuk-body">@Model.StartNewHint</p>
             <form method="post">
-                <button class="govuk-button govuk-!-margin-bottom-9" type="submit" asp-page-handler="CreateApplication" id="start-new-application-button">Start new @AppTerminology.Singular</button>
+                <button class="govuk-button govuk-!-margin-bottom-9" type="submit" asp-page-handler="CreateApplication" id="start-new-application-button">@Model.StartNewButtonText</button>
             </form>
         }
     </div>

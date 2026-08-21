@@ -29,7 +29,8 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
         IUsersClient usersClient,
         IApplicationResponseService applicationResponseService,
         IMemoryCache memoryCache,
-        IOptions<DashboardOptions> dashboardOptions)
+        IOptions<DashboardOptions> dashboardOptions,
+        IApplicationTerminologyProvider terminology)
         : PageModel
     {
         public string? Email { get; private set; }
@@ -85,6 +86,26 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
         public bool IsSearchActive => FiltersEnabled && SearchFilters.HasActiveFilters;
         public bool ShowFiltersPanel => IsSearchActive;
         public bool CanStartNewApplication { get; private set; }
+
+        public string MainHeading =>
+            FirstNonEmpty(dashboardOptions.Value.MainHeading, $"Your {terminology.Plural}");
+
+        public string InProgressHeading =>
+            FirstNonEmpty(dashboardOptions.Value.InProgressHeading, $"{terminology.PluralCapitalised} in progress");
+
+        public string StartNewHeading =>
+            FirstNonEmpty(dashboardOptions.Value.StartNewHeading, $"Start a new {terminology.Singular}");
+
+        public string StartNewHint =>
+            FirstNonEmpty(
+                dashboardOptions.Value.StartNewHint,
+                $"If you start an {terminology.Singular}, you will be the lead applicant for it.");
+
+        public string StartNewButtonText =>
+            FirstNonEmpty(dashboardOptions.Value.StartNewButtonText, $"Start new {terminology.Singular}");
+
+        private static string FirstNonEmpty(string? configured, string fallback) =>
+            string.IsNullOrWhiteSpace(configured) ? fallback : configured.Trim();
 
         public async SystemTask OnGetAsync(ApplicationStatus? status = null)
         {

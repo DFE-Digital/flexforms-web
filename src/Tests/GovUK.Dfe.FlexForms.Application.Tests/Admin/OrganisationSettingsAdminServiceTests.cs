@@ -45,6 +45,13 @@ public class OrganisationSettingsAdminServiceTests
                         "Web",
                         """{"Singular":"reform","Plural":"reforms"}""",
                         false,
+                        DateTime.UtcNow),
+                    new TenantSettingDto(
+                        Guid.NewGuid(),
+                        "Dashboard",
+                        "Web",
+                        """{"PageSize":10,"EnableApplicationFilters":false,"MainHeading":"Your visits","InProgressHeading":"Visits in progress","StartNewHeading":"Start a new visit","StartNewHint":"Hint text","StartNewButtonText":"Start new visit"}""",
+                        false,
                         DateTime.UtcNow)
                 ]));
 
@@ -53,6 +60,13 @@ public class OrganisationSettingsAdminServiceTests
         Assert.Equal("Loaded tenant", _state.TenantName);
         Assert.Equal("reform", _state.TerminologySingular);
         Assert.Equal("reforms", _state.TerminologyPlural);
+        Assert.Equal(10, _state.DashboardPageSize);
+        Assert.False(_state.DashboardEnableFilters);
+        Assert.Equal("Your visits", _state.DashboardMainHeading);
+        Assert.Equal("Visits in progress", _state.DashboardInProgressHeading);
+        Assert.Equal("Start a new visit", _state.DashboardStartNewHeading);
+        Assert.Equal("Hint text", _state.DashboardStartNewHint);
+        Assert.Equal("Start new visit", _state.DashboardStartNewButtonText);
         Assert.False(_state.HasError);
     }
 

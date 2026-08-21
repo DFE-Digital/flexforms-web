@@ -23,6 +23,16 @@ public sealed class OrganisationSettingsWorkState
 
     public bool DashboardEnableFilters { get; set; }
 
+    public string? DashboardMainHeading { get; set; }
+
+    public string? DashboardInProgressHeading { get; set; }
+
+    public string? DashboardStartNewHeading { get; set; }
+
+    public string? DashboardStartNewHint { get; set; }
+
+    public string? DashboardStartNewButtonText { get; set; }
+
     public bool HasError { get; set; }
 
     public string? ErrorMessage { get; set; }

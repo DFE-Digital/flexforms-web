@@ -59,6 +59,26 @@ public sealed class OrganisationSettingsModel(
     [BindProperty]
     public bool DashboardEnableFilters { get; set; }
 
+    [BindProperty]
+    [StringLength(200)]
+    public string? DashboardMainHeading { get; set; }
+
+    [BindProperty]
+    [StringLength(200)]
+    public string? DashboardInProgressHeading { get; set; }
+
+    [BindProperty]
+    [StringLength(200)]
+    public string? DashboardStartNewHeading { get; set; }
+
+    [BindProperty]
+    [StringLength(500)]
+    public string? DashboardStartNewHint { get; set; }
+
+    [BindProperty]
+    [StringLength(200)]
+    public string? DashboardStartNewButtonText { get; set; }
+
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
         ApplyTempData();
@@ -91,6 +111,11 @@ public sealed class OrganisationSettingsModel(
         TerminologyPlural = TerminologyPlural?.Trim() ?? string.Empty;
         BannerHeading = BannerHeading?.Trim() ?? "Important";
         BannerMessage = BannerMessage?.Trim() ?? string.Empty;
+        DashboardMainHeading = DashboardMainHeading?.Trim() ?? string.Empty;
+        DashboardInProgressHeading = DashboardInProgressHeading?.Trim() ?? string.Empty;
+        DashboardStartNewHeading = DashboardStartNewHeading?.Trim() ?? string.Empty;
+        DashboardStartNewHint = DashboardStartNewHint?.Trim() ?? string.Empty;
+        DashboardStartNewButtonText = DashboardStartNewButtonText?.Trim() ?? string.Empty;
 
         var outcome = await organisationSettingsAdmin.SaveAsync(CaptureWorkState(), cancellationToken);
         return MapOutcome(outcome);
@@ -132,7 +157,12 @@ public sealed class OrganisationSettingsModel(
             BannerHeading = BannerHeading,
             BannerMessage = BannerMessage,
             DashboardPageSize = DashboardPageSize,
-            DashboardEnableFilters = DashboardEnableFilters
+            DashboardEnableFilters = DashboardEnableFilters,
+            DashboardMainHeading = DashboardMainHeading,
+            DashboardInProgressHeading = DashboardInProgressHeading,
+            DashboardStartNewHeading = DashboardStartNewHeading,
+            DashboardStartNewHint = DashboardStartNewHint,
+            DashboardStartNewButtonText = DashboardStartNewButtonText
         };
 
     private void ApplyWorkState(OrganisationSettingsWorkState state)
@@ -146,6 +176,11 @@ public sealed class OrganisationSettingsModel(
         BannerMessage = state.BannerMessage;
         DashboardPageSize = state.DashboardPageSize;
         DashboardEnableFilters = state.DashboardEnableFilters;
+        DashboardMainHeading = state.DashboardMainHeading;
+        DashboardInProgressHeading = state.DashboardInProgressHeading;
+        DashboardStartNewHeading = state.DashboardStartNewHeading;
+        DashboardStartNewHint = state.DashboardStartNewHint;
+        DashboardStartNewButtonText = state.DashboardStartNewButtonText;
         if (state.HasError)
         {
             HasError = true;
