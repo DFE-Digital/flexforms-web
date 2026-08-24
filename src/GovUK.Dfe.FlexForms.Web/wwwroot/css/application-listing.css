@@ -1,41 +1,80 @@
 .application-listing__filters-container.govuk-details {
-  margin-bottom: 30px;
+    margin-bottom: 30px;
 }
 
 .application-listing__filters-summary.govuk-details__summary {
-  display: block;
-  list-style: none;
-  padding-left: 0;
+    display: block;
+    list-style: none;
+    padding-left: 0;
 }
 
 .application-listing__filters-summary::-webkit-details-marker {
-  display: none;
+    display: none;
 }
 
 .application-listing__filters-summary::marker {
-  content: "";
+    content: "";
 }
 
 .application-listing__filters-button.govuk-details__summary-text {
-  display: inline-block;
-  margin-bottom: 0;
+    display: inline-block;
+    margin-bottom: 0;
 }
 
-.application-listing__filters-button.govuk-details__summary-text::before {
-  display: none;
-}
+    .application-listing__filters-button.govuk-details__summary-text::before {
+        display: none;
+    }
 
 .application-listing__filters-details.govuk-details__text {
-  margin-top: 15px;
-  padding: 20px;
-  border: 1px solid #b1b4b6;
-  background-color: #f3f2f1;
+    margin-top: 15px;
+    padding: 20px;
+    border: 1px solid #b1b4b6;
+    background-color: #f3f2f1;
 }
 
 .application-listing__filters-details .govuk-fieldset {
-  min-width: 0;
+    min-width: 0;
 }
 
 .govuk-phase-banner__content span {
-    padding-right:10px;
+    padding-right: 10px;
 }
+
+.govuk-link.app-link {
+    float: left;
+}
+
+.govuk-link.app-link-button {
+    background: none;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    cursor: pointer;
+    float: left;
+}
+
+.govuk-table__cell.flex {
+    display: flex;
+}
+
+#app-delete-form {
+    display: inline;
+    margin-left: 10px;
+}
+
+    #app-delete-form .app-link-button {
+        background: none;
+        border: 0;
+        padding: 0;
+        font: inherit;
+        cursor: pointer;
+        float: left;
+        color: var(--govuk-link-visited-colour, #54319f);
+    }
+
+        #app-delete-form .app-link-button:focus {
+            outline: 3px solid transparent;
+            background-color: var(--govuk-focus-colour, #fd0);
+            box-shadow: 0 -2px var(--govuk-focus-colour, #fd0), 0px 4px var(--govuk-focus-text-colour, #0b0c0c);
+            text-decoration:none;
+        }

@@ -38,6 +38,12 @@ public class IndexModel(
     public bool ShowFiltersPanel => IsSearchActive;
 
     [BindProperty(SupportsGet = true)]
+    public IList<KeyValuePair<ApplicationStatus, string>> StatusFilters { get; set; }
+
+    [BindProperty]
+    public ApplicationStatus? SelectedStatusFilter { get; set; }
+
+    [BindProperty(SupportsGet = true)]
     public int CurrentPage { get; set; } = 1;
 
     [BindProperty(SupportsGet = true)]
@@ -68,11 +74,21 @@ public class IndexModel(
         Status = Status
     };
 
-    public async Task OnGetAsync()
+    public async Task OnGetAsync(ApplicationStatus? status = null)
     {
+        var statusFilters = new List<KeyValuePair<ApplicationStatus, string>>();
         var templateId = HttpContext.Session.GetString("TemplateId");
         TemplateId = !string.IsNullOrWhiteSpace(templateId) ? Guid.Parse(templateId) : null;
+        var baseApplicationStatuses = applicationStatusService.GetBaseApplicationStatuses();
         CustomStatuses = await applicationStatusService.GetCustomApplicationStatusesAsync(TemplateId);
+        foreach (var item in baseApplicationStatuses)
+        {
+            var customStatus = CustomStatuses.FirstOrDefault(x => x.ApplicationStatus == item.Key);
+            statusFilters.Add(new KeyValuePair<ApplicationStatus, string>(item.Key, customStatus?.Label != null ? customStatus.Label : item.Value));
+        }
+        StatusFilters = statusFilters.Where(app => AdminAccessHelper.IsAdmin(User) || AdminAccessHelper.IsSuperAdmin(User) || app.Key != ApplicationStatus.Deleted)
+            .OrderBy(app => app.Key).ToList();
+        SelectedStatusFilter = status;
         logger.LogInformation("TemplateId from session: {TemplateId}", TemplateId);
         ValidateSearchFilters();
         await LoadApplicationsAsync();
@@ -136,7 +152,10 @@ public class IndexModel(
             Status = filters.Status
         });
 
-        Applications = result.Applications;
+        
+        Applications = result.Applications
+            .Where(app => AdminAccessHelper.IsAdmin(User) || AdminAccessHelper.IsSuperAdmin(User) || app.CalculatedStatus.Key != ApplicationStatus.Deleted)
+            .ToList();
         TotalPages = result.TotalPages;
         CurrentPage = result.CurrentPage;
     }

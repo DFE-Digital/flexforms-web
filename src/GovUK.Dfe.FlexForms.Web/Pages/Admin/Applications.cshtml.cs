@@ -2,12 +2,14 @@ using System.Diagnostics.CodeAnalysis;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Application.Options;
+using GovUK.Dfe.FlexForms.Web.Models.Applications;
 using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.FlexForms.Web.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Options;
+using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums;
 
 namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 
@@ -62,6 +64,14 @@ public class ApplicationsModel(
         await LoadApplicationsAsync(cancellationToken);
     }
 
+    public async Task<IActionResult> OnPostDeleteActionAsync(Guid selectedTemplateId, Guid applicationId, CancellationToken cancellationToken)
+    {
+        await applicationsClient.DeleteApplicationAsync(applicationId, cancellationToken);
+        CurrentPage = 1; // Reset to first page after deletion/un-deletion
+        
+        return RedirectToPage(new {selectedTemplateId, CurrentPage});
+    }
+
     private async Task LoadTemplatesAsync(CancellationToken cancellationToken)
     {
         try
@@ -90,9 +100,7 @@ public class ApplicationsModel(
             TotalPages = result.TotalPages;
             CurrentPage = Math.Clamp(CurrentPage, 1, Math.Max(1, TotalPages));
 
-            Applications = result.Items
-                .OrderByDescending(a => a.DateCreated)
-                .ToList();
+            Applications = result.Items.OrderByDescending(a => a.DateCreated).ToList();            
         }
         catch (Exception ex)
         {

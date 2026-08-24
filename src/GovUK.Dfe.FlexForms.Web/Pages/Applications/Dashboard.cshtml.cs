@@ -16,6 +16,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
 using System.Text.Json;
 using SystemTask = System.Threading.Tasks.Task;
+using StackExchange.Redis;
 
 namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
 {
@@ -116,7 +117,8 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
                 var customStatus = CustomStatuses.FirstOrDefault(x => x.ApplicationStatus == item.Key);
                 statusFilters.Add(new KeyValuePair<ApplicationStatus, string>(item.Key, customStatus?.Label != null ? customStatus.Label : item.Value));
             }
-            StatusFilters = statusFilters.OrderBy(x => x.Key).ToList();
+            StatusFilters = statusFilters.Where(app => AdminAccessHelper.IsAdmin(User) || AdminAccessHelper.IsSuperAdmin(User) || app.Key != ApplicationStatus.Deleted)
+                .OrderBy(app => app.Key).ToList();
             SelectedStatusFilter = status;
             ValidateSearchFilters();
             var templateId = ResolveTemplateId();
@@ -265,7 +267,9 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
                 Status = filters.Status
             });
 
-            Applications = result.Applications;
+            Applications = result.Applications
+            .Where(app => AdminAccessHelper.IsAdmin(User) || AdminAccessHelper.IsSuperAdmin(User) || app.CalculatedStatus.Key != ApplicationStatus.Deleted)
+            .ToList();
             TotalPages = result.TotalPages;
             CurrentPage = result.CurrentPage;
         }
