@@ -61,6 +61,7 @@ public static class TenantAwareServiceCollectionExtensions
         AddTenantOptions<ApplicationTerminologyOptions>(services, "ApplicationTerminology");
         AddTenantOptions<NotificationBannerOptions>(services, "NotificationBanner");
         AddTenantOptions<DashboardOptions>(services, "Dashboard");
+        AddTenantOptions<ApplicationPreviewOptions>(services, "ApplicationPreview");
         AddTenantOptions<TokenRefreshSettings>(services, "TokenRefresh");
         AddTenantOptions<InternalServiceAuthOptions>(services, InternalServiceAuthOptions.SectionName);
         AddTenantOptions<TestAuthenticationOptions>(services, TestAuthenticationOptions.SectionName);

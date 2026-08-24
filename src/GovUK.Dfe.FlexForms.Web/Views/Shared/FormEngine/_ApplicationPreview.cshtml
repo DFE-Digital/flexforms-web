@@ -3,6 +3,14 @@
 @{
     var preview = Model.Preview;
     var submit = preview?.Submit;
+    var previewOptions = ApplicationPreviewOptions.Value;
+    var pageHeading = FirstNonEmpty(previewOptions.PageHeading, "Check your answers");
+    var submitHeading = FirstNonEmpty(previewOptions.SubmitHeading, $"Submit your {AppTerminology.Singular}");
+    var submitHint = FirstNonEmpty(
+        previewOptions.SubmitHint,
+        $"By submitting this {AppTerminology.Singular} you are confirming that, to the best of your knowledge, the details you are providing are correct.");
+    var submitButtonText = FirstNonEmpty(previewOptions.SubmitButtonText, "Submit");
+    var showSubmitSection = submit?.ShowSubmitSection == true && !previewOptions.HideSubmitSection;
 }
 
 @if (submit?.SubmitDisabledByConfig == true)
@@ -20,7 +28,7 @@
 
 <div class="govuk-grid-row" data-application-preview="true">
     <div class="govuk-grid-column-full">
-        <h1 class="govuk-heading-xl govuk-!-margin-bottom-6">Check your answers</h1>
+        <h1 class="govuk-heading-xl govuk-!-margin-bottom-6">@pageHeading</h1>
         <govuk-inset-text>@AppTerminology.SingularCapitalised reference: <strong>@Model.ReferenceNumber</strong></govuk-inset-text>
 
         @if (!ViewData.ModelState.IsValid)
@@ -72,15 +80,15 @@
     </div>
 </div>
 
-@if (submit?.ShowSubmitSection == true)
+@if (showSubmitSection)
 {
     <div class="govuk-!-margin-top-6">
-        <h2 class="govuk-heading-m govuk-!-margin-top-9">Submit your @AppTerminology.Singular</h2>
+        <h2 class="govuk-heading-m govuk-!-margin-top-9">@submitHeading</h2>
 
-        @if (submit.SubmitDisabledByConfig)
+        @if (submit!.SubmitDisabledByConfig)
         {
             <p class="govuk-body">@submit.DisabledHelpText</p>
-            <p class="govuk-body">You'll see a <b>Submit</b> button here when they're open.</p>
+            <p class="govuk-body">You'll see a <b>@submitButtonText</b> button here when they're open.</p>
             <p class="govuk-body">You can still work on your @AppTerminology.Singular and save it.</p>
         }
         else if (submit.FileValidationBlocksSubmit)
@@ -110,12 +118,12 @@
                 </div>
             </div>
             <button class="govuk-button" type="button" disabled="disabled" aria-disabled="true" id="submit-application-button">
-                Submit
+                @submitButtonText
             </button>
         }
         else
         {
-            <p class="govuk-body">By submitting this @AppTerminology.Singular you are confirming that, to the best of your knowledge, the details you are providing are correct.</p>
+            <p class="govuk-body">@submitHint</p>
             <form method="post" asp-page-handler="SubmitApplication">
                 <input type="hidden" asp-for="ReferenceNumber"/>
                 @if (submit.IncludePreviewQuery)
@@ -123,17 +131,22 @@
                     <input type="hidden" name="preview" value="true"/>
                 }
                 <govuk-button type="submit" id="submit-application-button">
-                    Submit
+                    @submitButtonText
                 </govuk-button>
             </form>
         }
     </div>
 }
-else if (submit?.ShowLeadApplicantInset == true)
+else if (submit?.ShowLeadApplicantInset == true && !previewOptions.HideSubmitSection)
 {
     <div class="govuk-!-margin-top-6">
         <div class="govuk-inset-text">
             <p class="govuk-body">Only the lead applicant can submit this @AppTerminology.Singular.</p>
         </div>
     </div>
+}
+
+@functions {
+    private static string FirstNonEmpty(string? configured, string fallback) =>
+        string.IsNullOrWhiteSpace(configured) ? fallback : configured.Trim();
 }

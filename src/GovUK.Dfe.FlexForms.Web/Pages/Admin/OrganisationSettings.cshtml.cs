@@ -10,7 +10,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 
 /// <summary>
-/// Tenant Admin editor for non-secret organisation settings (terminology, banner, dashboard).
+/// Tenant Admin editor for non-secret organisation settings (terminology, banner, dashboard, check-your-answers).
 /// </summary>
 [Authorize(Roles = AdminAccessHelper.AuthorizeRoles)]
 public sealed class OrganisationSettingsModel(
@@ -79,6 +79,25 @@ public sealed class OrganisationSettingsModel(
     [StringLength(200)]
     public string? DashboardStartNewButtonText { get; set; }
 
+    [BindProperty]
+    [StringLength(200)]
+    public string? PreviewPageHeading { get; set; }
+
+    [BindProperty]
+    [StringLength(200)]
+    public string? PreviewSubmitHeading { get; set; }
+
+    [BindProperty]
+    [StringLength(1000)]
+    public string? PreviewSubmitHint { get; set; }
+
+    [BindProperty]
+    [StringLength(200)]
+    public string? PreviewSubmitButtonText { get; set; }
+
+    [BindProperty]
+    public bool PreviewHideSubmitSection { get; set; }
+
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
         ApplyTempData();
@@ -116,6 +135,10 @@ public sealed class OrganisationSettingsModel(
         DashboardStartNewHeading = DashboardStartNewHeading?.Trim() ?? string.Empty;
         DashboardStartNewHint = DashboardStartNewHint?.Trim() ?? string.Empty;
         DashboardStartNewButtonText = DashboardStartNewButtonText?.Trim() ?? string.Empty;
+        PreviewPageHeading = PreviewPageHeading?.Trim() ?? string.Empty;
+        PreviewSubmitHeading = PreviewSubmitHeading?.Trim() ?? string.Empty;
+        PreviewSubmitHint = PreviewSubmitHint?.Trim() ?? string.Empty;
+        PreviewSubmitButtonText = PreviewSubmitButtonText?.Trim() ?? string.Empty;
 
         var outcome = await organisationSettingsAdmin.SaveAsync(CaptureWorkState(), cancellationToken);
         return MapOutcome(outcome);
@@ -162,7 +185,12 @@ public sealed class OrganisationSettingsModel(
             DashboardInProgressHeading = DashboardInProgressHeading,
             DashboardStartNewHeading = DashboardStartNewHeading,
             DashboardStartNewHint = DashboardStartNewHint,
-            DashboardStartNewButtonText = DashboardStartNewButtonText
+            DashboardStartNewButtonText = DashboardStartNewButtonText,
+            PreviewPageHeading = PreviewPageHeading,
+            PreviewSubmitHeading = PreviewSubmitHeading,
+            PreviewSubmitHint = PreviewSubmitHint,
+            PreviewSubmitButtonText = PreviewSubmitButtonText,
+            PreviewHideSubmitSection = PreviewHideSubmitSection
         };
 
     private void ApplyWorkState(OrganisationSettingsWorkState state)
@@ -181,6 +209,11 @@ public sealed class OrganisationSettingsModel(
         DashboardStartNewHeading = state.DashboardStartNewHeading;
         DashboardStartNewHint = state.DashboardStartNewHint;
         DashboardStartNewButtonText = state.DashboardStartNewButtonText;
+        PreviewPageHeading = state.PreviewPageHeading;
+        PreviewSubmitHeading = state.PreviewSubmitHeading;
+        PreviewSubmitHint = state.PreviewSubmitHint;
+        PreviewSubmitButtonText = state.PreviewSubmitButtonText;
+        PreviewHideSubmitSection = state.PreviewHideSubmitSection;
         if (state.HasError)
         {
             HasError = true;

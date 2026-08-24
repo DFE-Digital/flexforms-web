@@ -52,6 +52,13 @@ public class OrganisationSettingsAdminServiceTests
                         "Web",
                         """{"PageSize":10,"EnableApplicationFilters":false,"MainHeading":"Your visits","InProgressHeading":"Visits in progress","StartNewHeading":"Start a new visit","StartNewHint":"Hint text","StartNewButtonText":"Start new visit"}""",
                         false,
+                        DateTime.UtcNow),
+                    new TenantSettingDto(
+                        Guid.NewGuid(),
+                        "ApplicationPreview",
+                        "Web",
+                        """{"PageHeading":"Review your visit","SubmitHeading":"Submit your visit","SubmitHint":"Please confirm","SubmitButtonText":"Send","HideSubmitSection":true}""",
+                        false,
                         DateTime.UtcNow)
                 ]));
 
@@ -67,6 +74,11 @@ public class OrganisationSettingsAdminServiceTests
         Assert.Equal("Start a new visit", _state.DashboardStartNewHeading);
         Assert.Equal("Hint text", _state.DashboardStartNewHint);
         Assert.Equal("Start new visit", _state.DashboardStartNewButtonText);
+        Assert.Equal("Review your visit", _state.PreviewPageHeading);
+        Assert.Equal("Submit your visit", _state.PreviewSubmitHeading);
+        Assert.Equal("Please confirm", _state.PreviewSubmitHint);
+        Assert.Equal("Send", _state.PreviewSubmitButtonText);
+        Assert.True(_state.PreviewHideSubmitSection);
         Assert.False(_state.HasError);
     }
 
@@ -90,7 +102,7 @@ public class OrganisationSettingsAdminServiceTests
         Assert.Equal(AdminPageOutcomeKind.RedirectToPage, result.Kind);
         Assert.Equal(OrganisationSettingsMessages.Saved, result.SuccessMessage);
         Assert.True(result.RefreshLocalCaches);
-        await _client.Received(3).UpsertSafeTenantSettingAsync(
+        await _client.Received(4).UpsertSafeTenantSettingAsync(
             _state.TenantId,
             Arg.Any<UpsertTenantSettingRequest>(),
             Arg.Any<CancellationToken>());

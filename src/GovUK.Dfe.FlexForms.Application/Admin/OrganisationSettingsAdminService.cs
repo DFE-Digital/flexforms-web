@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 namespace GovUK.Dfe.FlexForms.Application.Admin;
 
 /// <summary>
-/// Loads and saves non-secret organisation settings (terminology, banner, dashboard).
+/// Loads and saves non-secret organisation settings (terminology, banner, dashboard, application preview).
 /// </summary>
 public interface IOrganisationSettingsAdmin
 {
@@ -23,6 +23,7 @@ public sealed class OrganisationSettingsAdminService(
     private const string CategoryTerminology = "ApplicationTerminology";
     private const string CategoryBanner = "NotificationBanner";
     private const string CategoryDashboard = "Dashboard";
+    private const string CategoryApplicationPreview = "ApplicationPreview";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -83,6 +84,19 @@ public sealed class OrganisationSettingsAdminService(
                     StartNewHeading = state.DashboardStartNewHeading,
                     StartNewHint = state.DashboardStartNewHint,
                     StartNewButtonText = state.DashboardStartNewButtonText
+                },
+                cancellationToken);
+
+            await UpsertCategoryAsync(
+                state.TenantId,
+                CategoryApplicationPreview,
+                new
+                {
+                    PageHeading = state.PreviewPageHeading,
+                    SubmitHeading = state.PreviewSubmitHeading,
+                    SubmitHint = state.PreviewSubmitHint,
+                    SubmitButtonText = state.PreviewSubmitButtonText,
+                    HideSubmitSection = state.PreviewHideSubmitSection
                 },
                 cancellationToken);
 
@@ -160,6 +174,19 @@ public sealed class OrganisationSettingsAdminService(
                     state.DashboardStartNewHint = startNewHint;
                 if (TryGetString(root, "StartNewButtonText", out var startNewButtonText))
                     state.DashboardStartNewButtonText = startNewButtonText;
+            }
+            else if (string.Equals(category, CategoryApplicationPreview, StringComparison.OrdinalIgnoreCase))
+            {
+                if (TryGetString(root, "PageHeading", out var pageHeading))
+                    state.PreviewPageHeading = pageHeading;
+                if (TryGetString(root, "SubmitHeading", out var submitHeading))
+                    state.PreviewSubmitHeading = submitHeading;
+                if (TryGetString(root, "SubmitHint", out var submitHint))
+                    state.PreviewSubmitHint = submitHint;
+                if (TryGetString(root, "SubmitButtonText", out var submitButtonText))
+                    state.PreviewSubmitButtonText = submitButtonText;
+                if (TryGetBool(root, "HideSubmitSection", out var hideSubmit))
+                    state.PreviewHideSubmitSection = hideSubmit;
             }
         }
         catch (JsonException ex)

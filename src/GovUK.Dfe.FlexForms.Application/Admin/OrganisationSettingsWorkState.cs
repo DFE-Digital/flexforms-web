@@ -33,6 +33,16 @@ public sealed class OrganisationSettingsWorkState
 
     public string? DashboardStartNewButtonText { get; set; }
 
+    public string? PreviewPageHeading { get; set; }
+
+    public string? PreviewSubmitHeading { get; set; }
+
+    public string? PreviewSubmitHint { get; set; }
+
+    public string? PreviewSubmitButtonText { get; set; }
+
+    public bool PreviewHideSubmitSection { get; set; }
+
     public bool HasError { get; set; }
 
     public string? ErrorMessage { get; set; }

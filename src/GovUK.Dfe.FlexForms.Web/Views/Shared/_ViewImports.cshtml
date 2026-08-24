@@ -1,5 +1,9 @@
 @using GovUK.Dfe.FlexForms.Web
+@using Microsoft.Extensions.Options
+@using GovUK.Dfe.FlexForms.Application.Options
 @namespace GovUK.Dfe.FlexForms.Web.Pages
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 @addTagHelper *, GovUk.Frontend.AspNetCore
 @inject GovUK.Dfe.FlexForms.Application.Interfaces.IApplicationTerminologyProvider AppTerminology
+@inject IOptions<ApplicationPreviewOptions> ApplicationPreviewOptions
+
