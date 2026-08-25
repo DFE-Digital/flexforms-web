@@ -153,7 +153,8 @@ else if (!Model.HasError && Model.Applications.Any())
             {
                 var action = $"View {AppTerminology.Singular}";
                 var statusClass = app.CalculatedStatus.Key == ApplicationStatus.Submitted ? "govuk-tag--green" :
-                    app.CalculatedStatus.Key == ApplicationStatus.InProgress ? "govuk-tag--blue" : "govuk-tag--grey";
+                    app.CalculatedStatus.Key == ApplicationStatus.InProgress ? "govuk-tag--blue" :
+                    app.CalculatedStatus.Key == ApplicationStatus.Deleted ? "govuk-tag--red" : "govuk-tag--grey";
                 <tr class="govuk-table__row">
                     <td class="govuk-table__cell">@app.ApplicationReference</td>
                     <td class="govuk-table__cell">@app.DateCreated.ToString("d MMMM yyyy")</td>
