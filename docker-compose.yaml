@@ -1,0 +1,37 @@
+name: dfe-flexforms
+
+networks:
+    dfe-flexforms-network:
+        name: dfe-flexforms-network
+        driver: bridge
+        external: true
+
+services:
+    ea_web:
+        container_name: ea-flexforms-web
+        cap_add:
+            - SYS_PTRACE
+        security_opt:
+            - seccomp:unconfined
+        build:
+            context: ${REPO_PATH}
+            dockerfile: Dockerfile.dev
+        ports:
+            - 5211:8080
+            - 7020:8081
+        restart: unless-stopped
+        environment:
+            - ASPNETCORE_URLS=https://+:8081;http://+:8080
+            - ASPNETCORE_ENVIRONMENT=Development
+            - ConnectionStrings__Redis=redis:6379
+            - CacheSettings__Redis__ConnectionString=redis:6379
+            - PlatformBootstrap__ApiBaseUrl=https://ea_api:8081
+            - ExternalApplicationsApiClient__BaseUrl=https://ea_api:8081
+            - ASPNETCORE_Kestrel__Certificates__Default__Password=Pa55w0rd
+            - ASPNETCORE_Kestrel__Certificates__Default__Path=/https/ea_cert.pfx
+        volumes:
+            - ${APPDATA}/dev-certs/ea_cert.pfx:/https/ea_cert.pfx:ro
+            - ${APPDATA}/Microsoft/UserSecrets/8051c984-585b-4a5e-b6d7-833e5dd4afe7:/home/app/.microsoft/usersecrets/8051c984-585b-4a5e-b6d7-833e5dd4afe7:ro
+            - ${APPDATA}/mkcert/rootCA.pem:/usr/local/share/ca-certificates/mkcert-rootCA.crt:ro
+        networks:
+            - dfe-flexforms-network
