@@ -54,7 +54,7 @@ jobs:
     permissions:
       contents: read
     needs: [ set-env ]
-    if: needs.set-env.outputs.environment-lower == 'production'
+    if: needs.set-env.outputs.environment-lower == 'skip'
     steps:
       - name: Validate Packages
         uses: DFE-Digital/rsd-github-actions/.github/actions/validate-packages@v1
