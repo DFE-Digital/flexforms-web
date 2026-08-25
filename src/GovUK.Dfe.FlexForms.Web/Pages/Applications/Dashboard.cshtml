@@ -199,9 +199,12 @@
                 <tbody class="govuk-table__body">
                     @foreach (var app in Model.Applications)
                     {
-                        var action = app.CalculatedStatus.Key == ApplicationStatus.Submitted ? $"View {AppTerminology.Singular}" : $"Continue {AppTerminology.Singular}";
+                        var action = app.CalculatedStatus.Key is ApplicationStatus.Submitted or ApplicationStatus.Deleted
+                            ? $"View {AppTerminology.Singular}"
+                            : $"Continue {AppTerminology.Singular}";
                         var statusClass = app.CalculatedStatus.Key == ApplicationStatus.Submitted ? "govuk-tag--green" :
-                            app.CalculatedStatus.Key == ApplicationStatus.InProgress ? "govuk-tag--blue" : "govuk-tag--grey";
+                            app.CalculatedStatus.Key == ApplicationStatus.InProgress ? "govuk-tag--blue" :
+                            app.CalculatedStatus.Key == ApplicationStatus.Deleted ? "govuk-tag--red" : "govuk-tag--grey";
 
                         <tr class="govuk-table__row">
                             @foreach (var column in Model.Columns)
