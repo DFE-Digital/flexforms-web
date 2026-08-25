@@ -40,13 +40,26 @@ You do not need to be a developer to use this manual. Where a change is made in 
     - [12.16 Who can change this](#1216-who-can-change-this)
     - [12.17 Event mappings checklist](#1217-event-mappings-checklist)
     - [12.18 Troubleshooting event mappings](#1218-troubleshooting-event-mappings)
-13. [Tenant settings](#13-tenant-settings)
-14. [Applications (admin list)](#14-applications-admin-list)
-15. [What end users see](#15-what-end-users-see)
-16. [System tools and caches](#16-system-tools-and-caches)
-17. [Things only a SuperAdmin can do](#17-things-only-a-superadmin-can-do)
-18. [Troubleshooting](#18-troubleshooting)
-19. [Glossary](#19-glossary)
+13. [Email placeholder mappings](#13-email-placeholder-mappings)
+    - [13.1 What this is for](#131-what-this-is-for)
+    - [13.2 How confirmation emails work](#132-how-confirmation-emails-work)
+    - [13.3 Baseline placeholders (always sent)](#133-baseline-placeholders-always-sent)
+    - [13.4 Recommended order of work](#134-recommended-order-of-work)
+    - [13.5 Step by step — add a custom placeholder](#135-step-by-step--add-a-custom-placeholder)
+    - [13.6 Mapping JSON shape](#136-mapping-json-shape)
+    - [13.7 How to link a placeholder to a form field](#137-how-to-link-a-placeholder-to-a-form-field)
+    - [13.8 Metadata keys you can use](#138-metadata-keys-you-can-use)
+    - [13.9 Worked examples](#139-worked-examples)
+    - [13.10 Who can change this](#1310-who-can-change-this)
+    - [13.11 Email placeholders checklist](#1311-email-placeholders-checklist)
+    - [13.12 Troubleshooting email placeholders](#1312-troubleshooting-email-placeholders)
+14. [Tenant settings](#14-tenant-settings)
+15. [Applications (admin list)](#15-applications-admin-list)
+16. [What end users see](#16-what-end-users-see)
+17. [System tools and caches](#17-system-tools-and-caches)
+18. [Things only a SuperAdmin can do](#18-things-only-a-superadmin-can-do)
+19. [Troubleshooting](#19-troubleshooting)
+20. [Glossary](#20-glossary)
 
 ---
 
@@ -64,7 +77,7 @@ You can:
 - Configure how submissions are published (event mappings)
 - Inspect tenant configuration and health
 
-You should **not** normally change secrets, login providers, or database connection strings. Those belong to the platform team (**SuperAdmin**). They are listed in [Tenant settings](#13-tenant-settings) so you can recognise them and leave them alone.
+You should **not** normally change secrets, login providers, or database connection strings. Those belong to the platform team (**SuperAdmin**). They are listed in [Tenant settings](#14-tenant-settings) so you can recognise them and leave them alone.
 
 ### Other Admin-area roles
 
@@ -115,7 +128,7 @@ What you see depends on your role. A full tenant Admin typically sees:
 | **Template Management** | Create a new template, Template Manager, Choose / preview templates, Custom Status Labels |
 | **Users & Roles** | User Manager (and Role Manager / Contributor management for Admin) |
 | **Applications** | Browse every application for a chosen template |
-| **Tenant Admin** | Organisation settings, Event mappings, Tenant Settings |
+| **Tenant Admin** | Organisation settings, Event mappings, Tenant Settings (including email placeholder mappings) |
 | **System** | Clear All Sessions & Caches, plus optional diagnostics |
 
 Tenant Admins (not SuperAdmins) also see a read-only summary: **This tenant’s configuration** (auth scheme, providers, hostnames).
@@ -136,6 +149,7 @@ Use this if you are standing up a new form.
 8. Set **Organisation settings** (wording, banner, filters).
 9. Create **Caseworker** / **Template Manager** roles if colleagues need limited Admin access.
 10. If another system must receive submit or file-upload data, follow [Event mappings](#12-event-mappings) (schema, mapping, trigger, then Azure Service Bus topic and subscription).
+11. If confirmation emails need form answers (for example academy name), follow [Email placeholder mappings](#13-email-placeholder-mappings) after the GOV.UK Notify template is ready.
 
 ---
 
@@ -710,7 +724,7 @@ Work from the bottom of the page conceptually, even though the screen lists sche
 | Field mappings | `EventMappings` | Copies form/metadata into properties |
 | Triggers | `EventTriggers` | Binds a lifecycle moment to an event type |
 
-The Admin page writes those categories for you. You can also inspect them under [Tenant settings](#13-tenant-settings), but prefer this page.
+The Admin page writes those categories for you. You can also inspect them under [Tenant settings](#14-tenant-settings), but prefer this page.
 
 **A mapping does not publish by itself.** You must add a trigger that uses the same event type (and the same `mappingId` you put in the JSON).
 
@@ -1083,21 +1097,395 @@ API logs (Application Insights) search for `Published schema event`, `Published 
 
 ---
 
+## 13. Email placeholder mappings
 
-## 13. Tenant settings
+There is **no dedicated Admin page** for this yet. You configure it under **Admin → Tenant Admin → Tenant Settings** (category `EmailPlaceholderMappings`, Target **Shared**). See [14. Tenant settings](#14-tenant-settings).
+
+The field-mapping language is the **same** as [Event mappings](#12-event-mappings) (`DirectField`, `ComplexFieldProperty`, `Collection`, `Metadata`, and so on). If you already map form answers into Service Bus events, you can reuse the same `sourceFieldId` / `nestedPath` patterns for emails.
+
+### 13.1 What this is for
+
+FlexForms sends **GOV.UK Notify** emails when:
+
+- An application is **submitted** (confirmation to the applicant)
+- A **contributor is invited**
+- A contributor is **granted access**
+
+The email **body** lives in Notify (not in FlexForms). FlexForms only supplies:
+
+1. Which Notify **template ID** to use (`EmailTemplates` — usually set by the platform team)
+2. A dictionary of **personalisation** values that fill `((placeholders))` in that Notify template
+
+**Baseline** personalisation (name, reference, dates) is always sent. **Email placeholder mappings** let you add **extra** values from the submitted form — for example `((AcademyName))` filled from the academy search field — without a code change.
+
+Configuration is stored in TenantConfig for **this tenant only** (category `EmailPlaceholderMappings`, Target **Shared** so the API can read it).
+
+If you never save this category, emails still work with the baseline keys only.
+
+### 13.2 How confirmation emails work
+
+```text
+Applicant submits / contributor invited
+        │
+        ▼
+API loads latest form answers
+        │
+        ▼
+Baseline personalisation (always)
+   + optional EmailPlaceholderMappings overlay
+        │
+        ▼
+GOV.UK Notify template  →  ((placeholders)) filled  →  inbox
+```
+
+| Piece | Where it lives | Who usually owns it |
+|-------|----------------|---------------------|
+| Email wording / layout | GOV.UK Notify template | Product / platform with Notify access |
+| Notify template GUID per form type | TenantConfig `EmailTemplates` | SuperAdmin / platform |
+| Extra placeholders from form answers | TenantConfig `EmailPlaceholderMappings` | Tenant Admin (this section) |
+
+**Important:** The personalisation **key** in FlexForms must match the Notify placeholder name **exactly** (case-sensitive). If Notify has `((AcademyName))`, the mapping JSON key must be `AcademyName`, not `academy_name`.
+
+### 13.3 Baseline placeholders (always sent)
+
+These are sent even when `EmailPlaceholderMappings` is empty. Put the matching `((...))` tokens in your Notify template if you need them.
+
+#### Application submitted (`ApplicationSubmitted`)
+
+| Personalisation key | What the applicant sees |
+|---------------------|-------------------------|
+| `user_full_name` | Submitter’s full name |
+| `application_reference` | Human-readable application reference |
+| `submitted_date` | Date as `dd/MM/yyyy` |
+| `submitted_time` | Time as `HH:mm` |
+
+#### Contributor invited (`ContributorInvited`)
+
+| Personalisation key | What the invitee sees |
+|---------------------|------------------------|
+| `contributor_name` | Contributor’s name |
+| `application_reference` | Application reference |
+| `added_date` | Date as `dd/MM/yyyy` |
+| `added_time` | Time as `HH:mm` |
+
+#### Contributor access granted (`ContributorAccessGranted`)
+
+| Personalisation key | What the contributor sees |
+|---------------------|---------------------------|
+| `contributor_name` | Contributor’s name |
+| `application_reference` | Application reference |
+| `granted_date` | Date as `dd/MM/yyyy` |
+| `granted_time` | Time as `HH:mm` |
+| `access_types` | Comma-separated access types (for example `Read, Write`) |
+
+Notify template ID resolution for access-granted emails still uses the `ContributorInvited` Notify template entry today. **Personalisation mappings** use the separate email type key `ContributorAccessGranted` so you can send different extra placeholders without changing that shared Notify ID.
+
+### 13.4 Recommended order of work
+
+1. Decide which **extra** facts from the form should appear in the email (for example academy name, trust name).
+2. In **GOV.UK Notify**, edit the template and add `((YourPlaceholderName))` where the text should appear. Save and note the exact spelling.
+3. In the form template schema, find the question’s **`fieldId`** (see [Form Template Designer Manual](Form-Template-Designer-Manual.md)). For nested values (autocomplete / complex objects), note the property path (for example `name` or `ukprn`).
+4. In FlexForms **Tenant Settings**, add or update **`EmailPlaceholderMappings`** (Target **Shared**) with a mapping for the right **template** and **email type** ([13.5](#135-step-by-step--add-a-custom-placeholder)).
+5. Submit a test application (or invite a contributor) in a non-production environment and check the email in Notify’s test inbox / letterbox.
+
+### 13.5 Step by step — add a custom placeholder
+
+Example goal: show the academy name in the **application submitted** confirmation email.
+
+#### A. Notify template
+
+In the Notify template body, add something like:
+
+```text
+You submitted an application for ((AcademyName)).
+Your reference is ((application_reference)).
+```
+
+Keep the existing baseline tokens (`application_reference`, `user_full_name`, and so on) if you still need them.
+
+#### B. Find the form field Id
+
+Open the live template schema (Template Manager / Forms designer). Find the academy question. Note its `fieldId` — for example `academiesSearch`. If the answer is a JSON object with a display name, the nested property is usually `name`.
+
+#### C. Save TenantConfig
+
+1. Open **Admin → Tenant Admin → Tenant Settings**.
+2. **Add a setting** (or **Update** if `EmailPlaceholderMappings` already exists).
+3. **Category:** `EmailPlaceholderMappings`
+4. **Target:** `Shared` (required — the API must read this at send time)
+5. **Settings JSON:** use the shape in [13.6](#136-mapping-json-shape). Example for one form:
+
+```json
+{
+  "form-001": {
+    "ApplicationSubmitted": {
+      "mappingId": "transfer-submitted-email-v1",
+      "eventType": "ApplicationSubmitted",
+      "description": "Extra personalisation for Transfers submitted email",
+      "fieldMappings": {
+        "AcademyName": {
+          "sourceType": "ComplexFieldProperty",
+          "sourceFieldId": "academiesSearch",
+          "nestedPath": "name"
+        }
+      }
+    }
+  }
+}
+```
+
+6. **Validate / diff**, then **Add setting** or **Update**.
+7. If another admin changed config recently, **Refresh settings** first.
+
+#### D. Template keys (GUID vs `form-001`)
+
+Use either:
+
+- The schema string `templateId` (for example `form-001`), or
+- The API template **GUID**
+
+The API looks up the exact key first, then falls back across sibling template keys for the same email type (same behaviour as Event mappings). Prefer saving under the key your team already uses for Event mappings so both stay aligned.
+
+You may nest **several email types** under the same template key:
+
+```json
+{
+  "form-001": {
+    "ApplicationSubmitted": { "...": "..." },
+    "ContributorInvited": { "...": "..." },
+    "ContributorAccessGranted": { "...": "..." }
+  }
+}
+```
+
+### 13.6 Mapping JSON shape
+
+Outer object: **template key → email type → mapping**.
+
+Each mapping object:
+
+```json
+{
+  "mappingId": "my-email-mapping-v1",
+  "eventType": "ApplicationSubmitted",
+  "description": "Optional note for other admins",
+  "fieldMappings": {
+    "NotifyPlaceholderName": { }
+  }
+}
+```
+
+| Field | Rules |
+|-------|--------|
+| `mappingId` | Required. A label for this version of the mapping (for your records). |
+| `eventType` | Required. Must match the email type key: `ApplicationSubmitted`, `ContributorInvited`, or `ContributorAccessGranted`. |
+| `fieldMappings` | Required. Keys = Notify personalisation names. Values = how to fill them (same DSL as Event mappings). |
+
+**Merge behaviour**
+
+- Baseline keys are always included.
+- Mapped keys are **added** on top.
+- If you map a key that already exists in the baseline (for example `user_full_name`), the **mapped value wins**.
+- Empty mapped values are **skipped** (that placeholder is not overwritten / not added).
+
+### 13.7 How to link a placeholder to a form field
+
+Each entry under `fieldMappings` is a **source** object. `sourceFieldId` for form answers must match the template field `fieldId`.
+
+| `sourceType` | What it reads | Extra fields |
+|--------------|---------------|--------------|
+| `DirectField` | One form answer (plain text / simple value) | `sourceFieldId` |
+| `ComplexFieldProperty` | Nested value on a complex / autocomplete field | `sourceFieldId`, `nestedPath` (for example `name`, `ukprn`) |
+| `Collection` | First row or mapped rows from a repeating collection | `collectionMapping` (same as Event mappings — see [12.10](#1210-mapping-json-reference)) |
+| `Metadata` | Platform facts (not a question on the form) | `sourceFieldId` = a metadata key ([13.8](#138-metadata-keys-you-can-use)) |
+| `Static` | Fixed or generated value | `transformationType`: `currentDateTime` / `currentDate`, or `defaultValue` |
+| `Computed` | Several fields combined | `sourceFieldIds`, `transformationType`: `concatenate`, `sum`, `count`, `any`, `checkEquals` |
+
+Optional on any source: `defaultValue`.
+
+**Notify tip:** Prefer string-friendly values (names, references, short text). Large JSON blobs are not useful in an email body.
+
+### 13.8 Metadata keys you can use
+
+Use `"sourceType": "Metadata"` and set `sourceFieldId` to one of these.
+
+**Always available (any of the three email types)**
+
+| `sourceFieldId` | Meaning |
+|-----------------|--------|
+| `applicationId` | Application GUID |
+| `applicationReference` | Human-readable reference |
+
+**Application submitted only**
+
+| `sourceFieldId` | Meaning |
+|-----------------|--------|
+| `submittedByUserId` | Submitter’s user id |
+| `submittedByEmail` | Submitter’s email |
+| `submittedByFullName` | Submitter’s full name |
+| `submittedOn` | UTC timestamp of submit (raw; baseline already formats date/time separately) |
+
+**Contributor invited only**
+
+| `sourceFieldId` | Meaning |
+|-----------------|--------|
+| `contributorName` | Contributor display name |
+| `contributorEmail` | Contributor email |
+| `addedOn` | When they were added |
+
+**Contributor access granted only**
+
+| `sourceFieldId` | Meaning |
+|-----------------|--------|
+| `contributorName` | Contributor display name |
+| `contributorEmail` | Contributor email |
+| `grantedOn` | When access was granted |
+| `accessTypes` | Access types string |
+
+### 13.9 Worked examples
+
+#### A. Academy name on the submitted confirmation email
+
+```json
+{
+  "9A4E9C58-9135-468C-B154-7B966F7ACFB7": {
+    "ApplicationSubmitted": {
+      "mappingId": "transfer-submitted-email-v1",
+      "eventType": "ApplicationSubmitted",
+      "fieldMappings": {
+        "AcademyName": {
+          "sourceType": "ComplexFieldProperty",
+          "sourceFieldId": "academiesSearch",
+          "nestedPath": "name"
+        }
+      }
+    }
+  }
+}
+```
+
+Notify body: `Thank you for submitting an application about ((AcademyName)).`
+
+#### B. Outgoing trust name from a collection (first row)
+
+```json
+{
+  "form-001": {
+    "ApplicationSubmitted": {
+      "mappingId": "transfer-submitted-email-v2",
+      "eventType": "ApplicationSubmitted",
+      "fieldMappings": {
+        "OutgoingTrustName": {
+          "sourceType": "Collection",
+          "collectionMapping": {
+            "sourceCollectionFieldId": "detailsOfOutgoingTrusts",
+            "extractFirst": true,
+            "nestedPath": "trustsSearch-field-flow.name"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+#### C. Plain text field + override a baseline key from metadata
+
+```json
+{
+  "form-001": {
+    "ApplicationSubmitted": {
+      "mappingId": "plan-submitted-email-v1",
+      "eventType": "ApplicationSubmitted",
+      "fieldMappings": {
+        "LocalAuthorityName": {
+          "sourceType": "DirectField",
+          "sourceFieldId": "localAuthorityName"
+        },
+        "user_full_name": {
+          "sourceType": "Metadata",
+          "sourceFieldId": "submittedByFullName"
+        }
+      }
+    }
+  }
+}
+```
+
+#### D. Contributor invite — include something from the application form
+
+```json
+{
+  "form-001": {
+    "ContributorInvited": {
+      "mappingId": "transfer-contributor-invite-email-v1",
+      "eventType": "ContributorInvited",
+      "fieldMappings": {
+        "AcademyName": {
+          "sourceType": "ComplexFieldProperty",
+          "sourceFieldId": "academiesSearch",
+          "nestedPath": "name"
+        }
+      }
+    }
+  }
+}
+```
+
+The API loads the application’s **latest saved answers** when building contributor emails, so form-based placeholders work there too (as long as those answers were saved before the invite).
+
+### 13.10 Who can change this
+
+| Who | What they can do |
+|-----|------------------|
+| **Tenant Admin** | Add / update `EmailPlaceholderMappings` via Tenant Settings (safe category) |
+| **SuperAdmin** | Same, plus `EmailTemplates` (Notify template GUIDs) and provider secrets under `Email` |
+| Product / Notify editors | Change the Notify template wording and `((placeholders))` |
+
+You need **Notify access** (or a colleague who has it) to add new `((...))` tokens. Saving FlexForms config alone does not change the email layout.
+
+### 13.11 Email placeholders checklist
+
+- [ ] Notify template updated with the new `((PlaceholderName))` spelling
+- [ ] Baseline tokens still present if you still need name / reference / dates
+- [ ] `fieldId` copied from the form schema (spelling and casing match)
+- [ ] For complex fields, `nestedPath` matches the stored property (often `name`)
+- [ ] `EmailPlaceholderMappings` saved with Target **Shared**
+- [ ] Outer key is the correct template (GUID or schema `templateId`)
+- [ ] Inner key is the correct email type (`ApplicationSubmitted` / `ContributorInvited` / `ContributorAccessGranted`)
+- [ ] `eventType` inside the mapping matches that email type
+- [ ] Tested in non-prod; personalisation visible in Notify preview / received email
+
+### 13.12 Troubleshooting email placeholders
+
+| What you see | What to check |
+|--------------|----------------|
+| Email arrives but custom text is blank | Placeholder name mismatch Notify vs JSON key; empty form answer (empty values are skipped); wrong `fieldId` / `nestedPath` |
+| Email never includes the new placeholder | Mapping saved under wrong template key or wrong email type; Target not `Shared`; tenant config not refreshed |
+| Only baseline fields appear | No `EmailPlaceholderMappings` for this template + email type (that is normal until you add one) |
+| Contributor email missing form values | Answers not saved yet on the application; wrong collection / field Ids |
+| Notify rejects the send | Notify template does not define that personalisation key, or value type is unexpected — keep values as short strings |
+| Wrong Notify template altogether | That is `EmailTemplates` / host mapping — ask SuperAdmin; not fixed by placeholder mappings |
+
+API logs (Application Insights) search for `Applying email placeholder mapping`, `No EmailPlaceholderMappings`, `Email sent successfully`, `Could not resolve email template`.
+
+---
+
+
+## 14. Tenant settings
 
 **Admin → Tenant Admin → Tenant Settings**  
 Page: `/admin/tenant-settings`
 
 ![Health, settings table, add a setting, audit log](images/16-tenant-settings-overview.png)
 
-This is the **full configuration editor**: categories of JSON stored for Web, API, or Shared. Organisation settings and Event mappings write into the same store through friendlier screens. Use Tenant Settings when you need a category that has no dedicated page, or when you are asked to by the platform team.
+This is the **full configuration editor**: categories of JSON stored for Web, API, or Shared. Organisation settings and Event mappings write into the same store through friendlier screens. Use Tenant Settings when you need a category that has no dedicated page (for example [Email placeholder mappings](#13-email-placeholder-mappings)), or when you are asked to by the platform team.
 
 Secret values are shown decrypted here and encrypted again when **Secret** is ticked on save.
 
 Select **Refresh settings** after another admin has changed config, or if health looks stale.
 
-### 13.1 Tenant health
+### 14.1 Tenant health
 
 A table of checks (Pass / Warn / Fail), including:
 
@@ -1112,7 +1500,7 @@ Plus a read-only snapshot of effective runtime configuration.
 
 Treat a Fail as “ask the platform team” unless you just changed a setting and can **Validate / diff** it.
 
-### 13.2 What a tenant Admin should usually change here
+### 14.2 What a tenant Admin should usually change here
 
 Prefer the dedicated screens first. If you must use this page, these categories match everyday product choices:
 
@@ -1124,6 +1512,7 @@ Prefer the dedicated screens first. If you must use this page, these categories 
 | **EventMappings** | Shared | Field mappings | Event mappings |
 | **SchemaEvents** | Shared | Tenant event shapes | Event mappings |
 | **EventTriggers** | Shared | Submit / upload publish bindings | Event mappings |
+| **EmailPlaceholderMappings** | Shared | Extra GOV.UK Notify personalisation from form answers | This page (JSON) — see [Email placeholder mappings](#13-email-placeholder-mappings) |
 | **Layout** | Web | Service name in the header, phase banner text and links | This page (JSON) — there is no separate form |
 | **FileValidation** | Shared | Whether submit is blocked until files pass tenant virus/validation | This page (JSON) |
 
@@ -1143,7 +1532,7 @@ Prefer the dedicated screens first. If you must use this page, these categories 
 
 `ServiceName` is the product name in the GOV.UK header and the browser title on the dashboard.
 
-### 13.3 What to leave for SuperAdmin / platform
+### 14.3 What to leave for SuperAdmin / platform
 
 Do not edit these unless you have been briefed. They can lock people out or break the API.
 
@@ -1158,10 +1547,11 @@ Do not edit these unless you have been briefed. They can lock people out or brea
 | **AuthProviders** | API keys / mTLS |
 | **AllowedHosts** | Which hostnames the app accepts |
 | **FeatureManagement** | Feature flags |
+| **Email** / **EmailTemplates** | Notify API key and template GUIDs (platform-owned) |
 
 The page also explains how SuperAdmins switch login without a platform restart (TestAuthentication / EntraSso / Authentication `Scheme`). Tenant Admins should not do this unprompted.
 
-### 13.4 How to add or update a setting
+### 14.4 How to add or update a setting
 
 Existing rows show **Category**, **Target**, JSON, **Secret**, then:
 
@@ -1180,13 +1570,13 @@ Existing rows show **Category**, **Target**, JSON, **Secret**, then:
 
 **Export settings** / **Import settings** copy configuration between environments. Import skips secret placeholders. Use with care.
 
-### 13.5 Audit log
+### 14.5 Audit log
 
 **Audit log** on this page lists recent setting changes: When (UTC), Action, Category, Target, Actor.
 
 ---
 
-## 14. Applications (admin list)
+## 15. Applications (admin list)
 
 **Admin → Applications → View applications**  
 Page: `/admin/applications`  
@@ -1200,7 +1590,7 @@ This is a catalogue for support. Caseworkers use the main **Applications** item 
 
 ---
 
-## 15. What end users see
+## 16. What end users see
 
 After you make a form live and grant access, a typical applicant gets:
 
@@ -1223,7 +1613,7 @@ Previewing a not-live form as an admin shows: **THIS IS A PREVIEW OF {template n
 
 ---
 
-## 16. System tools and caches
+## 17. System tools and caches
 
 **Admin hub → System → Clear All Sessions & Caches**
 
@@ -1237,7 +1627,7 @@ Template Manager’s success message also offers **Clear all caches** after a ne
 
 ---
 
-## 17. Things only a SuperAdmin can do
+## 18. Things only a SuperAdmin can do
 
 You will **not** see these as a tenant Admin (by design):
 
@@ -1251,7 +1641,7 @@ If you need a second tenant administrator, ask a SuperAdmin to assign the Admin 
 
 ---
 
-## 18. Troubleshooting
+## 19. Troubleshooting
 
 | What you see | What to try |
 |--------------|-------------|
@@ -1268,11 +1658,12 @@ If you need a second tenant administrator, ask a SuperAdmin to assign the Admin 
 | Dashboard missing a custom column | Check `fieldId` matches the question, you have no more than three field columns, and you saved a new template version. Older applications can show blank cells. |
 | Grant to all users succeeded but the banner showed zeros | Fixed in a recent release; counts should match people actually updated. |
 | Submit succeeded but reporting never received a message | See [12.18 Troubleshooting event mappings](#1218-troubleshooting-event-mappings). Check triggers, mapping, Service Bus topic/subscription, and API logs. |
+| Confirmation email missing academy name / custom text | See [13.12 Troubleshooting email placeholders](#1312-troubleshooting-email-placeholders). Check Notify `((placeholder))` spelling, `EmailPlaceholderMappings` (Target Shared), and form `fieldId`. |
 
 
 ---
 
-## 19. Glossary
+## 20. Glossary
 
 | Term | Plain meaning |
 |------|----------------|
@@ -1295,6 +1686,9 @@ If you need a second tenant administrator, ask a SuperAdmin to assign the Admin 
 | **Topic** | Named pile of messages in Service Bus. Typed names come from CoreLibs; schema names are yours. |
 | **Trigger** | `ApplicationSubmitted` or `FileUploaded` plus event kind, event type, and mapping id. |
 | **Typed event** | A platform-defined Service Bus contract. Opposite of a tenant **schema event**. |
+| **GOV.UK Notify** | Government email service. FlexForms sends a template ID plus personalisation; Notify builds the email body. |
+| **Personalisation / placeholder** | A named value Notify inserts into `((Name))` in the template. Baseline keys are always sent; extras come from `EmailPlaceholderMappings`. |
+| **EmailPlaceholderMappings** | TenantConfig category that maps form field Ids (and metadata) onto Notify personalisation keys. |
 
 ---
 
