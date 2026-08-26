@@ -26,6 +26,13 @@ public static class DashboardApplicationStatusCalculator
                     GetStatusLabel(ApplicationStatus.Submitted, customStatuses));
             }
 
+            if (application.Status == ApplicationStatus.Deleted)
+            {
+                return new KeyValuePair<ApplicationStatus, string>(
+                    ApplicationStatus.Deleted,
+                    GetStatusLabel(ApplicationStatus.Deleted, customStatuses));
+            }
+
             if (application.LatestResponse?.ResponseBody != null)
             {
                 try

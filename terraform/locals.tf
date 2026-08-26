@@ -14,6 +14,12 @@ locals {
   container_scale_http_concurrency             = var.container_scale_http_concurrency
   container_min_replicas                       = var.container_min_replicas
   container_port                               = var.container_port
+  enable_dns_zone                              = var.enable_dns_zone
+  dns_zone_domain_name                         = var.dns_zone_domain_name
+  dns_ns_records                               = var.dns_ns_records
+  dns_txt_records                              = var.dns_txt_records
+  dns_mx_records                               = var.dns_mx_records
+  dns_alias_records                            = var.dns_alias_records
   tfvars_access_ipv4                           = var.tfvars_access_ipv4
   tfvars_filename                              = var.tfvars_filename
   enable_monitoring                            = var.enable_monitoring

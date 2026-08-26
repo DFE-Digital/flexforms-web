@@ -244,3 +244,60 @@ variable "restrict_container_apps_to_cdn_inbound_only" {
   type        = bool
   default     = false
 }
+
+variable "enable_dns_zone" {
+  description = "Conditionally create a DNS zone"
+  type        = bool
+}
+
+variable "dns_zone_domain_name" {
+  description = "DNS zone domain name. If created, records will automatically be created to point to the CDN."
+  type        = string
+}
+
+variable "dns_ns_records" {
+  description = "DNS NS records to add to the DNS Zone"
+  type = map(
+    object({
+      ttl : optional(number, 300),
+      records : list(string)
+    })
+  )
+}
+
+variable "dns_txt_records" {
+  description = "DNS TXT records to add to the DNS Zone"
+  type = map(
+    object({
+      ttl : optional(number, 300),
+      records : list(string)
+    })
+  )
+}
+
+variable "dns_mx_records" {
+  description = "DNS MX records to add to the DNS Zone"
+  type = map(
+    object({
+      ttl : optional(number, 300),
+      records : list(
+        object({
+          preference : number,
+          exchange : string
+        })
+      )
+    })
+  )
+  default = {}
+}
+
+variable "dns_alias_records" {
+  description = "DNS ALIAS records to add to the DNS Zone"
+  type = map(
+    object({
+      ttl : optional(number, 300),
+      target_resource_id : string
+    })
+  )
+  default = {}
+}

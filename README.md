@@ -13,10 +13,11 @@ Template authoring guide: [`docs/Form-Template-Designer-Manual.md`](docs/Form-Te
 - **Platform bootstrap** — Host config from API at startup; per-request tenant config for Target `Web`
 - **Template-driven form engine** — Tasks, pages, fields, conditional logic, collection & derived flows
 - **Auth** — DfE Sign-In (OIDC) and optional Entra SSO, with cookie sessions and API token exchange
-- **Admin area** — Template Manager, User Manager, Role Manager, Event mappings (Admin), Tenant Settings (SuperAdmin)
+- **Admin area** — Template Manager, User Manager, Role Manager, Event mappings (Admin), Tenant Settings (including email placeholder mappings)
 - **Contributors** — Invite collaborators when `contributorPattern` is enabled on the template
 - **Files** — Upload via API; ClamAV scan results from Service Bus; optional tenant file-validation status
 - **Notifications** — API-backed notification centre + SignalR (malware, file delete, file validation)
+- **Emails** — Confirmation / invite personalisation is API-owned (GOV.UK Notify); Web configures optional `EmailPlaceholderMappings` via Tenant Settings
 - **GOV.UK Frontend** — Design System components via GovUk.Frontend.AspNetCore
 - **Request tracing** — Correlation id end-to-end, structured logs (Serilog → Application Insights), API error logging with ErrorId
 
@@ -652,6 +653,26 @@ flowchart TB
 
 Publish is **best-effort**: a mapping or bus failure does not roll back the user’s submit/upload. Runtime mapping lookup is **template id + event type** (not mapping id). Empty EventTriggers means no extra publish besides scan-on-upload.
 
+### Email placeholder mappings (high-level design)
+
+Web **does not send** emails. The **API** sends GOV.UK Notify messages on submit / contributor invite / access granted. Admins can add **extra** Notify personalisation from form answers by saving Shared TenantConfig category **`EmailPlaceholderMappings`** (Tenant Settings JSON — no dedicated Admin page yet).
+
+| Category | Role |
+|----------|------|
+| `EmailTemplates` | Notify template GUIDs per application type + email type (platform / SuperAdmin) |
+| `EmailPlaceholderMappings` | Per template + email type: form / metadata → Notify `((placeholder))` keys (same DSL as `EventMappings`) |
+
+Baseline personalisation (name, reference, dates) is always sent. Configured mappings **overlay** those keys. Operator steps: [`docs/Tenant-Admin-User-Manual.md`](docs/Tenant-Admin-User-Manual.md#13-email-placeholder-mappings) §13. Runtime detail: [flexforms-api README — Email placeholder mappings](https://github.com/DFE-Digital/flexforms-api#email-placeholder-mappings-notify-personalisation).
+
+```mermaid
+flowchart LR
+    Admin["Tenant Settings<br/>EmailPlaceholderMappings"] --> TC["TenantConfig Shared"]
+    User["Submit / invite"] --> API["FlexForms API handlers"]
+    TC --> API
+    API --> Builder["EmailPersonalisationBuilder"]
+    Builder --> Notify["GOV.UK Notify"]
+```
+
 ---
 
 ## Applications, contributors, notifications
@@ -664,6 +685,7 @@ Publish is **best-effort**: a mapping or bus failure does not roll back the user
 | Submitted | `/application-submitted/{referenceNumber}` |
 | Notifications | `/Notifications` UI + `notifications/*` API proxy; SignalR `notification.upserted` |
 | Feedback | `/Feedback/*` (often anonymous) |
+| Emails | Sent by the API (Notify). Optional custom placeholders: Tenant Settings → `EmailPlaceholderMappings` ([§13](docs/Tenant-Admin-User-Manual.md#13-email-placeholder-mappings)) |
 
 Terminology (application vs case, etc.) comes from tenant `ApplicationTerminology` settings.
 
@@ -844,9 +866,10 @@ sequenceDiagram
 ## Related documentation
 
 - [`docs/Form-Template-Designer-Manual.md`](docs/Form-Template-Designer-Manual.md) — JSON template authoring
-- [`docs/Tenant-Admin-User-Manual.md`](docs/Tenant-Admin-User-Manual.md) — tenant Admin UI, including [event mappings §12](docs/Tenant-Admin-User-Manual.md#12-event-mappings)
+- [`docs/Tenant-Admin-User-Manual.md`](docs/Tenant-Admin-User-Manual.md) — tenant Admin UI, including [event mappings §12](docs/Tenant-Admin-User-Manual.md#12-event-mappings) and [email placeholders §13](docs/Tenant-Admin-User-Manual.md#13-email-placeholder-mappings)
 - [Event mapping (HLD)](#event-mapping-high-level-design) — Web vs API vs Azure Service Bus
-- [flexforms-api README](https://github.com/DFE-Digital/flexforms-api) — API, TenantConfig, roles, security, file-validation callback
+- [Email placeholder mappings (HLD)](#email-placeholder-mappings-high-level-design) — Notify personalisation from form fields
+- [flexforms-api README](https://github.com/DFE-Digital/flexforms-api) — API, TenantConfig, roles, security, file-validation callback, [email placeholders](https://github.com/DFE-Digital/flexforms-api#email-placeholder-mappings-notify-personalisation)
 - DfE.CoreLibs `GovUK.Dfe.CoreLibs.Http/ExceptionHandler.md` — global exception handler + KQL support playbook
 - `terraform/README.md` — deployment
 
