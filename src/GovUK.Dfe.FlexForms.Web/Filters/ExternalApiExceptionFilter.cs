@@ -65,9 +65,9 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
                     return;
                 }
 
-                if (IsFileOperation(context.HttpContext))
+                if (TryHandleFileValidationError(context.HttpContext, page, statusCode, message, out var fileValidationResult))
                 {
-                    executedContext.Result = MapUnhandledApiException(page, statusCode, message, context.HttpContext);
+                    executedContext.Result = fileValidationResult;
                     executedContext.ExceptionHandled = true;
                     return;
                 }
@@ -92,6 +92,9 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
                 {
                     if (TryAddModelStateErrorsFromContext(page, r))
                     {
+                        if (page is BaseFormEngineModel formEnginePage)
+                            formEnginePage.EnsureFormStateForErrorDisplay();
+
                         executedContext.Result = new PageResult();
                         executedContext.ExceptionHandled = true;
                         return;
@@ -102,35 +105,8 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
                 {
                     AddNonFieldError(page, r.Message);
 
-                    var storedUploadInfo = context.HttpContext.Items.TryGetValue("UploadRequestInfo", out var storedInfo) 
-                        ? ((bool isUpload, string fieldId))storedInfo 
-                        : (false, string.Empty);
-                    
-                    if (storedUploadInfo.Item1)
-                    {
-                        try 
-                        {
-                            var formErrorStore = context.HttpContext.RequestServices.GetService<IFormErrorStore>();
-                            if (formErrorStore != null)
-                            {
-                                formErrorStore.Save(storedUploadInfo.Item2, page.ModelState);
-                                
-                                var returnUrl = context.HttpContext.Request.Form["ReturnUrl"].ToString();
-                                if (!string.IsNullOrEmpty(returnUrl))
-                                {
-                                    executedContext.Result = new RedirectResult(returnUrl);
-                                    executedContext.ExceptionHandled = true;
-                                    return;
-                                }
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            logger.LogWarning(ex,
-                                "Failed to persist upload validation errors for field {FieldId}",
-                                storedUploadInfo.Item2);
-                        }
-                    }
+                    if (page is BaseFormEngineModel formPageForValidation)
+                        formPageForValidation.EnsureFormStateForErrorDisplay();
 
                     executedContext.Result = new PageResult();
                     executedContext.ExceptionHandled = true;
@@ -285,12 +261,8 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
                 }
             }
 
-            if (!string.IsNullOrWhiteSpace(r.Message))
-            {
-                page.ModelState.AddModelError("Error", r.Message);
-                return true;
-            }
-
+            // Telemetry Context often has CorrelationId/TenantId without field errors —
+            // do not treat a bare Message as "structured validation" or we skip FormErrorStore.
             return false;
         }
         
@@ -368,6 +340,60 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
             }
 
             return (true, operation, fieldId);
+        }
+
+        private static bool TryHandleFileValidationError(
+            HttpContext httpContext,
+            PageModel page,
+            int statusCode,
+            string? apiMessage,
+            out IActionResult result)
+        {
+            result = new PageResult();
+
+            if (statusCode is not (400 or 409 or 422))
+                return false;
+
+            if (!IsFileOperation(httpContext))
+                return false;
+
+            var fileOpInfo = httpContext.Items.TryGetValue("FileOperationInfo", out var storedInfo)
+                ? (ValueTuple<bool, string, string>)storedInfo!
+                : (false, string.Empty, string.Empty);
+
+            // Download validation errors are rare; keep existing unhandled mapping for those.
+            if (fileOpInfo.Item2 is not ("upload" or "delete"))
+                return false;
+
+            AddNonFieldError(page, apiMessage);
+
+            var returnUrl = httpContext.Request.HasFormContentType
+                ? httpContext.Request.Form["ReturnUrl"].ToString()
+                : string.Empty;
+            if (string.IsNullOrEmpty(returnUrl))
+                returnUrl = httpContext.Request.Headers.Referer.ToString();
+
+            var errorKey = !string.IsNullOrEmpty(fileOpInfo.Item3) ? fileOpInfo.Item3 : "Error";
+            try
+            {
+                var formErrorStore = httpContext.RequestServices.GetService<IFormErrorStore>();
+                formErrorStore?.Save(errorKey, page.ModelState);
+                if (!string.IsNullOrEmpty(returnUrl))
+                {
+                    result = new RedirectResult(returnUrl);
+                    return true;
+                }
+            }
+            catch
+            {
+                // Fall through to page result with form state rehydrated when possible.
+            }
+
+            if (page is BaseFormEngineModel formEnginePage)
+                formEnginePage.EnsureFormStateForErrorDisplay();
+
+            result = new PageResult();
+            return true;
         }
 
         private static bool TryHandleApplicationFileAccessDenied(

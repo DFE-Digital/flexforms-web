@@ -2,6 +2,9 @@
 
 All notable changes to this service will be documented in this file.
 
+## [2.2.1]
+### Notes
+- Fixed upload validation issues
 
 ## [2.2.0]
 ### Notes
