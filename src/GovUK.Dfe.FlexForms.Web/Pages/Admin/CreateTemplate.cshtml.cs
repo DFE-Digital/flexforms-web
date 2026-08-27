@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using GovUK.Dfe.FlexForms.Domain.Templates;
 using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.FlexForms.Web.Services;
+using GovUK.Dfe.FlexForms.Web.Tenancy;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using Microsoft.AspNetCore.Authorization;
@@ -72,7 +73,8 @@ public sealed class CreateTemplateModel(
                 User,
                 logger,
                 cancellationToken,
-                forceRefresh: true);
+                forceRefresh: true,
+                tenantId: HttpContext.RequestServices.GetService<ITenantRequestContext>()?.TenantId);
 
             return RedirectToPage(
                 "/Admin/TemplateManager",

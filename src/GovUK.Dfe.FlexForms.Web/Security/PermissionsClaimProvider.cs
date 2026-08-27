@@ -1,6 +1,6 @@
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.CoreLibs.Security.Interfaces;
-using GovUK.Dfe.FlexForms.Web.Middleware;
+using GovUK.Dfe.FlexForms.Web.Tenancy;
 using Microsoft.Extensions.Caching.Memory;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
@@ -9,7 +9,9 @@ using Task = System.Threading.Tasks.Task;
 namespace GovUK.Dfe.FlexForms.Web.Security;
 
 [ExcludeFromCodeCoverage]
-public class PermissionsClaimProvider(IMemoryCache cache) : ICustomClaimProvider
+public class PermissionsClaimProvider(
+    IMemoryCache cache,
+    IHttpContextAccessor httpContextAccessor) : ICustomClaimProvider
 {
     public Task<IEnumerable<Claim>> GetClaimsAsync(ClaimsPrincipal principal)
     {
@@ -17,9 +19,12 @@ public class PermissionsClaimProvider(IMemoryCache cache) : ICustomClaimProvider
         if (string.IsNullOrEmpty(userId))
             return Task.FromResult(Enumerable.Empty<Claim>());
 
-        var email = principal.FindFirstValue(ClaimTypes.Email);
+        var tenantId = httpContextAccessor.HttpContext?.RequestServices
+            .GetService(typeof(ITenantRequestContext)) is ITenantRequestContext tenantContext
+            ? tenantContext.TenantId
+            : null;
 
-        var cacheKey = UserPermissionsCache.GetCacheKey(principal);
+        var cacheKey = UserPermissionsCache.GetCacheKey(principal, tenantId);
         
         var claims = new List<Claim>();
 

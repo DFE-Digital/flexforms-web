@@ -4,6 +4,7 @@ using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Security;
 using GovUK.Dfe.FlexForms.Application.Admin;
 using GovUK.Dfe.FlexForms.Web.Security;
+using GovUK.Dfe.FlexForms.Web.Tenancy;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -112,7 +113,10 @@ public sealed class UserManagerEditModel(
             && string.Equals(actingEmail, userEmail, StringComparison.OrdinalIgnoreCase))
         {
             tokenStore.ClearToken();
-            UserPermissionsCache.Invalidate(memoryCache, User);
+            UserPermissionsCache.Invalidate(
+                memoryCache,
+                User,
+                HttpContext.RequestServices.GetService<ITenantRequestContext>()?.TenantId);
         }
     }
 }

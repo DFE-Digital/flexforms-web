@@ -14,30 +14,41 @@ namespace GovUK.Dfe.FlexForms.Web.Security;
 [ExcludeFromCodeCoverage]
 public static class UserPermissionsCache
 {
-    private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
+    /// <summary>
+    /// Short TTL only. API Redis is the source of truth and is invalidated when grants change
+    /// </summary>
+    private static readonly TimeSpan CacheDuration = TimeSpan.FromSeconds(15);
 
     /// <summary>
     /// Builds the cache key for the authenticated user's permissions payload.
+    /// Includes tenant id when present so multi-tenant sessions do not share grants.
     /// </summary>
-    public static string GetCacheKey(ClaimsPrincipal user)
+    public static string GetCacheKey(ClaimsPrincipal user, Guid? tenantId = null)
     {
         var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
         var email = user.FindFirstValue(ClaimTypes.Email);
-        return $"{PermissionsCacheMiddleware.PermissionsCacheKeyPrefix}{userId}{email}";
+        var tenantPart = tenantId is { } id && id != Guid.Empty
+            ? id.ToString("N")
+            : user.FindFirstValue("tenant_id")
+              ?? user.FindFirstValue("TenantId")
+              ?? "none";
+        return $"{PermissionsCacheMiddleware.PermissionsCacheKeyPrefix}{tenantPart}_{userId}{email}";
     }
 
     /// <summary>
     /// Removes cached permissions so the next request reloads claims from the API.
     /// </summary>
-    public static void Invalidate(IMemoryCache cache, ClaimsPrincipal user)
+    public static void Invalidate(IMemoryCache cache, ClaimsPrincipal user, Guid? tenantId = null)
     {
-        cache.Remove(GetCacheKey(user));
+        cache.Remove(GetCacheKey(user, tenantId));
     }
 
     /// <summary>
-    /// Returns cached permissions when present; otherwise loads from the API and caches for 5 minutes.
+    /// Returns cached permissions when present; otherwise loads from the API and caches briefly.
     /// Pass <paramref name="forceRefresh"/> after mutations that change the caller's grants
-    /// (e.g. creating an application or template).
+    /// (e.g. creating an application or template), or when grants may have changed for another user
+    /// (contributor invite) — prefer force-refresh on authenticated page loads so invitees can edit
+    /// immediately rather than waiting for the web TTL.
     /// </summary>
     public static async Task<UserAuthorizationDto?> RefreshAsync(
         IMemoryCache cache,
@@ -45,7 +56,8 @@ public static class UserPermissionsCache
         ClaimsPrincipal user,
         ILogger? logger = null,
         CancellationToken cancellationToken = default,
-        bool forceRefresh = false)
+        bool forceRefresh = false,
+        Guid? tenantId = null)
     {
         if (user.Identity?.IsAuthenticated != true)
         {
@@ -58,7 +70,7 @@ public static class UserPermissionsCache
             return null;
         }
 
-        var cacheKey = GetCacheKey(user);
+        var cacheKey = GetCacheKey(user, tenantId);
         if (!forceRefresh && cache.TryGetValue(cacheKey, out UserAuthorizationDto? cached) && cached is not null)
         {
             return cached;
@@ -66,7 +78,7 @@ public static class UserPermissionsCache
 
         if (forceRefresh)
         {
-            Invalidate(cache, user);
+            Invalidate(cache, user, tenantId);
         }
 
         try

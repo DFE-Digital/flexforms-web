@@ -19,6 +19,7 @@ public abstract class FeedbackModelTests<T, TReq> where T : FeedbackModel<TReq> 
     protected readonly IFixture Fixture;
 
     protected readonly IFeedbackService FeedbackService;
+    protected readonly IApiClientSettingsProvider ApiClientSettingsProvider;
     protected readonly ApiClientSettings ApiClientSettings;
     protected readonly ILogger<T> Logger;
     protected readonly HttpContext HttpContext;
@@ -38,9 +39,11 @@ public abstract class FeedbackModelTests<T, TReq> where T : FeedbackModel<TReq> 
         
         FeedbackService = Fixture.Create<IFeedbackService>();
         Fixture.Inject(FeedbackService);
-        
+
         ApiClientSettings = Fixture.Create<ApiClientSettings>();
-        Fixture.Inject(ApiClientSettings);
+        ApiClientSettingsProvider = Substitute.For<IApiClientSettingsProvider>();
+        ApiClientSettingsProvider.GetSettings().Returns(ApiClientSettings);
+        Fixture.Inject(ApiClientSettingsProvider);
         
         Logger = Fixture.Create<ILogger<T>>();
         Fixture.Inject(Logger);

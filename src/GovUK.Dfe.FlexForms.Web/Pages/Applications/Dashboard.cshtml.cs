@@ -4,6 +4,7 @@ using GovUK.Dfe.FlexForms.Application.Options;
 using GovUK.Dfe.FlexForms.Web.Models.Applications;
 using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.FlexForms.Web.Services;
+using GovUK.Dfe.FlexForms.Web.Tenancy;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
@@ -213,13 +214,15 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
 
             if (User.Identity?.IsAuthenticated == true)
             {
+                var tenantId = HttpContext.RequestServices.GetService<ITenantRequestContext>()?.TenantId;
                 await UserPermissionsCache.RefreshAsync(
                     memoryCache,
                     usersClient,
                     User,
                     logger,
                     CancellationToken.None,
-                    forceRefresh: true);
+                    forceRefresh: true,
+                    tenantId: tenantId);
                 UserPermissionsCache.RemovePermissionClaims(User);
             }
 
