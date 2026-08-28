@@ -62,10 +62,10 @@ jobs:
           environment: ${{ needs.set-env.outputs.environment }}
 
   build-import-deploy:
-    name: Deploy to ${{ needs.set-env.outputs.environment }}
+    name: Build & import → ${{ needs.set-env.outputs.environment }}
     runs-on: ubuntu-24.04
     needs: [ set-env ]
-    environment: ${{ needs.set-env.outputs.environment }}
+    environment: ${{ needs.set-env.outputs.environment-lower == 'production' && 'production-build' || needs.set-env.outputs.environment }}
     permissions:
       attestations: write
       packages: write
@@ -97,6 +97,18 @@ jobs:
           AZURE_SUBSCRIPTION: ${{ secrets.AZURE_SUBSCRIPTION_ID || '' }}
           AZURE_ACR_CLIENT_ID: ${{ secrets.ACR_CLIENT_ID || '' }}
 
+  deploy:
+    name: Release → ${{ needs.set-env.outputs.environment }}
+    runs-on: ubuntu-24.04
+    needs: [ build-import-deploy, set-env ]
+    if: |
+      always() &&
+      needs.set-env.result == 'success' &&
+      needs.build-import-deploy.result == 'success'
+    environment: ${{ needs.set-env.outputs.environment }}
+    permissions:
+      id-token: write
+    steps:
       - name: Release
         uses: DFE-Digital/deploy-azure-container-apps-action/.github/actions/deploy@8e72e403f05ff9da09668207eef1d79e1ce9d1a7 # v5.2.1
         with:
