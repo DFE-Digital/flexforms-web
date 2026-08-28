@@ -1,0 +1,47 @@
+name: GitVersion
+
+on:
+  workflow_call:
+    outputs:
+      version:
+        description: MajorMinorPatch semver (e.g. 2.2.3)
+        value: ${{ jobs.gitversion.outputs.version }}
+      tag:
+        description: Git tag name (e.g. v2.2.3)
+        value: ${{ jobs.gitversion.outputs.tag }}
+
+jobs:
+  gitversion:
+    name: Determine version
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.gitversion.outputs.version }}
+      tag: ${{ steps.gitversion.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Install GitVersion
+        uses: gittools/actions/gitversion/setup@v4.5.0
+        with:
+          versionSpec: '6.7.x'
+
+      - name: Add .NET global tools to PATH
+        run: echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+      - name: Calculate version
+        id: gitversion
+        run: |
+          VERSION=$(dotnet-gitversion /showvariable MajorMinorPatch)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "GitVersion MajorMinorPatch: $VERSION (tag v$VERSION)"

@@ -61,10 +61,13 @@ jobs:
         with:
           environment: ${{ needs.set-env.outputs.environment }}
 
+  gitversion:
+    uses: ./.github/workflows/gitversion.yml
+
   build-import-deploy:
     name: Build & import → ${{ needs.set-env.outputs.environment }}
     runs-on: ubuntu-24.04
-    needs: [ set-env ]
+    needs: [ set-env, gitversion ]
     environment: ${{ needs.set-env.outputs.environment-lower == 'production' && 'production-build' || needs.set-env.outputs.environment }}
     permissions:
       attestations: write
@@ -81,6 +84,7 @@ jobs:
           image-name: ${{ needs.set-env.outputs.image-name }}
           build-args: |
             CI=true
+            APP_VERSION=${{ needs.gitversion.outputs.version }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Import
