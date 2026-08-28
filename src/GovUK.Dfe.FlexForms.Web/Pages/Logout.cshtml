@@ -12,7 +12,7 @@
             Are you sure you want to sign out? You will need to sign in again to continue using the application.
         </p>
 
-        <form method="post">
+        <form method="post" id="logout-form">
             <button type="submit" class="govuk-button govuk-button--warning" data-module="govuk-button" id="logout-button">
                 Sign out
             </button>
@@ -39,4 +39,30 @@
             </div>
         </details>
     </div>
-</div> 
+</div>
+
+@section Scripts {
+<script>
+    (function () {
+        function bindLogoutForm() {
+            var form = document.getElementById('logout-form');
+            if (!form || typeof window.signOutHubCookie !== 'function') {
+                return;
+            }
+
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                window.signOutHubCookie().finally(function () {
+                    form.submit();
+                });
+            });
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', bindLogoutForm);
+        } else {
+            bindLogoutForm();
+        }
+    })();
+</script>
+} 

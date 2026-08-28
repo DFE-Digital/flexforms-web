@@ -114,7 +114,13 @@
                 tokenInput.value = token;
                 logoutForm.appendChild(tokenInput);
                 document.body.appendChild(logoutForm);
-                logoutForm.submit();
+
+                var submitLogout = function () { logoutForm.submit(); };
+                if (typeof window.signOutHubCookie === 'function') {
+                    window.signOutHubCookie().finally(submitLogout);
+                } else {
+                    submitLogout();
+                }
             }
 
             function showWarning() {
@@ -201,6 +207,25 @@
                     var dest = stayUrl + '?returnUrl=' + encodeURIComponent(returnUrl);
                     window.location.assign(dest);
                 });
+            });
+
+            form.addEventListener('submit', function (e) {
+                var submitter = e.submitter;
+                if (!submitter || submitter.id !== 'app-timeout-signout') {
+                    return;
+                }
+
+                e.preventDefault();
+                if (signingOut) return;
+                signingOut = true;
+                clearTimers();
+
+                var submitSignOut = function () { form.submit(); };
+                if (typeof window.signOutHubCookie === 'function') {
+                    window.signOutHubCookie().finally(submitSignOut);
+                } else {
+                    submitSignOut();
+                }
             });
 
             // Initial arm
