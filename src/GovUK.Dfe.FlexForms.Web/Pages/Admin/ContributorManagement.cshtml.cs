@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Application.Admin;
 using GovUK.Dfe.FlexForms.Web.Security;
@@ -24,6 +25,8 @@ public sealed class ContributorManagementModel(IContributorManagementAdmin contr
     public Guid? ApplicationId { get; private set; }
 
     public string? TemplateName { get; private set; }
+
+    public Guid? TemplateId { get; private set; }
 
     public IReadOnlyList<UserDto> Contributors { get; private set; } = [];
 
@@ -57,7 +60,18 @@ public sealed class ContributorManagementModel(IContributorManagementAdmin contr
         if (string.IsNullOrWhiteSpace(Email))
             return;
 
-        Email = Email.Trim();
+        Email = Email?.Trim() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(Email))
+            return;
+
+        if (!new EmailAddressAttribute().IsValid(Email))
+        {
+            HasError = true;
+            ErrorMessage = ContributorManagementMessages.InvalidEmail;
+            return;
+        }
+
         await LookupByEmailAsync(cancellationToken);
     }
 
@@ -89,6 +103,12 @@ public sealed class ContributorManagementModel(IContributorManagementAdmin contr
             return Page();
         }
 
+        if (!new EmailAddressAttribute().IsValid(Email))
+        {
+            ModelState.AddModelError(nameof(Email), ContributorManagementMessages.InvalidEmail);
+            return Page();
+        }
+
         // EscapeDataString so '+' and other reserved characters survive the GET round-trip
         // (application/x-www-form-urlencoded treats bare '+' as a space).
         return Redirect(BuildEmailLookupPath(Email, currentPage: 1));
@@ -96,6 +116,11 @@ public sealed class ContributorManagementModel(IContributorManagementAdmin contr
 
     public string BuildEmailLookupHref(int page) =>
         BuildEmailLookupPath(Email ?? string.Empty, page);
+
+    public string BuildContributorsPageUrl(string applicationReference, Guid? templateId) =>
+        templateId is Guid id && id != Guid.Empty
+            ? $"/applications/{Uri.EscapeDataString(applicationReference)}/contributors?templateId={id}"
+            : $"/applications/{Uri.EscapeDataString(applicationReference)}/contributors";
 
     /// <summary>
     /// Builds the contributor-management lookup URL with a correctly encoded email.
@@ -121,6 +146,7 @@ public sealed class ContributorManagementModel(IContributorManagementAdmin contr
         ApplicationReference = state.ApplicationReference;
         ApplicationId = state.ApplicationId;
         TemplateName = state.TemplateName;
+        TemplateId = state.TemplateId;
         Contributors = state.Contributors;
         EmailLookupPerformed = state.EmailLookupPerformed;
         LookedUpUserId = state.LookedUpUserId;

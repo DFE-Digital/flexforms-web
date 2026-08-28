@@ -192,6 +192,8 @@ async function refreshUnreadCount() {
     } catch { }
 }
 
+window.refreshUnreadCount = refreshUnreadCount;
+
 async function ensureHubCookie() {
     const res = await fetch("/internal/hub-ticket", { credentials: "include" });
     if (!res.ok) return;

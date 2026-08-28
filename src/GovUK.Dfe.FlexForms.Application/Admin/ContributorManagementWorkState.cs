@@ -19,6 +19,8 @@ public sealed class ContributorManagementWorkState
 
     public string? TemplateName { get; set; }
 
+    public Guid? TemplateId { get; set; }
+
     public IReadOnlyList<UserDto> Contributors { get; set; } = [];
 
     public bool EmailLookupPerformed { get; set; }

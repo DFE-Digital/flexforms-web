@@ -22,10 +22,23 @@ public static class AdminApiErrorMapper
     /// </param>
     public static string Format(Exception ex, string fallback, bool includeGatewayHint = false)
     {
-        if (ex is ExternalApplicationsException<ExceptionResponse> apiEx
-            && !string.IsNullOrWhiteSpace(apiEx.Result?.Message))
+        if (ex is ExternalApplicationsException<ExceptionResponse> apiEx)
         {
-            return apiEx.Result.Message;
+            var message = apiEx.Result?.Message?.Trim();
+            var details = apiEx.Result?.Details?.Trim();
+
+            if (!string.IsNullOrWhiteSpace(details))
+            {
+                if (string.IsNullOrWhiteSpace(message))
+                    return details;
+
+                if (message.Contains("Please check the following errors", StringComparison.OrdinalIgnoreCase)
+                    || message.EndsWith(":", StringComparison.Ordinal))
+                    return details;
+            }
+
+            if (!string.IsNullOrWhiteSpace(message))
+                return message;
         }
 
         if (ex is ExternalApplicationsException clientEx)

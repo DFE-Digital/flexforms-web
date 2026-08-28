@@ -162,7 +162,7 @@ public sealed class TenantSettingsModel(
     public Task<IActionResult> OnPostExportAsync(CancellationToken cancellationToken)
         => DispatchMutationAsync(state => tenantSettingsAdmin.ExportAsync(state, cancellationToken));
 
-    public async Task<IActionResult> OnPostImportAsync(IFormFile? importFile, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostImportAsync(string? importJsonBase64, CancellationToken cancellationToken)
     {
         if (!TryResolveTenant(out var error))
         {
@@ -170,14 +170,23 @@ public sealed class TenantSettingsModel(
             return RedirectToPage();
         }
 
-        if (importFile is null || importFile.Length == 0)
+        if (string.IsNullOrWhiteSpace(importJsonBase64))
         {
             TempData["TenantSettingsError"] = TenantSettingsMessages.ImportFileRequired;
             return RedirectToPage();
         }
 
-        using var reader = new StreamReader(importFile.OpenReadStream());
-        var json = await reader.ReadToEndAsync(cancellationToken);
+        string json;
+        try
+        {
+            json = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(importJsonBase64));
+        }
+        catch (FormatException)
+        {
+            TempData["TenantSettingsError"] = TenantSettingsMessages.ImportInvalidJson;
+            return RedirectToPage();
+        }
+
         return await MapOutcomeAsync(await tenantSettingsAdmin.ImportAsync(CaptureWorkState(), json, cancellationToken));
     }
 

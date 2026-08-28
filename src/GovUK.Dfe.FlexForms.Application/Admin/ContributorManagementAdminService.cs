@@ -37,6 +37,9 @@ public sealed class ContributorManagementAdminService(
                 ? state.ReferenceNumber
                 : application.ApplicationReference;
             state.TemplateName = application.TemplateName;
+            state.TemplateId = application.TemplateSchema?.TemplateId is Guid templateId && templateId != Guid.Empty
+                ? templateId
+                : null;
 
             var contributors = await applicationsClient.GetContributorsAsync(
                 application.ApplicationId,
@@ -110,6 +113,18 @@ public sealed class ContributorManagementAdminService(
                 .Skip((state.CurrentPage - 1) * ContributorManagementWorkState.EmailLookupPageSize)
                 .Take(ContributorManagementWorkState.EmailLookupPageSize)
                 .ToList();
+
+            await EnrichTemplateIdsAsync(state.CreatedApplications, cancellationToken);
+        }
+        catch (ExternalApplicationsException ex) when (ex.StatusCode == 400)
+        {
+            state.HasError = true;
+            var message = AdminApiErrorMapper.Format(ex, ContributorManagementMessages.InvalidEmail);
+            state.ErrorMessage = message.Contains("Email", StringComparison.OrdinalIgnoreCase)
+                && message.Contains("valid", StringComparison.OrdinalIgnoreCase)
+                ? ContributorManagementMessages.InvalidEmail
+                : message;
+            state.CreatedApplications = [];
         }
         catch (ExternalApplicationsException ex) when (ex.StatusCode == 404)
         {
@@ -126,6 +141,43 @@ public sealed class ContributorManagementAdminService(
                 ContributorManagementMessages.EmailLookupFailed,
                 includeGatewayHint: false);
             state.CreatedApplications = [];
+        }
+    }
+
+    private async Task EnrichTemplateIdsAsync(
+        IReadOnlyList<CreatedApplicationInviteSummary> applications,
+        CancellationToken cancellationToken)
+    {
+        foreach (var application in applications)
+        {
+            if (application.TemplateId is Guid existing && existing != Guid.Empty)
+                continue;
+
+            if (string.IsNullOrWhiteSpace(application.ApplicationReference))
+                continue;
+
+            application.TemplateId = await ResolveTemplateIdAsync(application.ApplicationReference, cancellationToken);
+        }
+    }
+
+    private async Task<Guid?> ResolveTemplateIdAsync(
+        string applicationReference,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var application = await applicationsClient.GetApplicationByReferenceAsync(
+                applicationReference,
+                cancellationToken);
+
+            return application.TemplateSchema?.TemplateId is Guid templateId && templateId != Guid.Empty
+                ? templateId
+                : null;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not resolve template for {ApplicationReference}", applicationReference);
+            return null;
         }
     }
 }
