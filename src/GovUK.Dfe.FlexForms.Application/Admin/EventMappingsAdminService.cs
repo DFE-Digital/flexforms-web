@@ -290,16 +290,42 @@ public sealed class EventMappingsAdminService(
         {
             var root = await LoadCategoryRootAsync(state, CategoryEventMappings, cancellationToken);
             var mappingJson = JsonSerializer.Serialize(mapping, JsonPersistOptions);
-            var templateKeys = await ResolveTemplateMappingKeysAsync(state.SelectedTemplateId!, cancellationToken);
+            var primaryTemplateKey = state.SelectedTemplateId!;
+            var aliasKeys = await ResolveTemplateMappingKeysAsync(primaryTemplateKey, cancellationToken);
 
-            foreach (var templateKey in templateKeys)
+            var duplicateLocation = FindDuplicateMappingIdLocation(
+                root,
+                mapping.MappingId!,
+                state.SelectedEventType!,
+                primaryTemplateKey,
+                aliasKeys);
+            if (duplicateLocation is not null)
             {
-                var templateNode = root[templateKey] as JsonObject ?? new JsonObject();
-                root[templateKey] = templateNode;
+                return Stay(state, [
+                    new FormValidationError(
+                        nameof(EventMappingsWorkState.MappingJson),
+                        EventMappingsMessages.DuplicateMappingId(mapping.MappingId!, duplicateLocation))]);
+            }
 
-                var mappingNode = JsonNode.Parse(mappingJson)
-                    ?? throw new InvalidOperationException("Failed to serialise mapping.");
-                templateNode[state.SelectedEventType!] = mappingNode;
+            var templateNode = root[primaryTemplateKey] as JsonObject ?? new JsonObject();
+            root[primaryTemplateKey] = templateNode;
+
+            var mappingNode = JsonNode.Parse(mappingJson)
+                ?? throw new InvalidOperationException("Failed to serialise mapping.");
+            templateNode[state.SelectedEventType!] = mappingNode;
+
+            // Legacy saves duplicated alias keys (GUID + schema templateId). Keep one canonical row.
+            foreach (var aliasKey in aliasKeys)
+            {
+                if (string.Equals(aliasKey, primaryTemplateKey, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (root[aliasKey] is not JsonObject aliasNode)
+                    continue;
+
+                aliasNode.Remove(state.SelectedEventType!);
+                if (aliasNode.Count == 0)
+                    root.Remove(aliasKey);
             }
 
             await UpsertCategoryAsync(state, CategoryEventMappings, root, cancellationToken);
@@ -307,7 +333,7 @@ public sealed class EventMappingsAdminService(
 
             return Redirect(
                 state,
-                EventMappingsMessages.SavedMapping(string.Join(", ", templateKeys), state.SelectedEventType!),
+                EventMappingsMessages.SavedMapping(primaryTemplateKey, state.SelectedEventType!),
                 refreshLocalCaches: true);
         }
         catch (Exception ex)
@@ -636,10 +662,11 @@ public sealed class EventMappingsAdminService(
 
             state.SavedTypedMappings = rows
                 .Where(r => state.AllowedTemplateKeys.Count == 0 || state.AllowedTemplateKeys.Contains(r.TemplateId))
-                .GroupBy(
-                    r => $"{r.TemplateId}|{r.EventType}",
-                    StringComparer.OrdinalIgnoreCase)
-                .Select(g => g.First())
+                .GroupBy(r => $"{r.EventType}|{r.MappingId}", StringComparer.OrdinalIgnoreCase)
+                .Select(g => g
+                    .OrderBy(r => Guid.TryParse(r.TemplateId, out _) ? 0 : 1)
+                    .ThenBy(r => r.TemplateId, StringComparer.OrdinalIgnoreCase)
+                    .First())
                 .OrderBy(r => r.EventType, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(r => r.TemplateId, StringComparer.OrdinalIgnoreCase)
                 .ToList();
@@ -649,6 +676,52 @@ public sealed class EventMappingsAdminService(
             logger.LogWarning(ex, "Could not load saved typed EventMappings");
             state.SavedTypedMappings = [];
         }
+    }
+
+    private static string? FindDuplicateMappingIdLocation(
+        JsonObject root,
+        string mappingId,
+        string eventType,
+        string primaryTemplateKey,
+        IReadOnlyList<string> aliasKeys)
+    {
+        foreach (var templateProperty in root)
+        {
+            if (string.Equals(templateProperty.Key, "BasePath", StringComparison.OrdinalIgnoreCase)
+                || templateProperty.Value is not JsonObject templateNode)
+            {
+                continue;
+            }
+
+            foreach (var eventProperty in templateNode)
+            {
+                if (eventProperty.Value is not JsonObject mappingNode)
+                    continue;
+
+                var existingId = mappingNode["mappingId"]?.GetValue<string>()
+                    ?? mappingNode["MappingId"]?.GetValue<string>();
+                if (string.IsNullOrWhiteSpace(existingId)
+                    || !string.Equals(existingId, mappingId, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var templateKey = templateProperty.Key;
+                var existingEvent = eventProperty.Key;
+
+                // Updating the same template + event (including alias keys) is allowed.
+                if (string.Equals(existingEvent, eventType, StringComparison.OrdinalIgnoreCase)
+                    && (string.Equals(templateKey, primaryTemplateKey, StringComparison.OrdinalIgnoreCase)
+                        || aliasKeys.Contains(templateKey, StringComparer.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                return $"template '{templateKey}' / {existingEvent}";
+            }
+        }
+
+        return null;
     }
 
     private static JsonObject BuildBindingNode(string eventKind, string eventType, string mappingId) =>

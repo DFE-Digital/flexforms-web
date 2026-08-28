@@ -1,4 +1,5 @@
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
+using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Application.Admin;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
@@ -87,5 +88,65 @@ public class EventMappingsAdminServiceTests
 
         Assert.Equal(AdminPageOutcomeKind.RedirectToPage, result.Kind);
         Assert.Equal(EventMappingsMessages.DeleteTriggerUnidentified, result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task SaveMappingAsync_ShouldStay_WhenMappingIdAlreadyUsedByAnotherTemplate()
+    {
+        var templateGuid = Guid.Parse("9a4e9c58-9135-468c-b154-7b966f7acfb7");
+        _templates.GetAccessibleTemplatesAsync(Arg.Any<CancellationToken>()).Returns([
+            new TemplateDto { TemplateId = templateGuid, Name = "Transfers", CreatedOn = DateTime.UtcNow }
+        ]);
+        _state.AllowedTemplateKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            templateGuid.ToString(),
+            "form-001"
+        };
+        _state.SelectedTemplateId = templateGuid.ToString();
+        _state.SelectedEventType = "TransferApplicationSubmittedEvent";
+        _state.MappingJson = """
+            {
+              "mappingId": "transfer-application-submitted-v1",
+              "eventType": "TransferApplicationSubmittedEvent",
+              "fieldMappings": {
+                "AcademyName": { "sourceType": "DirectField", "sourceFieldId": "academy" }
+              }
+            }
+            """;
+
+        var existingRoot = """
+            {
+              "form-001": {
+                "TransferApplicationSubmittedEvent": {
+                  "mappingId": "transfer-application-submitted-v1",
+                  "eventType": "TransferApplicationSubmittedEvent",
+                  "fieldMappings": { "AcademyName": { "sourceType": "DirectField", "sourceFieldId": "old" } }
+                }
+              }
+            }
+            """;
+
+        _tenantAdmin.GetSafeTenantSettingsAsync(_state.TenantId, Arg.Any<CancellationToken>())
+            .Returns(new GetTenantSettingsResponse(
+                _state.TenantId,
+                "Transfers",
+                [
+                    new TenantSettingDto(
+                        Guid.NewGuid(),
+                        EventMappingsAdminService.CategoryEventMappings,
+                        EventMappingsAdminService.TargetShared,
+                        existingRoot,
+                        false,
+                        DateTime.UtcNow)
+                ]));
+
+        var result = await _service.SaveMappingAsync(_state);
+
+        Assert.Equal(AdminPageOutcomeKind.StayOnPage, result.Kind);
+        Assert.Contains(result.Errors, e => e.Message.Contains("transfer-application-submitted-v1", StringComparison.Ordinal));
+        await _tenantAdmin.DidNotReceive().UpsertSafeTenantSettingAsync(
+            Arg.Any<Guid>(),
+            Arg.Any<UpsertTenantSettingRequest>(),
+            Arg.Any<CancellationToken>());
     }
 }

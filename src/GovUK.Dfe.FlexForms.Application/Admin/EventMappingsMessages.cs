@@ -71,4 +71,7 @@ public static class EventMappingsMessages
 
     public static string UnknownProperty(string property, string eventType) =>
         $"Property '{property}' is not on {eventType}.";
+
+    public static string DuplicateMappingId(string mappingId, string existingLocation) =>
+        $"mappingId '{mappingId}' is already used by {existingLocation}. Each mappingId must be unique.";
 }

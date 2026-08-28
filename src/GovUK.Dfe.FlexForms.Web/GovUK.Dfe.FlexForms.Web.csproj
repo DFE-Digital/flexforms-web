@@ -5,8 +5,8 @@
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<UserSecretsId>8051c984-585b-4a5e-b6d7-833e5dd4afe7</UserSecretsId>
-		<Version>2.2.1</Version>
-		<InformationalVersion>2.2.1</InformationalVersion>
+		<Version>2.2.2</Version>
+		<InformationalVersion>2.2.2</InformationalVersion>
 		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
 		<DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
 		<DockerfileContext>..\..</DockerfileContext>
