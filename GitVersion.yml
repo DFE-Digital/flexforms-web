@@ -1,0 +1,16 @@
+mode: ContinuousDelivery
+semantic-version-format: Loose
+tag-prefix: 'v'
+major-version-bump-message: '(?i)\+semver:\s?(breaking|major)'
+minor-version-bump-message: '(?i)\+semver:\s?(feature|minor)'
+patch-version-bump-message: '(?i)\+semver:\s?(fix|patch)'
+
+branches:
+  main:
+    increment: Patch
+    label: ''
+
+  pull-request:
+    increment: Patch
+    source-branches: ['main']
+    label: prerelease

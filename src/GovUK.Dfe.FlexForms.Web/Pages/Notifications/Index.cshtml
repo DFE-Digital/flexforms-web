@@ -138,6 +138,10 @@
                 });
                 if (!response.ok) {
                     showError('You do not have permission to update notifications.');
+                    return;
+                }
+                if (typeof window.refreshUnreadCount === 'function') {
+                    await window.refreshUnreadCount();
                 }
             };
         }

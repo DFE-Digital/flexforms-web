@@ -6,7 +6,10 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace GovUK.Dfe.FlexForms.Web.Pages.Feedback;
 
-public abstract class FeedbackModel<T>(IFeedbackService feedbackService, ApiClientSettings apiClientSettings, ILogger<FeedbackModel<T>> logger) : PageModel where T : UserFeedbackRequest
+public abstract class FeedbackModel<T>(
+    IFeedbackService feedbackService,
+    IApiClientSettingsProvider apiClientSettingsProvider,
+    ILogger<FeedbackModel<T>> logger) : PageModel where T : UserFeedbackRequest
 {
     [BindProperty(SupportsGet = true, Name = "referenceNumber")]
     public string? ReferenceNumber { get; set; }
@@ -74,8 +77,20 @@ public abstract class FeedbackModel<T>(IFeedbackService feedbackService, ApiClie
 
             logger.LogWarning("Could not find template ID in session, falling back to configured settings.");
 
-            return apiClientSettings.DefaultTemplateId ??
-                   throw new InvalidOperationException("No default template ID configured.");
+            var fromClientSettings = apiClientSettingsProvider.GetSettings().DefaultTemplateId;
+            if (fromClientSettings is Guid clientTemplateId && clientTemplateId != Guid.Empty)
+            {
+                return clientTemplateId;
+            }
+
+            var configuration = HttpContext.RequestServices.GetService(typeof(IRequestAppConfiguration)) as IRequestAppConfiguration;
+            if (Guid.TryParse(configuration?["Template:Id"], out var configuredTemplateId)
+                && configuredTemplateId != Guid.Empty)
+            {
+                return configuredTemplateId;
+            }
+
+            throw new InvalidOperationException("No default template ID configured.");
         }
     }
 

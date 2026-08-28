@@ -13,5 +13,7 @@ public sealed class CreatedApplicationInviteSummary
 
     public string? TemplateName { get; init; }
 
+    public Guid? TemplateId { get; set; }
+
     public IReadOnlyList<UserDto> Invitees { get; init; } = [];
 }

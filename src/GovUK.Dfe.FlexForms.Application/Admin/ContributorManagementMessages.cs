@@ -10,4 +10,6 @@ public static class ContributorManagementMessages
     public const string EmailLookupFailed = "Could not find that user or load the applications they created.";
 
     public const string UserNotFound = "No user was found with that email address.";
+
+    public const string InvalidEmail = "Enter an email address in the correct format, like name@example.com";
 }

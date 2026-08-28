@@ -7,8 +7,8 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Feedback;
 
 public class BugReportModel(
     IFeedbackService feedbackService,
-    ApiClientSettings apiClientSettings,
-    ILogger<BugReportModel> logger) : FeedbackModel<BugReport>(feedbackService, apiClientSettings, logger)
+    IApiClientSettingsProvider apiClientSettingsProvider,
+    ILogger<BugReportModel> logger) : FeedbackModel<BugReport>(feedbackService, apiClientSettingsProvider, logger)
 {
     [BindProperty] public bool? AllowContact { get; set; } = null;
     [BindProperty] public string? EmailAddress { get; set; }

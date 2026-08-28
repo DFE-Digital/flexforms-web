@@ -1,4 +1,5 @@
 using GovUK.Dfe.FlexForms.Web.Security;
+using GovUK.Dfe.FlexForms.Web.Tenancy;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Caching.Memory;
@@ -35,7 +36,15 @@ public class PermissionsCacheMiddleware(
             {
                 try
                 {
-                    await UserPermissionsCache.RefreshAsync(cache, usersClient, user, logger, context.RequestAborted);
+                    var tenantId = context.RequestServices.GetService<ITenantRequestContext>()?.TenantId;
+                    await UserPermissionsCache.RefreshAsync(
+                        cache,
+                        usersClient,
+                        user,
+                        logger,
+                        context.RequestAborted,
+                        forceRefresh: true,
+                        tenantId: tenantId);
                     UserPermissionsCache.RemovePermissionClaims(user);
 
                     var transformation = context.RequestServices.GetRequiredService<IClaimsTransformation>();

@@ -9,9 +9,9 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Feedback;
 public class SupportRequestModel(
     IApplicationsClient applicationsClient,
     IFeedbackService feedbackService,
-    ApiClientSettings apiClientSettings,
+    IApiClientSettingsProvider apiClientSettingsProvider,
     ILogger<FeedbackModel<SupportRequest>> logger)
-    : FeedbackModel<SupportRequest>(feedbackService, apiClientSettings, logger)
+    : FeedbackModel<SupportRequest>(feedbackService, apiClientSettingsProvider, logger)
 {
     [BindProperty] public string EmailAddress { get; set; } = null!;
 
@@ -24,8 +24,12 @@ public class SupportRequestModel(
 
     protected override async Task FetchFormDataAsync()
     {
-        var result = await applicationsClient.GetMyApplicationsAsync(templateId: TemplateId);
-        ApplicationReferences = result.Items.AsEnumerable().Select(a => a.ApplicationReference).ToList();
+        // Anonymous users cannot list applications; leave the radio options empty.
+        if (User.Identity?.IsAuthenticated == true)
+        {
+            var result = await applicationsClient.GetMyApplicationsAsync(templateId: TemplateId);
+            ApplicationReferences = result.Items.AsEnumerable().Select(a => a.ApplicationReference).ToList();
+        }
 
         await base.FetchFormDataAsync();
     }

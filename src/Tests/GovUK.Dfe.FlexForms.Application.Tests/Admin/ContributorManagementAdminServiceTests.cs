@@ -1,4 +1,5 @@
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
+using GovUK.Dfe.CoreLibs.Http.Models;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Application.Admin;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -149,6 +150,30 @@ public class ContributorManagementAdminServiceTests
         Assert.Equal(2, page2.CreatedApplications.Count);
         Assert.Equal("REF-11", page2.CreatedApplications[0].ApplicationReference);
         Assert.Equal("REF-12", page2.CreatedApplications[1].ApplicationReference);
+    }
+
+    [Fact]
+    public async Task LookupByEmailAsync_ShouldSetFriendlyError_WhenEmailIsInvalid()
+    {
+        var state = new ContributorManagementWorkState { Email = "notanemail" };
+        _users.GetCreatedApplicationsByEmailAsync("notanemail", Arg.Any<CancellationToken>())
+            .Throws(new ExternalApplicationsException<ExceptionResponse>(
+                "Validation failed",
+                400,
+                "body",
+                new Dictionary<string, IEnumerable<string>>(),
+                new ExceptionResponse
+                {
+                    Message = "Validation failed. Please check the following errors:",
+                    Details = "Email: 'notanemail' is not a valid email address."
+                },
+                null));
+
+        await _service.LookupByEmailAsync(state);
+
+        Assert.True(state.HasError);
+        Assert.Equal(ContributorManagementMessages.InvalidEmail, state.ErrorMessage);
+        Assert.Empty(state.CreatedApplications);
     }
 
     [Fact]

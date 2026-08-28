@@ -4,6 +4,7 @@ ARG DOTNET_VERSION=10.0
 # Stage 1 - Build the app using the dotnet SDK
 FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION}-azurelinux3.0 AS build
 WORKDIR /build
+ARG APP_VERSION=0.0.0-local
 
 # Copy the solution file and source code
 COPY ./GovUK.Dfe.FlexForms.Web.sln ./
@@ -13,7 +14,7 @@ COPY ./src/ ./src/
 RUN --mount=type=secret,id=github_token \
     --mount=type=cache,target=/root/.nuget/packages \
     dotnet restore GovUK.Dfe.FlexForms.Web.sln && \
-    dotnet build GovUK.Dfe.FlexForms.Web.sln --no-restore -c Release && \
+    dotnet build GovUK.Dfe.FlexForms.Web.sln --no-restore -c Release -p:Version=${APP_VERSION} -p:InformationalVersion=${APP_VERSION} && \
     dotnet publish GovUK.Dfe.FlexForms.Web.sln --no-build -o /app
 
 # Stage 2 - Build a runtime environment

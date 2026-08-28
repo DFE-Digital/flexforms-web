@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  gitversion:
+    uses: ./.github/workflows/gitversion.yml
+
+  release:
+    name: Tag and GitHub release
+    needs: gitversion
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract release notes
+        id: notes
+        env:
+          VERSION: ${{ needs.gitversion.outputs.version }}
+        run: |
+          COMMIT_SUBJECT=$(git log -1 --pretty=format:"%s")
+          COMMIT_BODY=$(git log -1 --pretty=format:"%b")
+          if echo "$COMMIT_BODY" | tr '\n' '~' | grep -q '%release-note:'; then
+            NOTES=$(echo "$COMMIT_BODY" |
+              tr '\n' '~' |
+              grep -Eo '\(%release-note:.*%\)' |
+              sed 's/.*%release-note:\(.*\)%/\1/' |
+              sed 's/~/\n/g')
+          else
+            NOTES="$COMMIT_BODY"
+          fi
+          if [ -z "$(echo "$NOTES" | tr -d '[:space:]')" ]; then
+            NOTES="No release notes provided."
+          fi
+          TITLE="${VERSION} - ${COMMIT_SUBJECT}"
+          {
+            echo "title<<EOF"
+            echo "$TITLE"
+            echo "EOF"
+            echo "notes<<EOF"
+            echo "$NOTES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create tag and release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.gitversion.outputs.tag }}
+        run: |
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists — skipping release."
+            exit 0
+          fi
+          gh release create "$TAG" \
+            --title "${{ steps.notes.outputs.title }}" \
+            --notes "${{ steps.notes.outputs.notes }}" \
+            --prerelease

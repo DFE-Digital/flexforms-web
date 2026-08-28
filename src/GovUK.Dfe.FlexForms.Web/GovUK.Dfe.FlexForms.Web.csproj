@@ -5,11 +5,11 @@
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<UserSecretsId>8051c984-585b-4a5e-b6d7-833e5dd4afe7</UserSecretsId>
-		<Version>2.1.0</Version>
-		<InformationalVersion>2.1.0</InformationalVersion>
 		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
 		<DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
 		<DockerfileContext>..\..</DockerfileContext>
+		<Version Condition="'$(Version)' == ''">0.0.0-local</Version>
+		<InformationalVersion Condition="'$(InformationalVersion)' == ''">$(Version)</InformationalVersion>
 	</PropertyGroup>
 
 	<ItemGroup>

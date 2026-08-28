@@ -36,7 +36,7 @@
         <p class="govuk-body">
             Manage TenantConfig app settings for
             <strong>@(string.IsNullOrWhiteSpace(Model.TenantName) ? Model.TenantId.ToString() : Model.TenantName)</strong>.
-            Secret values are shown decrypted here and encrypted when saved with Secret checked.
+            Secret values are masked by default. Use Show value to reveal before editing or saving.
         </p>
         <p class="govuk-hint">
             SuperAdmin-only categories:
@@ -190,11 +190,33 @@
                     <div class="govuk-grid-row">
                         <div class="govuk-grid-column-one-half">
                             <h3 class="govuk-heading-s">Current</h3>
-                            <pre class="govuk-body" style="white-space: pre-wrap; word-break: break-word;">@(Model.ValidationPreview.CurrentSettingsJson ?? "(none — new setting)")</pre>
+                            <textarea class="govuk-textarea tenant-setting-value"
+                                      id="validation-current"
+                                      rows="8"
+                                      readonly
+                                      data-secret-masked="true"
+                                      style="-webkit-text-security: disc; text-security: disc;">@(Model.ValidationPreview.CurrentSettingsJson ?? "(none — new setting)")</textarea>
+                            <button type="button"
+                                    class="govuk-button govuk-button--secondary govuk-!-margin-top-1 js-toggle-setting-value"
+                                    data-target="validation-current"
+                                    data-module="govuk-button">
+                                Show value
+                            </button>
                         </div>
                         <div class="govuk-grid-column-one-half">
                             <h3 class="govuk-heading-s">Proposed</h3>
-                            <pre class="govuk-body" style="white-space: pre-wrap; word-break: break-word;">@Model.ValidationPreview.ProposedSettingsJson</pre>
+                            <textarea class="govuk-textarea tenant-setting-value"
+                                      id="validation-proposed"
+                                      rows="8"
+                                      readonly
+                                      data-secret-masked="true"
+                                      style="-webkit-text-security: disc; text-security: disc;">@Model.ValidationPreview.ProposedSettingsJson</textarea>
+                            <button type="button"
+                                    class="govuk-button govuk-button--secondary govuk-!-margin-top-1 js-toggle-setting-value"
+                                    data-target="validation-proposed"
+                                    data-module="govuk-button">
+                                Show value
+                            </button>
                         </div>
                     </div>
                     @if (Model.ValidationPreview.IsValid)
@@ -249,7 +271,19 @@
                         </h3>
                         <p class="govuk-body">@entry.Description</p>
                         <p class="govuk-body">Targets: @string.Join(", ", entry.TypicalTargets)</p>
-                        <pre class="govuk-body" style="white-space: pre-wrap; word-break: break-word;">@entry.ExampleJson</pre>
+                        <label class="govuk-visually-hidden" for="cookbook-@entry.Category.Replace(" ", "-")">Example JSON for @entry.Category</label>
+                        <textarea class="govuk-textarea tenant-setting-value"
+                                  id="cookbook-@entry.Category.Replace(" ", "-")"
+                                  rows="4"
+                                  readonly
+                                  data-secret-masked="true"
+                                  style="-webkit-text-security: disc; text-security: disc;">@entry.ExampleJson</textarea>
+                        <button type="button"
+                                class="govuk-button govuk-button--secondary govuk-!-margin-top-1 govuk-!-margin-bottom-2 js-toggle-setting-value"
+                                data-target="cookbook-@entry.Category.Replace(" ", "-")"
+                                data-module="govuk-button">
+                            Show value
+                        </button>
                         <p class="govuk-body">
                             <button type="button"
                                     class="govuk-button govuk-button--secondary govuk-!-margin-bottom-2 js-use-cookbook-example"
@@ -370,7 +404,19 @@
                                 else
                                 {
                                     <p class="govuk-hint">SuperAdmin only — this category cannot be edited by tenant Admin.</p>
-                                    <pre class="govuk-body" style="white-space: pre-wrap; word-break: break-word;">@setting.SettingsJson</pre>
+                                    <label class="govuk-visually-hidden" for="readonly-@rowId">Value for @setting.Category</label>
+                                    <textarea class="govuk-textarea tenant-setting-value"
+                                              id="readonly-@rowId"
+                                              rows="4"
+                                              readonly
+                                              data-secret-masked="true"
+                                              style="-webkit-text-security: disc; text-security: disc;">@setting.SettingsJson</textarea>
+                                    <button type="button"
+                                            class="govuk-button govuk-button--secondary govuk-!-margin-top-1 govuk-!-margin-bottom-0 js-toggle-setting-value"
+                                            data-target="readonly-@rowId"
+                                            data-module="govuk-button">
+                                        Show value
+                                    </button>
                                 }
                             </td>
                         </tr>
@@ -399,7 +445,18 @@
 
             <div class="govuk-form-group">
                 <label class="govuk-label" asp-for="NewSettingsJson">Settings JSON</label>
-                <textarea class="govuk-textarea" asp-for="NewSettingsJson" id="NewSettingsJson" rows="6"></textarea>
+                <textarea class="govuk-textarea tenant-setting-value"
+                          asp-for="NewSettingsJson"
+                          id="NewSettingsJson"
+                          rows="6"
+                          data-secret-masked="true"
+                          style="-webkit-text-security: disc; text-security: disc;"></textarea>
+                <button type="button"
+                        class="govuk-button govuk-button--secondary govuk-!-margin-top-1 js-toggle-setting-value"
+                        data-target="NewSettingsJson"
+                        data-module="govuk-button">
+                    Show value
+                </button>
             </div>
 
             <div class="govuk-form-group">
@@ -436,10 +493,13 @@
                     Export settings
                 </button>
             </form>
-            <form method="post" asp-page-handler="Import" enctype="multipart/form-data">
+            <form method="post" asp-page-handler="Import" id="tenant-settings-import-form">
+                @Html.AntiForgeryToken()
                 <div class="govuk-form-group govuk-!-margin-bottom-2">
                     <label class="govuk-label" for="importFile">Import JSON file</label>
-                    <input class="govuk-file-upload" type="file" id="importFile" name="importFile" accept=".json" />
+                    <div class="govuk-hint">Choose an export file from another environment. The file is encoded in the browser before upload to avoid gateway/WAF issues.</div>
+                    <input class="govuk-file-upload" type="file" id="importFile" accept=".json,application/json" />
+                    <input type="hidden" name="importJsonBase64" id="importJsonBase64" />
                 </div>
                 <button type="submit" class="govuk-button govuk-button--warning" data-module="govuk-button">
                     Import settings
@@ -521,8 +581,43 @@
             if (targetInput) targetInput.value = target;
             if (jsonInput) jsonInput.value = json;
             if (secretInput) secretInput.checked = secret;
+            if (jsonInput && secret) {
+                jsonInput.classList.add('tenant-setting-value');
+                jsonInput.setAttribute('data-secret-masked', 'true');
+                jsonInput.style.webkitTextSecurity = 'disc';
+                jsonInput.style.textSecurity = 'disc';
+            }
 
             document.getElementById('add-setting-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
     });
+
+    var importForm = document.getElementById('tenant-settings-import-form');
+    if (importForm) {
+        importForm.addEventListener('submit', function (e) {
+            var fileInput = document.getElementById('importFile');
+            var hidden = document.getElementById('importJsonBase64');
+            if (!fileInput || !hidden || !fileInput.files || fileInput.files.length === 0) {
+                e.preventDefault();
+                alert('Choose a JSON file to import.');
+                return;
+            }
+
+            e.preventDefault();
+            var file = fileInput.files[0];
+            var reader = new FileReader();
+            reader.onload = function () {
+                try {
+                    hidden.value = btoa(unescape(encodeURIComponent(reader.result)));
+                    importForm.submit();
+                } catch (err) {
+                    alert('Could not read the selected file.');
+                }
+            };
+            reader.onerror = function () {
+                alert('Could not read the selected file.');
+            };
+            reader.readAsText(file);
+        });
+    }
 </script>

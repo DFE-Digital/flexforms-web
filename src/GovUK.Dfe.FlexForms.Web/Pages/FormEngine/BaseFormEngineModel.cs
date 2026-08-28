@@ -40,6 +40,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
 
         /// <summary>
         /// Ensures <see cref="CurrentFormState"/> is populated when returning <see cref="PageResult"/> from an exception filter.
+        /// File upload validation should prefer FormErrorStore + ReturnUrl redirect instead.
         /// </summary>
         public void EnsureFormStateForErrorDisplay()
         {

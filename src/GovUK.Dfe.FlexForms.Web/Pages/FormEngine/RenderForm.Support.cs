@@ -240,16 +240,17 @@ public partial class RenderFormModel
         if (string.IsNullOrEmpty(outcome.SuccessMessage) || string.IsNullOrEmpty(outcome.NotificationContext))
             return;
 
+        var isUpload = outcome.NotificationContext.StartsWith("file-upload|", StringComparison.Ordinal);
+
         await TryCreateFileNotificationAsync(new AddNotificationRequest
         {
             Message = outcome.SuccessMessage,
-            Category = "file-upload",
+            Category = isUpload ? "file-upload" : "file-delete",
             Context = outcome.NotificationContext,
             Type = NotificationType.Success,
             AutoDismiss = false,
-            AutoDismissSeconds = outcome.NotificationContext.StartsWith("file-upload|", StringComparison.Ordinal)
-                ? 5
-                : 0,
+            // API rejects AutoDismissSeconds <= 0 when the property is set.
+            AutoDismissSeconds = 5,
             ReplaceExistingContext = false
         });
     }
