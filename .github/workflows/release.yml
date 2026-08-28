@@ -61,4 +61,5 @@ jobs:
           fi
           gh release create "$TAG" \
             --title "${{ steps.notes.outputs.title }}" \
-            --notes "${{ steps.notes.outputs.notes }}"
+            --notes "${{ steps.notes.outputs.notes }}" \
+            --prerelease

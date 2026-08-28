@@ -8,7 +8,7 @@ Application version is calculated from **Git tags** and **commits** — do not e
 - On every push to **`main`**, the **Release** workflow:
   1. Calculates the semver with GitVersion
   2. Creates tag `v{x.y.z}` if it does not already exist
-  3. Creates a GitHub release titled `{x.y.z} - {commit subject}`
+  3. Creates a GitHub release titled `{x.y.z} - {commit subject}` (marked as **pre-release**; promote to Latest manually when ready)
 
 ## Bumping the version
 
