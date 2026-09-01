@@ -42,5 +42,15 @@ public class TenantIdResolverHostnameTests
         var host = TenantIdResolver.ResolvePublicHostname(context);
 
         Assert.Null(host);
+        Assert.True(TenantIdResolver.IsNonPublicHostRequest(context));
+    }
+
+    [Fact]
+    public void IsNonPublicHostRequest_IsFalse_ForPublicTenantHost()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Host = new HostString("visits.flexforms.rsd.education.gov.uk");
+
+        Assert.False(TenantIdResolver.IsNonPublicHostRequest(context));
     }
 }
