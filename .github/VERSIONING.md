@@ -7,9 +7,11 @@ Application version is calculated from **Git tags** and **commits** — do not e
 - Tags use the format **`v2.2.3`** (see `tag-prefix` in `GitVersion.yml`).
 - On every push to **`main`**, the **Release** workflow:
   1. Calculates the semver with GitVersion
-  2. Creates tag `v{x.y.z}` if it does not already exist
+  2. Creates tag `v{x.y.z}` on the merge commit if it does not already exist
   3. Creates a GitHub release titled `{x.y.z} - {commit subject}` (marked as **pre-release**; promote to Latest manually when ready)
-  4. Prepends the same release notes to **`CHANGELOG.md`** and commits that update (changelog-only pushes do not re-trigger this workflow)
+  4. Opens a pull request that prepends the same notes to **`CHANGELOG.md`**, then auto-merges it
+
+The changelog is not pushed straight to `main` (branch protection requires a PR). Changelog-only merges do not re-run this workflow (`paths-ignore: CHANGELOG.md`) and use `+semver: skip` so they do not bump the version.
 
 ## Bumping the version
 
