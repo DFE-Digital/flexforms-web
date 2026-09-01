@@ -68,7 +68,7 @@ jobs:
     name: Build & import → ${{ needs.set-env.outputs.environment }}
     runs-on: ubuntu-24.04
     needs: [ set-env, gitversion ]
-    environment: ${{ needs.set-env.outputs.environment-lower == 'production' && 'production-build' || needs.set-env.outputs.environment }}
+    environment: ${{ needs.set-env.outputs.environment }}
     permissions:
       attestations: write
       packages: write
