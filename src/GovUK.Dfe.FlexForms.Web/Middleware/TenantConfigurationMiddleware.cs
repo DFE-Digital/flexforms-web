@@ -71,6 +71,7 @@ public sealed class TenantConfigurationMiddleware(
             tenantRequestContext.TenantConfiguration = configuration;
 
             var appInsightsConnectionString = TenantApplicationInsightsConnection.FromConfiguration(configuration);
+            TenantApplicationInsightsConnection.BindToRequest(context, appInsightsConnectionString);
             using (TenantApplicationInsightsScope.Begin(appInsightsConnectionString))
             using (logger.BeginScope(new Dictionary<string, object>
                    {

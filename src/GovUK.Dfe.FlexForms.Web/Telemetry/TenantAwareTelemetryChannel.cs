@@ -2,28 +2,34 @@ using System.Collections.Concurrent;
 using Microsoft.ApplicationInsights.Channel;
 using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.ApplicationInsights.WindowsServer.TelemetryChannel;
+using Microsoft.AspNetCore.Http;
 
 namespace GovUK.Dfe.FlexForms.Web.Telemetry;
 
 /// <summary>
 /// Routes telemetry to the tenant Application Insights resource when
-/// <see cref="TenantApplicationInsightsScope"/> is set; otherwise uses the host resource.
+/// <see cref="TenantApplicationInsightsScope"/> or the current HTTP request has a tenant
+/// connection string; otherwise uses the host resource.
 /// </summary>
 public sealed class TenantAwareTelemetryChannel : ITelemetryChannel, ITelemetryModule
 {
     private readonly ConcurrentDictionary<string, ITelemetryChannel> _tenantChannels =
         new(StringComparer.Ordinal);
     private readonly Func<string, ITelemetryChannel> _createChannel;
+    private readonly IHttpContextAccessor? _httpContextAccessor;
     private ITelemetryChannel? _hostChannel;
 
-    public TenantAwareTelemetryChannel()
-        : this(CreateServerChannel)
+    public TenantAwareTelemetryChannel(IHttpContextAccessor httpContextAccessor)
+        : this(CreateServerChannel, httpContextAccessor)
     {
     }
 
-    internal TenantAwareTelemetryChannel(Func<string, ITelemetryChannel> createChannel)
+    internal TenantAwareTelemetryChannel(
+        Func<string, ITelemetryChannel> createChannel,
+        IHttpContextAccessor? httpContextAccessor = null)
     {
         _createChannel = createChannel;
+        _httpContextAccessor = httpContextAccessor;
     }
 
     public bool? DeveloperMode { get; set; }
@@ -49,7 +55,8 @@ public sealed class TenantAwareTelemetryChannel : ITelemetryChannel, ITelemetryM
 
     public void Send(ITelemetry item)
     {
-        var connectionString = TenantApplicationInsightsScope.CurrentConnectionString;
+        var connectionString = TenantApplicationInsightsScope.CurrentConnectionString
+            ?? TenantApplicationInsightsConnection.FromHttpContext(_httpContextAccessor?.HttpContext);
         if (string.IsNullOrWhiteSpace(connectionString))
         {
             _hostChannel?.Send(item);
