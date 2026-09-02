@@ -2,6 +2,10 @@
 
 All notable changes to this service will be documented in this file.
 
+## [2.2.9] - Fixed too many request issues in the notifications
+### Notes
+- No release notes provided.
+
 ## [2.2.1]
 ### Notes
 - Fixed upload validation issues
