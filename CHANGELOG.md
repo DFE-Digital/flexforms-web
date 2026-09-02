@@ -2,6 +2,10 @@
 
 All notable changes to this service will be documented in this file.
 
+## [2.2.12] - Fixed AppIns and telemetry channel
+### Notes
+- No release notes provided.
+
 ## [2.2.1]
 ### Notes
 - Fixed upload validation issues
