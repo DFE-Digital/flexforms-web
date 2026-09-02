@@ -46,7 +46,7 @@
             </div>
         }
         
-        <form method="post" id="confirmation-form">
+        <form method="post" id="confirmation-form" asp-page="/Confirmation">
             @Html.AntiForgeryToken()
             <input type="hidden" asp-for="ConfirmationToken" />
             @* Repost original form fields when confirming *@

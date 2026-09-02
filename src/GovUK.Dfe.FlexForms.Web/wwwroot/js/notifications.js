@@ -8,6 +8,9 @@ const antiForgeryToken = () => {
     return input?.value;
 };
 const PAGE_LOAD_AT_MS = Date.now();
+const HUB_TICKET_COOLDOWN_MS = 30_000;
+let hubTicketInFlight = null;
+let hubTicketCooldownUntil = 0;
 
 function mapTypeToCss(type) {
     const normalize = (val) => {
@@ -195,11 +198,38 @@ async function refreshUnreadCount() {
 window.refreshUnreadCount = refreshUnreadCount;
 
 async function ensureHubCookie() {
-    const res = await fetch("/internal/hub-ticket", { credentials: "include" });
-    if (!res.ok) return;
-    const { url } = await res.json();
+    if (Date.now() < hubTicketCooldownUntil) {
+        return false;
+    }
 
-    await fetch(url, { credentials: "include" });
+    if (hubTicketInFlight) {
+        return hubTicketInFlight;
+    }
+
+    hubTicketInFlight = (async () => {
+        try {
+            const res = await fetch("/internal/hub-ticket", { credentials: "include" });
+            if (!res.ok) {
+                hubTicketCooldownUntil = Date.now() + HUB_TICKET_COOLDOWN_MS;
+                return false;
+            }
+
+            const { url } = await res.json();
+            if (!url) {
+                return false;
+            }
+
+            await fetch(url, { credentials: "include" });
+            return true;
+        } catch {
+            hubTicketCooldownUntil = Date.now() + HUB_TICKET_COOLDOWN_MS;
+            return false;
+        } finally {
+            hubTicketInFlight = null;
+        }
+    })();
+
+    return hubTicketInFlight;
 }
 
 async function startHub() {
@@ -208,29 +238,31 @@ async function startHub() {
         console.log('Cypress detected - skipping SignalR notifications hub');
         return;
     }
-    
+
+    if (window.__flexformsHubStarted) {
+        return;
+    }
+    window.__flexformsHubStarted = true;
+
     try {
-        await ensureHubCookie();
+        const ticketOk = await ensureHubCookie();
+        if (!ticketOk || typeof signalR === "undefined") {
+            return;
+        }
 
         const connection = new signalR.HubConnectionBuilder()
             .withUrl(`${API_BASE}/hubs/notifications`, { withCredentials: true })
-            .withAutomaticReconnect()
+            .withAutomaticReconnect([0, 2000, 10000, 30000])
             .build();
 
         connection.on("notification.upserted", n => window.renderOrUpdate(n, { live: true }));
         connection.on("notification.dismissed", ({ id }) => window.removeFromUi(id));
         connection.on("notification.cleared", () => window.clearUi());
 
-        connection.onreconnecting(async () => { await ensureHubCookie(); });
-        connection.onclose(async () => {
-            try {
-                await ensureHubCookie();
-                await connection.start();
-            } catch { /* optional backoff */ }
-        });
+        connection.onreconnected(async () => { await ensureHubCookie(); });
 
         // Renew hub cookie proactively (10min cookie >>> renew every ~8 min)
-        setInterval(ensureHubCookie, 8 * 60 * 1000);
+        setInterval(() => { void ensureHubCookie(); }, 8 * 60 * 1000);
 
         await connection.start();
         // Render only notifications that were created very recently (to catch events created during navigation)
@@ -249,7 +281,7 @@ async function startHub() {
         } catch { }
         await refreshUnreadCount();
     } catch {
-     
+        window.__flexformsHubStarted = false;
     }
 }
 
