@@ -10,12 +10,18 @@ public static class SuperAdminOnlyTenantSettingCategories
     public const string ApplicationTemplates = "ApplicationTemplates";
     public const string Template = "Template";
     public const string ConnectionStrings = "ConnectionStrings";
+    public const string FileStorage = "FileStorage";
+    public const string Email = "Email";
+    public const string ApplicationInsights = "ApplicationInsights";
 
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         ApplicationTemplates,
         Template,
-        ConnectionStrings
+        ConnectionStrings,
+        FileStorage,
+        Email,
+        ApplicationInsights
     };
 
     public static bool IsRestricted(string? category) =>
