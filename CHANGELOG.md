@@ -2,6 +2,10 @@
 
 All notable changes to this service will be documented in this file.
 
+## [2.2.11] - Fixed internal service auth to run only when related header props exists
+### Notes
+- No release notes provided.
+
 ## [2.2.1]
 ### Notes
 - Fixed upload validation issues
