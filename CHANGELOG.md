@@ -2,6 +2,10 @@
 
 All notable changes to this service will be documented in this file.
 
+## [2.2.10] - Added appinsights support to the tenant config
+### Notes
+- No release notes provided.
+
 ## [2.2.1]
 ### Notes
 - Fixed upload validation issues
