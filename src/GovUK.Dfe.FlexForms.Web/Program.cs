@@ -158,10 +158,6 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.KnownProxies.Clear();
 });
 
-// Shared Data Protection key ring so session / cookie-auth cookies unprotect on any replica.
-// Local/Development keep the default key ring unless DataProtection:UseStorageSas is set.
-builder.Services.AddSharedDataProtection(configuration, builder.Environment);
-
 builder.Services.AddSingleton<ITelemetryChannel, TenantAwareTelemetryChannel>();
 builder.Services.AddApplicationInsightsTelemetry(configuration);
 builder.Services.AddScoped<IJavaScriptSnippet, TenantJavaScriptSnippet>();

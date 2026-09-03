@@ -13,7 +13,6 @@ Template authoring guide: [`docs/Form-Template-Designer-Manual.md`](docs/Form-Te
 - **Platform bootstrap** — Host config from API at startup; per-request tenant config for Target `Web`
 - **Template-driven form engine** — Tasks, pages, fields, conditional logic, collection & derived flows
 - **Auth** — DfE Sign-In (OIDC) and optional Entra SSO, with cookie sessions and API token exchange
-- **Shared Data Protection** — Azure Blob + Key Vault key ring so session cookies work across replicas
 - **Admin area** — Template Manager, User Manager, Role Manager, Event mappings (Admin), Tenant Settings (including email placeholder mappings)
 - **Contributors** — Invite collaborators when `contributorPattern` is enabled on the template
 - **Files** — Upload via API; ClamAV scan results from Service Bus; optional tenant file-validation status
@@ -799,31 +798,6 @@ Configure (user secrets or env):
 - `PlatformBootstrap:ApiBaseUrl`
 - `PlatformBootstrap:Scope`, `ClientId`, `ClientSecret` (or DefaultAzureCredential)
 - Directory tenant id as required by your environment
-
-### Data Protection (session cookies)
-
-Session and cookie-auth cookies are protected with ASP.NET Data Protection. **Local / Development** keep a per-machine key ring. **Staging / Production** must share one ring across replicas or you get `The key {…} was not found in the key ring` on `CookieProtection.Unprotect` (and follow-on 401s from token exchange).
-
-Same Azure pattern as the API. Use a **different blob** and `ApplicationName` so Web cookie keys are not mixed with API TenantSettings keys.
-
-| Key | Purpose |
-|-----|---------|
-| `DataProtection:UseAzure` | `true` in Azure; Local/Development ignore this unless `UseStorageSas` is set |
-| `DataProtection:ApplicationName` | `GovUK.Dfe.FlexForms.Web` (do not change after go-live) |
-| `DataProtection:BlobUri` | `https://{account}.blob.core.windows.net/{container}/web-keys.xml` — **not** `api-keys.xml` |
-| `DataProtection:KeyVaultKeyId` | Key Vault key URI used to wrap the ring |
-| `DataProtection:UseStorageSas` | Local Azure opt-in; BlobUri must include a SAS query string |
-
-Container App env (colon → double underscore):
-
-```
-DataProtection__UseAzure=true
-DataProtection__ApplicationName=GovUK.Dfe.FlexForms.Web
-DataProtection__BlobUri=https://<account>.blob.core.windows.net/<container>/web-keys.xml
-DataProtection__KeyVaultKeyId=https://<vault>.vault.azure.net/keys/<web-cookie-dp>
-```
-
-The Web managed identity needs Blob **read/write** on that blob and Key Vault **unwrap/wrap** (or get + decrypt) on the key. After deploy, users with cookies from the old per-replica ring must sign in again once.
 
 ### Launch profiles
 
