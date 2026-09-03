@@ -61,4 +61,18 @@ public class InternalAuthRequestCheckerTests
 
         Assert.False(checker.IsValidRequest(context));
     }
+
+    [Fact]
+    public void IsValidRequest_ShouldNotResolveOptions_WhenServiceHeadersMissing()
+    {
+        var resolver = Substitute.For<IInternalServiceAuthOptionsResolver>();
+        var checker = new InternalAuthRequestChecker(
+            resolver,
+            NullLogger<InternalAuthRequestChecker>.Instance);
+
+        var context = new DefaultHttpContext();
+
+        Assert.False(checker.IsValidRequest(context));
+        resolver.DidNotReceive().Resolve();
+    }
 }
