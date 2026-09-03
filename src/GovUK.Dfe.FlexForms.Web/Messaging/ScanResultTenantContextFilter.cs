@@ -3,6 +3,7 @@ using GovUK.Dfe.FlexForms.Infrastructure.Messaging;
 using GovUK.Dfe.FlexForms.Web.Configuration;
 using GovUK.Dfe.FlexForms.Web.Services.Tenant;
 using GovUK.Dfe.FlexForms.Web.Tenancy;
+using GovUK.Dfe.FlexForms.Web.Telemetry;
 using MassTransit;
 using Microsoft.Extensions.Options;
 
@@ -61,6 +62,8 @@ public sealed class ScanResultTenantContextFilter<T>(
         }
 
         using (AmbientTenantRequestContext.Use(tenantRequestContext))
+        using (TenantApplicationInsightsScope.Begin(
+                   TenantApplicationInsightsConnection.FromConfiguration(tenantRequestContext.TenantConfiguration)))
         {
             await next.Send(context);
         }

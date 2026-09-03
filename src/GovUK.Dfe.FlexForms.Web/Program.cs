@@ -36,6 +36,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using Microsoft.ApplicationInsights.AspNetCore;
+using Microsoft.ApplicationInsights.Channel;
 using GovUK.Dfe.FlexForms.Web.Telemetry;
 using GovUK.Dfe.FlexForms.Web.Configuration;
 using GovUK.Dfe.CoreLibs.Http.Extensions;
@@ -156,7 +158,9 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.KnownProxies.Clear();
 });
 
+builder.Services.AddSingleton<ITelemetryChannel, TenantAwareTelemetryChannel>();
 builder.Services.AddApplicationInsightsTelemetry(configuration);
+builder.Services.AddScoped<IJavaScriptSnippet, TenantJavaScriptSnippet>();
 
 builder.Logging.AddFilter<Microsoft.Extensions.Logging.ApplicationInsights.ApplicationInsightsLoggerProvider>(
     (_, _) => false);

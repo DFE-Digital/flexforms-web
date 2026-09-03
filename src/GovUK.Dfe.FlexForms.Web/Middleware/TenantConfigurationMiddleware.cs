@@ -3,6 +3,7 @@ using System.Text.Json;
 using GovUK.Dfe.FlexForms.Web.Configuration;
 using GovUK.Dfe.FlexForms.Web.Services.Tenant;
 using GovUK.Dfe.FlexForms.Web.Tenancy;
+using GovUK.Dfe.FlexForms.Web.Telemetry;
 using Microsoft.Extensions.Options;
 
 namespace GovUK.Dfe.FlexForms.Web.Middleware;
@@ -69,6 +70,9 @@ public sealed class TenantConfigurationMiddleware(
             tenantRequestContext.TenantName = tenantConfig.TenantName;
             tenantRequestContext.TenantConfiguration = configuration;
 
+            var appInsightsConnectionString = TenantApplicationInsightsConnection.FromConfiguration(configuration);
+            TenantApplicationInsightsConnection.BindToRequest(context, appInsightsConnectionString);
+            using (TenantApplicationInsightsScope.Begin(appInsightsConnectionString))
             using (logger.BeginScope(new Dictionary<string, object>
                    {
                        ["TenantId"] = tenantConfig.TenantId,

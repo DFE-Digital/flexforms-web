@@ -98,6 +98,42 @@ public class InternalServiceAuthOptionsResolverTests
     }
 
     [Fact]
+    public void Resolve_ShouldFallBackToHost_WhenTenantContextIsEmptyPlaceholder()
+    {
+        var hostConfig = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["InternalServiceAuth:SecretKey"] = "host-secret-key-32chars-minimum!!",
+                ["InternalServiceAuth:Issuer"] = "host-issuer",
+                ["InternalServiceAuth:Audience"] = "host-audience"
+            })
+            .Build();
+
+        // Scoped ITenantRequestContext exists even on health/static bypass paths.
+        var tenantContext = Substitute.For<ITenantRequestContext>();
+        tenantContext.TenantId.Returns((Guid?)null);
+        tenantContext.TenantName.Returns((string?)null);
+        tenantContext.TenantConfiguration.Returns((IConfiguration?)null);
+
+        var httpContext = new DefaultHttpContext();
+        var services = new ServiceCollection();
+        services.AddSingleton(tenantContext);
+        httpContext.RequestServices = services.BuildServiceProvider();
+
+        var accessor = Substitute.For<IHttpContextAccessor>();
+        accessor.HttpContext.Returns(httpContext);
+
+        var resolver = new InternalServiceAuthOptionsResolver(
+            accessor,
+            hostConfig,
+            NullLogger<InternalServiceAuthOptionsResolver>.Instance);
+
+        var options = resolver.Resolve();
+
+        Assert.Equal("host-secret-key-32chars-minimum!!", options.SecretKey);
+    }
+
+    [Fact]
     public void Resolve_ShouldUseAmbientTenant_WhenHttpContextMissing()
     {
         var tenantConfig = new ConfigurationBuilder()

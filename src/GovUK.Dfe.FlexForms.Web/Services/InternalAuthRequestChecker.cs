@@ -18,10 +18,14 @@ public sealed class InternalAuthRequestChecker(
     /// <inheritdoc />
     public bool IsValidRequest(HttpContext httpContext)
     {
-        var config = optionsResolver.Resolve();
-
         var serviceEmail = httpContext.Request.Headers[ServiceEmailHeaderKey].ToString();
         var serviceApiKey = httpContext.Request.Headers[ServiceApiHeaderKey].ToString();
+        if (string.IsNullOrWhiteSpace(serviceEmail) || string.IsNullOrWhiteSpace(serviceApiKey))
+        {
+            return false;
+        }
+
+        var config = optionsResolver.Resolve();
 
         var serviceConfig = config.Services
             .FirstOrDefault(s => s.Email.Equals(serviceEmail, StringComparison.OrdinalIgnoreCase));
