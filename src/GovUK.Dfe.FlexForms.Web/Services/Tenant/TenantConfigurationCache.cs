@@ -22,9 +22,20 @@ public sealed class TenantConfigurationCache(IOptions<PlatformBootstrapOptions> 
             return existing.Value;
         }
 
-        var loaded = await factory(cancellationToken);
-        _cache[tenantId] = new CacheEntry(loaded, now.Add(ttl));
-        return loaded;
+        try
+        {
+            var loaded = await factory(cancellationToken);
+            _cache[tenantId] = new CacheEntry(loaded, now.Add(ttl));
+            return loaded;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception) when (existing is not null)
+        {
+            return existing.Value;
+        }
     }
 
     /// <inheritdoc />

@@ -3,6 +3,7 @@ using System.Text.Json;
 using GovUK.Dfe.FlexForms.Web.Configuration;
 using GovUK.Dfe.FlexForms.Web.Services.Tenant;
 using GovUK.Dfe.FlexForms.Web.Tenancy;
+using GovUK.Dfe.FlexForms.Web.Telemetry;
 using Microsoft.Extensions.Options;
 
 namespace GovUK.Dfe.FlexForms.Web.Middleware;
@@ -38,6 +39,17 @@ public sealed class TenantConfigurationMiddleware(
             var tenantId = await tenantIdResolver.ResolveTenantIdAsync(context, context.RequestAborted);
             if (tenantId is null)
             {
+                if (TenantIdResolver.IsNonPublicHostRequest(context))
+                {
+                    logger.LogDebug(
+                        "Skipping tenant resolution for non-public host {Method} {Path} (Host={Host})",
+                        context.Request.Method,
+                        context.Request.Path,
+                        context.Request.Host.Value);
+                    context.Response.StatusCode = (int)HttpStatusCode.NotFound;
+                    return;
+                }
+
                 logger.LogWarning(
                     "No tenant could be resolved for {Method} {Path} (Host={Host})",
                     context.Request.Method,
@@ -58,6 +70,9 @@ public sealed class TenantConfigurationMiddleware(
             tenantRequestContext.TenantName = tenantConfig.TenantName;
             tenantRequestContext.TenantConfiguration = configuration;
 
+            var appInsightsConnectionString = TenantApplicationInsightsConnection.FromConfiguration(configuration);
+            TenantApplicationInsightsConnection.BindToRequest(context, appInsightsConnectionString);
+            using (TenantApplicationInsightsScope.Begin(appInsightsConnectionString))
             using (logger.BeginScope(new Dictionary<string, object>
                    {
                        ["TenantId"] = tenantConfig.TenantId,

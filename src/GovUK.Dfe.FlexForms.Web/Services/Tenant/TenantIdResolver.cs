@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using GovUK.Dfe.FlexForms.Web.Configuration;
@@ -10,17 +9,16 @@ namespace GovUK.Dfe.FlexForms.Web.Services.Tenant;
 /// <inheritdoc />
 public sealed class TenantIdResolver(
     PlatformConfigurationApiClient apiClient,
+    TenantHostnameCache hostnameCache,
     IOptions<PlatformBootstrapOptions> options,
     ILogger<TenantIdResolver> logger) : ITenantIdResolver
 {
     public const string TenantIdHeader = "X-Tenant-ID";
 
-    private readonly ConcurrentDictionary<string, CacheEntry> _hostnameCache = new(StringComparer.OrdinalIgnoreCase);
-
     /// <inheritdoc />
     public void InvalidateHostnameCache()
     {
-        _hostnameCache.Clear();
+        hostnameCache.Clear();
         logger.LogDebug("Tenant hostname cache cleared.");
     }
 
@@ -48,18 +46,17 @@ public sealed class TenantIdResolver(
 
         var host = ResolvePublicHostname(httpContext);
 
-        logger.LogInformation(
+        logger.LogDebug(
             "Tenant hostname resolution headers: X-Forwarded-Host={ForwardedHost}, X-Original-Host={OriginalHost}, Request.Host={RequestHost}, Request.Host.Host={RequestHostHost}, ChosenHost={ChosenHost}",
             string.IsNullOrWhiteSpace(forwardedHost) ? "(empty)" : forwardedHost,
             string.IsNullOrWhiteSpace(originalHost) ? "(empty)" : originalHost,
             string.IsNullOrWhiteSpace(requestHost) ? "(empty)" : requestHost,
             string.IsNullOrWhiteSpace(requestHostHost) ? "(empty)" : requestHostHost,
-
             string.IsNullOrWhiteSpace(host) ? "(none)" : host);
 
         if (string.IsNullOrWhiteSpace(host))
         {
-            logger.LogWarning(
+            logger.LogDebug(
                 "Could not resolve a public hostname for tenant lookup (Request.Host={RequestHost}, X-Forwarded-Host={ForwardedHost}, X-Original-Host={OriginalHost})",
                 requestHost,
                 string.IsNullOrWhiteSpace(forwardedHost) ? "(empty)" : forwardedHost,
@@ -69,32 +66,51 @@ public sealed class TenantIdResolver(
 
         var ttl = TimeSpan.FromMinutes(Math.Max(1, options.Value.TenantConfigurationCacheMinutes));
         var now = DateTimeOffset.UtcNow;
-        if (_hostnameCache.TryGetValue(host, out var cached) && cached.ExpiresAt > now)
+        if (hostnameCache.TryGet(host, now, allowExpired: false, out var cached))
         {
-            return cached.TenantId;
+            return cached;
         }
 
-        try
+        return await hostnameCache.RunSerializedAsync<Guid?>(host, async () =>
         {
-            var resolution = await apiClient.ResolveTenantByHostnameAsync(host, cancellationToken);
-            logger.LogDebug(
-                "Resolved tenant {TenantId} ({TenantName}) from hostname {Hostname}",
-                resolution.TenantId,
-                resolution.TenantName,
-                resolution.Hostname);
+            now = DateTimeOffset.UtcNow;
+            if (hostnameCache.TryGet(host, now, allowExpired: false, out var winner))
+            {
+                return winner;
+            }
 
-            _hostnameCache[host] = new CacheEntry(resolution.TenantId, now.Add(ttl));
-            return resolution.TenantId;
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (HttpRequestException ex)
-        {
-            logger.LogWarning(ex, "Could not resolve tenant for hostname {Hostname}", host);
-            return null;
-        }
+            try
+            {
+                var resolution = await apiClient.ResolveTenantByHostnameAsync(host, cancellationToken);
+                logger.LogDebug(
+                    "Resolved tenant {TenantId} ({TenantName}) from hostname {Hostname}",
+                    resolution.TenantId,
+                    resolution.TenantName,
+                    resolution.Hostname);
+
+                hostnameCache.Set(host, resolution.TenantId, now.Add(ttl));
+                return resolution.TenantId;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (HttpRequestException ex)
+            {
+                if (hostnameCache.TryGet(host, now, allowExpired: true, out var stale))
+                {
+                    logger.LogWarning(
+                        ex,
+                        "Platform tenant resolve failed for {Hostname}; using cached tenant {TenantId}",
+                        host,
+                        stale);
+                    return stale;
+                }
+
+                logger.LogWarning(ex, "Could not resolve tenant for hostname {Hostname}", host);
+                return null;
+            }
+        }, cancellationToken);
     }
 
     /// <summary>
@@ -112,6 +128,13 @@ public sealed class TenantIdResolver(
 
         return null;
     }
+
+    /// <summary>
+    /// True when the request arrived on the Container Apps FQDN (or another non-tenant host)
+    /// with no public hostname header. Typical of probes and internal calls, not browsers.
+    /// </summary>
+    public static bool IsNonPublicHostRequest(HttpContext httpContext) =>
+        string.IsNullOrWhiteSpace(ResolvePublicHostname(httpContext));
 
     private static IEnumerable<string> EnumerateHostnameCandidates(HttpContext httpContext)
     {
@@ -190,6 +213,4 @@ public sealed class TenantIdResolver(
 
         return false;
     }
-
-    private sealed record CacheEntry(Guid TenantId, DateTimeOffset ExpiresAt);
 }

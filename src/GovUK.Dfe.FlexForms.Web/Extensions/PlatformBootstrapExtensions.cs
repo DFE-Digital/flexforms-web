@@ -31,6 +31,7 @@ public static class PlatformBootstrapExtensions
         services.AddHttpClient<PlatformConfigurationApiClient>();
         services.AddSingleton<IPlatformAccessTokenProvider, PlatformAccessTokenProvider>();
         services.AddSingleton<ITenantConfigurationCache, TenantConfigurationCache>();
+        services.AddSingleton<TenantHostnameCache>();
         services.AddScoped<TenantConfigurationLoader>();
         services.AddScoped<ITenantIdResolver, TenantIdResolver>();
         services.AddScoped<PlatformHostConfigurationBootstrapper>();

@@ -347,8 +347,13 @@ public class ApplicationResponseService(
         {
             var fieldId = kvp.Key;
             var value = kvp.Value?.ToString() ?? string.Empty;
+            var completed = ResponseFieldMetadataResolver.ResolveCompleted(fieldId, fieldLookup, taskStatusData);
 
-            responseData[fieldId] = ResponseFieldMetadataResolver.BuildFormFieldEntry(fieldId, value, fieldLookup);
+            responseData[fieldId] = ResponseFieldMetadataResolver.BuildFormFieldEntry(
+                fieldId,
+                value,
+                fieldLookup,
+                completed);
         }
 
         // Add task completion status (unchanged shape)
@@ -358,7 +363,7 @@ public class ApplicationResponseService(
             responseData[taskStatusKey] = new
             {
                 value = kvp.Value,
-                completed = true
+                completed = ResponseFieldMetadataResolver.IsTaskMarkedCompleted(kvp.Key, taskStatusData)
             };
         }
 

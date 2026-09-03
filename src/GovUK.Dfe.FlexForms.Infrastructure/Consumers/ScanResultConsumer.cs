@@ -340,7 +340,8 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Consumers
                                 
                                 // Update the field, preserving question/dataType when already present
                                 var updatedValueJson = JsonSerializer.Serialize(files);
-                                var isCompleted = !string.IsNullOrWhiteSpace(updatedValueJson) && files.Count > 0;
+                                var isCompleted = fieldData.TryGetProperty("completed", out var completedElement)
+                                    && completedElement.ValueKind == JsonValueKind.True;
 
                                 var preservedQuestion = fieldData.TryGetProperty("question", out var questionElement)
                                     && questionElement.ValueKind == JsonValueKind.String

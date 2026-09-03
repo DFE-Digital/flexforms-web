@@ -3,9 +3,12 @@ name: Release
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - CHANGELOG.md
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   gitversion:
@@ -41,6 +44,7 @@ jobs:
             NOTES="No release notes provided."
           fi
           TITLE="${VERSION} - ${COMMIT_SUBJECT}"
+          printf '%s\n' "$NOTES" > /tmp/release-notes.txt
           {
             echo "title<<EOF"
             echo "$TITLE"
@@ -48,18 +52,67 @@ jobs:
             echo "notes<<EOF"
             echo "$NOTES"
             echo "EOF"
+            echo "subject<<EOF"
+            echo "$COMMIT_SUBJECT"
+            echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Check if release needed
+        id: check
+        env:
+          TAG: ${{ needs.gitversion.outputs.tag }}
+        run: |
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "Tag $TAG already exists — skipping release."
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Create tag and release
+        if: steps.check.outputs.skip == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.gitversion.outputs.tag }}
         run: |
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "Tag $TAG already exists — skipping release."
-            exit 0
-          fi
+          RELEASE_SHA=$(git rev-parse HEAD)
           gh release create "$TAG" \
+            --target "$RELEASE_SHA" \
             --title "${{ steps.notes.outputs.title }}" \
             --notes "${{ steps.notes.outputs.notes }}" \
             --prerelease
+
+      - name: Open CHANGELOG pull request
+        if: steps.check.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.gitversion.outputs.tag }}
+          VERSION: ${{ needs.gitversion.outputs.version }}
+          SUBJECT: ${{ steps.notes.outputs.subject }}
+        run: |
+          set -euo pipefail
+          bash .github/scripts/update-changelog.sh "$VERSION" "$SUBJECT" /tmp/release-notes.txt
+          if git diff --quiet -- CHANGELOG.md; then
+            echo "CHANGELOG.md already contains this release."
+            exit 0
+          fi
+
+          BRANCH="chore/changelog-$TAG"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add CHANGELOG.md
+          git commit -m "chore(release): update CHANGELOG for $TAG +semver: skip"
+          git push -u origin "$BRANCH" --force
+
+          if ! gh pr list --head "$BRANCH" --base main --json number --jq 'length' | grep -qx '0'; then
+            echo "Changelog PR already open for $BRANCH."
+          else
+            gh pr create \
+              --base main \
+              --head "$BRANCH" \
+              --title "chore(release): update CHANGELOG for $TAG" \
+              --body "Automated changelog update for GitHub release \`$TAG\`. Merge this PR so \`CHANGELOG.md\` on main matches the release notes. This commit uses \`+semver: skip\` so it does not bump the version."
+          fi
+
+          gh pr merge "$BRANCH" --squash --auto --delete-branch

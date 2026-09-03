@@ -11,7 +11,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services;
 /// </summary>
 public static class ResponseFieldMetadataResolver
 {
-    public sealed record FieldMetadata(string Question, string? TemplateFieldType);
+    public sealed record FieldMetadata(string Question, string? TemplateFieldType, string? TaskId = null);
 
     public sealed class TemplateFieldLookup
     {
@@ -23,6 +23,8 @@ public static class ResponseFieldMetadataResolver
         /// </summary>
         public Dictionary<string, Dictionary<string, FieldMetadata>> CollectionNestedFields { get; } =
             new(StringComparer.OrdinalIgnoreCase);
+
+        public HashSet<string> TaskIds { get; } = new(StringComparer.OrdinalIgnoreCase);
     }
 
     public static TemplateFieldLookup BuildLookup(FormTemplate? template)
@@ -35,13 +37,18 @@ public static class ResponseFieldMetadataResolver
 
         foreach (var task in template.TaskGroups.SelectMany(g => g.Tasks))
         {
-            AddPages(lookup.Fields, task.Pages);
+            if (!string.IsNullOrWhiteSpace(task.TaskId))
+            {
+                lookup.TaskIds.Add(task.TaskId);
+            }
+
+            AddPages(lookup.Fields, task.Pages, task.TaskId);
 
             if (task.Summary?.Flows != null)
             {
                 foreach (var flow in task.Summary.Flows)
                 {
-                    AddCollectionFlow(lookup, flow.FieldId, flow.Title, flow.FlowId, flow.Pages);
+                    AddCollectionFlow(lookup, flow.FieldId, flow.Title, flow.FlowId, flow.Pages, task.TaskId);
                 }
             }
 
@@ -49,7 +56,7 @@ public static class ResponseFieldMetadataResolver
             {
                 foreach (var flow in task.Summary.DerivedFlows)
                 {
-                    AddCollectionFlow(lookup, flow.FieldId, flow.Title, flow.FlowId, flow.Pages);
+                    AddCollectionFlow(lookup, flow.FieldId, flow.Title, flow.FlowId, flow.Pages, task.TaskId);
                 }
             }
         }
@@ -88,17 +95,60 @@ public static class ResponseFieldMetadataResolver
     }
 
     /// <summary>
+    /// True only when the field's parent task was explicitly marked complete
+    /// (the "Mark this section as complete" checkbox), not merely because the field has a value.
+    /// </summary>
+    public static bool ResolveCompleted(
+        string fieldId,
+        TemplateFieldLookup lookup,
+        IReadOnlyDictionary<string, string> taskStatusData)
+    {
+        if (TryResolveTaskId(fieldId, lookup, out var taskId)
+            && IsTaskMarkedCompleted(taskId, taskStatusData))
+        {
+            return true;
+        }
+
+        const string completedSuffix = "_completed";
+        if (fieldId.EndsWith(completedSuffix, StringComparison.OrdinalIgnoreCase))
+        {
+            var candidate = fieldId[..^completedSuffix.Length];
+            if (IsTaskMarkedCompleted(candidate, taskStatusData))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static bool IsTaskMarkedCompleted(
+        string? taskId,
+        IReadOnlyDictionary<string, string> taskStatusData)
+    {
+        if (string.IsNullOrWhiteSpace(taskId) || taskStatusData.Count == 0)
+        {
+            return false;
+        }
+
+        return taskStatusData.TryGetValue(taskId, out var status)
+               && string.Equals(status, nameof(Domain.Models.TaskStatus.Completed), StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Builds a response entry. Always keeps <paramref name="value"/> unchanged.
     /// For collection flows, adds an additive <c>fields</c> map of nested question/dataType metadata.
+    /// <paramref name="completed"/> defaults to false; callers should pass true only when the
+    /// parent task was explicitly marked complete.
     /// </summary>
     public static object BuildFormFieldEntry(
         string fieldId,
         string value,
-        TemplateFieldLookup lookup)
+        TemplateFieldLookup lookup,
+        bool completed = false)
     {
         var question = ResolveQuestion(fieldId, lookup);
         var dataType = ResolveDataType(fieldId, value, lookup);
-        var completed = !string.IsNullOrWhiteSpace(value);
 
         if (lookup.CollectionNestedFields.TryGetValue(fieldId, out var nestedFields) &&
             nestedFields.Count > 0)
@@ -226,12 +276,61 @@ public static class ResponseFieldMetadataResolver
                || DateTime.TryParse(value, CultureInfo.CurrentCulture, DateTimeStyles.AssumeLocal, out _);
     }
 
+    internal static bool TryResolveTaskId(string fieldId, TemplateFieldLookup lookup, out string taskId)
+    {
+        if (lookup.Fields.TryGetValue(fieldId, out var metadata)
+            && !string.IsNullOrWhiteSpace(metadata.TaskId))
+        {
+            taskId = metadata.TaskId;
+            return true;
+        }
+
+        const string completedSuffix = "_completed";
+        if (fieldId.EndsWith(completedSuffix, StringComparison.OrdinalIgnoreCase))
+        {
+            var candidate = fieldId[..^completedSuffix.Length];
+            if (lookup.TaskIds.Contains(candidate))
+            {
+                taskId = candidate;
+                return true;
+            }
+        }
+
+        string? bestMatchTaskId = null;
+        var bestMatchLength = -1;
+        foreach (var (knownFieldId, fieldMeta) in lookup.Fields)
+        {
+            if (string.IsNullOrWhiteSpace(fieldMeta.TaskId)
+                || fieldId.Length <= knownFieldId.Length
+                || !fieldId.StartsWith(knownFieldId + "_", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (knownFieldId.Length > bestMatchLength)
+            {
+                bestMatchLength = knownFieldId.Length;
+                bestMatchTaskId = fieldMeta.TaskId;
+            }
+        }
+
+        if (bestMatchTaskId != null)
+        {
+            taskId = bestMatchTaskId;
+            return true;
+        }
+
+        taskId = string.Empty;
+        return false;
+    }
+
     private static void AddCollectionFlow(
         TemplateFieldLookup lookup,
         string fieldId,
         string? title,
         string? flowId,
-        List<Page>? pages)
+        List<Page>? pages,
+        string? taskId)
     {
         if (string.IsNullOrWhiteSpace(fieldId))
         {
@@ -239,21 +338,30 @@ public static class ResponseFieldMetadataResolver
         }
 
         var nested = new Dictionary<string, FieldMetadata>(StringComparer.OrdinalIgnoreCase);
-        AddPages(nested, pages);
+        AddPages(nested, pages, taskId);
         // Also register nested fields in the flat lookup for any direct references
-        AddPages(lookup.Fields, pages);
+        AddPages(lookup.Fields, pages, taskId);
 
         lookup.CollectionNestedFields[fieldId] = nested;
 
         var question = ResolveFlowQuestion(title, pages, flowId);
         if (!lookup.Fields.ContainsKey(fieldId))
         {
-            lookup.Fields[fieldId] = new FieldMetadata(question, "complexField");
+            lookup.Fields[fieldId] = new FieldMetadata(question, "complexField", taskId);
         }
         else if (string.IsNullOrWhiteSpace(lookup.Fields[fieldId].Question) &&
                  !string.IsNullOrWhiteSpace(question))
         {
-            lookup.Fields[fieldId] = new FieldMetadata(question, lookup.Fields[fieldId].TemplateFieldType ?? "complexField");
+            lookup.Fields[fieldId] = new FieldMetadata(
+                question,
+                lookup.Fields[fieldId].TemplateFieldType ?? "complexField",
+                lookup.Fields[fieldId].TaskId ?? taskId);
+        }
+        else if (string.IsNullOrWhiteSpace(lookup.Fields[fieldId].TaskId) &&
+                 !string.IsNullOrWhiteSpace(taskId))
+        {
+            var existing = lookup.Fields[fieldId];
+            lookup.Fields[fieldId] = existing with { TaskId = taskId };
         }
     }
 
@@ -275,7 +383,7 @@ public static class ResponseFieldMetadataResolver
         return flowId?.Trim() ?? string.Empty;
     }
 
-    private static void AddPages(Dictionary<string, FieldMetadata> target, List<Page>? pages)
+    private static void AddPages(Dictionary<string, FieldMetadata> target, List<Page>? pages, string? taskId)
     {
         if (pages == null)
         {
@@ -304,7 +412,7 @@ public static class ResponseFieldMetadataResolver
                 // Prefer first definition if duplicates exist
                 if (!target.ContainsKey(field.FieldId))
                 {
-                    target[field.FieldId] = new FieldMetadata(question, field.Type);
+                    target[field.FieldId] = new FieldMetadata(question, field.Type, taskId);
                 }
             }
         }
