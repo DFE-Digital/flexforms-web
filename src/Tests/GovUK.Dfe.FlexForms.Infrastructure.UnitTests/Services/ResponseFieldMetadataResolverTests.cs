@@ -103,7 +103,7 @@ public class ResponseFieldMetadataResolverTests
 
         Assert.Equal("Strategic needs", field.GetProperty("question").GetString());
         Assert.Equal("asdasd", field.GetProperty("value").GetString());
-        Assert.True(field.GetProperty("completed").GetBoolean());
+        Assert.False(field.GetProperty("completed").GetBoolean());
         Assert.Equal("string", field.GetProperty("dataType").GetString());
         Assert.False(field.TryGetProperty("fields", out _));
     }
@@ -133,7 +133,7 @@ public class ResponseFieldMetadataResolverTests
         // Outer metadata
         Assert.Equal("Incoming trust details", field.GetProperty("question").GetString());
         Assert.Equal("array", field.GetProperty("dataType").GetString());
-        Assert.True(field.GetProperty("completed").GetBoolean());
+        Assert.False(field.GetProperty("completed").GetBoolean());
 
         // Value structure unchanged (still the raw string)
         Assert.Equal(JsonValueKind.String, field.GetProperty("value").ValueKind);
@@ -165,6 +165,120 @@ public class ResponseFieldMetadataResolverTests
 
         using var doc = JsonDocument.Parse(json);
         Assert.Equal("Trust contact page", doc.RootElement.GetProperty("question").GetString());
+    }
+
+    [Fact]
+    public void BuildFormFieldEntry_SetsCompletedOnlyWhenCallerPassesTrue()
+    {
+        var template = BuildTemplate(
+            pageTitle: "Dates",
+            fieldId: "dateVisited",
+            fieldType: "date",
+            labelValue: "Visit date",
+            labelVisible: true);
+
+        var lookup = ResponseFieldMetadataResolver.BuildLookup(template);
+
+        var incomplete = ResponseFieldMetadataResolver.BuildFormFieldEntry(
+            "dateVisited",
+            "2006-02-23",
+            lookup);
+
+        using (var doc = JsonDocument.Parse(JsonSerializer.Serialize(incomplete)))
+        {
+            Assert.False(doc.RootElement.GetProperty("completed").GetBoolean());
+        }
+
+        var complete = ResponseFieldMetadataResolver.BuildFormFieldEntry(
+            "dateVisited",
+            "2006-02-23",
+            lookup,
+            completed: true);
+
+        using (var doc = JsonDocument.Parse(JsonSerializer.Serialize(complete)))
+        {
+            Assert.True(doc.RootElement.GetProperty("completed").GetBoolean());
+        }
+    }
+
+    [Fact]
+    public void ResolveCompleted_IsFalse_WhenTaskHasNotBeenMarkedComplete()
+    {
+        var template = BuildTemplate(
+            pageTitle: "Dates",
+            fieldId: "dateVisited",
+            fieldType: "date",
+            labelValue: "Visit date",
+            labelVisible: true);
+        var lookup = ResponseFieldMetadataResolver.BuildLookup(template);
+
+        Assert.False(ResponseFieldMetadataResolver.ResolveCompleted(
+            "dateVisited",
+            lookup,
+            new Dictionary<string, string>()));
+
+        Assert.False(ResponseFieldMetadataResolver.ResolveCompleted(
+            "dateVisited",
+            lookup,
+            new Dictionary<string, string> { ["t1"] = nameof(Domain.Models.TaskStatus.InProgress) }));
+    }
+
+    [Fact]
+    public void ResolveCompleted_IsTrue_WhenParentTaskIsExplicitlyCompleted()
+    {
+        var template = BuildTemplate(
+            pageTitle: "Dates",
+            fieldId: "dateVisited",
+            fieldType: "date",
+            labelValue: "Visit date",
+            labelVisible: true);
+        var lookup = ResponseFieldMetadataResolver.BuildLookup(template);
+
+        Assert.True(ResponseFieldMetadataResolver.ResolveCompleted(
+            "dateVisited",
+            lookup,
+            new Dictionary<string, string> { ["t1"] = nameof(Domain.Models.TaskStatus.Completed) }));
+    }
+
+    [Fact]
+    public void ResolveCompleted_IsTrue_ForPrefixedDerivedKeys_WhenParentTaskIsCompleted()
+    {
+        var template = BuildCollectionTemplate();
+        var lookup = ResponseFieldMetadataResolver.BuildLookup(template);
+        var taskStatus = new Dictionary<string, string>
+        {
+            ["incoming-trust-details"] = nameof(Domain.Models.TaskStatus.Completed)
+        };
+
+        Assert.True(ResponseFieldMetadataResolver.ResolveCompleted(
+            "detailsOfIncomingTrust_status_abc",
+            lookup,
+            taskStatus));
+        Assert.False(ResponseFieldMetadataResolver.ResolveCompleted(
+            "detailsOfIncomingTrust_status_abc",
+            lookup,
+            new Dictionary<string, string>()));
+    }
+
+    [Fact]
+    public void ResolveCompleted_IsTrue_ForTaskCompletedMarker_WhenThatTaskIsCompleted()
+    {
+        var template = BuildTemplate(
+            pageTitle: "Dates",
+            fieldId: "dateVisited",
+            fieldType: "date",
+            labelValue: "Visit date",
+            labelVisible: true);
+        var lookup = ResponseFieldMetadataResolver.BuildLookup(template);
+
+        Assert.True(ResponseFieldMetadataResolver.ResolveCompleted(
+            "t1_completed",
+            lookup,
+            new Dictionary<string, string> { ["t1"] = nameof(Domain.Models.TaskStatus.Completed) }));
+        Assert.False(ResponseFieldMetadataResolver.ResolveCompleted(
+            "t1_completed",
+            lookup,
+            new Dictionary<string, string> { ["t1"] = nameof(Domain.Models.TaskStatus.InProgress) }));
     }
 
     private static FormTemplate BuildTemplate(
