@@ -2,7 +2,7 @@
 
 All notable changes to this service will be documented in this file.
 
-## [2.2.7] - Create changelog PR
+## [2.2.8] - Logic to cache tenant hostname
 ### Notes
 - No release notes provided.
 
