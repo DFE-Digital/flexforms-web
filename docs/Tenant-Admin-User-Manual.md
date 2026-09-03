@@ -54,6 +54,12 @@ You do not need to be a developer to use this manual. Where a change is made in 
     - [13.11 Email placeholders checklist](#1311-email-placeholders-checklist)
     - [13.12 Troubleshooting email placeholders](#1312-troubleshooting-email-placeholders)
 14. [Tenant settings](#14-tenant-settings)
+    - [14.1 Tenant health](#141-tenant-health)
+    - [14.2 What a tenant Admin should usually change here](#142-what-a-tenant-admin-should-usually-change-here)
+    - [14.3 What to leave for SuperAdmin / platform](#143-what-to-leave-for-superadmin--platform)
+    - [14.4 How to add or update a setting](#144-how-to-add-or-update-a-setting)
+    - [14.5 Audit log](#145-audit-log)
+    - [14.6 File validation (tenant function)](#146-file-validation-tenant-function)
 15. [Applications (admin list)](#15-applications-admin-list)
 16. [What end users see](#16-what-end-users-see)
 17. [System tools and caches](#17-system-tools-and-caches)
@@ -1060,6 +1066,8 @@ FlexForms Web does **not** subscribe to your reporting topics. It only consumes 
 
 Every upload still publishes `ScanRequestedEvent` to `file-scanner-requests`. You **cannot** disable that on this page (`ScanRequestedEvent` is rejected as a trigger event type). Infected files are handled by the platform scan result pipeline, separate from your reporting events.
 
+Tenant **file validation** (Excel schema checks and similar) is optional and separate. Infected files are still deleted; a failed validation only marks the file. Setup: [14.6 File validation](#146-file-validation-tenant-function).
+
 ### 12.16 Who can change this
 
 **Admin** and **SuperAdmin** of the current tenant. Custom roles (Template Manager, User Manager) do not get this card unless they are also Admin.
@@ -1514,7 +1522,7 @@ Prefer the dedicated screens first. If you must use this page, these categories 
 | **EventTriggers** | Shared | Submit / upload publish bindings | Event mappings |
 | **EmailPlaceholderMappings** | Shared | Extra GOV.UK Notify personalisation from form answers | This page (JSON) — see [Email placeholder mappings](#13-email-placeholder-mappings) |
 | **Layout** | Web | Service name in the header, phase banner text and links | This page (JSON) — there is no separate form |
-| **FileValidation** | Shared | Whether submit is blocked until files pass tenant virus/validation | This page (JSON) |
+| **FileValidation** | Shared | Whether submit is blocked until a tenant function validates eligible files | This page (JSON) — see [14.6](#146-file-validation-tenant-function) |
 
 **Layout** example (illustrative):
 
@@ -1544,7 +1552,7 @@ Do not edit these unless you have been briefed. They can lock people out or brea
 | **Authorization** | API token behaviour |
 | **ConnectionStrings** | Databases |
 | **InternalServiceAuth** | Machine-to-machine keys |
-| **AuthProviders** | API keys / mTLS |
+| **AuthProviders** | API keys / mTLS. Needed for the file-validation callback — see [14.6](#146-file-validation-tenant-function) |
 | **AllowedHosts** | Which hostnames the app accepts |
 | **FeatureManagement** | Feature flags |
 | **Email** / **EmailTemplates** | Notify API key and template GUIDs (platform-owned) |
@@ -1573,6 +1581,112 @@ Existing rows show **Category**, **Target**, JSON, **Secret**, then:
 ### 14.5 Audit log
 
 **Audit log** on this page lists recent setting changes: When (UTC), Action, Category, Target, Actor.
+
+### 14.6 File validation (tenant function)
+
+This is **optional**. It is **not** virus scanning (that is always on — see [12.15](#1215-virus-scanning-always-on)).
+
+Use it when your organisation has an Azure Function that checks uploaded files (for example Excel columns) and FlexForms should **block submit** until that check passes. A failed check **keeps** the file and marks it `Failed`. Malware still **deletes** the file.
+
+You need **two** Tenant Settings rows, plus a `FileUploaded` event so the function is told about each upload.
+
+#### Policy — `FileValidation` (Target **Shared**)
+
+This category is not a secret. Add or update it on this page:
+
+```json
+{
+  "DefaultMode": "Off",
+  "Extensions": [ ".xlsx", ".xls" ],
+  "Templates": {
+    "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee": "RequirePassed"
+  }
+}
+```
+
+Replace the GUID with your form’s template Id (Template Manager / Diagnostics).
+
+| Mode | What applicants experience |
+|------|----------------------------|
+| `Off` | Ignore validation (default). Upload status stays `—`. |
+| `FailOnInvalid` | Submit is blocked only after the function reports the file as invalid. |
+| `RequirePassed` | Eligible files must be validated successfully. **Pending** also blocks submit. |
+
+`Extensions` is optional. Empty or omitted means every upload is eligible when mode is not `Off`. With `[".xlsx"]`, photos stay `NotRequired` and never block submit.
+
+`RequirePassed` can leave people stuck if the function is down. Prefer `FailOnInvalid` until the function is reliable.
+
+#### API key — `AuthProviders` (Target **Api** or **Shared**)
+
+The function must call:
+
+`POST /v1/integrations/files/{fileId}/validation-result`
+
+with headers `X-Tenant-ID` (your tenant GUID) and `X-Api-Key` (the **raw** secret). Signing in as Admin does **not** authorise this call.
+
+FlexForms stores only a **hash** of the key. Treat the raw key like a password: give it to the function configuration, never paste it into Tenant Settings.
+
+1. Generate a raw key in PowerShell:
+
+```powershell
+[guid]::NewGuid().ToString("N")
+```
+
+Copy that value into the function’s `X-Api-Key` setting.
+
+2. Hash the **same** string (Windows PowerShell 5.1):
+
+```powershell
+[BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes("paste-raw-key-here"))).Replace("-","").ToLower()
+```
+
+3. On Tenant Settings, add or update **`AuthProviders`**. Tick **Secret (encrypt at rest)**. Target **Api** or **Shared**. JSON:
+
+```json
+{
+  "Providers": [
+    {
+      "Name": "file-validation",
+      "Kind": "ApiKey",
+      "IsServicePrincipal": true,
+      "KeyHash": "<paste-the-hash-from-step-2>",
+      "Roles": ["FileValidation"]
+    }
+  ]
+}
+```
+
+Leave `"IsServicePrincipal": true`. If it is missing or `false`, the function gets **403** even with a correct key.
+
+4. **Validate / diff**, then **Add setting** or **Update**. Select **Refresh settings**.
+
+Do **not** put this key in `InternalServiceAuth`. That category is for a different machine login.
+
+If `AuthProviders` already has other providers, **add** this object to the `Providers` array — do not replace the whole list unless you intend to.
+
+#### Tell the function about uploads
+
+Under **Event mappings**, bind **File uploaded** to the event your function already consumes (same pattern as [12.12 Triggers](#1212-triggers--when-the-api-actually-publishes)). The callback must **not** publish onto FlexForms Service Bus; it only HTTP-posts the result.
+
+#### What applicants see
+
+| Surface | Behaviour |
+|---------|-----------|
+| Upload Status column | Validation pending / Validated / Validation failed |
+| Preview submit | Disabled when any blocking file remains; names are listed |
+| Banner and Notifications | Live update when the function posts a result |
+
+Technical contract: [flexforms-api README — File validation](https://github.com/DFE-Digital/flexforms-api#file-validation-callback-tenant-integrations).
+
+#### File validation checklist
+
+- [ ] `FileValidation` Target **Shared**, mode set on the right template GUID
+- [ ] `Extensions` matches the files you actually want checked
+- [ ] Raw API key only in the function; **hash** in `AuthProviders`
+- [ ] `IsServicePrincipal` is `true` and `Roles` includes `FileValidation`
+- [ ] **Secret** ticked on `AuthProviders`; **Refresh settings** after save
+- [ ] `FileUploaded` trigger publishes to the function
+- [ ] Non-prod test: upload → pending → function → status + submit gate
 
 ---
 
@@ -1659,6 +1773,7 @@ If you need a second tenant administrator, ask a SuperAdmin to assign the Admin 
 | Grant to all users succeeded but the banner showed zeros | Fixed in a recent release; counts should match people actually updated. |
 | Submit succeeded but reporting never received a message | See [12.18 Troubleshooting event mappings](#1218-troubleshooting-event-mappings). Check triggers, mapping, Service Bus topic/subscription, and API logs. |
 | Confirmation email missing academy name / custom text | See [13.12 Troubleshooting email placeholders](#1312-troubleshooting-email-placeholders). Check Notify `((placeholder))` spelling, `EmailPlaceholderMappings` (Target Shared), and form `fieldId`. |
+| Upload stays “Validation pending” / submit stays blocked | See [14.6](#146-file-validation-tenant-function). Check `FileValidation` mode, `FileUploaded` trigger, function `X-Api-Key` (raw) vs `AuthProviders` `KeyHash`, `IsServicePrincipal: true`, and **Refresh settings**. |
 
 
 ---
@@ -1689,6 +1804,8 @@ If you need a second tenant administrator, ask a SuperAdmin to assign the Admin 
 | **GOV.UK Notify** | Government email service. FlexForms sends a template ID plus personalisation; Notify builds the email body. |
 | **Personalisation / placeholder** | A named value Notify inserts into `((Name))` in the template. Baseline keys are always sent; extras come from `EmailPlaceholderMappings`. |
 | **EmailPlaceholderMappings** | TenantConfig category that maps form field Ids (and metadata) onto Notify personalisation keys. |
+| **FileValidation** | Optional tenant-function check of uploads (not virus scanning). Modes: Off, FailOnInvalid, RequirePassed. |
+| **AuthProviders** | TenantConfig for machine API keys / mTLS. File-validation stores a SHA-256 `KeyHash`, never the raw key. |
 
 ---
 
