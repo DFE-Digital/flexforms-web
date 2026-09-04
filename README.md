@@ -825,6 +825,8 @@ DataProtection__KeyVaultKeyId=https://<vault>.vault.azure.net/keys/<web-cookie-d
 
 The Web managed identity needs Blob **read/write** on that blob and Key Vault **unwrap/wrap** (or get + decrypt) on the key. After deploy, users with cookies from the old per-replica ring must sign in again once.
 
+Azure Dev often uses `ASPNETCORE_ENVIRONMENT=Development`. The app still uses **managed identity** there (it detects `IDENTITY_ENDPOINT`). Do not set `DataProtection__UseStorageSas=true` on Azure.
+
 ### Launch profiles
 
 See `Properties/launchSettings.json`:

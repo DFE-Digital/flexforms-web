@@ -75,10 +75,18 @@ public static class SharedDataProtectionExtensions
         return builder.ProtectKeysWithAzureKeyVault(keyVaultKeyUri, credential);
     }
 
+    /// <summary>
+    /// Azure App Service / Container Apps expose IDENTITY_ENDPOINT (or MSI_ENDPOINT).
+    /// Dev slots often still set ASPNETCORE_ENVIRONMENT=Development — always use managed identity there.
+    /// Exclude IMDS only on a developer laptop (Local / SAS opt-in).
+    /// </summary>
     private static DefaultAzureCredential CreateKeyVaultCredential(
         IHostEnvironment environment,
         DataProtectionSettings settings)
     {
+        if (IsRunningInAzure())
+            return new DefaultAzureCredential();
+
         var useDeveloperCredentials =
             settings.UseStorageSas || environment.IsEnvironment("Local") || environment.IsDevelopment();
 
@@ -96,6 +104,10 @@ public static class SharedDataProtectionExtensions
             ExcludeInteractiveBrowserCredential = true
         });
     }
+
+    private static bool IsRunningInAzure() =>
+        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("IDENTITY_ENDPOINT"))
+        || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("MSI_ENDPOINT"));
 
     private static bool ShouldUseLocalKeyRing(
         IHostEnvironment environment,
