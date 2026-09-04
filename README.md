@@ -802,13 +802,13 @@ Configure (user secrets or env):
 
 ### Data Protection (session cookies)
 
-Session and cookie-auth cookies are protected with ASP.NET Data Protection. **Local** (no BlobUri / KeyVault) keeps a per-machine key ring. **Any Azure environment** — including Dev with `ASPNETCORE_ENVIRONMENT=Development` — must set BlobUri and KeyVaultKeyId so replicas share one ring, or you get `The key {…} was not found in the key ring` on `CookieProtection.Unprotect` (and follow-on 401s from token exchange).
+Session and cookie-auth cookies are protected with ASP.NET Data Protection using the **same rules as the API**. Environment `Local` keeps a per-machine key ring (unless `UseStorageSas`). Any other environment with `UseAzure=true` (including Azure Dev with `ASPNETCORE_ENVIRONMENT=Development`) uses Blob + Key Vault and **managed identity**. Otherwise you get `The key {…} was not found in the key ring` on `CookieProtection.Unprotect`.
 
 Same Azure pattern as the API. Use a **different blob** and `ApplicationName` so Web cookie keys are not mixed with API TenantSettings keys.
 
 | Key | Purpose |
 |-----|---------|
-| `DataProtection:UseAzure` | `true` in Azure. Local keeps a machine ring when BlobUri/KeyVault are empty |
+| `DataProtection:UseAzure` | `true` in Azure. `Local` ignores this unless `UseStorageSas` is set |
 | `DataProtection:ApplicationName` | `GovUK.Dfe.FlexForms.Web` (do not change after go-live) |
 | `DataProtection:BlobUri` | `https://{account}.blob.core.windows.net/{container}/web-keys.xml` — **not** `api-keys.xml` |
 | `DataProtection:KeyVaultKeyId` | Key Vault key URI used to wrap the ring |
@@ -823,9 +823,7 @@ DataProtection__BlobUri=https://<account>.blob.core.windows.net/<container>/web-
 DataProtection__KeyVaultKeyId=https://<vault>.vault.azure.net/keys/<web-cookie-dp>
 ```
 
-The Web managed identity needs Blob **read/write** on that blob and Key Vault **unwrap/wrap** (or get + decrypt) on the key. After deploy, users with cookies from the old per-replica ring must sign in again once.
-
-Azure Dev often uses `ASPNETCORE_ENVIRONMENT=Development`. The app still uses **managed identity** there (it detects `IDENTITY_ENDPOINT`). Do not set `DataProtection__UseStorageSas=true` on Azure.
+The Web managed identity needs Blob **read/write** on that blob and Key Vault **unwrap/wrap** (or get + decrypt) on the key. After deploy, users with cookies from the old per-replica ring must sign in again once. Do not set `DataProtection__UseStorageSas=true` on Azure.
 
 ### Launch profiles
 

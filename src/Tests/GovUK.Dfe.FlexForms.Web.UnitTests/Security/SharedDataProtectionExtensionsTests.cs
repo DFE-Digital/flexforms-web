@@ -11,15 +11,14 @@ public class SharedDataProtectionExtensionsTests
 {
     [Theory]
     [InlineData("Local")]
-    [InlineData("Development")]
-    public void AddSharedDataProtection_LocalOrDevelopment_UsesLocalKeysWhenAzureNotConfigured(string environmentName)
+    public void AddSharedDataProtection_Local_UsesLocalKeysEvenWhenUseAzureTrue(string environmentName)
     {
         var services = new ServiceCollection();
         var configuration = BuildConfiguration(
             useAzure: true,
             useStorageSas: false,
-            blobUri: "",
-            keyVaultKeyId: "");
+            blobUri: "https://example.blob.core.windows.net/keys/web-keys.xml",
+            keyVaultKeyId: "https://example.vault.azure.net/keys/k");
         var environment = new TestHostEnvironment(environmentName);
 
         var builder = services.AddSharedDataProtection(configuration, environment);
@@ -33,25 +32,8 @@ public class SharedDataProtectionExtensionsTests
     }
 
     [Theory]
-    [InlineData("Development")]
-    [InlineData("Local")]
-    public void AddSharedDataProtection_LocalOrDevelopment_UsesAzureWhenFullyConfigured(string environmentName)
-    {
-        var services = new ServiceCollection();
-        var configuration = BuildConfiguration(
-            useAzure: true,
-            useStorageSas: false,
-            blobUri: "https://example.blob.core.windows.net/keys/web-keys.xml",
-            keyVaultKeyId: "https://example.vault.azure.net/keys/k");
-        var environment = new TestHostEnvironment(environmentName);
-
-        var builder = services.AddSharedDataProtection(configuration, environment);
-
-        Assert.NotNull(builder);
-    }
-
-    [Theory]
     [InlineData("Test")]
+    [InlineData("Development")]
     [InlineData("Staging")]
     [InlineData("Production")]
     public void AddSharedDataProtection_NonLocalWithUseAzureFalse_UsesLocalKeys(string environmentName)
@@ -151,7 +133,7 @@ public class SharedDataProtectionExtensionsTests
     }
 
     [Fact]
-    public void AddSharedDataProtection_DevelopmentWithUseStorageSasMissingSas_Throws()
+    public void AddSharedDataProtection_LocalWithUseStorageSasMissingSas_Throws()
     {
         var services = new ServiceCollection();
         var configuration = BuildConfiguration(
@@ -159,7 +141,7 @@ public class SharedDataProtectionExtensionsTests
             useStorageSas: true,
             blobUri: "https://example.blob.core.windows.net/keys/web-keys.xml",
             keyVaultKeyId: "https://example.vault.azure.net/keys/k");
-        var environment = new TestHostEnvironment("Development");
+        var environment = new TestHostEnvironment("Local");
 
         var ex = Assert.Throws<InvalidOperationException>(() =>
             services.AddSharedDataProtection(configuration, environment));

@@ -54,6 +54,7 @@ public static class SharedDataProtectionExtensions
                 "DataProtection:KeyVaultKeyId must be an absolute URI.");
         }
 
+        // Key Vault: managed identity in Azure; Azure CLI / VS login locally (never probe IMDS when using SAS).
         var credential = CreateKeyVaultCredential(environment, settings);
 
         if (settings.UseStorageSas)
@@ -76,25 +77,23 @@ public static class SharedDataProtectionExtensions
     }
 
     /// <summary>
-    /// Azure App Service / Container Apps expose IDENTITY_ENDPOINT (or MSI_ENDPOINT).
-    /// Dev slots often still set ASPNETCORE_ENVIRONMENT=Development — always use managed identity there.
-    /// Exclude IMDS only on a developer laptop (Local / SAS opt-in).
+    /// Builds the credential used for Key Vault (and for blob when not using SAS).
+    /// When <see cref="DataProtectionSettings.UseStorageSas"/> is set (typical local Azure opt-in),
+    /// managed identity / IMDS is excluded so DefaultAzureCredential uses Azure CLI or Visual Studio login.
     /// </summary>
     private static DefaultAzureCredential CreateKeyVaultCredential(
         IHostEnvironment environment,
         DataProtectionSettings settings)
     {
-        if (IsRunningInAzure())
-            return new DefaultAzureCredential();
-
         var useDeveloperCredentials =
-            settings.UseStorageSas || environment.IsEnvironment("Local") || environment.IsDevelopment();
+            settings.UseStorageSas || environment.IsEnvironment("Local");
 
         if (!useDeveloperCredentials)
             return new DefaultAzureCredential();
 
         return new DefaultAzureCredential(new DefaultAzureCredentialOptions
         {
+            // Avoid IMDS probes (169.254.169.254) that fail slowly / hard on developer machines.
             ExcludeManagedIdentityCredential = true,
             ExcludeWorkloadIdentityCredential = true,
             ExcludeEnvironmentCredential = false,
@@ -105,10 +104,6 @@ public static class SharedDataProtectionExtensions
         });
     }
 
-    private static bool IsRunningInAzure() =>
-        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("IDENTITY_ENDPOINT"))
-        || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("MSI_ENDPOINT"));
-
     private static bool ShouldUseLocalKeyRing(
         IHostEnvironment environment,
         DataProtectionSettings settings)
@@ -116,19 +111,11 @@ public static class SharedDataProtectionExtensions
         if (!settings.UseAzure)
             return true;
 
-        var azureConfigured =
-            !string.IsNullOrWhiteSpace(settings.BlobUri) &&
-            !string.IsNullOrWhiteSpace(settings.KeyVaultKeyId);
-
-        // Local laptop: UseAzure may be true in appsettings.json with empty BlobUri.
-        // Azure Dev often sets ASPNETCORE_ENVIRONMENT=Development — if BlobUri and KeyVault
-        // are configured, still use the shared ring or replicas cannot unprotect cookies.
-        if ((environment.IsDevelopment() || environment.IsEnvironment("Local"))
-            && !settings.UseStorageSas
-            && !azureConfigured)
-        {
+        // Local launch profiles often inherit UseAzure=true from appsettings.json.
+        // Keep the local key ring unless the developer explicitly opts into Azure blob access
+        // via UseStorageSas (SAS URL in BlobUri + Key Vault via DefaultAzureCredential).
+        if (environment.IsEnvironment("Local") && !settings.UseStorageSas)
             return true;
-        }
 
         return false;
     }
