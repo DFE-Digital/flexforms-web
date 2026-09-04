@@ -12,7 +12,30 @@ public class SharedDataProtectionExtensionsTests
     [Theory]
     [InlineData("Local")]
     [InlineData("Development")]
-    public void AddSharedDataProtection_LocalOrDevelopment_UsesLocalKeysEvenWhenUseAzureTrue(string environmentName)
+    public void AddSharedDataProtection_LocalOrDevelopment_UsesLocalKeysWhenAzureNotConfigured(string environmentName)
+    {
+        var services = new ServiceCollection();
+        var configuration = BuildConfiguration(
+            useAzure: true,
+            useStorageSas: false,
+            blobUri: "",
+            keyVaultKeyId: "");
+        var environment = new TestHostEnvironment(environmentName);
+
+        var builder = services.AddSharedDataProtection(configuration, environment);
+
+        Assert.NotNull(builder);
+        using var provider = services.BuildServiceProvider();
+        var dataProtection = provider.GetRequiredService<IDataProtectionProvider>();
+        var protector = dataProtection.CreateProtector("FlexForms.Web.Cookies.v1");
+        var cipher = protector.Protect("hello");
+        Assert.Equal("hello", protector.Unprotect(cipher));
+    }
+
+    [Theory]
+    [InlineData("Development")]
+    [InlineData("Local")]
+    public void AddSharedDataProtection_LocalOrDevelopment_UsesAzureWhenFullyConfigured(string environmentName)
     {
         var services = new ServiceCollection();
         var configuration = BuildConfiguration(
@@ -25,11 +48,6 @@ public class SharedDataProtectionExtensionsTests
         var builder = services.AddSharedDataProtection(configuration, environment);
 
         Assert.NotNull(builder);
-        using var provider = services.BuildServiceProvider();
-        var dataProtection = provider.GetRequiredService<IDataProtectionProvider>();
-        var protector = dataProtection.CreateProtector("FlexForms.Web.Cookies.v1");
-        var cipher = protector.Protect("hello");
-        Assert.Equal("hello", protector.Unprotect(cipher));
     }
 
     [Theory]

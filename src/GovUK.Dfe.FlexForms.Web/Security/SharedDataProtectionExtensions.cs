@@ -104,10 +104,19 @@ public static class SharedDataProtectionExtensions
         if (!settings.UseAzure)
             return true;
 
-        // Launch profiles use Development; Local is also used. Keep the local key ring unless
-        // the developer opts into Azure via UseStorageSas.
-        if ((environment.IsDevelopment() || environment.IsEnvironment("Local")) && !settings.UseStorageSas)
+        var azureConfigured =
+            !string.IsNullOrWhiteSpace(settings.BlobUri) &&
+            !string.IsNullOrWhiteSpace(settings.KeyVaultKeyId);
+
+        // Local laptop: UseAzure may be true in appsettings.json with empty BlobUri.
+        // Azure Dev often sets ASPNETCORE_ENVIRONMENT=Development — if BlobUri and KeyVault
+        // are configured, still use the shared ring or replicas cannot unprotect cookies.
+        if ((environment.IsDevelopment() || environment.IsEnvironment("Local"))
+            && !settings.UseStorageSas
+            && !azureConfigured)
+        {
             return true;
+        }
 
         return false;
     }

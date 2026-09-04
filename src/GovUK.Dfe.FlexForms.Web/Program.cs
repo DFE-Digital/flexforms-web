@@ -159,7 +159,8 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 });
 
 // Shared Data Protection key ring so session / cookie-auth cookies unprotect on any replica.
-// Local/Development keep the default key ring unless DataProtection:UseStorageSas is set.
+// Uses Azure Blob + Key Vault when DataProtection:UseAzure is true and BlobUri/KeyVaultKeyId are set
+// (including Azure Dev with ASPNETCORE_ENVIRONMENT=Development). Local empty URIs keep the default key ring.
 builder.Services.AddSharedDataProtection(configuration, builder.Environment);
 
 builder.Services.AddSingleton<ITelemetryChannel, TenantAwareTelemetryChannel>();
