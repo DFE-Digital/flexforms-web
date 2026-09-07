@@ -4,6 +4,7 @@ using GovUK.Dfe.CoreLibs.Testing.Helpers;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using GovUK.Dfe.FlexForms.Infrastructure.Services;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 
 namespace GovUK.Dfe.FlexForms.Infrastructure.UnitTests.Services;
@@ -324,5 +325,251 @@ public class FormValidationOrchestratorTests
         var formTemplate = _fixture.Create<FormTemplate>();
 
         return _orchestrator.ValidateField(field, sanitisedText, formData, fieldKey, formTemplate).IsValid;
+    }
+
+    [Fact]
+    public void ValidatePage_when_required_text_field_is_empty_then_returns_error()
+    {
+        var orchestrator = CreateExplicitOrchestrator();
+        var page = CreatePage(("name", "text", [RequiredRule("Enter your name")]));
+
+        var result = orchestrator.ValidatePage(page, []);
+
+        Assert.False(result.IsValid);
+        Assert.Equal("Enter your name", result.Errors[0].Message);
+    }
+
+    [Fact]
+    public void ValidatePage_when_email_field_is_invalid_then_returns_error()
+    {
+        var orchestrator = CreateExplicitOrchestrator();
+        var page = CreatePage(("email", "email", []));
+
+        var result = orchestrator.ValidatePage(page, new Dictionary<string, object> { ["email"] = "not-an-email" });
+
+        Assert.False(result.IsValid);
+        Assert.Contains("email address", result.Errors[0].Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ValidatePage_when_date_field_has_missing_parts_then_returns_error()
+    {
+        var orchestrator = CreateExplicitOrchestrator();
+        var page = CreatePage(
+            ("startDate", "date", []),
+            label: new Label { Value = "Start date", ValidationLabelValue = "Start date" });
+
+        var result = orchestrator.ValidatePage(page, new Dictionary<string, object> { ["startDate"] = "--" });
+
+        Assert.False(result.IsValid);
+        Assert.Contains("day, month and year", result.Errors[0].Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ValidatePage_when_date_field_is_not_real_then_returns_error()
+    {
+        var orchestrator = CreateExplicitOrchestrator();
+        var page = CreatePage(
+            ("startDate", "date", []),
+            label: new Label { Value = "Start date", ValidationLabelValue = "Start date" });
+
+        var result = orchestrator.ValidatePage(page, new Dictionary<string, object> { ["startDate"] = "2024-02-30" });
+
+        Assert.False(result.IsValid);
+        Assert.Contains("real date", result.Errors[0].Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ValidatePage_when_number_field_is_required_and_empty_then_returns_error()
+    {
+        var fieldRequirementService = Substitute.For<IFieldRequirementService>();
+        fieldRequirementService.IsFieldRequired(Arg.Any<Field>(), Arg.Any<FormTemplate>()).Returns(true);
+        var orchestrator = CreateExplicitOrchestrator(fieldRequirementService);
+        var template = new FormTemplate
+        {
+            TemplateId = "t1",
+            TemplateName = "Template",
+            Description = "Template",
+            TaskGroups = [],
+            DefaultFieldRequirementPolicy = "required"
+        };
+        var page = CreatePage(
+            ("amount", "number", []),
+            label: new Label { Value = "Amount" });
+
+        var result = orchestrator.ValidatePage(page, [], template);
+
+        Assert.False(result.IsValid);
+        Assert.Contains("Amount is required", result.Errors[0].Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ValidatePage_when_regex_rule_fails_then_returns_error()
+    {
+        var orchestrator = CreateExplicitOrchestrator();
+        var page = CreatePage(("ref", "text", [RegexRule("^[A-Z]{3}$", "Enter a 3-letter code")]));
+
+        var result = orchestrator.ValidatePage(page, new Dictionary<string, object> { ["ref"] = "abc123" });
+
+        Assert.False(result.IsValid);
+        Assert.Equal("Enter a 3-letter code", result.Errors[0].Message);
+    }
+
+    [Fact]
+    public void ValidatePage_when_conditional_required_rule_is_not_met_then_skips_validation()
+    {
+        var conditionalEngine = Substitute.For<IConditionalLogicEngine>();
+        conditionalEngine
+            .EvaluateCondition(Arg.Any<Condition>(), Arg.Any<Dictionary<string, object>>(), Arg.Any<ConditionalLogicContext?>())
+            .Returns(false);
+
+        var orchestrator = CreateExplicitOrchestrator(conditionalLogicEngine: conditionalEngine);
+        var conditionalRequired = new ValidationRule
+        {
+            Type = "required",
+            Rule = string.Empty,
+            Message = "Conditional field is required",
+            Condition = new Condition
+            {
+                TriggerField = "showExtra",
+                Operator = ConditionalLogicConstants.Operators.Equals,
+                Value = "yes",
+                DataType = ConditionalLogicConstants.DataTypes.String
+            }
+        };
+        var page = CreatePage(("extra", "text", [conditionalRequired]));
+
+        var result = orchestrator.ValidatePage(
+            page,
+            new Dictionary<string, object> { ["showExtra"] = "no", ["extra"] = "" });
+
+        Assert.True(result.IsValid);
+        conditionalEngine.Received(1).EvaluateCondition(
+            Arg.Is<Condition>(c => c.TriggerField == "showExtra"),
+            Arg.Any<Dictionary<string, object>>(),
+            Arg.Any<ConditionalLogicContext?>());
+    }
+
+    [Fact]
+    public void ValidatePage_when_conditional_required_rule_is_met_and_value_missing_then_returns_error()
+    {
+        var conditionalEngine = new ConditionalLogicEngine(NullLogger<ConditionalLogicEngine>.Instance);
+        var orchestrator = CreateExplicitOrchestrator(conditionalLogicEngine: conditionalEngine);
+        var conditionalRequired = new ValidationRule
+        {
+            Type = "required",
+            Rule = string.Empty,
+            Message = "Extra detail is required",
+            Condition = new Condition
+            {
+                TriggerField = "showExtra",
+                Operator = ConditionalLogicConstants.Operators.Equals,
+                Value = "yes",
+                DataType = ConditionalLogicConstants.DataTypes.String
+            }
+        };
+        var page = CreatePage(("extra", "text", [conditionalRequired]));
+
+        var result = orchestrator.ValidatePage(
+            page,
+            new Dictionary<string, object> { ["showExtra"] = "yes", ["extra"] = "" });
+
+        Assert.False(result.IsValid);
+        Assert.Equal("Extra detail is required", result.Errors[0].Message);
+    }
+
+    [Fact]
+    public void ValidateTask_when_task_page_has_required_field_then_validates_all_pages()
+    {
+        var orchestrator = CreateExplicitOrchestrator();
+        var task = new Domain.Models.Task
+        {
+            TaskId = "task-1",
+            TaskName = "Task 1",
+            TaskOrder = 1,
+            TaskStatusString = "NotStarted",
+            Pages =
+            [
+                CreatePage(("field-a", "text", [RequiredRule("Field A is required")])),
+                new Page
+                {
+                    PageId = "page-2",
+                    Slug = "page-2",
+                    Title = "Page 2",
+                    Description = string.Empty,
+                    PageOrder = 2,
+                    Fields =
+                    [
+                        new Field
+                        {
+                            FieldId = "field-b",
+                            Type = "text",
+                            Label = new Label { Value = "Field B" },
+                            Order = 1,
+                            Validations = [RequiredRule("Field B is required")]
+                        }
+                    ]
+                }
+            ]
+        };
+
+        var result = orchestrator.ValidateTask(task, new Dictionary<string, object> { ["field-a"] = "done" });
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Message == "Field B is required");
+    }
+
+    private static FormValidationOrchestrator CreateExplicitOrchestrator(
+        IFieldRequirementService? fieldRequirementService = null,
+        IConditionalLogicEngine? conditionalLogicEngine = null)
+    {
+        fieldRequirementService ??= Substitute.For<IFieldRequirementService>();
+        conditionalLogicEngine ??= new ConditionalLogicEngine(NullLogger<ConditionalLogicEngine>.Instance);
+
+        return new FormValidationOrchestrator(
+            NullLogger<FormValidationOrchestrator>.Instance,
+            conditionalLogicEngine,
+            fieldRequirementService);
+    }
+
+    private static ValidationRule RequiredRule(string message) =>
+        new()
+        {
+            Type = "required",
+            Rule = string.Empty,
+            Message = message
+        };
+
+    private static ValidationRule RegexRule(string pattern, string message) =>
+        new()
+        {
+            Type = "regex",
+            Rule = pattern,
+            Message = message
+        };
+
+    private static Page CreatePage(
+        (string FieldId, string Type, ValidationRule[] Validations) field,
+        Label? label = null)
+    {
+        return new Page
+        {
+            PageId = "page-1",
+            Slug = "page-1",
+            Title = "Page 1",
+            Description = string.Empty,
+            PageOrder = 1,
+            Fields =
+            [
+                new Field
+                {
+                    FieldId = field.FieldId,
+                    Type = field.Type,
+                    Label = label ?? new Label { Value = field.FieldId },
+                    Order = 1,
+                    Validations = field.Validations.ToList()
+                }
+            ]
+        };
     }
 }

@@ -74,6 +74,79 @@ public class CompleteFormTaskServiceTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_ShouldRevertCompletedStatus_WhenTaskIsUncheckedWithoutData()
+    {
+        var task = CreateTask("t1");
+        var state = State(task, isTaskCompleted: false);
+        _applicationState.CalculateTaskStatus(state.CurrentTask!.TaskId, state.Template!, state.FormData, state.ApplicationId, state.ApplicationStatus)
+            .Returns(Domain.Models.TaskStatus.Completed);
+
+        var result = await _service.ExecuteAsync(state);
+
+        Assert.Equal(FormEngineOutcomeKind.Redirect, result.Kind);
+        await _applicationState.Received().SaveTaskStatusAsync(
+            state.ApplicationId!.Value,
+            "t1",
+            Domain.Models.TaskStatus.NotStarted);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ShouldStayOnPage_WhenCollectionItemHasMissingRequiredFields()
+    {
+        var nameField = new Field
+        {
+            FieldId = "fullName",
+            Type = "text",
+            Label = new Label { Value = "Full name" },
+            Order = 1
+        };
+        var flow = new MultiCollectionFlowConfiguration
+        {
+            FlowId = "f1",
+            FieldId = "members",
+            Title = "Members",
+            MinItems = 1,
+            Pages = [new Page { PageId = "p1", Slug = "p1", Title = "p1", Description = "p1", PageOrder = 1, Fields = [nameField] }]
+        };
+        var task = CreateTask("t1", FormStepPolicy.MultiCollectionFlowMode, [flow]);
+        var state = State(task, isTaskCompleted: true);
+        state.FormData["members"] = """[{"id":"i1"}]""";
+
+        _fieldRequirements.IsFieldRequired(nameField, state.Template!).Returns(true);
+
+        var result = await _service.ExecuteAsync(state);
+
+        Assert.Equal(FormEngineOutcomeKind.StayOnPage, result.Kind);
+        Assert.Contains(result.Errors, e => e.Message.Contains("Complete all required questions for each item in Members"));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ShouldRevertToInProgress_WhenUncheckedTaskStillHasData()
+    {
+        var task = CreateTask("t1", FormStepPolicy.MultiCollectionFlowMode,
+        [
+            new MultiCollectionFlowConfiguration
+            {
+                FlowId = "f1",
+                FieldId = "members",
+                Title = "Members",
+                Pages = []
+            }
+        ]);
+        var state = State(task, isTaskCompleted: false);
+        state.FormData["members"] = """[{"id":"i1"}]""";
+        _applicationState.CalculateTaskStatus(task.TaskId, state.Template!, state.FormData, state.ApplicationId, state.ApplicationStatus)
+            .Returns(Domain.Models.TaskStatus.Completed);
+
+        await _service.ExecuteAsync(state);
+
+        await _applicationState.Received().SaveTaskStatusAsync(
+            state.ApplicationId!.Value,
+            "t1",
+            Domain.Models.TaskStatus.InProgress);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_ShouldRedirectToTaskList_WhenTaskCanBeCompleted()
     {
         var task = CreateTask("t1");
@@ -120,7 +193,7 @@ public class CompleteFormTaskServiceTests
         };
 }
 
-public class SubmitFormApplicationServiceTests
+public class SubmitFormApplicationServiceUseCaseTests
 {
     private readonly IApplicationStateService _applicationState = Substitute.For<IApplicationStateService>();
     private readonly IApplicationsClient _applicationsClient = Substitute.For<IApplicationsClient>();
@@ -129,7 +202,7 @@ public class SubmitFormApplicationServiceTests
     private readonly SubmitFormApplicationService _service;
     private readonly Guid _applicationId = Guid.NewGuid();
 
-    public SubmitFormApplicationServiceTests()
+    public SubmitFormApplicationServiceUseCaseTests()
     {
         _applicationState.AreAllTasksCompleted(Arg.Any<FormTemplate>(), Arg.Any<Dictionary<string, object>>(), Arg.Any<Guid?>(), Arg.Any<string>())
             .Returns(true);

@@ -4,6 +4,7 @@ using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Application.Admin;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Task = System.Threading.Tasks.Task;
 
 namespace GovUK.Dfe.FlexForms.Application.Tests.Admin;
@@ -138,6 +139,161 @@ public class UserManagerEditAdminServiceTests
             _userId,
             Arg.Any<UpdateUserTemplateAccessRequest>(),
             Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task LoadAsync_ShouldStayAndPopulateUser_WhenUserExists()
+    {
+        var templateId = Guid.NewGuid();
+        _templates.GetAccessibleTemplatesAsync(Arg.Any<CancellationToken>()).Returns([
+            new TemplateDto { TemplateId = templateId, Name = "Transfers", CreatedOn = DateTime.UtcNow }
+        ]);
+        _users.GetTenantUsersAsync(
+                Arg.Any<int?>(),
+                Arg.Any<int?>(),
+                Arg.Any<Guid?>(),
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Page(new TenantUserDto
+            {
+                UserId = _userId,
+                Name = "Ada Lovelace",
+                Email = "ada@example.com",
+                Role = "Caseworker",
+                Templates = [new TenantUserTemplateDto { TemplateId = templateId, TemplateName = "Transfers" }]
+            }));
+        _state.SelectedTemplateIds = [];
+
+        var result = await _service.LoadAsync(_state);
+
+        Assert.Equal(AdminPageOutcomeKind.StayOnPage, result.Kind);
+        Assert.Equal("Ada Lovelace", _state.UserName);
+        Assert.Equal("Caseworker", _state.Role);
+        Assert.Equal(templateId, _state.SelectedTemplateIds.Single());
+    }
+
+    [Fact]
+    public async Task LoadAsync_ShouldAppendExistingRole_WhenRoleIsNotAssignable()
+    {
+        _users.GetTenantUsersAsync(
+                Arg.Any<int?>(),
+                Arg.Any<int?>(),
+                Arg.Any<Guid?>(),
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Page(new TenantUserDto
+            {
+                UserId = _userId,
+                Name = "Ada Lovelace",
+                Email = "ada@example.com",
+                Role = "LegacyRole"
+            }));
+        _state.AssignableRoles = ["User"];
+
+        var result = await _service.LoadAsync(_state);
+
+        Assert.Equal(AdminPageOutcomeKind.StayOnPage, result.Kind);
+        Assert.Contains("LegacyRole", _state.AssignableRoles);
+    }
+
+    [Fact]
+    public async Task LoadAsync_ShouldRedirectWithError_WhenUserLookupFails()
+    {
+        _users.GetTenantUsersAsync(
+                Arg.Any<int?>(),
+                Arg.Any<int?>(),
+                Arg.Any<Guid?>(),
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>())
+            .Throws(new InvalidOperationException("user lookup failed"));
+
+        var result = await _service.LoadAsync(_state);
+
+        Assert.Equal(AdminPageOutcomeKind.RedirectToPage, result.Kind);
+        Assert.Contains(UserManagerEditMessages.LoadFailed, result.ErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LoadForUpdateAsync_ShouldStay_WhenUserExists()
+    {
+        _users.GetTenantUsersAsync(
+                Arg.Any<int?>(),
+                Arg.Any<int?>(),
+                Arg.Any<Guid?>(),
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Page(new TenantUserDto
+            {
+                UserId = _userId,
+                Name = "Ada Lovelace",
+                Email = "ada@example.com",
+                Role = "Caseworker"
+            }));
+
+        var result = await _service.LoadForUpdateAsync(_state);
+
+        Assert.Equal(AdminPageOutcomeKind.StayOnPage, result.Kind);
+        Assert.Equal("ada@example.com", _state.UserEmail);
+    }
+
+    [Fact]
+    public async Task LoadForUpdateAsync_ShouldRedirect_WhenUserIsMissing()
+    {
+        _users.GetTenantUsersAsync(
+                Arg.Any<int?>(),
+                Arg.Any<int?>(),
+                Arg.Any<Guid?>(),
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>())
+            .Returns(EmptyPage());
+
+        var result = await _service.LoadForUpdateAsync(_state);
+
+        Assert.Equal(UserManagerEditMessages.UserNotFound, result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldRedirect_WhenUserIsMissing()
+    {
+        _users.GetTenantUsersAsync(
+                Arg.Any<int?>(),
+                Arg.Any<int?>(),
+                Arg.Any<Guid?>(),
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>())
+            .Returns(EmptyPage());
+
+        var result = await _service.UpdateAsync(_state);
+
+        Assert.Equal(UserManagerEditMessages.UserNotFound, result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldStay_WhenUpdateFails()
+    {
+        _users.GetTenantUsersAsync(
+                Arg.Any<int?>(),
+                Arg.Any<int?>(),
+                Arg.Any<Guid?>(),
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Page(new TenantUserDto
+            {
+                UserId = _userId,
+                Name = "Ada Lovelace",
+                Email = "ada@example.com",
+                Role = "Caseworker"
+            }));
+        _users.UpdateUserTemplateAccessAsync(
+                _userId,
+                Arg.Any<UpdateUserTemplateAccessRequest>(),
+                Arg.Any<CancellationToken>())
+            .Throws(new InvalidOperationException("update failed"));
+
+        var result = await _service.UpdateAsync(_state);
+
+        Assert.Equal(AdminPageOutcomeKind.StayOnPage, result.Kind);
+        Assert.Contains(result.Errors, e => e.Message.Contains(UserManagerEditMessages.UpdateFailed));
     }
 
     private static PagedResultOfTenantUserDto EmptyPage() => Page();

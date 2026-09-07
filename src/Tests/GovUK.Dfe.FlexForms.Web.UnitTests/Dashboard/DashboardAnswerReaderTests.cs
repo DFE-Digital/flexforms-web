@@ -179,4 +179,104 @@ public class DashboardAnswerReaderTests
             "10060685",
             DashboardAnswerReader.GetDisplayValue("incomingTrustsSearch-field-flow.ukprn", formData));
     }
+
+    [Fact]
+    public void ParseFormData_ReturnsEmpty_ForNullBlankOrInvalidJson()
+    {
+        Assert.Empty(DashboardAnswerReader.ParseFormData(null));
+        Assert.Empty(DashboardAnswerReader.ParseFormData("   "));
+        Assert.Empty(DashboardAnswerReader.ParseFormData("not-json"));
+    }
+
+    [Fact]
+    public void ParseFormData_SkipsTaskStatusFields()
+    {
+        var body = """{"TaskStatus_t1":"Completed","name":"Ada"}""";
+        var formData = DashboardAnswerReader.ParseFormData(body);
+
+        Assert.False(formData.ContainsKey("TaskStatus_t1"));
+        Assert.Equal("Ada", DashboardAnswerReader.GetDisplayValue("name", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_FormatsBooleanAndPlaceholderValues()
+    {
+        var body = """{"isLead":true,"missing":"undefined","empty":"null"}""";
+        var formData = DashboardAnswerReader.ParseFormData(body);
+
+        Assert.Equal("Yes", DashboardAnswerReader.GetDisplayValue("isLead", formData));
+        Assert.Equal(string.Empty, DashboardAnswerReader.GetDisplayValue("missing", formData));
+        Assert.Equal(string.Empty, DashboardAnswerReader.GetDisplayValue("empty", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_FormatsIsoAndSlashDates()
+    {
+        var formData = DashboardAnswerReader.ParseFormData("""{"startDate":"2026-03-01","endDate":"01/04/2026"}""");
+
+        Assert.Equal("1 March 2026", DashboardAnswerReader.GetDisplayValue("startDate", formData));
+        Assert.Equal("1 April 2026", DashboardAnswerReader.GetDisplayValue("endDate", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_FormatsJsonArrayValues()
+    {
+        var body = """{"tags":["Alpha","Beta"]}""";
+        var formData = DashboardAnswerReader.ParseFormData(body);
+
+        Assert.Equal("Alpha, Beta", DashboardAnswerReader.GetDisplayValue("tags", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ReadsExactDottedKeyMatch()
+    {
+        var body = """{"field.name":"Exact value"}""";
+        var formData = DashboardAnswerReader.ParseFormData(body);
+
+        Assert.Equal("Exact value", DashboardAnswerReader.GetDisplayValue("field.name", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_FormatsCollectionItemsByPreferredTitleFields()
+    {
+        var body = JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            ["organisations"] = new[]
+            {
+                new Dictionary<string, object> { ["id"] = "1", ["title"] = "First Org" },
+                new Dictionary<string, object> { ["id"] = "2", ["label"] = "Second Org" }
+            }
+        });
+
+        var formData = DashboardAnswerReader.ParseFormData(body);
+        var value = DashboardAnswerReader.GetDisplayValue("organisations", formData);
+
+        Assert.Equal("First Org, Second Org", value);
+    }
+
+    [Fact]
+    public void GetDisplayValue_ReturnsEmpty_WhenCollectionItemFieldIsMissing()
+    {
+        var body = JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            ["detailsOfIncomingTrust"] = new[]
+            {
+                new Dictionary<string, object> { ["id"] = "1" }
+            }
+        });
+
+        var formData = DashboardAnswerReader.ParseFormData(body);
+        var value = DashboardAnswerReader.GetDisplayValue("missingField", formData);
+
+        Assert.Equal(string.Empty, value);
+    }
+
+    [Fact]
+    public void GetDisplayValue_ReadsNestedPropertyFromTopLevelJsonObject()
+    {
+        var body = """{"trust":{"name":"Gamma Trust","ukprn":"11111111"}}""";
+        var formData = DashboardAnswerReader.ParseFormData(body);
+
+        Assert.Equal("Gamma Trust", DashboardAnswerReader.GetDisplayValue("trust.name", formData));
+    }
 }
