@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -481,14 +482,19 @@ public static class DashboardAnswerReader
             }
         }
 
-        if (DateTime.TryParse(trimmed, out var date)
-            && (trimmed.Contains('-') || trimmed.Contains('/')))
+        if ((trimmed.Contains('-') || trimmed.Contains('/'))
+            && TryParseDisplayDate(trimmed, out var date))
         {
-            return date.ToString("d MMMM yyyy");
+            return date.ToString("d MMMM yyyy", CultureInfo.InvariantCulture);
         }
 
         return trimmed;
     }
+
+    private static bool TryParseDisplayDate(string value, out DateTime date) =>
+        DateTime.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out date)
+        || DateTime.TryParseExact(value, "dd/MM/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out date)
+        || DateTime.TryParseExact(value, "d/M/yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out date);
 
     private static bool IsPlaceholder(string value) =>
         string.Equals(value, "undefined", StringComparison.OrdinalIgnoreCase)
