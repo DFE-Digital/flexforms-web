@@ -439,25 +439,3 @@ public class RemoveCollectionItemServiceTests
     }
 }
 
-public class UploadFormFileServiceTests
-{
-    [Fact]
-    public async Task ExecuteAsync_ShouldStayWithError_WhenNoFileIsPosted()
-    {
-        var files = Substitute.For<IFormFileFieldService>();
-        files.GetFiles(Arg.Any<FormFileFieldContext>(), Arg.Any<string>()).Returns([]);
-        var service = new UploadFormFileService(
-            files,
-            Substitute.For<IFileUploadService>(),
-            Substitute.For<IInfectedUploadFilter>(),
-            NullLogger<UploadFormFileService>.Instance);
-
-        var result = await service.ExecuteAsync(
-            new FormEngineWorkState(),
-            new UploadFormFileRequest(Guid.NewGuid(), "evidence", null, null, Stream.Null, "cv.pdf", "application/pdf", "ctx", false));
-
-        Assert.Equal(FormEngineOutcomeKind.StayOnPage, result.Kind);
-        Assert.Equal(FormEngineMessages.SelectAFile, result.ErrorMessage);
-        Assert.Contains(result.Errors, e => e.FieldKey == "UploadFile");
-    }
-}

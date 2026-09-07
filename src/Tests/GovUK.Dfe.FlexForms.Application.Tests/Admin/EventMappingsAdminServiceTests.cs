@@ -4,6 +4,7 @@ using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Application.Admin;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Application.Models;
+using GovUK.Dfe.FlexForms.Application.Options;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Task = System.Threading.Tasks.Task;
@@ -148,5 +149,117 @@ public class EventMappingsAdminServiceTests
             Arg.Any<Guid>(),
             Arg.Any<UpsertTenantSettingRequest>(),
             Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SaveTriggerAsync_ShouldRedirect_WhenInputIsValid()
+    {
+        _state.TriggerName = "FileUploaded";
+        _state.TriggerEventType = "CustomEvent";
+        _state.TriggerMappingId = "custom-v1";
+        _state.TriggerEventKind = EventPublishKind.Typed;
+        _tenantAdmin.GetSafeTenantSettingsAsync(_state.TenantId, Arg.Any<CancellationToken>())
+            .Returns(new GetTenantSettingsResponse(_state.TenantId, "Transfers", []));
+
+        var result = await _service.SaveTriggerAsync(_state);
+
+        Assert.Equal(AdminPageOutcomeKind.RedirectToPage, result.Kind);
+        Assert.Equal(EventMappingsMessages.SavedTrigger("CustomEvent", "FileUploaded"), result.SuccessMessage);
+        await _tenantAdmin.Received(1).UpsertSafeTenantSettingAsync(
+            _state.TenantId,
+            Arg.Is<UpsertTenantSettingRequest>(r => r.Category == EventMappingsAdminService.CategoryEventTriggers),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DeleteTriggerAsync_ShouldRedirect_WhenBindingExists()
+    {
+        _state.TriggerName = "FileUploaded";
+        _state.TriggerEventType = "CustomEvent";
+        var existing = """
+            {
+              "FileUploaded": [
+                { "eventKind": "Typed", "eventType": "CustomEvent", "mappingId": "custom-v1" }
+              ]
+            }
+            """;
+        _tenantAdmin.GetSafeTenantSettingsAsync(_state.TenantId, Arg.Any<CancellationToken>())
+            .Returns(new GetTenantSettingsResponse(
+                _state.TenantId,
+                "Transfers",
+                [
+                    new TenantSettingDto(
+                        Guid.NewGuid(),
+                        EventMappingsAdminService.CategoryEventTriggers,
+                        EventMappingsAdminService.TargetShared,
+                        existing,
+                        false,
+                        DateTime.UtcNow)
+                ]));
+
+        var result = await _service.DeleteTriggerAsync(_state);
+
+        Assert.Equal(AdminPageOutcomeKind.RedirectToPage, result.Kind);
+        Assert.Equal(EventMappingsMessages.RemovedTrigger("CustomEvent", "FileUploaded"), result.SuccessMessage);
+    }
+
+    [Fact]
+    public async Task SaveMappingAsync_ShouldRedirect_WhenMappingIsValid()
+    {
+        var templateGuid = Guid.NewGuid();
+        _templates.GetAccessibleTemplatesAsync(Arg.Any<CancellationToken>()).Returns([
+            new TemplateDto { TemplateId = templateGuid, Name = "Transfers", CreatedOn = DateTime.UtcNow }
+        ]);
+        _state.SelectedTemplateId = templateGuid.ToString();
+        _state.SelectedEventType = "CustomEvent";
+        _state.MappingJson = """
+            {
+              "mappingId": "custom-v1",
+              "eventType": "CustomEvent",
+              "fieldMappings": {
+                "Name": { "sourceType": "DirectField", "sourceFieldId": "name" }
+              }
+            }
+            """;
+        _tenantAdmin.GetSafeTenantSettingsAsync(_state.TenantId, Arg.Any<CancellationToken>())
+            .Returns(new GetTenantSettingsResponse(_state.TenantId, "Transfers", []));
+
+        var result = await _service.SaveMappingAsync(_state);
+
+        Assert.Equal(AdminPageOutcomeKind.RedirectToPage, result.Kind);
+        Assert.Equal(
+            EventMappingsMessages.SavedMapping(templateGuid.ToString(), "CustomEvent"),
+            result.SuccessMessage);
+    }
+
+    [Fact]
+    public async Task SaveSchemaAsync_ShouldStay_WhenSchemaDefinitionIsMissing()
+    {
+        _state.NewSchemaEventType = "TenantCustomEvent";
+        _state.SchemaDefinitionJson = " ";
+
+        var result = await _service.SaveSchemaAsync(_state);
+
+        Assert.Equal(AdminPageOutcomeKind.StayOnPage, result.Kind);
+        Assert.Contains(result.Errors, e => e.Message == EventMappingsMessages.EnterSchemaDefinitionJson);
+    }
+
+    [Fact]
+    public async Task SaveSchemaAsync_ShouldRedirect_WhenSchemaIsValid()
+    {
+        _state.NewSchemaEventType = "TenantCustomEvent";
+        _state.SchemaDefinitionJson = """
+            {
+              "topicName": "tenant-custom-topic",
+              "jsonSchema": { "type": "object", "properties": {} }
+            }
+            """;
+        _tenantAdmin.GetSafeTenantSettingsAsync(_state.TenantId, Arg.Any<CancellationToken>())
+            .Returns(new GetTenantSettingsResponse(_state.TenantId, "Transfers", []));
+
+        var result = await _service.SaveSchemaAsync(_state);
+
+        Assert.Equal(AdminPageOutcomeKind.RedirectToPage, result.Kind);
+        Assert.Equal(EventMappingsMessages.SavedSchema("TenantCustomEvent"), result.SuccessMessage);
     }
 }

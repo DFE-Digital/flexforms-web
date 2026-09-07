@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
@@ -90,5 +91,47 @@ public class CustomStatusLabelOverridesAdminServiceTests
             Arg.Is<CustomApplicationStatusRequest>(r =>
                 r.ApplicationStatus == ApplicationStatus.InProgress && r.Label == "Working"),
             Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task LoadAvailableTemplatesAsync_ShouldReturnEmpty_WhenApiFails()
+    {
+        _templates.GetAccessibleTemplatesAsync(Arg.Any<CancellationToken>())
+            .Returns<ObservableCollection<TemplateDto>>(_ => throw new InvalidOperationException("down"));
+        var state = new CustomStatusLabelOverridesWorkState();
+
+        await _service.LoadAvailableTemplatesAsync(state);
+
+        Assert.Empty(state.AvailableTemplates);
+    }
+
+    [Fact]
+    public async Task LoadStatusOverrideAsync_ShouldUseCustomLabel_WhenOverrideExists()
+    {
+        var templateId = Guid.NewGuid();
+        var state = new CustomStatusLabelOverridesWorkState();
+        _templates.GetCustomApplicationStatusesAsync(templateId, Arg.Any<CancellationToken>())
+            .Returns([
+                new CustomApplicationStatusDto
+                {
+                    ApplicationStatus = ApplicationStatus.InProgress,
+                    Label = "Working"
+                }
+            ]);
+
+        await _service.LoadStatusOverrideAsync(state, templateId, ApplicationStatus.InProgress);
+
+        Assert.Equal("Working", state.BaseStatusOverrideValue);
+        Assert.NotEmpty(state.BaseStatuses);
+    }
+
+    [Fact]
+    public void PopulateBaseStatuses_ShouldIncludeAllStatuses()
+    {
+        var state = new CustomStatusLabelOverridesWorkState();
+
+        _service.PopulateBaseStatuses(state);
+
+        Assert.Equal(Enum.GetValues<ApplicationStatus>().Length, state.BaseStatuses.Count);
     }
 }

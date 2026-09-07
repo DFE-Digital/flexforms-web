@@ -142,4 +142,30 @@ public class DuplicateTenantAdminServiceTests
         Assert.Equal(DuplicateTenantMessages.CloneFailedHttp(500), result.ErrorMessage);
         Assert.True(_state.HasError);
     }
+
+    [Fact]
+    public async Task CloneAsync_ShouldStay_WhenValidationFails()
+    {
+        _state.NewTenantId = Guid.Empty;
+
+        var result = await _service.CloneAsync(_state);
+
+        Assert.Equal(AdminPageOutcomeKind.StayOnPage, result.Kind);
+        Assert.Contains(result.Errors, e => e.Message == DuplicateTenantMessages.TenantIdRequired);
+        await _client.DidNotReceive().CloneTenantAsync(
+            Arg.Any<Guid>(),
+            Arg.Any<CloneTenantRequest>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task LoadInternalServiceAuthServicesAsync_ShouldReturnEmpty_WhenApiFails()
+    {
+        _client.GetTenantSettingsAsync(_state.SourceTenantId, Arg.Any<CancellationToken>())
+            .Throws(new ExternalApplicationsException("boom", 500, "err", null!, null!));
+
+        await _service.LoadInternalServiceAuthServicesAsync(_state);
+
+        Assert.Empty(_state.InternalServiceAuthServiceApiKeys);
+    }
 }
