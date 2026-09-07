@@ -279,4 +279,41 @@ public class DashboardAnswerReaderTests
 
         Assert.Equal("Gamma Trust", DashboardAnswerReader.GetDisplayValue("trust.name", formData));
     }
+
+    [Fact]
+    public void GetDisplayValue_FormatsFalseBooleansNumbersAndUnpaddedDates()
+    {
+        var formData = DashboardAnswerReader.ParseFormData(
+            """{"isLead":false,"count":12,"when":"1/4/2026","emptyDate":""}""");
+
+        Assert.Equal("No", DashboardAnswerReader.GetDisplayValue("isLead", formData));
+        Assert.Equal("12", DashboardAnswerReader.GetDisplayValue("count", formData));
+        Assert.Equal("1 April 2026", DashboardAnswerReader.GetDisplayValue("when", formData));
+        Assert.Equal(string.Empty, DashboardAnswerReader.GetDisplayValue("emptyDate", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ReadsCollectionFromJsonStringAndPrefersValueProperty()
+    {
+        var body = """
+            {
+              "orgs":"[{\"id\":\"1\",\"name\":\"First\"},{\"id\":\"2\",\"title\":\"Second\"}]",
+              "choice":{"value":"Selected","completed":true}
+            }
+            """;
+        var formData = DashboardAnswerReader.ParseFormData(body);
+
+        Assert.Equal("First, Second", DashboardAnswerReader.GetDisplayValue("orgs", formData));
+        Assert.Equal("Selected", DashboardAnswerReader.GetDisplayValue("choice", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_UsesLabelFromComplexJsonWithoutValueWrapper()
+    {
+        var formData = DashboardAnswerReader.ParseFormData(
+            """{"item":{"label":"Shown label"},"plain":{"ukprn":"123"}}""");
+
+        Assert.Equal("Shown label", DashboardAnswerReader.GetDisplayValue("item", formData));
+        Assert.Contains("ukprn", DashboardAnswerReader.GetDisplayValue("plain", formData));
+    }
 }

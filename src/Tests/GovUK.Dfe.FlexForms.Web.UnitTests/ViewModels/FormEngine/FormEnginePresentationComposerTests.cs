@@ -556,6 +556,44 @@ public class FormEnginePresentationComposerTests
         Assert.Equal(SummaryDisplayKind.NotAnswered, rows[5].Value.Kind);
     }
 
+    [Fact]
+    public void BuildPreview_collection_flow_renders_items_and_empty_state()
+    {
+        var flow = new MultiCollectionFlowConfiguration
+        {
+            FlowId = "members",
+            FieldId = "memberList",
+            Title = "Members",
+            ItemKind = "Member",
+            ItemTitleBinding = "fullName",
+            SummaryColumns = [new FlowSummaryColumn { Field = "fullName", Label = "Full name" }],
+            Pages = [Page("p1", [Field("fullName", "text", "Name")])]
+        };
+        var task = Task("t1", "Team", mode: FormStepPolicy.MultiCollectionFlowMode, flows: [flow]);
+        var items = JsonSerializer.Serialize(new[]
+        {
+            new Dictionary<string, object> { ["id"] = "i1", ["fullName"] = "Ada" }
+        });
+        var formData = new Dictionary<string, object> { ["memberList"] = items };
+
+        _formatting.GetFormattedFieldValues("fullName", Arg.Any<Dictionary<string, object>>())
+            .Returns(["Ada"]);
+
+        var rows = _composer.BuildPreview(Context(formData, Template(task)))
+            .Groups.Single().Tasks.Single().Rows;
+
+        Assert.Equal("Members", rows[0].Key);
+        Assert.True(rows[0].KeyIsBold);
+        Assert.Equal("Ada", rows[1].Key);
+        Assert.Equal("Full name", rows[2].Key);
+        Assert.Equal("Ada", rows[2].Value.Html);
+
+        var emptyRows = _composer.BuildPreview(Context(new Dictionary<string, object>(), Template(task)))
+            .Groups.Single().Tasks.Single().Rows;
+        Assert.Equal("No items added", emptyRows[1].Key);
+        Assert.Equal(SummaryDisplayKind.NotAnswered, emptyRows[1].Value.Kind);
+    }
+
     private static FormEnginePresentationContext Context(
         Dictionary<string, object> formData,
         FormTemplate template,
