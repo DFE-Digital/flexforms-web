@@ -28,8 +28,11 @@ public sealed class RequestTelemetryEnrichmentMiddleware(
         if (context.User?.Identity?.IsAuthenticated == true)
         {
             telemetry.UserId = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
-            telemetry.UserEmail = context.User.FindFirstValue(ClaimTypes.Email)
+            var rawEmail = context.User.FindFirstValue(ClaimTypes.Email)
                 ?? context.User.Identity?.Name;
+            telemetry.UserEmail = string.IsNullOrWhiteSpace(rawEmail)
+                ? null
+                : PiiMasking.MaskEmail(rawEmail);
         }
 
         var templateId = context.Session.GetString("TemplateId");

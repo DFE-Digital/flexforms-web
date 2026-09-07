@@ -54,7 +54,7 @@ builder.Host.UseSerilog((context, _, loggerConfiguration) =>
         .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
         .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
         .Enrich.FromLogContext()
-        .WriteTo.Console();
+        .WriteTo.Console(new PiiMaskingTextFormatter());
 });
 
 builder.Configuration.AddJsonFile("appsettings.bootstrap.json", optional: true, reloadOnChange: true);
@@ -669,7 +669,7 @@ if (telemetryConfig is not null)
         .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
         .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
         .Enrich.FromLogContext()
-        .WriteTo.Console()
+        .WriteTo.Console(new PiiMaskingTextFormatter())
         .WriteTo.ApplicationInsights(telemetryConfig, new ExceptionTrackingTelemetryConverter())
         .CreateLogger();
 }
