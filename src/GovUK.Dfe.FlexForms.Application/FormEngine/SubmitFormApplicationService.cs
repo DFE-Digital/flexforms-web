@@ -88,7 +88,7 @@ public sealed class SubmitFormApplicationService(
 
         try
         {
-            var gate = await applicationsClient.GetFileValidationGateAsync(state.ApplicationId.Value);
+            var gate = await applicationsClient.GetFileValidationGateAsync(state.ApplicationId.Value, cancellationToken);
             if (gate is { CanSubmit: false })
             {
                 var names = string.Join(", ", (gate.BlockingFiles ?? []).Select(f => f.OriginalFileName));
@@ -116,7 +116,7 @@ public sealed class SubmitFormApplicationService(
                 state.ApplicationId.Value,
                 state.ReferenceNumber);
 
-            var submittedApplication = await applicationsClient.SubmitApplicationAsync(state.ApplicationId.Value);
+            var submittedApplication = await applicationsClient.SubmitApplicationAsync(state.ApplicationId.Value, cancellationToken);
             if (submittedApplication != null)
             {
                 sessionStore.SetString(

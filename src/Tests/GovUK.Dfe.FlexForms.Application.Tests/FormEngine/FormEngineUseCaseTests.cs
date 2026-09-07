@@ -135,9 +135,9 @@ public class SubmitFormApplicationServiceTests
             .Returns(true);
         _applicationState.ValidateAllRequiredFieldsForSubmission(Arg.Any<FormTemplate>(), Arg.Any<Dictionary<string, object>>(), Arg.Any<Func<string, bool>?>())
             .Returns(new Dictionary<string, List<string>>());
-        _applicationsClient.GetFileValidationGateAsync(Arg.Any<Guid>())
+        _applicationsClient.GetFileValidationGateAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(new FileValidationGateDto { CanSubmit = true, BlockingFiles = [] });
-        _applicationsClient.SubmitApplicationAsync(Arg.Any<Guid>())
+        _applicationsClient.SubmitApplicationAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(new ApplicationDto { ApplicationReference = "REF-1" });
         _service = new SubmitFormApplicationService(
             _applicationState,
@@ -163,7 +163,7 @@ public class SubmitFormApplicationServiceTests
     [Fact]
     public async Task ExecuteAsync_ShouldStayOnPage_WhenFileValidationGateBlocksSubmit()
     {
-        _applicationsClient.GetFileValidationGateAsync(Arg.Any<Guid>())
+        _applicationsClient.GetFileValidationGateAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(new FileValidationGateDto
             {
                 CanSubmit = false,
@@ -183,7 +183,7 @@ public class SubmitFormApplicationServiceTests
 
         Assert.Equal(FormEngineOutcomeKind.RedirectToPage, result.Kind);
         Assert.Equal("/Applications/ApplicationSubmitted", result.PageName);
-        await _applicationsClient.Received().SubmitApplicationAsync(_applicationId);
+        await _applicationsClient.Received().SubmitApplicationAsync(_applicationId, Arg.Any<CancellationToken>());
     }
 
     private FormEngineWorkState EditableState() =>
@@ -326,7 +326,7 @@ public class PrepareFormEngineGetServiceTests
         _responses.GetAccumulatedFormData().Returns(new Dictionary<string, object> { ["name"] = "Ada" });
         _applications.GetFilesForApplicationAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(new ObservableCollection<UploadDto>());
-        _applications.GetFileValidationGateAsync(Arg.Any<Guid>())
+        _applications.GetFileValidationGateAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(new FileValidationGateDto { CanSubmit = true, BlockingFiles = [] });
         _service = new PrepareFormEngineGetService(
             _templates,
@@ -397,7 +397,7 @@ public class PrepareFormEngineGetServiceTests
                     ValidationMessage = "OK"
                 }
             });
-        _applications.GetFileValidationGateAsync(applicationId)
+        _applications.GetFileValidationGateAsync(applicationId, Arg.Any<CancellationToken>())
             .Returns(new FileValidationGateDto { CanSubmit = true, BlockingFiles = [] });
 
         var state = new FormEngineWorkState

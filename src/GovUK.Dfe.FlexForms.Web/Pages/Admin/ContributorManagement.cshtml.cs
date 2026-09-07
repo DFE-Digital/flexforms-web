@@ -60,10 +60,7 @@ public sealed class ContributorManagementModel(IContributorManagementAdmin contr
         if (string.IsNullOrWhiteSpace(Email))
             return;
 
-        Email = Email?.Trim() ?? string.Empty;
-
-        if (string.IsNullOrWhiteSpace(Email))
-            return;
+        Email = Email.Trim();
 
         if (!new EmailAddressAttribute().IsValid(Email))
         {
