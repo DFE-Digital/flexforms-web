@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using GovUK.Dfe.FlexForms.Web.Tenancy;
 using GovUK.Dfe.CoreLibs.Security.Configurations;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -11,6 +12,7 @@ namespace GovUK.Dfe.FlexForms.Web.Security;
 /// <summary>
 /// Applies tenant <c>EntraSso</c> settings onto the Entra OIDC options at challenge and callback time.
 /// </summary>
+[ExcludeFromCodeCoverage]
 public static class TenantAwareEntraSsoConfigurator
 {
     /// <summary>

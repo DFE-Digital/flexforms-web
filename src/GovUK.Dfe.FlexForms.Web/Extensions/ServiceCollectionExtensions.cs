@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using GovUK.Dfe.FlexForms.Application.Admin;
 using GovUK.Dfe.FlexForms.Application.Dashboard;
 using GovUK.Dfe.FlexForms.Application.FormEngine;
@@ -13,6 +14,7 @@ using GovUK.Dfe.FlexForms.Api.Client.Extensions;
 
 namespace GovUK.Dfe.FlexForms.Web.Extensions
 {
+    [ExcludeFromCodeCoverage]
     public static class ServiceCollectionExtensions
     {
         public static IServiceCollection AddExternalApplicationsApiClients(

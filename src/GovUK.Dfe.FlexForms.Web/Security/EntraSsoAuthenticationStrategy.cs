@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using GovUK.Dfe.CoreLibs.Security.Configurations;
 using GovUK.Dfe.CoreLibs.Security.EntraSso;
 using GovUK.Dfe.FlexForms.Api.Client.Security;
@@ -14,6 +15,7 @@ namespace GovUK.Dfe.FlexForms.Web.Security;
 /// Handles token retrieval and refresh for Entra-authenticated sessions,
 /// following the same pattern as OidcAuthenticationStrategy.
 /// </summary>
+[ExcludeFromCodeCoverage]
 public class EntraSsoAuthenticationStrategy(
     ILogger<EntraSsoAuthenticationStrategy> logger,
     IOptions<EntraSsoOptions> entraSsoOptions) : IAuthenticationSchemeStrategy

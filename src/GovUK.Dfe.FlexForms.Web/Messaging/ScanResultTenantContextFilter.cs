@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using GovUK.Dfe.CoreLibs.Messaging.Contracts.Messages.Events;
 using GovUK.Dfe.FlexForms.Infrastructure.Messaging;
 using GovUK.Dfe.FlexForms.Web.Configuration;
@@ -15,6 +16,7 @@ namespace GovUK.Dfe.FlexForms.Web.Messaging;
 /// so S2S API calls include <c>X-Tenant-ID</c>. Must be an open generic so MassTransit can
 /// register it with <c>UseConsumeFilter(typeof(ScanResultTenantContextFilter&lt;&gt;), ...)</c>.
 /// </summary>
+[ExcludeFromCodeCoverage]
 public sealed class ScanResultTenantContextFilter<T>(
     ITenantRequestContext tenantRequestContext,
     IOptions<PlatformBootstrapOptions> bootstrapOptions,

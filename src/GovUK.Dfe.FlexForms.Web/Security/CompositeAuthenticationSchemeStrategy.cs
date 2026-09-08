@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using GovUK.Dfe.CoreLibs.Security.Configurations;
 using GovUK.Dfe.CoreLibs.Security.Interfaces;
 using GovUK.Dfe.FlexForms.Api.Client.Security;
@@ -10,6 +11,7 @@ namespace GovUK.Dfe.FlexForms.Web.Security;
 /// Priority: Internal Auth > tenant/host interactive scheme
 /// (explicit Authentication:Scheme, else Test / Entra / DfE Sign-In).
 /// </summary>
+[ExcludeFromCodeCoverage]
 public class CompositeAuthenticationSchemeStrategy(
     ILogger<CompositeAuthenticationSchemeStrategy> logger,
     IHttpContextAccessor httpContextAccessor,

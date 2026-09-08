@@ -316,4 +316,317 @@ public class DashboardAnswerReaderTests
         Assert.Equal("Shown label", DashboardAnswerReader.GetDisplayValue("item", formData));
         Assert.Contains("ukprn", DashboardAnswerReader.GetDisplayValue("plain", formData));
     }
+
+    [Fact]
+    public void GetDisplayValue_ReturnsEmpty_ForNullOrWhitespaceFieldPath()
+    {
+        var formData = DashboardAnswerReader.ParseFormData("""{"name":"Ada"}""");
+
+        Assert.Equal(string.Empty, DashboardAnswerReader.GetDisplayValue(null!, formData));
+        Assert.Equal(string.Empty, DashboardAnswerReader.GetDisplayValue("   ", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ReturnsEmpty_WhenFieldPathIsOnlySeparators()
+    {
+        var formData = DashboardAnswerReader.ParseFormData("""{"name":"Ada"}""");
+
+        Assert.Equal(string.Empty, DashboardAnswerReader.GetDisplayValue("...", formData));
+    }
+
+    [Fact]
+    public void ParseFormData_ReturnsEmpty_WhenBase64DecodesToWhitespace()
+    {
+        var encoded = Convert.ToBase64String(Encoding.UTF8.GetBytes("   "));
+
+        Assert.Empty(DashboardAnswerReader.ParseFormData(encoded));
+    }
+
+    [Fact]
+    public void ParseFormData_ReturnsEmpty_WhenJsonIsNullLiteral()
+    {
+        var encoded = Convert.ToBase64String(Encoding.UTF8.GetBytes("null"));
+
+        Assert.Empty(DashboardAnswerReader.ParseFormData(encoded));
+    }
+
+    [Fact]
+    public void ParseFormData_MapsJsonNullAndFractionalNumbers()
+    {
+        var formData = DashboardAnswerReader.ParseFormData("""{"nothing":null,"ratio":1.5}""");
+
+        Assert.Equal(string.Empty, DashboardAnswerReader.GetDisplayValue("nothing", formData));
+        Assert.Equal("1.5", DashboardAnswerReader.GetDisplayValue("ratio", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_SkipsBlankValuesWhenJoiningCollectionItems()
+    {
+        var body = JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            ["items"] = new[]
+            {
+                new Dictionary<string, object> { ["id"] = "1", ["note"] = "   " },
+                new Dictionary<string, object> { ["id"] = "2", ["note"] = "Kept" }
+            }
+        });
+
+        var formData = DashboardAnswerReader.ParseFormData(body);
+
+        Assert.Equal("Kept", DashboardAnswerReader.GetDisplayValue("note", formData));
+        Assert.Equal("Kept", DashboardAnswerReader.GetDisplayValue("items.note", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ReturnsEmpty_WhenCollectionItemsHaveNoPreferredTitleField()
+    {
+        var body = JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            ["orgs"] = new[]
+            {
+                new Dictionary<string, object> { ["id"] = "1", ["ukprn"] = "12345678" }
+            }
+        });
+
+        var formData = DashboardAnswerReader.ParseFormData(body);
+
+        // A trailing separator resolves the collection itself rather than an exact key.
+        Assert.Equal(string.Empty, DashboardAnswerReader.GetDisplayValue("orgs.", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_SkipsPlaceholderNameAndFallsBackToTitle()
+    {
+        var body = JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            ["orgs"] = new[]
+            {
+                new Dictionary<string, object> { ["name"] = "undefined", ["title"] = "Fallback Org" },
+                new Dictionary<string, object> { ["label"] = "Second Org" }
+            }
+        });
+
+        var formData = DashboardAnswerReader.ParseFormData(body);
+
+        Assert.Equal("Fallback Org, Second Org", DashboardAnswerReader.GetDisplayValue("orgs.", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ReturnsEmpty_WhenCollectionJsonStringIsMalformed()
+    {
+        var body = """{"orgs":"[{\"name\":\"Broken\""}""";
+
+        var formData = DashboardAnswerReader.ParseFormData(body);
+
+        Assert.Equal(string.Empty, DashboardAnswerReader.GetDisplayValue("name", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ReturnsEmpty_ForEmptyCollectionJsonString()
+    {
+        var formData = DashboardAnswerReader.ParseFormData("""{"orgs":"[]"}""");
+
+        Assert.Equal(string.Empty, DashboardAnswerReader.GetDisplayValue("orgs.name", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_IgnoresScalarAndNonCollectionValuesWhenSearchingCollections()
+    {
+        var formData = DashboardAnswerReader.ParseFormData(
+            """{"flag":true,"count":5,"tags":["a","b"],"note":"plain text"}""");
+
+        Assert.Equal(string.Empty, DashboardAnswerReader.GetDisplayValue("missing", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ReadsCollectionFromJsonElementArray()
+    {
+        using var doc = JsonDocument.Parse("""[{"name":"Element Org"},{"name":"Second Org"}]""");
+        var formData = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["orgs"] = doc.RootElement.Clone()
+        };
+
+        Assert.Equal("Element Org, Second Org", DashboardAnswerReader.GetDisplayValue("orgs.name", formData));
+        Assert.Equal("Element Org, Second Org", DashboardAnswerReader.GetDisplayValue("orgs", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ReadsCollectionFromJsonElementString()
+    {
+        using var doc = JsonDocument.Parse("""{"orgs":"[{\"name\":\"String Org\"}]"}""");
+        var formData = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["orgs"] = doc.RootElement.GetProperty("orgs").Clone()
+        };
+
+        Assert.Equal("String Org", DashboardAnswerReader.GetDisplayValue("orgs.name", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ReturnsEmpty_WhenJsonElementValueIsNotACollection()
+    {
+        using var doc = JsonDocument.Parse("""{"count":5}""");
+        var formData = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["count"] = doc.RootElement.GetProperty("count").Clone()
+        };
+
+        Assert.Equal(string.Empty, DashboardAnswerReader.GetDisplayValue("missing", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ParsesCollectionItemsFromMixedObjectList()
+    {
+        using var doc = JsonDocument.Parse(
+            """{"obj":{"name":"Element Item"},"str":"{\"name\":\"String Element Item\"}","num":7}""");
+        var root = doc.RootElement;
+        var formData = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["items"] = new List<object>
+            {
+                new Dictionary<string, object> { ["name"] = "Dictionary Item" },
+                root.GetProperty("obj").Clone(),
+                root.GetProperty("str").Clone(),
+                root.GetProperty("num").Clone(),
+                """{"name":"Raw String Item"}""",
+                "not-json",
+                "{broken",
+                null!
+            }
+        };
+
+        Assert.Equal(
+            "Dictionary Item, Element Item, String Element Item, Raw String Item",
+            DashboardAnswerReader.GetDisplayValue("items.name", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ReadsNestedPropertyFromDictionaryValue()
+    {
+        var formData = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["trust"] = new Dictionary<string, object>
+            {
+                ["address"] = new Dictionary<string, object> { ["postcode"] = "SW1A 1AA" }
+            }
+        };
+
+        Assert.Equal("SW1A 1AA", DashboardAnswerReader.GetDisplayValue("trust.address.postcode", formData));
+        Assert.Equal(string.Empty, DashboardAnswerReader.GetDisplayValue("trust.address.missing", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ReadsNestedPropertyFromJsonElementValues()
+    {
+        using var doc = JsonDocument.Parse(
+            """{"obj":{"name":"Object Trust"},"str":"{\"name\":\"String Trust\"}","num":9}""");
+        var root = doc.RootElement;
+        var formData = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["objTrust"] = root.GetProperty("obj").Clone(),
+            ["strTrust"] = root.GetProperty("str").Clone(),
+            ["numTrust"] = root.GetProperty("num").Clone()
+        };
+
+        Assert.Equal("Object Trust", DashboardAnswerReader.GetDisplayValue("objTrust.name", formData));
+        Assert.Equal("String Trust", DashboardAnswerReader.GetDisplayValue("strTrust.name", formData));
+        Assert.Equal(string.Empty, DashboardAnswerReader.GetDisplayValue("numTrust.name", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ReturnsEmpty_ForNestedPathOnBlankMalformedOrArrayValues()
+    {
+        var formData = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["blank"] = "   ",
+            ["broken"] = "{\"name\":",
+            ["scalars"] = "[1,2]"
+        };
+
+        Assert.Equal(string.Empty, DashboardAnswerReader.GetDisplayValue("blank.name", formData));
+        Assert.Equal(string.Empty, DashboardAnswerReader.GetDisplayValue("broken.name", formData));
+        Assert.Equal(string.Empty, DashboardAnswerReader.GetDisplayValue("scalars.name", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ReturnsEmpty_ForNestedPathOnNumericValue()
+    {
+        var formData = DashboardAnswerReader.ParseFormData("""{"count":12}""");
+
+        Assert.Equal(string.Empty, DashboardAnswerReader.GetDisplayValue("count.name", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_DecodesDoubleEncodedComplexJson()
+    {
+        var formData = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["quoted"] = "{&amp;quot;name&amp;quot;:&amp;quot;Double Quoted Trust&amp;quot;}",
+            ["numeric"] = "{&amp;#34;name&amp;#34;:&amp;#34;Numeric Entity Trust&amp;#34;}"
+        };
+
+        Assert.Equal("Double Quoted Trust", DashboardAnswerReader.GetDisplayValue("quoted", formData));
+        Assert.Equal("Numeric Entity Trust", DashboardAnswerReader.GetDisplayValue("numeric", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_PrefersTextThenValuePropertiesFromComplexJson()
+    {
+        var formData = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["withText"] = """{"text":"Text prop"}""",
+            ["withValue"] = """{"value":"Value prop"}""",
+            ["skipsNonStrings"] = """{"name":123,"title":"   ","label":"Label prop"}"""
+        };
+
+        Assert.Equal("Text prop", DashboardAnswerReader.GetDisplayValue("withText", formData));
+        Assert.Equal("Value prop", DashboardAnswerReader.GetDisplayValue("withValue", formData));
+        Assert.Equal("Label prop", DashboardAnswerReader.GetDisplayValue("skipsNonStrings", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_FallsBackToRawText_WhenComplexJsonIsMalformed()
+    {
+        var raw = "{\"name\":\"Unclosed";
+        var formData = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["broken"] = raw
+        };
+
+        Assert.Equal(raw, DashboardAnswerReader.GetDisplayValue("broken", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_UnwrapsValueObjectsInsideCollectionItems()
+    {
+        var body = """{"orgs":"[{\"id\":\"1\",\"orgName\":{\"value\":\"Wrapped Org\",\"completed\":true}}]"}""";
+
+        var formData = DashboardAnswerReader.ParseFormData(body);
+
+        Assert.Equal("Wrapped Org", DashboardAnswerReader.GetDisplayValue("orgName", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_SupportsDeepPropertyPathInsideCollectionItems()
+    {
+        var body = JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            ["orgs"] = new[]
+            {
+                new Dictionary<string, object>
+                {
+                    ["id"] = "1",
+                    ["trust"] = new Dictionary<string, object>
+                    {
+                        ["address"] = new Dictionary<string, object> { ["postcode"] = "AB1 2CD" }
+                    }
+                }
+            }
+        });
+
+        var formData = DashboardAnswerReader.ParseFormData(body);
+
+        Assert.Equal("AB1 2CD", DashboardAnswerReader.GetDisplayValue("orgs.trust.address.postcode", formData));
+    }
 }

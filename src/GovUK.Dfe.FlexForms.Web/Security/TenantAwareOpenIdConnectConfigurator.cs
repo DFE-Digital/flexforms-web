@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Protocols;
@@ -10,6 +11,7 @@ namespace GovUK.Dfe.FlexForms.Web.Security;
 /// <summary>
 /// Applies DfE Sign-In settings from the current tenant configuration to OIDC options at runtime.
 /// </summary>
+[ExcludeFromCodeCoverage]
 public static class TenantAwareOpenIdConnectConfigurator
 {
     /// <summary>
