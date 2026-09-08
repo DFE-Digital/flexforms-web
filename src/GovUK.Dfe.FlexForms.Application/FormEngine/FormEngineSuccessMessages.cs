@@ -62,7 +62,7 @@ internal static class FormEngineSuccessMessages
         if (itemData == null || itemData.Count == 0)
             return message;
 
-        return PlaceholderRegex().Replace(message, match =>
+        return PlaceholderRegex.Replace(message, match =>
         {
             var key = match.Groups[1].Value;
             if (itemData.TryGetValue(key, out var value) && value != null)
@@ -88,5 +88,8 @@ internal static class FormEngineSuccessMessages
         return firstValue?.ToString() ?? "Item";
     }
 
-    private static Regex PlaceholderRegex() => new(@"\{([^{}]+)\}", RegexOptions.CultureInvariant);
+    private static readonly Regex PlaceholderRegex = new(
+        @"\{([^{}]+)\}",
+        RegexOptions.CultureInvariant,
+        TimeSpan.FromMilliseconds(200));
 }

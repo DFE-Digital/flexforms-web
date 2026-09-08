@@ -47,7 +47,9 @@ public sealed class DownloadFormFileService(
             {
                 var fileNameMatch = Regex.Match(
                     disposition,
-                    @"filename\*=UTF-8''(?<fileName>.+)|filename=""?(?<fileName>[^\"";]+)""?");
+                    @"filename\*=UTF-8''(?<fileName>.+)|filename=""?(?<fileName>[^\"";]+)""?",
+                    RegexOptions.CultureInvariant,
+                    TimeSpan.FromMilliseconds(200));
                 if (fileNameMatch.Success)
                     fileName = WebUtility.UrlDecode(fileNameMatch.Groups["fileName"].Value);
             }

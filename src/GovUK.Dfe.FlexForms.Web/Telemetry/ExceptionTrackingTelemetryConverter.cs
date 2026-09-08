@@ -25,8 +25,14 @@ public sealed class ExceptionTrackingTelemetryConverter : TraceTelemetryConverte
         FlexFormsLogContextKeys.ApplicationReference
     ];
 
-    private static readonly Regex ErrorIdPattern = new(@"ErrorId[:\s=]+([A-Za-z0-9\-]+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-    private static readonly Regex CorrelationIdPattern = new(@"CorrelationId[:\s=]+([a-f0-9\-]+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex ErrorIdPattern = new(
+        @"ErrorId[:\s=]+([A-Za-z0-9\-]+)",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled,
+        TimeSpan.FromMilliseconds(200));
+    private static readonly Regex CorrelationIdPattern = new(
+        @"CorrelationId[:\s=]+([a-f0-9\-]+)",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled,
+        TimeSpan.FromMilliseconds(200));
 
     public override IEnumerable<ITelemetry> Convert(LogEvent logEvent, IFormatProvider formatProvider)
     {
