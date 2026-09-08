@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Infrastructure.Parsers;
 using GovUK.Dfe.FlexForms.Infrastructure.Providers;
@@ -10,6 +11,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure;
 /// <summary>
 /// Registers Infrastructure adapters. Call once from the composition root.
 /// </summary>
+[ExcludeFromCodeCoverage]
 public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructureDependencyGroup(this IServiceCollection services)

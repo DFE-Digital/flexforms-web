@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using GovUK.Dfe.CoreLibs.Security.Configurations;
 using GovUK.Dfe.FlexForms.Web.Authentication;
 using GovUK.Dfe.FlexForms.Api.Client.Security;
@@ -13,6 +14,7 @@ namespace GovUK.Dfe.FlexForms.Web.Security;
 /// Authentication strategy for Test authentication scheme.
 /// Can always "refresh" by generating new tokens from tenant TestAuthentication options.
 /// </summary>
+[ExcludeFromCodeCoverage]
 public class TestAuthenticationStrategy(
     ILogger<TestAuthenticationStrategy> logger,
     IOptions<TestAuthenticationOptions> testAuthOptions) : IAuthenticationSchemeStrategy

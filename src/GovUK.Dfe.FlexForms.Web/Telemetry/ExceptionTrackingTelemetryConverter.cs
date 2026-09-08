@@ -25,8 +25,14 @@ public sealed class ExceptionTrackingTelemetryConverter : TraceTelemetryConverte
         FlexFormsLogContextKeys.ApplicationReference
     ];
 
-    private static readonly Regex ErrorIdPattern = new(@"ErrorId[:\s=]+([A-Za-z0-9\-]+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-    private static readonly Regex CorrelationIdPattern = new(@"CorrelationId[:\s=]+([a-f0-9\-]+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex ErrorIdPattern = new(
+        @"ErrorId[:\s=]+([A-Za-z0-9\-]+)",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled,
+        TimeSpan.FromMilliseconds(200));
+    private static readonly Regex CorrelationIdPattern = new(
+        @"CorrelationId[:\s=]+([a-f0-9\-]+)",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled,
+        TimeSpan.FromMilliseconds(200));
 
     public override IEnumerable<ITelemetry> Convert(LogEvent logEvent, IFormatProvider formatProvider)
     {
@@ -38,7 +44,7 @@ public sealed class ExceptionTrackingTelemetryConverter : TraceTelemetryConverte
                 Timestamp = logEvent.Timestamp
             };
 
-            var renderedMessage = logEvent.RenderMessage(formatProvider);
+            var renderedMessage = PiiMasking.MaskEmailsInText(logEvent.RenderMessage(formatProvider));
             exceptionTelemetry.Properties["LogMessage"] = renderedMessage;
 
             ApplyStructuredProperties(exceptionTelemetry.Properties, logEvent);
@@ -48,22 +54,31 @@ public sealed class ExceptionTrackingTelemetryConverter : TraceTelemetryConverte
             {
                 var value = FormatPropertyValue(property.Value?.ToString());
                 if (!string.IsNullOrEmpty(value) && !exceptionTelemetry.Properties.ContainsKey(property.Key))
-                    exceptionTelemetry.Properties[property.Key] = value;
+                {
+                    exceptionTelemetry.Properties[property.Key] =
+                        PiiMasking.MaskIfEmailProperty(property.Key, value);
+                }
             }
 
             yield return exceptionTelemetry;
 
             foreach (var trace in base.Convert(logEvent, formatProvider))
+            {
+                MaskTraceMessage(trace);
                 yield return trace;
+            }
         }
         else
         {
             foreach (var telemetry in base.Convert(logEvent, formatProvider))
             {
+                MaskTraceMessage(telemetry);
                 if (telemetry is TraceTelemetry traceTelemetry)
                 {
                     ApplyStructuredProperties(traceTelemetry.Properties, logEvent);
-                    ApplyRegexFallbacks(traceTelemetry.Properties, logEvent.RenderMessage(formatProvider));
+                    ApplyRegexFallbacks(
+                        traceTelemetry.Properties,
+                        PiiMasking.MaskEmailsInText(logEvent.RenderMessage(formatProvider)));
                 }
 
                 yield return telemetry;
@@ -79,7 +94,7 @@ public sealed class ExceptionTrackingTelemetryConverter : TraceTelemetryConverte
                 continue;
 
             if (TryGetPropertyValue(logEvent, key, out var value))
-                target[key] = value;
+                target[key] = PiiMasking.MaskIfEmailProperty(key, value);
         }
     }
 
@@ -123,6 +138,12 @@ public sealed class ExceptionTrackingTelemetryConverter : TraceTelemetryConverte
             return value[1..^1];
 
         return value;
+    }
+
+    private static void MaskTraceMessage(ITelemetry telemetry)
+    {
+        if (telemetry is TraceTelemetry traceTelemetry)
+            traceTelemetry.Message = PiiMasking.MaskEmailsInText(traceTelemetry.Message);
     }
 
     private static SeverityLevel ConvertSeverityLevel(LogEventLevel level) => level switch

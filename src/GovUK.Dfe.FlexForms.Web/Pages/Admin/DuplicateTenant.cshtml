@@ -101,7 +101,7 @@
                 {
                     var apiKeyField = $"{nameof(Model.InternalServiceAuthServiceApiKeys)}[{i}].{nameof(DuplicateTenantModel.InternalServiceAuthServiceSecretInput.ApiKey)}";
                     <div class="govuk-form-group @(ViewData.ModelState[apiKeyField]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
-                        <label class="govuk-label" for="InternalServiceAuthServiceApiKeys_@(i)__ApiKey">
+                        <label class="govuk-label" asp-for="InternalServiceAuthServiceApiKeys[i].ApiKey">
                             Services[@i] ApiKey
                         </label>
                         <div class="govuk-hint">

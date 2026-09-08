@@ -54,7 +54,7 @@ builder.Host.UseSerilog((context, _, loggerConfiguration) =>
         .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
         .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
         .Enrich.FromLogContext()
-        .WriteTo.Console();
+        .WriteTo.Console(new PiiMaskingTextFormatter());
 });
 
 builder.Configuration.AddJsonFile("appsettings.bootstrap.json", optional: true, reloadOnChange: true);
@@ -157,6 +157,9 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.KnownIPNetworks.Clear();
     options.KnownProxies.Clear();
 });
+
+// Same Data Protection rules as the API: Local key ring unless UseAzure (Azure Blob + Key Vault / SAS).
+builder.Services.AddSharedDataProtection(configuration, builder.Environment);
 
 builder.Services.AddSingleton<ITelemetryChannel, TenantAwareTelemetryChannel>();
 builder.Services.AddApplicationInsightsTelemetry(configuration);
@@ -666,7 +669,7 @@ if (telemetryConfig is not null)
         .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
         .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
         .Enrich.FromLogContext()
-        .WriteTo.Console()
+        .WriteTo.Console(new PiiMaskingTextFormatter())
         .WriteTo.ApplicationInsights(telemetryConfig, new ExceptionTrackingTelemetryConverter())
         .CreateLogger();
 }

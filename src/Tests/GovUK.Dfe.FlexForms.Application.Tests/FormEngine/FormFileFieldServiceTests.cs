@@ -189,4 +189,56 @@ public class FormFileFieldServiceTests
         _service.SaveFiles(new FormFileFieldContext(null, null, null), "evidence", [new UploadDto()]);
         Assert.Empty(_session.Keys);
     }
+
+    [Fact]
+    public void SaveFiles_ignores_uploads_when_field_id_is_empty()
+    {
+        _service.SaveFiles(new FormFileFieldContext(_applicationId, "flow-1", "item-1"), "", [new UploadDto()]);
+        Assert.Empty(_session.Keys);
+    }
+
+    [Fact]
+    public void GetFiles_reads_regular_upload_from_accumulated_data_when_session_is_empty()
+    {
+        var file = new UploadDto { Id = Guid.NewGuid(), OriginalFileName = "stored.pdf" };
+        _responses.GetAccumulatedFormData().Returns(new Dictionary<string, object>
+        {
+            ["evidence"] = JsonSerializer.Serialize(new[] { file })
+        });
+
+        var result = _service.GetFiles(new FormFileFieldContext(_applicationId, null, null), "evidence");
+
+        Assert.Single(result);
+        Assert.Equal("stored.pdf", result[0].OriginalFileName);
+    }
+
+    [Fact]
+    public void ReplaceUploadPlaceholders_leaves_placeholder_when_session_and_accumulated_data_are_empty()
+    {
+        var data = new Dictionary<string, object>
+        {
+            ["upload"] = FormEngineConstants.UploadFieldSessionPlaceholder
+        };
+
+        _service.ReplaceUploadPlaceholders(data, new FormFileFieldContext(_applicationId, null, null));
+
+        Assert.Equal(FormEngineConstants.UploadFieldSessionPlaceholder, data["upload"]);
+    }
+
+    [Fact]
+    public void ContainsFileName_matches_file_in_accumulated_data()
+    {
+        var file = new UploadDto { Id = Guid.NewGuid(), OriginalFileName = "archive.pdf" };
+        _responses.GetAccumulatedFormData().Returns(new Dictionary<string, object>
+        {
+            ["evidence"] = JsonSerializer.Serialize(new[] { file })
+        });
+
+        var result = _service.ContainsFileName(
+            new FormFileFieldContext(_applicationId, null, null),
+            "evidence",
+            "archive.pdf");
+
+        Assert.True(result);
+    }
 }

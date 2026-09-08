@@ -2,6 +2,7 @@
 @inject Application.Interfaces.IComplexFieldConfigurationService ComplexFieldConfigurationService
 @using System.Text.Json
 @using GovUK.Dfe.FlexForms.Web.Extensions
+@using GovUK.Dfe.FlexForms.Web.Utilities
 
 @if (!ViewData.ModelState.IsValid)
 {
@@ -44,6 +45,12 @@
 }
 
 <h1 class="govuk-heading-xl govuk-!-margin-bottom-6">@Model.CurrentTask.TaskName</h1>
+
+@if (!string.IsNullOrEmpty(Model.CurrentTask.Summary?.Description))
+{
+    var (hintHtml, hintClass) = MarkdownSafe.RenderHintWithClass(Model.CurrentTask.Summary.Description);
+    <div class="govuk-body">@Html.Raw(hintHtml)</div>
+}
 
 <dl class="govuk-summary-list">
     @foreach (var page in (Model.CurrentTask.Pages ?? new List<GovUK.Dfe.FlexForms.Domain.Models.Page>()).OrderBy(p => p.PageOrder).Where(p => !Model.IsPageHidden(p.PageId)))

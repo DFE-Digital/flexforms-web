@@ -4,6 +4,7 @@ using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Application.Admin;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Task = System.Threading.Tasks.Task;
 
 namespace GovUK.Dfe.FlexForms.Application.Tests.Admin;
@@ -117,5 +118,139 @@ public class TenantSettingsAdminServiceTests
         Assert.Equal(TenantSettingsMessages.Deleted("Layout", "Web"), result.SuccessMessage);
         Assert.True(result.RefreshLocalCaches);
         await _client.Received(1).DeleteTenantSettingAsync(_state.TenantId, "Layout", "Web", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task LoadAsync_ShouldPopulateSettings_WhenApiSucceeds()
+    {
+        _client.GetTenantSettingsAsync(_state.TenantId, Arg.Any<CancellationToken>())
+            .Returns(new GetTenantSettingsResponse(
+                _state.TenantId,
+                "Transfers",
+                [new TenantSettingDto(Guid.NewGuid(), "Layout", "Web", "{}", false, DateTime.UtcNow)]));
+
+        await _service.LoadAsync(_state);
+
+        Assert.Equal("Transfers", _state.TenantName);
+        Assert.Single(_state.Settings);
+        Assert.False(_state.HasError);
+    }
+
+    [Fact]
+    public async Task LoadAsync_ShouldSetError_WhenSettingsApiFails()
+    {
+        _client.GetTenantSettingsAsync(_state.TenantId, Arg.Any<CancellationToken>())
+            .Throws(new ExternalApplicationsException("boom", 500, "err", null!, null!));
+
+        await _service.LoadAsync(_state);
+
+        Assert.True(_state.HasError);
+        Assert.Equal(TenantSettingsMessages.LoadFailed + " (HTTP 500)", _state.ErrorMessage);
+        Assert.Empty(_state.Settings);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldUpsertSecretSetting_WhenInputIsValid()
+    {
+        var result = await _service.UpdateAsync(_state, "Secrets", "Api", """{"key":"value"}""", isSecret: true);
+
+        Assert.Equal(TenantSettingsMessages.Updated("Secrets", "Api"), result.SuccessMessage);
+        await _client.Received(1).UpsertTenantSettingAsync(
+            _state.TenantId,
+            Arg.Is<UpsertTenantSettingRequest>(r => r.IsSecret && r.Category == "Secrets"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldRedirectWithError_WhenApiFails()
+    {
+        _client.UpsertTenantSettingAsync(
+                Arg.Any<Guid>(),
+                Arg.Any<UpsertTenantSettingRequest>(),
+                Arg.Any<CancellationToken>())
+            .Throws(new ExternalApplicationsException("boom", 500, "err", null!, null!));
+
+        var result = await _service.UpdateAsync(_state, "Layout", "Web", "{}", false);
+
+        Assert.Equal(TenantSettingsMessages.UpdateFailed + " (HTTP 500)", result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task ValidateAsync_ShouldCallApi_WhenInputIsValid()
+    {
+        var preview = new ValidateTenantSettingResponse(true, [], null, null, "{}", false);
+        _client.ValidateTenantSettingAsync(_state.TenantId, Arg.Any<ValidateTenantSettingRequest>(), Arg.Any<CancellationToken>())
+            .Returns(preview);
+        _client.GetTenantSettingsAsync(_state.TenantId, Arg.Any<CancellationToken>())
+            .Returns(new GetTenantSettingsResponse(_state.TenantId, "Transfers", []));
+
+        var result = await _service.ValidateAsync(_state, "Layout", "Web", "{}", false);
+
+        Assert.Equal(AdminPageOutcomeKind.StayOnPage, result.Kind);
+        Assert.Equal(preview, _state.ValidationPreview);
+        Assert.False(_state.HasError);
+    }
+
+    [Fact]
+    public async Task ExportAsync_ShouldReturnFile_WhenApiSucceeds()
+    {
+        _client.ExportConfigurationAsync(_state.TenantId, Arg.Any<CancellationToken>())
+            .Returns(new ExportTenantConfigurationDto(_state.TenantId, "Transfers", DateTimeOffset.UtcNow, []));
+
+        var result = await _service.ExportAsync(_state);
+
+        Assert.Equal(AdminPageOutcomeKind.FileDownload, result.Kind);
+        Assert.Equal("application/json", result.FileContentType);
+        Assert.NotNull(result.FileBytes);
+    }
+
+    [Fact]
+    public async Task ExportAsync_ShouldRedirect_WhenApiFails()
+    {
+        _client.ExportConfigurationAsync(_state.TenantId, Arg.Any<CancellationToken>())
+            .Throws(new ExternalApplicationsException("boom", 502, "err", null!, null!));
+
+        var result = await _service.ExportAsync(_state);
+
+        Assert.Equal(TenantSettingsMessages.ExportFailed + " (HTTP 502)", result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task ImportAsync_ShouldImportAndRefresh_WhenJsonIsValid()
+    {
+        var json = """
+            {
+              "settings": [
+                { "category": "Layout", "target": "Web", "settingsJson": "{}", "isSecret": false }
+              ]
+            }
+            """;
+        _client.ImportConfigurationAsync(_state.TenantId, Arg.Any<ImportTenantConfigurationDto>(), Arg.Any<CancellationToken>())
+            .Returns(new ImportTenantConfigurationResultDto(1, 0, []));
+
+        var result = await _service.ImportAsync(_state, json);
+
+        Assert.Equal(TenantSettingsMessages.Imported(1, 0), result.SuccessMessage);
+        Assert.True(result.RefreshLocalCaches);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_ShouldRedirectWithSuccess_WhenApiSucceeds()
+    {
+        var result = await _service.RefreshAsync(_state);
+
+        Assert.Equal(TenantSettingsMessages.RefreshSuccess, result.SuccessMessage);
+        await _client.Received(1).RefreshTenantConfigurationAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task DeleteAsync_ShouldRedirectWithError_WhenApiFails()
+    {
+        _client.DeleteTenantSettingAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Throws(new ExternalApplicationsException("boom", 404, "err", null!, null!));
+
+        var result = await _service.DeleteAsync(_state, "Layout", "Web");
+
+        Assert.Equal(TenantSettingsMessages.DeleteFailed + " (HTTP 404)", result.ErrorMessage);
     }
 }

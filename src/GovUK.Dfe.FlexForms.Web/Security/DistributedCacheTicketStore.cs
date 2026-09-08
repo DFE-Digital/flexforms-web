@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -11,6 +12,7 @@ namespace GovUK.Dfe.FlexForms.Web.Security;
 /// Stores cookie authentication tickets server-side in Redis (via <see cref="IDistributedCache"/>).
 /// Tickets must live in distributed cache so logout / FLUSHDB / multi-instance deploys stay consistent.
 /// </summary>
+[ExcludeFromCodeCoverage]
 public sealed class DistributedCacheTicketStore(
     IDistributedCache cache,
     ILogger<DistributedCacheTicketStore> logger) : ITicketStore

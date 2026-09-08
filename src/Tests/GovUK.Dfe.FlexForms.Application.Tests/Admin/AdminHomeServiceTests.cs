@@ -5,6 +5,7 @@ using GovUK.Dfe.FlexForms.Application.Admin;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using Task = System.Threading.Tasks.Task;
 
 namespace GovUK.Dfe.FlexForms.Application.Tests.Admin;
@@ -101,5 +102,56 @@ public class AdminHomeServiceTests
         await _service.LoadAsync(state);
 
         Assert.Same(summary, state.TenantConfigurationSummary);
+    }
+
+    [Fact]
+    public async Task SetTemplateLiveAsync_ShouldRedirect_WhenSettingNotLive()
+    {
+        var templateId = Guid.NewGuid();
+
+        var result = await _service.SetTemplateLiveAsync(templateId, isLive: false);
+
+        Assert.Equal(AdminHomeMessages.TemplateNotLive, result.SuccessMessage);
+        await _templates.Received(1).SetTemplateLiveAsync(
+            templateId,
+            Arg.Is<SetTemplateLiveRequest>(r => !r.IsLive),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SetTemplateLiveAsync_ShouldRedirectWithError_WhenApiFails()
+    {
+        var templateId = Guid.NewGuid();
+        _templates.SetTemplateLiveAsync(templateId, Arg.Any<SetTemplateLiveRequest>(), Arg.Any<CancellationToken>())
+            .Throws(new ExternalApplicationsException("boom", 500, "err", null!, null!));
+
+        var result = await _service.SetTemplateLiveAsync(templateId, isLive: true);
+
+        Assert.Equal(AdminHomeMessages.SetLiveFailed, result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task LoadAsync_ShouldOrderTemplatesLiveFirst()
+    {
+        var live = new TemplateDto
+        {
+            TemplateId = Guid.NewGuid(),
+            Name = "Zed",
+            CreatedOn = DateTime.UtcNow,
+            IsLive = true
+        };
+        var draft = new TemplateDto
+        {
+            TemplateId = Guid.NewGuid(),
+            Name = "Alpha",
+            CreatedOn = DateTime.UtcNow,
+            IsLive = false
+        };
+        _templates.GetAccessibleTemplatesAsync(Arg.Any<CancellationToken>()).Returns([draft, live]);
+        var state = new AdminHomeWorkState();
+
+        await _service.LoadAsync(state);
+
+        Assert.Equal(new[] { live.TemplateId, draft.TemplateId }, state.TenantTemplates.Select(t => t.TemplateId));
     }
 }

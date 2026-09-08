@@ -141,11 +141,11 @@ public class RenderFormModelCharacterizationTests
         _fixture.Register(() => _fieldRequirements);
 
         _applicationsClient = Substitute.For<IApplicationsClient>();
-        _applicationsClient.GetFileValidationGateAsync(Arg.Any<Guid>())
+        _applicationsClient.GetFileValidationGateAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(new FileValidationGateDto { CanSubmit = true, BlockingFiles = [] });
         _applicationsClient.GetFilesForApplicationAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(new ObservableCollection<UploadDto>());
-        _applicationsClient.SubmitApplicationAsync(Arg.Any<Guid>())
+        _applicationsClient.SubmitApplicationAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(new ApplicationDto { ApplicationReference = "REF-1" });
         _fixture.Register(() => _applicationsClient);
 
@@ -503,7 +503,7 @@ public class RenderFormModelCharacterizationTests
     [Fact]
     public async Task OnPostSubmitApplicationAsync_ShouldReturnPage_WhenFileValidationGateBlocksSubmit()
     {
-        _applicationsClient.GetFileValidationGateAsync(Arg.Any<Guid>())
+        _applicationsClient.GetFileValidationGateAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(new FileValidationGateDto
             {
                 CanSubmit = false,
@@ -524,7 +524,7 @@ public class RenderFormModelCharacterizationTests
         var result = Assert.IsType<RedirectToPageResult>(await _model.OnPostSubmitApplicationAsync());
 
         Assert.Equal("/Applications/ApplicationSubmitted", result.PageName);
-        await _applicationsClient.Received().SubmitApplicationAsync(_applicationId);
+        await _applicationsClient.Received().SubmitApplicationAsync(_applicationId, Arg.Any<CancellationToken>());
     }
 
     [Fact]

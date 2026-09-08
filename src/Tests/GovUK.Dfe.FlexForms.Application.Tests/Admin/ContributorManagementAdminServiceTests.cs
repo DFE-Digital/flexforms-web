@@ -189,4 +189,17 @@ public class ContributorManagementAdminServiceTests
         Assert.Equal(ContributorManagementMessages.UserNotFound, state.ErrorMessage);
         Assert.Empty(state.CreatedApplications);
     }
+
+    [Fact]
+    public async Task LookupByEmailAsync_ShouldSetError_WhenGenericApiFails()
+    {
+        var state = new ContributorManagementWorkState { Email = "owner@example.test" };
+        _users.GetCreatedApplicationsByEmailAsync("owner@example.test", Arg.Any<CancellationToken>())
+            .Throws(new ExternalApplicationsException("boom", 500, "err", null!, null!));
+
+        await _service.LookupByEmailAsync(state);
+
+        Assert.True(state.HasError);
+        Assert.Equal(ContributorManagementMessages.EmailLookupFailed + " (HTTP 500)", state.ErrorMessage);
+    }
 }

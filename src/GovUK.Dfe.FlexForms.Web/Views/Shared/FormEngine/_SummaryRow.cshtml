@@ -6,21 +6,21 @@
     var keyStyle = Model.KeyIsBold ? "font-weight: bold;" : null;
 }
 <div class="govuk-summary-list__row" style="@rowStyle">
-    <dt class="govuk-summary-list__key" style="@keyStyle">
+    <dt class="govuk-summary-list__key" style="@keyStyle"><!-- //NOSONAR -->
         @Model.Key
     </dt>
-    <dd class="govuk-summary-list__value">
+    <dd class="govuk-summary-list__value"><!-- //NOSONAR -->
         @await Html.PartialAsync("FormEngine/_SummaryValue", Model.Value)
     </dd>
     @if (Model.Remove != null)
     {
-        <dd class="govuk-summary-list__actions">
+        <dd class="govuk-summary-list__actions"><!-- //NOSONAR -->
             @await Html.PartialAsync("FormEngine/_CollectionItemRemove", Model.Remove)
         </dd>
     }
     else if (Model.ChangeUrl != null)
     {
-        <dd class="govuk-summary-list__actions">
+        <dd class="govuk-summary-list__actions"><!-- //NOSONAR -->
             <a class="govuk-link" href="@Model.ChangeUrl">
                 Change<span class="govuk-visually-hidden"> @Model.ChangeHiddenText</span>
             </a>

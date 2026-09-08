@@ -47,7 +47,7 @@ public sealed class TemplateManagerAdminService(
             state.SelectedTemplateId = templateId;
             state.LatestVersionNumber = state.SelectedTemplate.LatestVersionNumber;
 
-            var versions = await templatesClient.GetTemplateVersionsAsync(templateId);
+            var versions = await templatesClient.GetTemplateVersionsAsync(templateId, cancellationToken);
             state.AvailableVersions = versions.ToList();
 
             if (state.AvailableVersions.Count == 0)
@@ -72,7 +72,8 @@ public sealed class TemplateManagerAdminService(
 
             var apiResponse = await templatesClient.GetTemplateSchemaByVersionAsync(
                 templateId,
-                selectedVersion.VersionNumber);
+                selectedVersion.VersionNumber,
+                cancellationToken);
 
             var schemaJson = apiResponse.JsonSchema;
             if (string.IsNullOrWhiteSpace(schemaJson))

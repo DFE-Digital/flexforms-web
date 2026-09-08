@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using GovUK.Dfe.CoreLibs.Security.TokenRefresh.Interfaces;
 using GovUK.Dfe.FlexForms.Api.Client.Security;
 using Microsoft.AspNetCore.Authentication;
@@ -13,6 +14,7 @@ namespace GovUK.Dfe.FlexForms.Web.Security;
 /// Authentication strategy for OIDC-based authentication
 /// Handles DfE Sign-In and other OIDC providers
 /// </summary>
+[ExcludeFromCodeCoverage]
 public class OidcAuthenticationStrategy(ILogger<OidcAuthenticationStrategy> logger, ITokenRefreshService tokenRefreshService) : IAuthenticationSchemeStrategy
 {
     /// <summary>

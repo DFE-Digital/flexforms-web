@@ -964,6 +964,8 @@ Trigger: `FileUploaded`. Metadata keys that exist **only** on this trigger:
 | `fileSize` | Bytes |
 | `uploaderUserId` | Uploader GUID |
 | `uploaderEmail` | When known |
+| `uploaderName` | Name of the uploader when known. May be an invited contributor rather than the lead applicant |
+| `leadApplicantName` | Name of the lead applicant — the user who created the application |
 | `uploadedOn` | UTC |
 
 Always available on **both** triggers: `applicationId`, `applicationReference`.

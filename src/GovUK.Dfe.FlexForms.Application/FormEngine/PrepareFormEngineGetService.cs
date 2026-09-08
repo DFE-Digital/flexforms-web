@@ -468,7 +468,7 @@ public sealed class PrepareFormEngineGetService(
 
         try
         {
-            var gate = await applicationsClient.GetFileValidationGateAsync(state.ApplicationId.Value);
+            var gate = await applicationsClient.GetFileValidationGateAsync(state.ApplicationId.Value, cancellationToken);
             _fileValidationBlocksSubmit = !gate.CanSubmit;
             _blockingFiles = gate.BlockingFiles ?? [];
         }

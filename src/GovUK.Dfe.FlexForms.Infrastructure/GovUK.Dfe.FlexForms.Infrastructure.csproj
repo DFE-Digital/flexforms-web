@@ -22,4 +22,8 @@
     <ProjectReference Include="..\GovUK.Dfe.FlexForms.Application\GovUK.Dfe.FlexForms.Application.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="GovUK.Dfe.FlexForms.Infrastructure.UnitTests" />
+  </ItemGroup>
+
 </Project>

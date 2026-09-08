@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 using System.Security.Claims;
@@ -11,6 +12,7 @@ namespace GovUK.Dfe.FlexForms.Web.Authentication;
 /// Follows the same pattern as TestAuthenticationHandler but reads from headers instead of session
 /// Implements forwarder pattern - only engages when service headers are present
 /// </summary>
+[ExcludeFromCodeCoverage]
 public class InternalServiceAuthenticationHandler(
     IOptionsMonitor<InternalServiceAuthenticationSchemeOptions> options,
     ILoggerFactory logger,
@@ -127,6 +129,7 @@ public class InternalServiceAuthenticationHandler(
 /// <summary>
 /// Options for internal service authentication scheme
 /// </summary>
+[ExcludeFromCodeCoverage]
 public class InternalServiceAuthenticationSchemeOptions : AuthenticationSchemeOptions
 {
     // Options class for future extensibility

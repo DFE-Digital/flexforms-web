@@ -75,6 +75,8 @@ public sealed class EventMappingsModel(
         new("fileSize", "File size in bytes"),
         new("uploaderUserId", "User id of the uploader"),
         new("uploaderEmail", "Email of the uploader when known"),
+        new("uploaderName", "Name of the uploader when known (a contributor may not be the lead applicant)"),
+        new("leadApplicantName", "Name of the lead applicant — the user who created the application"),
         new("uploadedOn", "UTC timestamp when the file was uploaded")
     ];
 

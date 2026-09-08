@@ -18,4 +18,8 @@
     <ProjectReference Include="..\GovUK.Dfe.FlexForms.Domain\GovUK.Dfe.FlexForms.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="GovUK.Dfe.FlexForms.Application.Tests" />
+  </ItemGroup>
+
 </Project>
