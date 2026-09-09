@@ -1,0 +1,33 @@
+{
+  "name": "dfe.externalapplications.playwrighttests",
+  "version": "1.0.0",
+  "description": "Playwright UI tests for DfE.ExternalApplications.Web",
+  "scripts": {
+    "pl:run": "playwright test",
+    "pl:open": "playwright test --ui",
+    "pl:test:report": "playwright show-report",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.61.1",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^26.1.0",
+    "axios": "^1.9.0",
+    "dotenv": "^17.4.2",
+    "eslint": "^10.6.0",
+    "eslint-config-prettier": "^10.1.1",
+    "eslint-plugin-playwright": "^2.2.2",
+    "globals": "^16.0.0",
+    "jsonwebtoken": "^9.0.3",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.26.0"
+  }
+}
