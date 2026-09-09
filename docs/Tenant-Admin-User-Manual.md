@@ -1174,6 +1174,7 @@ These are sent even when `EmailPlaceholderMappings` is empty. Put the matching `
 | Personalisation key | What the invitee sees |
 |---------------------|------------------------|
 | `contributor_name` | Contributor’s name |
+| `lead_applicant_name` | Name of the lead applicant — the user who created the application |
 | `application_reference` | Application reference |
 | `added_date` | Date as `dd/MM/yyyy` |
 | `added_time` | Time as `HH:mm` |
@@ -1183,6 +1184,7 @@ These are sent even when `EmailPlaceholderMappings` is empty. Put the matching `
 | Personalisation key | What the contributor sees |
 |---------------------|---------------------------|
 | `contributor_name` | Contributor’s name |
+| `lead_applicant_name` | Name of the lead applicant — the user who created the application |
 | `application_reference` | Application reference |
 | `granted_date` | Date as `dd/MM/yyyy` |
 | `granted_time` | Time as `HH:mm` |
@@ -1341,6 +1343,7 @@ Use `"sourceType": "Metadata"` and set `sourceFieldId` to one of these.
 |-----------------|--------|
 | `contributorName` | Contributor display name |
 | `contributorEmail` | Contributor email |
+| `leadApplicantName` | Name of the lead applicant — the user who created the application |
 | `addedOn` | When they were added |
 
 **Contributor access granted only**
@@ -1349,6 +1352,7 @@ Use `"sourceType": "Metadata"` and set `sourceFieldId` to one of these.
 |-----------------|--------|
 | `contributorName` | Contributor display name |
 | `contributorEmail` | Contributor email |
+| `leadApplicantName` | Name of the lead applicant — the user who created the application |
 | `grantedOn` | When access was granted |
 | `accessTypes` | Access types string |
 
