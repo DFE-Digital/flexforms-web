@@ -1,6 +1,6 @@
 import './load-env';
+import { getDefaultAuthUser } from './auth-users';
 import { requireEnvironmentVariable } from './environment';
-import { requireApiKey } from './test-config';
 import type { ApiConfig } from './types';
 
 function resolveTokenLifetimeMinutes(): number {
@@ -18,11 +18,13 @@ function resolveTokenLifetimeMinutes(): number {
 }
 
 export function createApiConfig(): ApiConfig {
+  const defaultUser = getDefaultAuthUser();
+
   return {
     baseUrl: requireEnvironmentVariable('API_BASE_URL').replace(/\/$/, ''),
     tenantId: requireEnvironmentVariable('TENANT_ID'),
-    serviceEmail: requireEnvironmentVariable('SERVICE_EMAIL'),
-    serviceApiKey: requireApiKey(),
+    serviceEmail: defaultUser.email,
+    serviceApiKey: defaultUser.apiKey,
     templateId: requireEnvironmentVariable('TEMPLATE_ID'),
     internalServiceAuth: {
       secretKey: requireEnvironmentVariable('JWT_SIGNING_KEY'),

@@ -5,6 +5,12 @@ export interface Terminology {
   plural: string;
 }
 
+export interface AuthUser {
+  name: string;
+  email: string;
+  apiKey: string;
+}
+
 export interface ServiceConfig {
   name: ServiceName;
   url: string;

@@ -1,7 +1,12 @@
 import type { Page } from '@playwright/test';
+import { resolveAuthUser, type AuthUserName } from './auth-users';
+import { setContextAuthUser } from './authenticationInterceptor';
 import { getServiceConfigFromEnv } from './test-config';
 
-export async function login(page: Page): Promise<void> {
+export async function login(page: Page, userName?: AuthUserName): Promise<void> {
+  const user = resolveAuthUser(userName);
+  setContextAuthUser(page.context(), user);
+
   await page.context().clearCookies();
   await page.context().clearPermissions();
   await page.context().addCookies([
