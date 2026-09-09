@@ -23,28 +23,58 @@ namespace GovUK.Dfe.FlexForms.Web.Utilities
 
         private static readonly HtmlSanitizer SanitizerHttpsOnly = CreateSanitizer(allowHttp: false);
         private static readonly HtmlSanitizer SanitizerHttpAndHttps = CreateSanitizer(allowHttp: true);
+        private static readonly HtmlSanitizer SanitizerGovUkContent = CreateSanitizer(
+            allowHttp: false,
+            allowMailto: true,
+            allowHeadings: true);
+
+        private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(250);
 
         // Strip anchors without href
         private static readonly Regex AnchorWithoutHref =
-            new(@"<a(?![^>]*\bhref=)[^>]*>(.*?)</a>", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
+            new(@"<a(?![^>]*\bhref=)[^>]*>(.*?)</a>", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled, RegexTimeout);
 
         // Empty paragraphs
         private static readonly Regex EmptyParagraph =
-            new(@"<p>\s*</p>", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
+            new(@"<p>\s*</p>", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled, RegexTimeout);
 
         // Exactly one <p>...</p>
         private static readonly Regex SingleParagraph =
-            new(@"^\s*<p>([\s\S]*)<\/p>\s*$", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
+            new(@"^\s*<p>([\s\S]*)<\/p>\s*$", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled, RegexTimeout);
 
         // Count paragraph tags
         private static readonly Regex ParagraphTag =
-            new(@"<p\b[^>]*>", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
+            new(@"<p\b[^>]*>", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled, RegexTimeout);
 
         // Presence of a list block
         private static readonly Regex HasListBlock =
-            new(@"<\s*(ul|ol)\b", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
+            new(@"<\s*(ul|ol)\b", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled, RegexTimeout);
 
-        private static HtmlSanitizer CreateSanitizer(bool allowHttp)
+        private static readonly Regex ParagraphOpen =
+            new(@"<p\b([^>]*)>", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout);
+
+        private static readonly Regex UnorderedListOpen =
+            new(@"<ul\b([^>]*)>", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout);
+
+        private static readonly Regex OrderedListOpen =
+            new(@"<ol\b([^>]*)>", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout);
+
+        private static readonly Regex Heading1Open =
+            new(@"<h1\b([^>]*)>", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout);
+
+        private static readonly Regex Heading2Open =
+            new(@"<h2\b([^>]*)>", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout);
+
+        private static readonly Regex Heading3Open =
+            new(@"<h3\b([^>]*)>", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout);
+
+        private static readonly Regex AnchorOpen =
+            new(@"<a\b([^>]*)>", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout);
+
+        private static HtmlSanitizer CreateSanitizer(
+            bool allowHttp,
+            bool allowMailto = false,
+            bool allowHeadings = false)
         {
             var s = new HtmlSanitizer();
 
@@ -58,17 +88,26 @@ namespace GovUK.Dfe.FlexForms.Web.Utilities
             s.AllowedTags.Add("ol");
             s.AllowedTags.Add("li");
             s.AllowedTags.Add("a");
+            if (allowHeadings)
+            {
+                s.AllowedTags.Add("h1");
+                s.AllowedTags.Add("h2");
+                s.AllowedTags.Add("h3");
+            }
 
             // Allowed attributes
             s.AllowedAttributes.Clear();
             s.AllowedAttributes.Add("href");
             s.AllowedAttributes.Add("target");
             s.AllowedAttributes.Add("rel");
+            if (allowHeadings)
+                s.AllowedAttributes.Add("class");
 
             // Allowed schemes
             s.AllowedSchemes.Clear();
             s.AllowedSchemes.Add("https");
             if (allowHttp) s.AllowedSchemes.Add("http");
+            if (allowMailto) s.AllowedSchemes.Add("mailto");
 
             // Normalise anchors after sanitising
             s.PostProcessNode += (_, e) =>
@@ -125,6 +164,49 @@ namespace GovUK.Dfe.FlexForms.Web.Utilities
             safe = EmptyParagraph.Replace(safe, string.Empty);
 
             return safe;
+        }
+
+        /// <summary>
+        /// Convert Markdown to sanitised HTML with GOV.UK content classes.
+        /// Allows headings and mailto links for admin-authored confirmation copy.
+        /// </summary>
+        public static string ToSafeGovUkHtml(string? markdown, int maxChars = 20000)
+        {
+            if (string.IsNullOrWhiteSpace(markdown))
+                return string.Empty;
+
+            if (markdown.Length > maxChars)
+                markdown = markdown.Substring(0, maxChars);
+
+            markdown = NormaliseWhitespace(markdown);
+
+            var rawHtml = Markdig.Markdown.ToHtml(markdown, Pipeline);
+            var safe = SanitizerGovUkContent.Sanitize(rawHtml);
+
+            safe = AnchorWithoutHref.Replace(safe, "$1");
+            safe = EmptyParagraph.Replace(safe, string.Empty);
+
+            return ApplyGovUkContentClasses(safe);
+        }
+
+        private static string ApplyGovUkContentClasses(string html)
+        {
+            html = ParagraphOpen.Replace(html, "<p class=\"govuk-body\"$1>");
+            html = UnorderedListOpen.Replace(html, "<ul class=\"govuk-list govuk-list--bullet\"$1>");
+            html = OrderedListOpen.Replace(html, "<ol class=\"govuk-list govuk-list--number\"$1>");
+            html = Heading1Open.Replace(html, "<h1 class=\"govuk-heading-l\"$1>");
+            html = Heading2Open.Replace(html, "<h2 class=\"govuk-heading-m\"$1>");
+            html = Heading3Open.Replace(html, "<h3 class=\"govuk-heading-s\"$1>");
+            html = AnchorOpen.Replace(html, MatchGovUkLink);
+            return html;
+        }
+
+        private static string MatchGovUkLink(Match match)
+        {
+            var attrs = match.Groups[1].Value;
+            return attrs.Contains("govuk-link", StringComparison.OrdinalIgnoreCase)
+                ? match.Value
+                : $"<a class=\"govuk-link\"{attrs}>";
         }
 
         /// <summary>

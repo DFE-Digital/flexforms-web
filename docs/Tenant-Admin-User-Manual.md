@@ -21,6 +21,7 @@ You do not need to be a developer to use this manual. Where a change is made in 
 9. [Roles](#9-roles)
 10. [Permissions — how they work](#10-permissions--how-they-work)
 11. [Organisation settings](#11-organisation-settings)
+    - [11.4 Application submitted page](#114-application-submitted-page)
 12. [Event mappings](#12-event-mappings)
     - [12.1 What this page is for](#121-what-this-page-is-for)
     - [12.2 Events in plain English](#122-events-in-plain-english)
@@ -625,6 +626,25 @@ Show a GOV.UK notification banner on **every page** (for example “This is a te
 | **Start new button text** | Primary button label. Leave blank to use **Start new {singular}** |
 
 Listing options do **not** change which columns appear. Columns come from the template JSON ([section 7](#7-dashboard-columns-via-the-template)).
+
+### 11.4 Application submitted page
+
+Customise the confirmation page after submit (`/application-submitted/{reference}`). This category is **per template**.
+
+| Field | Purpose |
+|-------|---------|
+| **Template** | A form from this tenant’s catalogue, or **Default (all templates)** as the fallback |
+| **Confirmation title** | Green panel heading (for example `Plan submitted`). Leave blank to use **{Singular} submitted** |
+| **Page body** | Markdown for everything below the reference number |
+
+Markdown uses the same **Markdig** renderer as form hints. Supported:
+
+- `## Heading` / `### Subheading`
+- Bullet lists (`- item`) and numbered lists (`1. item`)
+- **Bold** and *italic*
+- Links: `[text](https://…)` or `[email](mailto:name@example.com)`
+
+Raw HTML is stripped. Save settings before switching template if you have unsaved changes.
 
 ---
 
@@ -1519,6 +1539,7 @@ Prefer the dedicated screens first. If you must use this page, these categories 
 | **ApplicationTerminology** | Web | Singular / plural labels | Organisation settings |
 | **NotificationBanner** | Web | Site-wide banner | Organisation settings |
 | **Dashboard** | Web | Page size, filters, and dashboard display text | Organisation settings |
+| **ApplicationSubmittedPage** | Web | Per-template confirmation title and markdown body | Organisation settings |
 | **EventMappings** | Shared | Field mappings | Event mappings |
 | **SchemaEvents** | Shared | Tenant event shapes | Event mappings |
 | **EventTriggers** | Shared | Submit / upload publish bindings | Event mappings |

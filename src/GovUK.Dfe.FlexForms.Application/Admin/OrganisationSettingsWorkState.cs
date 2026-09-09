@@ -1,3 +1,5 @@
+using GovUK.Dfe.FlexForms.Application.Options;
+
 namespace GovUK.Dfe.FlexForms.Application.Admin;
 
 /// <summary>
@@ -42,6 +44,17 @@ public sealed class OrganisationSettingsWorkState
     public string? PreviewSubmitButtonText { get; set; }
 
     public bool PreviewHideSubmitSection { get; set; }
+
+    public string? SubmittedTemplateId { get; set; }
+
+    public IReadOnlyList<AdminSelectOption> SubmittedTemplateOptions { get; set; } = [];
+
+    public string? SubmittedPanelTitle { get; set; }
+
+    public string? SubmittedBodyMarkdown { get; set; }
+
+    public Dictionary<string, ApplicationSubmittedPageCopy> SubmittedPageByTemplate { get; set; } =
+        new(StringComparer.OrdinalIgnoreCase);
 
     public bool HasError { get; set; }
 
