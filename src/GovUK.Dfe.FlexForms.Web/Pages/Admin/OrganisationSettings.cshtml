@@ -54,11 +54,11 @@
 
         <h1 class="govuk-heading-xl">Organisation settings</h1>
         <p class="govuk-body">
-            Update display terminology, the site-wide notification banner, dashboard, and check-your-answers options for
+            Update display terminology, the site-wide notification banner, dashboard, check-your-answers, and application submitted page options for
             <strong>@(string.IsNullOrWhiteSpace(Model.TenantName) ? Model.TenantId.ToString() : Model.TenantName)</strong>.
         </p>
         <p class="govuk-hint">
-            Changes apply after save. You may need to refresh the page to see banner, terminology, dashboard, or preview text updates.
+            Changes apply after save. You may need to refresh the page to see banner, terminology, dashboard, preview, or submitted page text updates.
         </p>
 
         <form method="post">
@@ -229,6 +229,44 @@
                             </div>
                         </div>
                         <div class="govuk-hint">Removes the submit heading, hint, and button from the preview page.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="govuk-summary-card">
+                <div class="govuk-summary-card__title-wrapper">
+                    <h2 class="govuk-summary-card__title">Application submitted page</h2>
+                </div>
+                <div class="govuk-summary-card__content">
+                    <p class="govuk-body">
+                        Customise the confirmation page shown after someone submits a form.
+                        Choose a template, or <strong>Default (all templates)</strong> as the fallback.
+                    </p>
+                    <p class="govuk-hint">
+                        Leave a field blank to use the default. Save settings before switching template if you have unsaved changes.
+                    </p>
+
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="SubmittedTemplateId">Template</label>
+                        <select class="govuk-select" asp-for="SubmittedTemplateId" asp-items="Model.SubmittedTemplateOptions"
+                                id="SubmittedTemplateId"
+                                onchange="window.location='?SubmittedTemplateId=' + encodeURIComponent(this.value)">
+                        </select>
+                    </div>
+
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="SubmittedPanelTitle">Confirmation title</label>
+                        <div class="govuk-hint">Shown in the green panel, for example Plan submitted. Leave blank to use “{singular} submitted”.</div>
+                        <input class="govuk-input" asp-for="SubmittedPanelTitle" id="SubmittedPanelTitle" autocomplete="off" />
+                    </div>
+
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="SubmittedBodyMarkdown">Page body</label>
+                        <div class="govuk-hint">
+                            Markdown for everything below the reference number. Use ## for headings, - for bullet lists,
+                            **bold**, and [text](mailto:name@example.com) or https links.
+                        </div>
+                        <textarea class="govuk-textarea" asp-for="SubmittedBodyMarkdown" id="SubmittedBodyMarkdown" rows="16"></textarea>
                     </div>
                 </div>
             </div>

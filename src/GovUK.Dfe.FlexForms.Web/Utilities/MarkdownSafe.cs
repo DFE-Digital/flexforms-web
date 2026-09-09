@@ -23,6 +23,10 @@ namespace GovUK.Dfe.FlexForms.Web.Utilities
 
         private static readonly HtmlSanitizer SanitizerHttpsOnly = CreateSanitizer(allowHttp: false);
         private static readonly HtmlSanitizer SanitizerHttpAndHttps = CreateSanitizer(allowHttp: true);
+        private static readonly HtmlSanitizer SanitizerGovUkContent = CreateSanitizer(
+            allowHttp: false,
+            allowMailto: true,
+            allowHeadings: true);
 
         // Strip anchors without href
         private static readonly Regex AnchorWithoutHref =
@@ -44,7 +48,10 @@ namespace GovUK.Dfe.FlexForms.Web.Utilities
         private static readonly Regex HasListBlock =
             new(@"<\s*(ul|ol)\b", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
 
-        private static HtmlSanitizer CreateSanitizer(bool allowHttp)
+        private static HtmlSanitizer CreateSanitizer(
+            bool allowHttp,
+            bool allowMailto = false,
+            bool allowHeadings = false)
         {
             var s = new HtmlSanitizer();
 
@@ -58,17 +65,26 @@ namespace GovUK.Dfe.FlexForms.Web.Utilities
             s.AllowedTags.Add("ol");
             s.AllowedTags.Add("li");
             s.AllowedTags.Add("a");
+            if (allowHeadings)
+            {
+                s.AllowedTags.Add("h1");
+                s.AllowedTags.Add("h2");
+                s.AllowedTags.Add("h3");
+            }
 
             // Allowed attributes
             s.AllowedAttributes.Clear();
             s.AllowedAttributes.Add("href");
             s.AllowedAttributes.Add("target");
             s.AllowedAttributes.Add("rel");
+            if (allowHeadings)
+                s.AllowedAttributes.Add("class");
 
             // Allowed schemes
             s.AllowedSchemes.Clear();
             s.AllowedSchemes.Add("https");
             if (allowHttp) s.AllowedSchemes.Add("http");
+            if (allowMailto) s.AllowedSchemes.Add("mailto");
 
             // Normalise anchors after sanitising
             s.PostProcessNode += (_, e) =>
@@ -125,6 +141,49 @@ namespace GovUK.Dfe.FlexForms.Web.Utilities
             safe = EmptyParagraph.Replace(safe, string.Empty);
 
             return safe;
+        }
+
+        /// <summary>
+        /// Convert Markdown to sanitised HTML with GOV.UK content classes.
+        /// Allows headings and mailto links for admin-authored confirmation copy.
+        /// </summary>
+        public static string ToSafeGovUkHtml(string? markdown, int maxChars = 20000)
+        {
+            if (string.IsNullOrWhiteSpace(markdown))
+                return string.Empty;
+
+            if (markdown.Length > maxChars)
+                markdown = markdown.Substring(0, maxChars);
+
+            markdown = NormaliseWhitespace(markdown);
+
+            var rawHtml = Markdig.Markdown.ToHtml(markdown, Pipeline);
+            var safe = SanitizerGovUkContent.Sanitize(rawHtml);
+
+            safe = AnchorWithoutHref.Replace(safe, "$1");
+            safe = EmptyParagraph.Replace(safe, string.Empty);
+
+            return ApplyGovUkContentClasses(safe);
+        }
+
+        private static string ApplyGovUkContentClasses(string html)
+        {
+            html = Regex.Replace(html, @"<p\b([^>]*)>", "<p class=\"govuk-body\"$1>", RegexOptions.IgnoreCase);
+            html = Regex.Replace(html, @"<ul\b([^>]*)>", "<ul class=\"govuk-list govuk-list--bullet\"$1>", RegexOptions.IgnoreCase);
+            html = Regex.Replace(html, @"<ol\b([^>]*)>", "<ol class=\"govuk-list govuk-list--number\"$1>", RegexOptions.IgnoreCase);
+            html = Regex.Replace(html, @"<h1\b([^>]*)>", "<h1 class=\"govuk-heading-l\"$1>", RegexOptions.IgnoreCase);
+            html = Regex.Replace(html, @"<h2\b([^>]*)>", "<h2 class=\"govuk-heading-m\"$1>", RegexOptions.IgnoreCase);
+            html = Regex.Replace(html, @"<h3\b([^>]*)>", "<h3 class=\"govuk-heading-s\"$1>", RegexOptions.IgnoreCase);
+            html = Regex.Replace(html, @"<a\b([^>]*)>", MatchGovUkLink, RegexOptions.IgnoreCase);
+            return html;
+        }
+
+        private static string MatchGovUkLink(Match match)
+        {
+            var attrs = match.Groups[1].Value;
+            return attrs.Contains("govuk-link", StringComparison.OrdinalIgnoreCase)
+                ? match.Value
+                : $"<a class=\"govuk-link\"{attrs}>";
         }
 
         /// <summary>

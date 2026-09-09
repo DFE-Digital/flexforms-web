@@ -1,43 +1,23 @@
 @page "/application-submitted/{referenceNumber}"
 @model ApplicationSubmittedModel
 @{
-    ViewData["Title"] = $"{AppTerminology.SingularCapitalised} submitted";
+    ViewData["Title"] = Model.PanelTitle;
 }
 <div class="govuk-grid-row">
     <div class="govuk-grid-column-two-thirds">
         <div class="govuk-panel govuk-panel--confirmation">
-            <h1 class="govuk-panel__title">@AppTerminology.SingularCapitalised submitted</h1>
+            <h1 class="govuk-panel__title">@Model.PanelTitle</h1>
             <div class="govuk-panel__body">
                 Your reference number<br>
                 <strong>@Model.ReferenceNumber</strong>
             </div>
         </div>
-        
-        <p class="govuk-body">We've sent you a confirmation email with your reference number.</p>
 
-        <h2 class="govuk-heading-m">What happens next</h2>
-        
-        <p class="govuk-body">Your @AppTerminology.Singular will be assigned to a staff member in DfE's Regions Group.</p>
-        
-        <p class="govuk-body">The staff member will contact you:</p>
-        
-        <ul class="govuk-list govuk-list--bullet">
-            <li>if we need anything else</li>
-            <li>when the @AppTerminology.Singular is ready for decision</li>
-        </ul>
-        
-        <p class="govuk-body">You must have approval for your @AppTerminology.Singular from DfE's Regions Group before you:</p>
-        
-        <ul class="govuk-list govuk-list--bullet">
-            <li>make any changes to the articles of association or any other trust documents</li>
-            <li>engage with stakeholders of the trust that academies are leaving</li>
-        </ul>
-
-        <h2 class="govuk-heading-m">Contact us</h2>
-
-        <p class="govuk-body">
-            If you have any questions about your @AppTerminology.Singular, you can email
-            <a href="mailto:RegionalServices.RG@education.gov.uk" class="govuk-link">RegionalServices.RG@education.gov.uk</a>.
-        </p>
+        @if (!string.IsNullOrWhiteSpace(Model.BodyHtml))
+        {
+            <div class="application-submitted-body">
+                @Html.Raw(Model.BodyHtml)
+            </div>
+        }
     </div>
 </div>

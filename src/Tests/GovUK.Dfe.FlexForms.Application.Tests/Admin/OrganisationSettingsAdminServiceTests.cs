@@ -1,7 +1,9 @@
+using System.Text;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Application.Admin;
+using GovUK.Dfe.FlexForms.Application.Options;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
@@ -12,6 +14,7 @@ namespace GovUK.Dfe.FlexForms.Application.Tests.Admin;
 public class OrganisationSettingsAdminServiceTests
 {
     private readonly ITenantAdminClient _client = Substitute.For<ITenantAdminClient>();
+    private readonly ITemplatesClient _templates = Substitute.For<ITemplatesClient>();
     private readonly OrganisationSettingsAdminService _service;
     private readonly OrganisationSettingsWorkState _state = new()
     {
@@ -28,7 +31,11 @@ public class OrganisationSettingsAdminServiceTests
 
     public OrganisationSettingsAdminServiceTests()
     {
-        _service = new OrganisationSettingsAdminService(_client, NullLogger<OrganisationSettingsAdminService>.Instance);
+        _templates.GetAccessibleTemplatesAsync(Arg.Any<CancellationToken>()).Returns([]);
+        _service = new OrganisationSettingsAdminService(
+            _client,
+            _templates,
+            NullLogger<OrganisationSettingsAdminService>.Instance);
     }
 
     [Fact]
@@ -59,6 +66,13 @@ public class OrganisationSettingsAdminServiceTests
                         "Web",
                         """{"PageHeading":"Review your visit","SubmitHeading":"Submit your visit","SubmitHint":"Please confirm","SubmitButtonText":"Send","HideSubmitSection":true}""",
                         false,
+                        DateTime.UtcNow),
+                    new TenantSettingDto(
+                        Guid.NewGuid(),
+                        "ApplicationSubmittedPage",
+                        "Web",
+                        """{"_default":{"PanelTitle":"Plan submitted","BodyMarkdown":"Thanks."}}""",
+                        false,
                         DateTime.UtcNow)
                 ]));
 
@@ -79,6 +93,9 @@ public class OrganisationSettingsAdminServiceTests
         Assert.Equal("Please confirm", _state.PreviewSubmitHint);
         Assert.Equal("Send", _state.PreviewSubmitButtonText);
         Assert.True(_state.PreviewHideSubmitSection);
+        Assert.Equal("_default", _state.SubmittedTemplateId);
+        Assert.Equal("Plan submitted", _state.SubmittedPanelTitle);
+        Assert.Equal("Thanks.", _state.SubmittedBodyMarkdown);
         Assert.False(_state.HasError);
     }
 
@@ -102,7 +119,7 @@ public class OrganisationSettingsAdminServiceTests
         Assert.Equal(AdminPageOutcomeKind.RedirectToPage, result.Kind);
         Assert.Equal(OrganisationSettingsMessages.Saved, result.SuccessMessage);
         Assert.True(result.RefreshLocalCaches);
-        await _client.Received(4).UpsertSafeTenantSettingAsync(
+        await _client.Received(5).UpsertSafeTenantSettingAsync(
             _state.TenantId,
             Arg.Any<UpsertTenantSettingRequest>(),
             Arg.Any<CancellationToken>());
@@ -123,5 +140,34 @@ public class OrganisationSettingsAdminServiceTests
         Assert.Equal(AdminPageOutcomeKind.StayOnPage, result.Kind);
         Assert.Equal(OrganisationSettingsMessages.SaveFailed + " (HTTP 403)", result.ErrorMessage);
         Assert.DoesNotContain("WAF", result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task SaveAsync_ShouldMergeSelectedSubmittedPageCopy()
+    {
+        var templateId = Guid.NewGuid();
+        _templates.GetAccessibleTemplatesAsync(Arg.Any<CancellationToken>()).Returns([
+            new TemplateDto { TemplateId = templateId, Name = "Transfers", CreatedOn = DateTime.UtcNow }
+        ]);
+        _state.SubmittedTemplateId = templateId.ToString();
+        _state.SubmittedPanelTitle = "Transfer submitted";
+        _state.SubmittedBodyMarkdown = "## Next\n\nWe will contact you.";
+        _state.SubmittedPageByTemplate["_default"] = new ApplicationSubmittedPageCopy
+        {
+            PanelTitle = "Plan submitted",
+            BodyMarkdown = "Default body"
+        };
+
+        await _service.SaveAsync(_state);
+
+        await _client.Received().UpsertSafeTenantSettingAsync(
+            _state.TenantId,
+            Arg.Is<UpsertTenantSettingRequest>(r =>
+                r.Category == "ApplicationSubmittedPage"
+                && Encoding.UTF8.GetString(Convert.FromBase64String(r.SettingsJson))
+                    .Contains("Transfer submitted", StringComparison.Ordinal)
+                && Encoding.UTF8.GetString(Convert.FromBase64String(r.SettingsJson))
+                    .Contains("Plan submitted", StringComparison.Ordinal)),
+            Arg.Any<CancellationToken>());
     }
 }
