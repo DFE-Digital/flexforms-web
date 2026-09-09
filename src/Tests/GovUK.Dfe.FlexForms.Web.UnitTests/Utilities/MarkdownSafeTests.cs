@@ -28,4 +28,25 @@ public class MarkdownSafeTests
         var html = MarkdownSafe.ToSafeHtml(new string('a', 50), maxChars: 10);
         Assert.DoesNotContain(new string('a', 50), html);
     }
+
+    [Fact]
+    public void ToSafeGovUkHtml_ShouldRenderHeadingsListsAndMailto()
+    {
+        var html = MarkdownSafe.ToSafeGovUkHtml(
+            "## What happens next\n\n- if we need anything else\n\nEmail [team@example.com](mailto:team@example.com).");
+
+        Assert.Contains("govuk-heading-m", html);
+        Assert.Contains("What happens next", html);
+        Assert.Contains("govuk-list govuk-list--bullet", html);
+        Assert.Contains("govuk-link", html);
+        Assert.Contains("mailto:team@example.com", html);
+        Assert.Contains("govuk-body", html);
+    }
+
+    [Fact]
+    public void ToSafeGovUkHtml_ShouldStripScripts()
+    {
+        var html = MarkdownSafe.ToSafeGovUkHtml("Hello <script>alert(1)</script>");
+        Assert.DoesNotContain("<script>", html);
+    }
 }

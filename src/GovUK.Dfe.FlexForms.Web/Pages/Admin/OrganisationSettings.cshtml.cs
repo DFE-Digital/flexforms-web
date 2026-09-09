@@ -6,6 +6,7 @@ using GovUK.Dfe.FlexForms.Web.Tenancy;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.Mvc.Rendering;
 
 namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 
@@ -98,6 +99,19 @@ public sealed class OrganisationSettingsModel(
     [BindProperty]
     public bool PreviewHideSubmitSection { get; set; }
 
+    [BindProperty(SupportsGet = true)]
+    public string? SubmittedTemplateId { get; set; }
+
+    public IReadOnlyList<SelectListItem> SubmittedTemplateOptions { get; private set; } = [];
+
+    [BindProperty]
+    [StringLength(200)]
+    public string? SubmittedPanelTitle { get; set; }
+
+    [BindProperty]
+    [StringLength(20000)]
+    public string? SubmittedBodyMarkdown { get; set; }
+
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
         ApplyTempData();
@@ -124,7 +138,10 @@ public sealed class OrganisationSettingsModel(
         }
 
         if (!ModelState.IsValid)
+        {
+            await ReloadSubmittedTemplateOptionsAsync(cancellationToken);
             return Page();
+        }
 
         TerminologySingular = TerminologySingular?.Trim() ?? string.Empty;
         TerminologyPlural = TerminologyPlural?.Trim() ?? string.Empty;
@@ -139,12 +156,13 @@ public sealed class OrganisationSettingsModel(
         PreviewSubmitHeading = PreviewSubmitHeading?.Trim() ?? string.Empty;
         PreviewSubmitHint = PreviewSubmitHint?.Trim() ?? string.Empty;
         PreviewSubmitButtonText = PreviewSubmitButtonText?.Trim() ?? string.Empty;
+        SubmittedPanelTitle = SubmittedPanelTitle?.Trim() ?? string.Empty;
 
         var outcome = await organisationSettingsAdmin.SaveAsync(CaptureWorkState(), cancellationToken);
-        return MapOutcome(outcome);
+        return await MapOutcome(outcome, cancellationToken);
     }
 
-    private IActionResult MapOutcome(AdminPageOutcome outcome)
+    private async Task<IActionResult> MapOutcome(AdminPageOutcome outcome, CancellationToken cancellationToken)
     {
         if (outcome.RefreshLocalCaches)
         {
@@ -163,10 +181,21 @@ public sealed class OrganisationSettingsModel(
                 ErrorMessage = outcome.ErrorMessage;
             }
 
+            await ReloadSubmittedTemplateOptionsAsync(cancellationToken);
             return Page();
         }
 
-        return RedirectToPage();
+        return RedirectToPage(new { SubmittedTemplateId });
+    }
+
+    private async Task ReloadSubmittedTemplateOptionsAsync(CancellationToken cancellationToken)
+    {
+        var state = CaptureWorkState();
+        await organisationSettingsAdmin.LoadTemplateOptionsAsync(state, cancellationToken);
+        SubmittedTemplateOptions = state.SubmittedTemplateOptions
+            .Select(o => new SelectListItem(o.Text, o.Value, o.Selected))
+            .ToList();
+        SubmittedTemplateId = state.SubmittedTemplateId;
     }
 
     private OrganisationSettingsWorkState CaptureWorkState() =>
@@ -190,7 +219,10 @@ public sealed class OrganisationSettingsModel(
             PreviewSubmitHeading = PreviewSubmitHeading,
             PreviewSubmitHint = PreviewSubmitHint,
             PreviewSubmitButtonText = PreviewSubmitButtonText,
-            PreviewHideSubmitSection = PreviewHideSubmitSection
+            PreviewHideSubmitSection = PreviewHideSubmitSection,
+            SubmittedTemplateId = SubmittedTemplateId,
+            SubmittedPanelTitle = SubmittedPanelTitle,
+            SubmittedBodyMarkdown = SubmittedBodyMarkdown
         };
 
     private void ApplyWorkState(OrganisationSettingsWorkState state)
@@ -214,6 +246,12 @@ public sealed class OrganisationSettingsModel(
         PreviewSubmitHint = state.PreviewSubmitHint;
         PreviewSubmitButtonText = state.PreviewSubmitButtonText;
         PreviewHideSubmitSection = state.PreviewHideSubmitSection;
+        SubmittedTemplateId = state.SubmittedTemplateId;
+        SubmittedTemplateOptions = state.SubmittedTemplateOptions
+            .Select(o => new SelectListItem(o.Text, o.Value, o.Selected))
+            .ToList();
+        SubmittedPanelTitle = state.SubmittedPanelTitle;
+        SubmittedBodyMarkdown = state.SubmittedBodyMarkdown;
         if (state.HasError)
         {
             HasError = true;
