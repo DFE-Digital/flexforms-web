@@ -1,4 +1,4 @@
-import type { Locator, Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import type { Terminology } from '../support/types';
 import { BasePage } from './BasePage';
 import { ApplicationsTable } from './components/ApplicationsTable';
@@ -27,6 +27,14 @@ export class DashboardPage extends BasePage {
     await this.filterReferenceInput().fill(reference);
   }
 
+  async expectApplicationPresent(reference: string): Promise<void> {
+    await expect(this.applicationLink(reference)).toBeVisible();
+  }
+
+  async expectApplicationNotPresent(reference: string): Promise<void> {
+    await expect(this.applicationLink(reference)).toHaveCount(0);
+  }
+
   private startNewApplicationButton(): Locator {
     return this.byId('start-new-application-button');
   }
@@ -41,5 +49,9 @@ export class DashboardPage extends BasePage {
 
   private filterReferenceInput(): Locator {
     return this.byId('search-reference');
+  }
+
+  private applicationLink(reference: string): Locator {
+    return this.page.locator(`table.govuk-table tbody a[href="/applications/${reference}"]`);
   }
 }

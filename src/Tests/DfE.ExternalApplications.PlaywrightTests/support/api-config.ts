@@ -1,5 +1,5 @@
 import './load-env';
-import { getDefaultAuthUser } from './auth-users';
+import { getDefaultAuthUser, resolveAuthUser, type AuthUserName } from './auth-users';
 import { requireEnvironmentVariable } from './environment';
 import type { ApiConfig } from './types';
 
@@ -38,4 +38,14 @@ export function createApiConfig(): ApiConfig {
 
 export function getApiConfigFromEnv(): ApiConfig {
   return createApiConfig();
+}
+
+export function apiConfigForUser(userName: AuthUserName, baseConfig = createApiConfig()): ApiConfig {
+  const user = resolveAuthUser(userName);
+
+  return {
+    ...baseConfig,
+    serviceEmail: user.email,
+    serviceApiKey: user.apiKey,
+  };
 }

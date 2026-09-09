@@ -10,7 +10,11 @@ interface CachedToken {
 
 const EXPIRY_BUFFER_MS = 2 * 60 * 1000;
 
-let cachedInternalUserToken: CachedToken | null = null;
+const cachedInternalUserTokens = new Map<string, CachedToken>();
+
+function cacheKey(config: ApiConfig): string {
+  return `${config.tenantId}:${config.serviceEmail.toLowerCase()}`;
+}
 
 function isCacheValid(cache: CachedToken | null): cache is CachedToken {
   return cache !== null && Date.now() + EXPIRY_BUFFER_MS < cache.expiresAtMs;
@@ -27,6 +31,9 @@ function resolveTokenExpiryMs(token: string): number {
 }
 
 export async function getInternalUserToken(config: ApiConfig): Promise<string> {
+  const key = cacheKey(config);
+  const cachedInternalUserToken = cachedInternalUserTokens.get(key) ?? null;
+
   if (isCacheValid(cachedInternalUserToken)) {
     return cachedInternalUserToken.value;
   }
@@ -34,10 +41,10 @@ export async function getInternalUserToken(config: ApiConfig): Promise<string> {
   const signInToken = generateInternalServiceToken(config);
   const internalUserToken = await exchangeForInternalUserToken(config, signInToken);
 
-  cachedInternalUserToken = {
+  cachedInternalUserTokens.set(key, {
     value: internalUserToken,
     expiresAtMs: resolveTokenExpiryMs(internalUserToken),
-  };
+  });
 
   return internalUserToken;
 }
