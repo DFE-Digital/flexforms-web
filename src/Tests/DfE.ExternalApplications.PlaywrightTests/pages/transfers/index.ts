@@ -1,0 +1,14 @@
+export { IncomingTrustPage } from './IncomingTrustPage';
+export { ReasonsAndBenefitsIncomingPage } from './ReasonsAndBenefitsIncomingPage';
+export { HighQualityInclusiveEducationPage } from './HighQualityInclusiveEducationPage';
+export { SchoolImprovementPage } from './SchoolImprovementPage';
+export { FinanceAndOperationsPage } from './FinanceAndOperationsPage';
+export { LeadershipPage } from './LeadershipPage';
+export { MembersPage } from './MembersPage';
+export { TrusteesPage } from './TrusteesPage';
+export { GovernanceStructurePage } from './GovernanceStructurePage';
+export { DetailsOfAcademiesPage } from './DetailsOfAcademiesPage';
+export { ReasonsAndBenefitsOutgoingPage } from './ReasonsAndBenefitsOutgoingPage';
+export { RisksPage } from './RisksPage';
+export { OutgoingTrustPage } from './OutgoingTrustPage';
+export { DeclarationPage } from './DeclarationPage';
