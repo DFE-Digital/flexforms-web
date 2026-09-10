@@ -20,10 +20,18 @@
     // Get configuration from appsettings
     var configuration = ComplexFieldConfigurationService.GetConfiguration(complexFieldId);
     
-    // Generate unique IDs
+    // Generate unique IDs (never use label text — spaces break aria-labelledby tokenisation)
     var inputId = $"{Model.Id}-complex-field";
     var selectedItemsId = $"{Model.Id}-selected-items";
     var searchInputId = $"{Model.Id}-search-input";
+    var labelId = $"{inputId}-label";
+    var hintId = $"{inputId}-hint";
+    var tooltipId = $"{inputId}-tooltip";
+    var errorId = $"{inputId}-error";
+    var labelText = !string.IsNullOrWhiteSpace(label)
+        ? label
+        : (!string.IsNullOrWhiteSpace(configuration.Label) ? configuration.Label : "Search");
+    var effectiveLabelClasses = string.IsNullOrWhiteSpace(label) ? "govuk-visually-hidden" : labelClasses;
     
     // Helper function to format display value
     string FormatDisplayValue(object value)
@@ -163,31 +171,37 @@
 else
 {
     <div class="govuk-form-group @(string.IsNullOrEmpty(Model.ErrorMessage) ? "" : "govuk-form-group--error")">
-        @if (!string.IsNullOrEmpty(Model.Field.Label.Value))
-        {
-            <label id="@label-label" class="@labelClasses" for="@inputId">
-                @label
-                @if (isRequired)
-                {
-                    <span class="govuk-visually-hidden">required</span>
-                }
-            </label>
-        }
+        <label id="@labelId" class="@effectiveLabelClasses" for="@inputId">
+            @labelText
+            @if (isRequired)
+            {
+                <span class="govuk-visually-hidden">required</span>
+            }
+        </label>
         
         @{
             var full = MarkdownSafe.ToSafeHtml(Model.Field.Tooltip);
             var isSingle = MarkdownSafe.IsSingleParagraphFromHtml(full);
             var content = isSingle ? MarkdownSafe.ToSafeHtmlInline(Model.Field.Tooltip) : full;
+            var describedBy = hintId;
+            if (!string.IsNullOrEmpty(Model.Field.Tooltip))
+            {
+                describedBy = tooltipId + " " + describedBy;
+            }
+            if (!string.IsNullOrEmpty(Model.ErrorMessage))
+            {
+                describedBy = errorId + " " + describedBy;
+            }
         }
 
         @if (!string.IsNullOrEmpty(Model.Field.Tooltip))
         {
-            <div class="govuk-hint" style="@(isSingle ? null : "color: var(--govuk-text-colour);")">@Html.Raw(content)</div>
+            <div id="@tooltipId" class="govuk-hint" style="@(isSingle ? null : "color: var(--govuk-text-colour);")">@Html.Raw(content)</div>
         }
         
         @if (!string.IsNullOrEmpty(Model.ErrorMessage))
         {
-            <div class="govuk-error-message">@Model.ErrorMessage</div>
+            <div id="@errorId" class="govuk-error-message">@Model.ErrorMessage</div>
         }
         
         <div class="complex-field-container" data-module="autocomplete-complex-field" data-field-type="autocomplete">
@@ -199,10 +213,6 @@ else
                    data-allow-multiple="@configuration.AllowMultiple.ToString().ToLower()" 
                    @validationAttributes />
 
-        @{
-            var ariaLabel = !string.IsNullOrEmpty(Model.Field.Label.Value) ? label + "-label" : "page-title";
-        }
-            
             <!-- Container for autocomplete - library will create input here -->
             <div id="@inputId-container" 
                  class="complex-field-search-container govuk-!-margin-bottom-15"
@@ -213,11 +223,12 @@ else
                  data-target-input="@Model.Id"
                  data-selected-items-container="@selectedItemsId"
                  data-placeholder="@configuration.Placeholder"
-                 aria-describedby="@inputId-hint"
-                 aria-labelledby="@ariaLabel">
+                 data-input-id="@inputId"
+                 data-label-id="@labelId"
+                 data-describedby="@describedBy">
             </div>
             
-            <div id="@inputId-hint" class="govuk-visually-hidden">
+            <div id="@hintId" class="govuk-visually-hidden">
                 Use this field to search and select options. Type at least @configuration.MinLength characters to see results.
                 @(configuration.AllowMultiple ? "<span>You can select multiple options.</span>" : "")
             </div>
@@ -449,6 +460,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const selectedItemsContainer = container.querySelector('.complex-field-selected-items');
         const complexFieldId = complexFieldContainer.dataset.complexFieldId;
         const fieldId = hiddenInput.id; // Use the actual field ID for form submission
+        const inputId = complexFieldContainer.dataset.inputId || (fieldId + '-complex-field');
         const allowMultiple = complexFieldContainer.dataset.allowMultiple === 'true';
         
         // Extract the actual field ID without the "Data_" prefix
@@ -567,9 +579,61 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Cache to store full API results with all properties
                 var cachedResults = [];
 
+                function enhanceAutocompleteAccessibility() {
+                    const autocompleteInput = container.querySelector('.autocomplete__input');
+                    const hintInput = container.querySelector('.autocomplete__hint');
+                    const listbox = container.querySelector('.autocomplete__menu');
+                    const labelId = complexFieldContainer.dataset.labelId;
+                    const describedBy = complexFieldContainer.dataset.describedby || '';
+
+                    // The library's predictive hint is a second <input> (tabindex=-1) with no label.
+                    if (hintInput) {
+                        hintInput.setAttribute('aria-hidden', 'true');
+                        hintInput.removeAttribute('role');
+                        hintInput.removeAttribute('aria-owns');
+                        hintInput.removeAttribute('aria-controls');
+                        hintInput.removeAttribute('aria-describedby');
+                        hintInput.removeAttribute('aria-labelledby');
+                        hintInput.removeAttribute('aria-autocomplete');
+                        hintInput.removeAttribute('aria-expanded');
+                    }
+
+                    if (!autocompleteInput) {
+                        return;
+                    }
+
+                    autocompleteInput.id = inputId;
+
+                    if (labelId && document.getElementById(labelId)) {
+                        autocompleteInput.setAttribute('aria-labelledby', labelId);
+                    }
+
+                    const describedByIds = describedBy.split(/\s+/).filter(Boolean);
+                    const libraryDescribedBy = (autocompleteInput.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean);
+                    const merged = [];
+                    describedByIds.concat(libraryDescribedBy).forEach(function (id) {
+                        if (id && merged.indexOf(id) === -1 && document.getElementById(id)) {
+                            merged.push(id);
+                        }
+                    });
+                    if (merged.length) {
+                        autocompleteInput.setAttribute('aria-describedby', merged.join(' '));
+                    } else {
+                        autocompleteInput.removeAttribute('aria-describedby');
+                    }
+
+                    if (listbox) {
+                        if (!listbox.id) {
+                            listbox.id = inputId + '__listbox';
+                        }
+                        autocompleteInput.setAttribute('aria-owns', listbox.id);
+                        autocompleteInput.setAttribute('aria-controls', listbox.id);
+                    }
+                }
+
                 accessibleAutocomplete({
                     element: complexFieldContainer,
-                    id: complexFieldContainer.id,
+                    id: inputId,
                     placeholder: placeholder,
                     showAllValues: false,
                     autoselect: true,
@@ -824,6 +888,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
                 
                 console.log('Autocomplete complex field initialized successfully');
+                enhanceAutocompleteAccessibility();
                 
                 // Add backup event listeners for debugging onConfirm issues
                 setTimeout(function() {
@@ -874,8 +939,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     const autocompleteInput = container.querySelector('.autocomplete__input');
                     const menuEl = container.querySelector('.autocomplete__menu');
                     if (autocompleteInput) {
-                        // Set the correct ID to match the label's 'for' attribute
-                        autocompleteInput.id = fieldId + '-complex-field';
+                        enhanceAutocompleteAccessibility();
                         // Ensure the visible input participates in unobtrusive validation by giving it a name
                         try { autocompleteInput.setAttribute('name', `Data[${actualFieldId}_query]`); } catch {}
                         autocompleteInput.classList.add('govuk-input');

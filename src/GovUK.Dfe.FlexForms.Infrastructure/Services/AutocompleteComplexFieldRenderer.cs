@@ -22,21 +22,33 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                 complexFieldId = fieldId;
             }
             
-            // Generate unique IDs using the complex field ID
+            // Generate unique IDs using the complex field ID (never use label text — spaces break aria-labelledby)
             var inputId = $"{complexFieldId}-complex-field";
-            var selectId = $"{complexFieldId}-select";
+            var labelId = $"{inputId}-label";
+            var hintId = $"{inputId}-hint";
+            var tooltipId = $"{inputId}-tooltip";
+            var errorId = $"{inputId}-error";
             var selectedItemsId = $"{complexFieldId}-selected-items";
+            var describedBy = hintId;
+            if (!string.IsNullOrEmpty(tooltip))
+            {
+                describedBy = $"{tooltipId} {describedBy}";
+            }
+            if (!string.IsNullOrEmpty(errorMessage))
+            {
+                describedBy = $"{errorId} {describedBy}";
+            }
 
             return $@"
 <div class=""govuk-form-group {errorClass}"">
-    <label class=""{labelClasses}"" for=""{selectId}"">
+    <label id=""{labelId}"" class=""{labelClasses}"" for=""{inputId}"">
         {label}
         {(isRequired ? "<span class=\"govuk-visually-hidden\">required</span>" : "")}
     </label>
     
-    {(string.IsNullOrEmpty(tooltip) ? "" : $@"<div class=""govuk-hint"">{tooltip}</div>")}
+    {(string.IsNullOrEmpty(tooltip) ? "" : $@"<div id=""{tooltipId}"" class=""govuk-hint"">{tooltip}</div>")}
     
-    {(string.IsNullOrEmpty(errorMessage) ? "" : $@"<div class=""govuk-error-message""><span class=""govuk-visually-hidden"">Error: </span>{errorMessage}</div>")}
+    {(string.IsNullOrEmpty(errorMessage) ? "" : $@"<div id=""{errorId}"" class=""govuk-error-message""><span class=""govuk-visually-hidden"">Error: </span>{errorMessage}</div>")}
     
     <div class=""complex-field-container"" data-module=""complex-field"" data-field-type=""{configuration.FieldType}"">
         <!-- Hidden input for form submission -->
@@ -56,10 +68,12 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
              data-target-input=""{fieldId}""
              data-selected-items-container=""{selectedItemsId}""
              data-placeholder=""{configuration.Placeholder}""
-             aria-describedby=""{inputId}-hint"">
+             data-input-id=""{inputId}""
+             data-label-id=""{labelId}""
+             data-describedby=""{describedBy}"">
         </div>
         
-        <div id=""{inputId}-hint"" class=""govuk-visually-hidden"">
+        <div id=""{hintId}"" class=""govuk-visually-hidden"">
             Use this field to search and select options. Type at least {configuration.MinLength} characters to see results.
             {(configuration.AllowMultiple ? "<span>You can select multiple options.</span>" : "")}
         </div>

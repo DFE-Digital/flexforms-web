@@ -86,6 +86,29 @@ public class AutocompleteComplexFieldRendererTests
         Assert.Contains("establishment-complex-field-container", html);
         Assert.Contains("Pick one", html);
     }
+
+    [Fact]
+    public void Render_uses_stable_ids_for_label_and_aria_and_does_not_use_label_text()
+    {
+        var html = _renderer.Render(
+            new ComplexFieldConfiguration { Id = "trust", MinLength = 3 },
+            "incomingTrustSearch",
+            currentValue: "",
+            errorMessage: "",
+            label: "Find a trust",
+            tooltip: "Enter at least 3 characters",
+            isRequired: true);
+
+        Assert.Contains("id=\"trust-complex-field-label\"", html);
+        Assert.Contains("for=\"trust-complex-field\"", html);
+        Assert.Contains("data-input-id=\"trust-complex-field\"", html);
+        Assert.Contains("data-label-id=\"trust-complex-field-label\"", html);
+        Assert.Contains("id=\"trust-complex-field-tooltip\"", html);
+        Assert.Contains("data-describedby=\"trust-complex-field-tooltip trust-complex-field-hint\"", html);
+        Assert.DoesNotContain("Find a trust-label", html);
+        Assert.DoesNotContain("aria-labelledby=\"Find a trust-label\"", html);
+        Assert.DoesNotContain("aria-describedby=\"trust-complex-field-hint\"", html);
+    }
 }
 
 public class CompositeComplexFieldRendererTests
