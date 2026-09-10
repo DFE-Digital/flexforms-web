@@ -144,14 +144,27 @@
         }
     }
 
+    var confirmationDisplay = AutocompleteDisplayExpression.FirstNonEmpty(
+        Model.Field.ComplexField?.ConfirmationDisplay,
+        configuration.ConfirmationDisplay);
+    var dropdownDisplay = AutocompleteDisplayExpression.FirstNonEmpty(
+        Model.Field.ComplexField?.DropdownDisplay,
+        configuration.DropdownDisplay);
+
     // For establishment/academy fields, show postcode on confirmation; for LA/diocese show name and code
     var isNameAndCodeField = string.Equals(complexFieldId, "LocalAuthorityComplexField", StringComparison.OrdinalIgnoreCase)
         || string.Equals(complexFieldId, "DioceseComplexField", StringComparison.OrdinalIgnoreCase);
-    var confirmationDisplayFields = string.Equals(complexFieldId, "EstablishmentComplexField", StringComparison.OrdinalIgnoreCase)
-        ? "trustname,postcode,ukprn,companiesHousenumber"
-        : isNameAndCodeField
-            ? "trustname,code"
-            : "trustname,ukprn,companiesHousenumber";
+    var confirmationDisplayFields = AutocompleteDisplayExpression.IsSpecified(confirmationDisplay)
+        ? string.Join(",", AutocompleteDisplayExpression.GetPropertyNames(confirmationDisplay))
+        : string.Empty;
+    if (string.IsNullOrWhiteSpace(confirmationDisplayFields))
+    {
+        confirmationDisplayFields = string.Equals(complexFieldId, "EstablishmentComplexField", StringComparison.OrdinalIgnoreCase)
+            ? "trustname,postcode,ukprn,companiesHousenumber"
+            : isNameAndCodeField
+                ? "trustname,code"
+                : "trustname,ukprn,companiesHousenumber";
+    }
 }
 
 @if (string.IsNullOrEmpty(complexFieldId))
@@ -213,6 +226,7 @@ else
                  data-target-input="@Model.Id"
                  data-selected-items-container="@selectedItemsId"
                  data-placeholder="@configuration.Placeholder"
+                 data-dropdown-display="@dropdownDisplay"
                  aria-describedby="@inputId-hint"
                  aria-labelledby="@ariaLabel">
             </div>
@@ -460,6 +474,7 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('Hidden input value:', hiddenInput.value);
         const minLength = parseInt(complexFieldContainer.dataset.minLength) || 3;
         const placeholder = complexFieldContainer.dataset.placeholder;
+        const dropdownDisplay = (complexFieldContainer.dataset.dropdownDisplay || '').trim();
         const maxSelections = parseInt(complexFieldContainer.dataset.maxSelections) || 0;
         let lastConfirmedText = '';
         let suppressMenuUntilUserInput = false;
@@ -576,15 +591,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     confirmOnBlur: false,
                     templates: {
                         inputValue: function(result) {
-                            console.log('inputValue template called with:', result);
-                            if (typeof result === 'object' && result !== null && result.name) {
-                                return result.name;
-                            }
-                            return result ? result.toString() : '';
+                            return getResultLabel(result);
                         },
                         suggestion: function(result) {
-                            console.log('suggestion template called with:', result);
                             if (typeof result === 'object' && result !== null) {
+                                if (dropdownDisplay) {
+                                    return '<div class="complex-field-suggestion">' + escapeHtml(evaluateDisplayExpression(dropdownDisplay, result)) + '</div>';
+                                }
                                 var name = result.name ? escapeHtml(result.name) : '';
                                 var ukprn = (result.ukprn !== undefined && result.ukprn !== null) ? escapeHtml(result.ukprn.toString()) : '';
                                 var code = (result.code !== undefined && result.code !== null) ? escapeHtml(result.code.toString()) : '';
@@ -666,7 +679,8 @@ document.addEventListener('DOMContentLoaded', function() {
                                 // Filter out empty values
                                 results = results.filter(function(item) {
                                     if (typeof item === 'object' && item !== null) {
-                                        return item.name && item.name.toString().trim() !== '';
+                                        var label = getResultLabel(item);
+                                        return label && label.trim() !== '';
                                     }
                                     return item && item.toString().trim() !== '';
                                 });
@@ -730,7 +744,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         console.log('Final option to save:', JSON.stringify(option));
 
                         var isValidString = typeof option === 'string' && option.trim() !== '';
-                        var isValidObject = typeof option === 'object' && option !== null && option.name;
+                        var isValidObject = typeof option === 'object' && option !== null && (option.name || getResultLabel(option));
 
                         if (!isValidString && !isValidObject) {
                             console.log('Option validation failed');
@@ -742,7 +756,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                         if (!allowMultiple) {
                             // Single-select: populate input with label and update hidden input only
-                            var labelText = isValidObject ? (option.name || option.toString()) : option.toString();
+                            var labelText = getResultLabel(option);
 
                             if (typeof option === 'object' && option !== null) {
                                 hiddenInput.value = JSON.stringify(option);
@@ -783,7 +797,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
 
                         // Multi-select: behave like single-select (fill input, set hidden value, no below-input list)
-                        var multiLabelText = isValidObject ? (option.name || option.toString()) : option.toString();
+                        var multiLabelText = getResultLabel(option);
 
                         if (typeof option === 'object' && option !== null) {
                             hiddenInput.value = JSON.stringify(option);
@@ -904,7 +918,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 let labelText = '';
                                 try {
                                     const parsed = JSON.parse(v);
-                                    labelText = parsed && parsed.name ? parsed.name : v.toString();
+                                    labelText = parsed ? getResultLabel(parsed) : v.toString();
                                 } catch { labelText = v.toString(); }
                                 const valueSetter = Object.getOwnPropertyDescriptor(autocompleteInput, 'value')?.set ||
                                     Object.getOwnPropertyDescriptor(Object.getPrototypeOf(autocompleteInput), 'value')?.set;
@@ -1333,6 +1347,84 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
+        function getResultLabel(result) {
+            if (result == null) return '';
+            if (typeof result !== 'object') return result.toString();
+            if (dropdownDisplay) {
+                var custom = evaluateDisplayExpression(dropdownDisplay, result);
+                if (custom) return custom;
+            }
+            return result.name ? result.name.toString() : '';
+        }
+
+        function evaluateDisplayExpression(expression, source) {
+            if (!expression || !source || typeof source !== 'object') return '';
+            var lookup = {};
+            Object.keys(source).forEach(function(key) {
+                lookup[key.toLowerCase()] = source[key] == null ? '' : source[key].toString();
+            });
+
+            function readProperty(name) {
+                return lookup[name.toLowerCase()] || '';
+            }
+
+            if (expression.indexOf('{') !== -1 && expression.indexOf('+') === -1) {
+                return expression.replace(/\{([A-Za-z_][A-Za-z0-9_]*)\}/g, function(_, name) {
+                    return readProperty(name);
+                }).replace(/\s+/g, ' ').trim();
+            }
+
+            var parts = [];
+            var i = 0;
+            while (i < expression.length) {
+                while (i < expression.length && /\s/.test(expression[i])) i++;
+                if (i >= expression.length) break;
+                var ch = expression[i];
+                if (ch === '"' || ch === "'") {
+                    var quote = ch;
+                    i++;
+                    var literal = '';
+                    while (i < expression.length && expression[i] !== quote) {
+                        literal += expression[i];
+                        i++;
+                    }
+                    if (i < expression.length) i++;
+                    parts.push({ literal: true, value: literal });
+                } else if (ch === '+') {
+                    i++;
+                } else {
+                    var start = i;
+                    while (i < expression.length && /[A-Za-z0-9_]/.test(expression[i])) i++;
+                    if (i === start) { i++; continue; }
+                    parts.push({ literal: false, value: expression.substring(start, i) });
+                }
+            }
+
+            var resolved = parts.map(function(part) {
+                return part.literal ? part.value : readProperty(part.value);
+            });
+            var output = '';
+            for (var p = 0; p < parts.length; p++) {
+                if (!parts[p].literal && !String(resolved[p]).trim()) continue;
+                if (parts[p].literal && isSeparatorLiteral(parts[p].value)) {
+                    if (!output || !hasNonEmptyPropertyAfter(parts, resolved, p)) continue;
+                }
+                output += resolved[p];
+            }
+            return output.trim();
+        }
+
+        function isSeparatorLiteral(value) {
+            return !value || /^[\s\-\|\/,:]+$/.test(value);
+        }
+
+        function hasNonEmptyPropertyAfter(parts, resolved, index) {
+            for (var i = index + 1; i < parts.length; i++) {
+                if (!parts[i].literal && String(resolved[i]).trim()) return true;
+            }
+            return false;
+        }
+
         function escapeHtml(text) {
             const map = {
                 '&': '&amp;',

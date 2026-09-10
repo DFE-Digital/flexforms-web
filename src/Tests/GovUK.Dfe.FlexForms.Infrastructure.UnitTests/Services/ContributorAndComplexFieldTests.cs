@@ -88,4 +88,27 @@ public class ComplexFieldConfigurationServiceTests
         Assert.Equal("api://example/.default", found.Scope);
         Assert.True(string.IsNullOrEmpty(found.ApiKey));
     }
+
+    [Fact]
+    public void GetConfiguration_ShouldBindDropdownAndConfirmationDisplay()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["FormEngine:ComplexFields:0:Id"] = "member",
+            ["FormEngine:ComplexFields:0:FieldType"] = "autocomplete",
+            ["FormEngine:ComplexFields:0:ApiEndpoint"] = "https://example.test/members",
+            ["FormEngine:ComplexFields:0:DropdownDisplay"] = "displayName + \" - \" + constituencyName",
+            ["FormEngine:ComplexFields:0:ConfirmationDisplay"] = "firstName + \" \" + lastName"
+        }).Build();
+        var requestConfig = Substitute.For<IRequestAppConfiguration>();
+        requestConfig.Current.Returns(configuration);
+        var service = new ComplexFieldConfigurationService(
+            requestConfig,
+            NullLogger<ComplexFieldConfigurationService>.Instance);
+
+        var found = service.GetConfiguration("member");
+
+        Assert.Equal("displayName + \" - \" + constituencyName", found.DropdownDisplay);
+        Assert.Equal("firstName + \" \" + lastName", found.ConfirmationDisplay);
+    }
 }

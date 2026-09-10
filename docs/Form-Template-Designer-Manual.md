@@ -4,6 +4,8 @@ A practical guide for designing application forms as JSON. Written for product/c
 
 If you have never seen JSON before, start with [§1.1 JSON in plain English](#11-json-in-plain-english).
 
+**Related guide:** [Tenant Admin User Manual](Tenant-Admin-User-Manual.md) — live forms, access, and Tenant Settings (including [autocomplete / FormEngine](Tenant-Admin-User-Manual.md#147-autocomplete-search-formengine-complex-fields)).
+
 ---
 
 ## 1. What you are building
@@ -370,7 +372,7 @@ Every field shares this shape:
 | `visibility.default` | Starting visibility before conditional logic runs. |
 | `validations` | Rules (required, regex, maxLength…). |
 | `options` | For radios / checkboxes / select. |
-| `complexField` | Only for `type: "complexField"`. |
+| `complexField` | Only for `type: "complexField"`. Must include `id`. Optional `dropdownDisplay` and `confirmationDisplay` — see [8.10](#810-complexfield--search-or-upload). |
 | `Value` | Leave `null` in the template (runtime answers live elsewhere). |
 
 ---
@@ -509,9 +511,31 @@ A built-in autocomplete control. For Trusts/Academies search, Transfer uses **`c
 
 ### 8.10 `complexField` — search or upload
 
-Template side only references a **config id** defined in tenant **FormEngine:ComplexFields** settings (not inside the template JSON).
+A **search** (`autocomplete`) or **file upload** question backed by tenant configuration.
 
-#### Trust search
+You **do not** put the API URL, API key, or OAuth client secret in the template. Those live in Tenant Settings category **`FormEngine`** (Target **Web**), as a `ComplexFields` entry whose `Id` matches `complexField.id`.
+
+**Admin setup (auth, endpoint, default labels):** [Tenant Admin User Manual — 14.7 Autocomplete search](Tenant-Admin-User-Manual.md#147-autocomplete-search-formengine-complex-fields).
+
+**You cannot invent a new search id in JSON alone.** Ask a tenant Admin to add the `Id` under FormEngine first (API endpoint plus either an API key **or** OAuth2 client credentials). Then use that same id here.
+
+#### What you put in the template
+
+| JSON on `complexField` | Required | What it does |
+|------------------------|----------|----------------|
+| `id` | Yes | Must match a `ComplexFields` `Id` in FormEngine (e.g. `TrustComplexField`, `EstablishmentComplexField`, `MemberComplexField`). PascalCase. |
+| `dropdownDisplay` | No | How each search result is labelled in the dropdown (and in the box after the user chooses). Overrides the same setting in FormEngine when both are set. |
+| `confirmationDisplay` | No | How the chosen answer is shown on **check your answers** / preview, and which properties appear on “Is this the right …?”. Overrides FormEngine when set. |
+
+If both display properties are omitted, FlexForms keeps the built-in Trusts/Academies layout:
+
+| Surface | Default (no expressions) |
+|---------|---------------------------|
+| Dropdown | Result `name`, plus UKPRN, code, and/or Companies House number when those properties exist on the API object |
+| Check your answers | Bold **name**, then postcode, UKPRN, Companies House number when present |
+| “Is this the right …?” | Trusts/academies-style fields depending on the config id |
+
+#### Trust search (built-in ids, no display override)
 
 ```json
 {
@@ -528,7 +552,7 @@ Template side only references a **config id** defined in tenant **FormEngine:Com
 }
 ```
 
-Stored value is typically a rich object (e.g. with `.name`). Bindings like  
+Stored value is a rich JSON object. Bindings like  
 `{detailsOfIncomingTrust.incomingTrustsSearch-field-flow.name}` read nested properties.
 
 #### Academy search
@@ -536,6 +560,81 @@ Stored value is typically a rich object (e.g. with `.name`). Bindings like
 ```json
 "complexField": { "id": "EstablishmentComplexField" }
 ```
+
+#### Custom search (e.g. members) — dropdown and confirmation labels
+
+Use this when the API returns different property names (not `name` / UKPRN). The **id** must already exist in FormEngine. Auth (API key vs client credentials) is **not** configured in the template.
+
+Example API object:
+
+```json
+{
+  "id": "123",
+  "displayName": "Jane Smith MP",
+  "firstName": "Jane",
+  "lastName": "Smith",
+  "constituencyName": "Example West",
+  "email": "jane.smith@example.gov.uk"
+}
+```
+
+Template field:
+
+```json
+{
+  "fieldId": "memberSearch",
+  "type": "complexField",
+  "label": { "value": "Member of Parliament", "isVisible": true },
+  "placeholder": "Start typing a name...",
+  "tooltip": "Enter at least 3 characters to search",
+  "complexField": {
+    "id": "MemberComplexField",
+    "dropdownDisplay": "displayName + \" - \" + constituencyName",
+    "confirmationDisplay": "firstName + \" \" + lastName"
+  },
+  "validations": [
+    { "type": "required", "rule": true, "message": "Search for and select a member" }
+  ]
+}
+```
+
+What the applicant sees:
+
+| Surface | With the expressions above |
+|---------|-----------------------------|
+| Dropdown row | `Jane Smith MP - Example West` |
+| After they choose | Same text in the search box |
+| Check your answers | `Jane Smith` |
+| “Is this the right …?” | Lists the properties used in `confirmationDisplay` (`firstName`, `lastName`) |
+
+The **saved answer** is still the full object (`email`, `constituencyName`, and so on). Use those names in collection captions, event mappings, and email `ComplexFieldProperty` paths.
+
+If you omit `dropdownDisplay` / `confirmationDisplay` here, FormEngine’s `DropdownDisplay` / `ConfirmationDisplay` apply. If those are also empty, the built-in name/UKPRN layout applies (often a poor fit for a members API).
+
+#### Display expression syntax
+
+Two equivalent styles. Property names must match the JSON from the search API (case-insensitive).
+
+**Concatenation** (quoted literals joined with `+`):
+
+```text
+displayName + " - " + constituencyName
+firstName + " " + lastName
+```
+
+**Placeholders** (only when the expression has **no** `+`):
+
+```text
+{firstName} {lastName}
+{displayName} — {constituencyName}
+```
+
+Rules:
+
+- Empty properties are skipped. You do not get a trailing ` - ` if `constituencyName` is missing.
+- Separator-only literals (` - `, `|`, `/`, `,`, `:`) are also dropped when there is nothing after them.
+- Nested objects and arrays (for example `roles`) cannot be used in the expression; only strings, numbers, and booleans copied from the result.
+- FlexForms still sets a fallback `name` from the first of: `name`, `title`, `label`, `value`, `displayName`, `groupName`, `text`. Use `dropdownDisplay` when you need more than that one field.
 
 #### File upload
 
@@ -552,7 +651,16 @@ Stored value is typically a rich object (e.g. with `.name`). Bindings like
 }
 ```
 
-**You cannot invent a new complex field id** in JSON alone — ops must register it under FormEngine settings (`autocomplete` or `upload`, API URL, keys, etc.).
+`dropdownDisplay` / `confirmationDisplay` do not apply to uploads.
+
+#### Designer checklist for a new search question
+
+1. Confirm the FormEngine `Id` exists (Admin → Tenant Settings → `FormEngine`, Target **Web**).
+2. Confirm auth is already configured there (API key **or** client credentials) — not in this JSON.
+3. Set `"type": "complexField"` and `"complexField": { "id": "…" }`.
+4. If the API is not trusts/academies-shaped, add `dropdownDisplay` and `confirmationDisplay` (or ask Admin to set them on the FormEngine entry).
+5. Add `required` (and usually a min-length regex matching the config `MinLength`).
+6. Save a new template version, **preview**, type past the minimum length, pick a result, and check check your answers.
 
 ---
 
@@ -919,7 +1027,7 @@ Keep **pageId** and **fieldId** distinct: conditional logic targets both.
 7. For collections, set **min/max**, **columns**, and **itemTitleBinding**.
 8. Validate JSON (commas, quotes).
 9. Upload via **Template Manager** as a new version; test Live vs Not live.
-10. Remember: **complexField** ids must exist in tenant FormEngine settings.
+10. Remember: **complexField** ids must exist in tenant FormEngine settings. For a new API, confirm Admin has registered the id (endpoint + API key or client credentials). Add `dropdownDisplay` / `confirmationDisplay` if the results are not trust/academy-shaped.
 
 ---
 
@@ -946,7 +1054,7 @@ Keep **pageId** and **fieldId** distinct: conditional logic targets both.
 ## 18. What this JSON does *not* include
 
 - Database template GUID / tenant ownership
-- FormEngine complex field API URLs and keys (tenant settings)
+- FormEngine search API URLs, API keys, and OAuth client credentials (tenant settings — see [Admin 14.7](Tenant-Admin-User-Manual.md#147-autocomplete-search-formengine-complex-fields)). The template may only name the id and optional display expressions.
 - Email templates, auth, hostnames
 - HTML/CSS — the engine renders GOV.UK components
 

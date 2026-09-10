@@ -272,13 +272,12 @@ namespace GovUK.Dfe.FlexForms.Web.Services
                     }
                 }
                 
-                // For trust data, try to extract both name and URN
-                var result = new Dictionary<string, object>();
-                
-                // Try to get the display name
+                var result = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+                CopyScalarProperties(item, result);
+
                 var displayProperties = new[] { "name", "title", "label", "value", "displayName", "groupName", "text" };
                 string displayName = null;
-                
+
                 foreach (var propertyName in displayProperties)
                 {
                     if (item.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String)
@@ -289,42 +288,6 @@ namespace GovUK.Dfe.FlexForms.Web.Services
                             displayName = value;
                             result["name"] = value;
                             break;
-                        }
-                    }
-                }
-                
-                // Try to get UKPRN or other identifier/display fields (support common casing variants)
-                var identifierProperties = new[] { "ukprn", "id", "urn", "companiesHouseNumber", "companieshousenumber", "companies_house_number", "code", "localAuthorityName", "gor", "postcode", "postCode" };
-                foreach (var propertyName in identifierProperties)
-                {
-                    if (item.TryGetProperty(propertyName, out var property))
-                    {
-
-                        if (property.ValueKind == JsonValueKind.String)
-                        {
-                            var value = property.GetString();
-                            if (!string.IsNullOrEmpty(value))
-                            {
-                                result[propertyName] = value;
-                            }
-                        }
-                        else if (property.ValueKind == JsonValueKind.Number)
-                        {
-                            result[propertyName] = property.GetInt64().ToString();
-                        }
-                        else if (property.ValueKind == JsonValueKind.Object)
-                        {
-                            // Handle nested objects (e.g. gor: { name: "...", code: "..." })
-                            // Try to extract the "name" property from the nested object
-                            if (property.TryGetProperty("name", out var nameProperty) && 
-                                nameProperty.ValueKind == JsonValueKind.String)
-                            {
-                                var nameValue = nameProperty.GetString();
-                                if (!string.IsNullOrEmpty(nameValue))
-                                {
-                                    result[propertyName] = nameValue;
-                                }
-                            }
                         }
                     }
                 }
@@ -374,6 +337,35 @@ namespace GovUK.Dfe.FlexForms.Web.Services
             }
             
             return string.Empty;
+        }
+
+        private static void CopyScalarProperties(JsonElement item, Dictionary<string, object> result)
+        {
+            foreach (var property in item.EnumerateObject())
+            {
+                if (property.Value.ValueKind == JsonValueKind.String)
+                {
+                    var value = property.Value.GetString();
+                    if (!string.IsNullOrEmpty(value))
+                        result[property.Name] = value;
+                }
+                else if (property.Value.ValueKind == JsonValueKind.Number)
+                {
+                    result[property.Name] = property.Value.ToString();
+                }
+                else if (property.Value.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                {
+                    result[property.Name] = property.Value.GetBoolean().ToString();
+                }
+                else if (property.Value.ValueKind == JsonValueKind.Object
+                         && property.Value.TryGetProperty("name", out var nestedName)
+                         && nestedName.ValueKind == JsonValueKind.String)
+                {
+                    var nameValue = nestedName.GetString();
+                    if (!string.IsNullOrEmpty(nameValue))
+                        result[property.Name] = nameValue;
+                }
+            }
         }
 
         /// <summary>
