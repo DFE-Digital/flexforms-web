@@ -1,18 +1,25 @@
+import type { Locator } from '@playwright/test';
 import { BasePage } from './BasePage';
 
 export class ContributorsInvitePage extends BasePage {
-  private static readonly selectors = {
-    name: '#Name',
-    emailAddress: '#EmailAddress',
-    sendInviteButton: '#send-email-invite',
-  } as const;
-
   async fillInvite(name: string, email: string): Promise<void> {
-    await this.page.locator(ContributorsInvitePage.selectors.name).fill(name);
-    await this.page.locator(ContributorsInvitePage.selectors.emailAddress).fill(email);
+    await this.nameInput().fill(name);
+    await this.emailAddressInput().fill(email);
   }
 
   async sendInvite(): Promise<void> {
-    await this.page.locator(ContributorsInvitePage.selectors.sendInviteButton).click();
+    await this.sendInviteButton().click();
+  }
+
+  private nameInput(): Locator {
+    return this.page.getByLabel('Full name');
+  }
+
+  private emailAddressInput(): Locator {
+    return this.page.getByLabel('Email address');
+  }
+
+  private sendInviteButton(): Locator {
+    return this.page.getByRole('button', { name: 'Send email invite' });
   }
 }

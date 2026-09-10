@@ -2,6 +2,7 @@ import { expect, type Locator, type Page } from '@playwright/test';
 import type { Terminology } from '../support/types';
 import { BasePage } from './BasePage';
 import { ApplicationsTable } from './components/ApplicationsTable';
+import { requireEnvironmentVariable } from '../support/environment';
 
 export class DashboardPage extends BasePage {
   readonly applicationsTable: ApplicationsTable;
@@ -11,11 +12,16 @@ export class DashboardPage extends BasePage {
     this.applicationsTable = new ApplicationsTable(page);
   }
 
+  async chooseDefaultForm(): Promise<void> {
+    await this.byId(`form-${requireEnvironmentVariable('TEMPLATE_ID')}`).click();
+    await this.page.getByRole('button', { name: 'Go to dashboard' }).click();
+  }
+
   async startNewApplication(): Promise<void> {
     await this.startNewApplicationButton().click();
   }
 
-  async filterApplications() {
+  async filterApplications(): Promise<void> {
     await this.filterApplicationsButton().click();
   }
 
@@ -44,14 +50,14 @@ export class DashboardPage extends BasePage {
   }
 
   private applyFilterButton(): Locator {
-    return this.page.getByTestId('apply-filters');
+    return this.page.getByRole('button', { name: 'Apply filters' });
   }
 
   private filterReferenceInput(): Locator {
-    return this.byId('search-reference');
+    return this.page.getByLabel('Reference number');
   }
 
   private applicationLink(reference: string): Locator {
-    return this.page.locator(`table.govuk-table tbody a[href="/applications/${reference}"]`);
+    return this.page.getByRole('link', { name: reference });
   }
 }

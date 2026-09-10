@@ -12,7 +12,7 @@ export class ApplicationsTable implements PromiseLike<void> {
 
   constructor(page: Page) {
     this.page = page;
-    this.table = page.locator('table.govuk-table');
+    this.table = page.getByRole('table');
   }
 
   withReference(reference: string): this {
@@ -22,7 +22,7 @@ export class ApplicationsTable implements PromiseLike<void> {
 
   hasTableHeaders(headers: string[]): this {
     this.enqueue(async () => {
-      const headerCells = this.table.locator('thead .govuk-table__header');
+      const headerCells = this.headerCells();
       await expect(headerCells).toHaveCount(headers.length);
       for (let i = 0; i < headers.length; i++) {
         await expect(headerCells.nth(i)).toHaveText(headers[i]);
@@ -33,7 +33,7 @@ export class ApplicationsTable implements PromiseLike<void> {
 
   hasNumberOfRows(expected: number): this {
     this.enqueue(async () => {
-      await expect(this.table.locator('tbody .govuk-table__row')).toHaveCount(expected);
+      await expect(this.bodyRows()).toHaveCount(expected);
     });
     return this;
   }
@@ -49,7 +49,7 @@ export class ApplicationsTable implements PromiseLike<void> {
   columnHasValueWithLink(tableColumn: string, expectedValue: string, href: string): this {
     this.enqueue(async () => {
       const cell = await this.cellForColumn(tableColumn);
-      const link = cell.getByRole('link');
+      const link = this.cellLink(cell);
       await expect(link).toContainText(expectedValue);
       await expect(link).toHaveAttribute('href', href);
     });
@@ -67,12 +67,24 @@ export class ApplicationsTable implements PromiseLike<void> {
     this.assertions = this.assertions.then(assertion);
   }
 
+  private headerCells(): Locator {
+    return this.table.getByRole('columnheader');
+  }
+
+  private bodyRows(): Locator {
+    return this.table.getByRole('row').filter({ has: this.page.getByRole('cell') });
+  }
+
+  private cellLink(cell: Locator): Locator {
+    return cell.getByRole('link');
+  }
+
   private async cellForColumn(tableColumn: string): Promise<Locator> {
     if (!this.reference) {
       throw new Error('Reference is not set. Call withReference() before asserting a table cell value.');
     }
 
-    const headerCells = this.table.locator('thead .govuk-table__header');
+    const headerCells = this.headerCells();
     await expect(headerCells.filter({ hasText: tableColumn })).toHaveCount(1);
 
     const columnIndex = await headerCells.evaluateAll((headers, column) => {
@@ -83,11 +95,11 @@ export class ApplicationsTable implements PromiseLike<void> {
       throw new Error(`Table column "${tableColumn}" was not found.`);
     }
 
-    const row = this.table.locator('tbody .govuk-table__row').filter({
+    const row = this.bodyRows().filter({
       has: this.page.getByRole('cell', { name: this.reference, exact: true }),
     });
 
-    return row.locator('td').nth(columnIndex);
+    return row.getByRole('cell').nth(columnIndex);
   }
 }
 

@@ -4,17 +4,9 @@ import { apiConfigForUser, getApiConfigFromEnv } from '../support/api-config';
 import { registerAuthentication } from '../support/authenticationInterceptor';
 import { getServiceConfigFromEnv } from '../support/test-config';
 import type { ApiConfig, Terminology } from '../support/types';
-import { DashboardPage } from '../pages/DashboardPage';
-import { ContributorsPage } from '../pages/ContributorsPage';
-import { ContributorsInvitePage } from '../pages/ContributorsInvitePage';
-import { ApplicationPage } from '../pages/ApplicationPage';
 
 interface Fixtures {
   terminology: Terminology;
-  applicationPage: ApplicationPage;
-  dashboardPage: DashboardPage;
-  contributorsPage: ContributorsPage;
-  contributorsInvitePage: ContributorsInvitePage;
 }
 
 interface WorkerFixtures {
@@ -58,18 +50,6 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
   },
   terminology: async ({}, use) => {
     await use(getServiceConfigFromEnv().terminology);
-  },
-  applicationPage: async ({ page, terminology }, use) => {
-    await use(new ApplicationPage(page, terminology));
-  },
-  dashboardPage: async ({ page, terminology }, use) => {
-    await use(new DashboardPage(page, terminology));
-  },
-  contributorsPage: async ({ page, terminology }, use) => {
-    await use(new ContributorsPage(page, terminology));
-  },
-  contributorsInvitePage: async ({ page, terminology }, use) => {
-    await use(new ContributorsInvitePage(page, terminology));
   },
 });
 

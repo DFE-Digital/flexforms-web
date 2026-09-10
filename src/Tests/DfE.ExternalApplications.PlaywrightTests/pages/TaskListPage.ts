@@ -1,4 +1,4 @@
-import { expect } from '@playwright/test';
+import { expect, type Locator } from '@playwright/test';
 import { FormPage } from './FormPage';
 
 export class TaskListPage extends FormPage {
@@ -7,6 +7,10 @@ export class TaskListPage extends FormPage {
   }
 
   async reviewApplication(): Promise<void> {
-    await this.byId('review-application-button').click();
+    await this.reviewApplicationButton().click();
+  }
+
+  private reviewApplicationButton(): Locator {
+    return this.byId('review-application-button');
   }
 }

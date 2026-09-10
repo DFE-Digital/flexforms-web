@@ -4,16 +4,23 @@ import { FormPage } from './FormPage';
 export abstract class TaskPage extends FormPage {
   protected abstract readonly taskItem: string;
 
+  async open(): Promise<void> {
+    await this.taskLink().click();
+  }
+
+  async expectCompleted(): Promise<void> {
+    await expect(this.taskStatus()).toContainText('Completed');
+  }
+
   private taskItemLocator(): Locator {
     return this.byId(this.taskItem);
   }
 
-  async open(): Promise<void> {
-    await this.taskItemLocator().getByRole('link').first().click();
+  private taskLink(): Locator {
+    return this.taskItemLocator().getByRole('link').first();
   }
 
-  async expectCompleted(): Promise<void> {
-    const status = this.taskItemLocator().locator('.govuk-task-list__status');
-    await expect(status).toContainText('Completed');
+  private taskStatus(): Locator {
+    return this.taskItemLocator().locator('.govuk-task-list__status');
   }
 }
