@@ -44,6 +44,26 @@ public class MarkdownSafeTests
     }
 
     [Fact]
+    public void ToSafeGovUkHtml_ShouldKeepMailtoInSameTabButOpenHttpsLinksInNewTab()
+    {
+        var html = MarkdownSafe.ToSafeGovUkHtml(
+            "Email [team@example.com](mailto:team@example.com) or read the [guidance](https://example.com).");
+
+        var mailtoAnchor = AnchorContaining(html, "mailto:team@example.com");
+        Assert.DoesNotContain("target=", mailtoAnchor);
+        Assert.DoesNotContain("rel=", mailtoAnchor);
+
+        var httpsAnchor = AnchorContaining(html, "https://example.com");
+        Assert.Contains("target=\"_blank\"", httpsAnchor);
+        Assert.Contains("noopener", httpsAnchor);
+    }
+
+    private static string AnchorContaining(string html, string href) =>
+        html.Split("<a ")
+            .Select(segment => segment[..segment.IndexOf('>')])
+            .Single(openingTag => openingTag.Contains(href, StringComparison.Ordinal));
+
+    [Fact]
     public void ToSafeGovUkHtml_ShouldStripScripts()
     {
         var html = MarkdownSafe.ToSafeGovUkHtml("Hello <script>alert(1)</script>");

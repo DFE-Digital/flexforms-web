@@ -115,11 +115,22 @@ namespace GovUK.Dfe.FlexForms.Web.Utilities
                 if (e.Node is IElement el && el.TagName.Equals("A", StringComparison.OrdinalIgnoreCase))
                 {
                     var href = el.GetAttribute("href");
-                    if (!string.IsNullOrWhiteSpace(href))
+                    if (string.IsNullOrWhiteSpace(href))
                     {
-                        el.SetAttribute("target", "_blank");
-                        el.SetAttribute("rel", "noopener noreferrer");
+                        return;
                     }
+
+                    // mailto: must stay in the same tab so the OS hands off to the mail client
+                    // instead of leaving an empty browser tab behind.
+                    if (href.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        el.RemoveAttribute("target");
+                        el.RemoveAttribute("rel");
+                        return;
+                    }
+
+                    el.SetAttribute("target", "_blank");
+                    el.SetAttribute("rel", "noopener noreferrer");
                 }
             };
 
