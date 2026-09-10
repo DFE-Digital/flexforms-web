@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Application.Admin;
@@ -11,12 +12,13 @@ namespace GovUK.Dfe.FlexForms.Application.Tests.Admin;
 public class UserManagerAdminServiceTests
 {
     private readonly IUsersClient _users = Substitute.For<IUsersClient>();
+    private readonly IRolesClient _roles = Substitute.For<IRolesClient>();
     private readonly UserManagerAdminService _service;
     private readonly UserManagerWorkState _state = new();
 
     public UserManagerAdminServiceTests()
     {
-        _service = new UserManagerAdminService(_users, NullLogger<UserManagerAdminService>.Instance);
+        _service = new UserManagerAdminService(_users, _roles, NullLogger<UserManagerAdminService>.Instance);
     }
 
     [Fact]
@@ -26,6 +28,8 @@ public class UserManagerAdminServiceTests
                 Arg.Any<int?>(),
                 Arg.Any<int?>(),
                 Arg.Any<Guid?>(),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
                 Arg.Any<string>(),
                 Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("down"));
@@ -59,9 +63,9 @@ public class UserManagerAdminServiceTests
             })
             .ToList();
 
-        _users.GetTenantUsersAsync(1, 10, null, null, Arg.Any<CancellationToken>())
+        _users.GetTenantUsersAsync(1, 10, null, null, null, null, Arg.Any<CancellationToken>())
             .Returns(Paged(page1Items, totalCount: 12, pageNumber: 1, totalPages: 2));
-        _users.GetTenantUsersAsync(2, 10, null, null, Arg.Any<CancellationToken>())
+        _users.GetTenantUsersAsync(2, 10, null, null, null, null, Arg.Any<CancellationToken>())
             .Returns(Paged(page2Items, totalCount: 12, pageNumber: 2, totalPages: 2));
         _users.GetAccessAuditLogAsync(Arg.Any<int?>(), Arg.Any<CancellationToken>())
             .Returns(new GetTenantAccessAuditLogDto(Guid.NewGuid(), []));
@@ -80,7 +84,74 @@ public class UserManagerAdminServiceTests
         Assert.Equal(2, page2.Users.Count);
         Assert.Equal("User 11", page2.Users[0].Name);
         Assert.Equal("User 12", page2.Users[1].Name);
-        await _users.Received(1).GetTenantUsersAsync(2, 10, null, null, Arg.Any<CancellationToken>());
+        await _users.Received(1).GetTenantUsersAsync(2, 10, null, null, null, null, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task LoadAsync_ShouldSendFiltersToTheApi_Trimmed()
+    {
+        _state.CurrentPage = 1;
+        _state.SearchTerm = "  brown  ";
+        _state.Role = " Admin ";
+
+        await _service.LoadAsync(_state);
+
+        await _users.Received(1).GetTenantUsersAsync(
+            1,
+            UserManagerWorkState.PageSize,
+            null,
+            null,
+            "brown",
+            "Admin",
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task LoadAsync_ShouldSendNullFilters_WhenFilterValuesAreBlank()
+    {
+        _state.CurrentPage = 1;
+        _state.SearchTerm = "   ";
+        _state.Role = string.Empty;
+
+        await _service.LoadAsync(_state);
+
+        await _users.Received(1).GetTenantUsersAsync(
+            1,
+            UserManagerWorkState.PageSize,
+            null,
+            null,
+            null,
+            null,
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task LoadAsync_ShouldLoadTenantRoles_ForTheFilterDropdown()
+    {
+        _roles.ListAsync(Arg.Any<CancellationToken>())
+            .Returns(new ObservableCollection<TenantRoleDto>
+            {
+                new() { Name = "User" },
+                new() { Name = "Admin" },
+                new() { Name = "admin" }
+            });
+
+        await _service.LoadAsync(_state);
+
+        Assert.Equal(["Admin", "User"], _state.AvailableRoles);
+    }
+
+    [Fact]
+    public async Task LoadAsync_ShouldKeepTheSelectedRole_WhenRolesCannotBeLoaded()
+    {
+        _roles.ListAsync(Arg.Any<CancellationToken>())
+            .ThrowsAsync(new InvalidOperationException("down"));
+        _state.Role = "Caseworker";
+
+        await _service.LoadAsync(_state);
+
+        Assert.Equal(["Caseworker"], _state.AvailableRoles);
+        Assert.False(_state.HasError);
     }
 
     [Fact]

@@ -24,6 +24,8 @@ public class UserManagerPermissionsAdminServiceTests
                 Arg.Any<int?>(),
                 Arg.Any<Guid?>(),
                 Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
                 Arg.Any<CancellationToken>())
             .Returns(new PagedResultOfTenantUserDto
             {
@@ -117,6 +119,8 @@ public class UserManagerPermissionsAdminServiceTests
                 Arg.Any<int?>(),
                 Arg.Any<Guid?>(),
                 Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
                 Arg.Any<CancellationToken>())
             .Returns(new PagedResultOfTenantUserDto
             {
@@ -150,6 +154,8 @@ public class UserManagerPermissionsAdminServiceTests
                 Arg.Any<int?>(),
                 Arg.Any<int?>(),
                 Arg.Any<Guid?>(),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
                 Arg.Any<string>(),
                 Arg.Any<CancellationToken>())
             .Throws(new InvalidOperationException("user lookup failed"));
