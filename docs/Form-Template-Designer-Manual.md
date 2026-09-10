@@ -2,6 +2,8 @@
 
 A practical guide for designing application forms as JSON. Written for product/content designers and developers who are new to the FlexForms engine. Examples follow the Transfer Applications template patterns.
 
+If you have never seen JSON before, start with [§1.1 JSON in plain English](#11-json-in-plain-english).
+
 ---
 
 ## 1. What you are building
@@ -17,6 +19,86 @@ A FlexForms template is a **JSON document** that describes:
 Users see a **GOV.UK-style task list**. Completing tasks moves status from Not started → In progress → Completed. Answers are stored by **`fieldId`**.
 
 Think of the JSON as a blueprint. The engine renders it; you do not write HTML for each question.
+
+### 1.1 JSON in plain English
+
+You do not need to be a programmer. JSON is just **structured text** — a way of writing labelled facts so a computer can read them reliably.
+
+Think of a paper form. Each box has a **name** (Date of birth, School name) and a **value** (the answer). JSON is the same idea, typed out:
+
+```json
+{
+  "schoolName": "Oakwood Academy",
+  "numberOfPupils": 420,
+  "isLive": true
+}
+```
+
+Read that as: the school name is Oakwood Academy, there are 420 pupils, and the form is live. Curly braces `{ }` mean “this is one record”. Each line is a **key** (the label, always in double quotes) then a colon, then the **value**.
+
+#### The five kinds of value
+
+| What it looks like | What it is | Everyday example |
+|--------------------|------------|------------------|
+| `"Oakwood Academy"` | **Text** (a string). Always inside double quotes. | A name, a question label, an id |
+| `420` | **Number**. No quotes. | A count, an order (`1`, `2`, `3`) |
+| `true` or `false` | **Yes / no**. No quotes, lowercase. | Is this field required? |
+| `{ ... }` | **Object**. A group of labelled facts. | One field, one page, one task |
+| `[ ... ]` | **List** (an array). Several things of the same kind, in order. | Several tasks, several questions |
+
+There is also `null`, which means “nothing here”. FlexForms templates almost never need it.
+
+#### Nesting — boxes inside boxes
+
+A template is one big object. Inside it you put lists of task groups; inside those, lists of tasks; inside those, pages and fields. Same punctuation at every level:
+
+```json
+{
+  "templateName": "School transfer",
+  "taskGroups": [
+    {
+      "title": "About the school",
+      "tasks": [
+        {
+          "title": "School name",
+          "pages": [
+            {
+              "title": "What is the school called?",
+              "fields": [
+                {
+                  "fieldId": "schoolName",
+                  "type": "text",
+                  "label": { "value": "School name" }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+That is the same hierarchy as [§2](#2-big-picture-hierarchy), just written as JSON. You do not invent HTML; you fill in these labelled boxes.
+
+#### Punctuation that must be right
+
+JSON is fussy. The computer cannot guess what you meant.
+
+1. **Keys use double quotes** — `"title"` not `title` and not `'title'`.
+2. **A colon sits between the key and the value** — `"type": "text"`.
+3. **Commas go between items, not after the last one.**
+   - Right: `{ "a": 1, "b": 2 }`
+   - Wrong: `{ "a": 1, "b": 2, }` ← extra comma
+4. **Brackets must pair.** Every `{` needs a `}`, every `[` needs a `]`. Use an editor that highlights matching pairs (VS Code, or paste into [jsonlint.com](https://jsonlint.com/) to check).
+5. **Do not put a comma between `}` and `]` when the `}` already closed the last list item** — close the object, then close the list: `} ]`.
+
+A common slip when copying an example is leaving a trailing comma after the last field, or using a curly brace `{` where a list `[` was needed (`taskGroups` is always a list).
+
+#### How this shows up in Admin
+
+In **Template Manager** you paste or edit this text in the **JSON Schema** box and save a version. If a quote or comma is wrong, save is rejected and you see **There is a problem** with the parse error — usually “missing comma” or “unexpected character”. Fix the punctuation and save again. The rest of this manual is the **meaning** of each key once the text is valid JSON.
 
 ---
 

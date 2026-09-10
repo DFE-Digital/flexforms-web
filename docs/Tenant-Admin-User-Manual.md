@@ -2,7 +2,7 @@
 
 A practical guide to the Admin area. Written for **tenant administrators** who run a FlexForms service for their organisation (for example Local SEND Reform Plans, Transfers, or Visits).
 
-You do not need to be a developer to use this manual. Where a change is made in JSON (templates, some tenant settings), the steps still start from the screens you see.
+You do not need to be a developer to use this manual. Where a change is made in JSON (templates, some tenant settings), the steps still start from the screens you see. If you have never seen JSON, read [JSON in plain English](Form-Template-Designer-Manual.md#11-json-in-plain-english) first (about five minutes).
 
 **Related guide:** [Form Template Designer Manual](Form-Template-Designer-Manual.md) — how to design the JSON schema for a form.
 
@@ -229,7 +229,7 @@ Adding a new version **starts from the version you currently have open**, not ne
 
 1. Select **Add New Template Version**.
 2. **New Version Number** — for example `1.1`, `2.0`, `1.2.1`.
-3. **JSON Schema** — prefilled from the version you opened. Edit it, or paste a schema produced with the [designer manual](Form-Template-Designer-Manual.md).
+3. **JSON Schema** — prefilled from the version you opened. Edit it, or paste a schema produced with the [designer manual](Form-Template-Designer-Manual.md). If the curly braces and quotes are unfamiliar, start with [JSON in plain English](Form-Template-Designer-Manual.md#11-json-in-plain-english).
 4. Read the reporting warning (shown in red). Tick:
 
    > I agree and confirm I have discussed any changes with the relevant data team
@@ -1810,6 +1810,7 @@ If you need a second tenant administrator, ask a SuperAdmin to assign the Admin 
 | **Claim / grant** | A single permission assigned to a role or user. |
 | **Contributor** | Someone invited onto a specific application, not necessarily a tenant user with their own forms. |
 | **Live** | Visible to end users who have access. |
+| **JSON** | Structured text made of labelled facts (keys and values). Templates and some tenant settings are stored this way. See [JSON in plain English](Form-Template-Designer-Manual.md#11-json-in-plain-english). |
 | **Schema / JSON schema** | The template document Template Manager saves as a version. |
 | **Target (Shared / Api / Web)** | Which app a Tenant Settings category applies to. |
 | **Tenant** | One organisation’s isolated environment. |
