@@ -321,6 +321,20 @@ public class FieldFormattingServiceTests
         Assert.Equal("&lt;script&gt;alert(1)&lt;/script&gt;", result);
     }
 
+    [Fact]
+    public void GetFormattedFieldValue_uses_confirmation_display_expression_when_provided()
+    {
+        var service = CreateService();
+        var formData = new Dictionary<string, object>
+        {
+            ["member"] = "{\"displayName\":\"Jane Smith\",\"constituencyName\":\"Holborn\",\"name\":\"Jane Smith\"}"
+        };
+
+        var result = service.GetFormattedFieldValue("member", formData, "displayName + \" - \" + constituencyName");
+
+        Assert.Equal("Jane Smith - Holborn", result);
+    }
+
     #endregion
 
     #region GetFormattedFieldValues
@@ -375,7 +389,7 @@ public class FieldFormattingServiceTests
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         Assert.NotNull(formatAutocompleteList);
 
-        var formatted = (List<string>)formatAutocompleteList!.Invoke(service, [autocompleteJson])!;
+        var formatted = (List<string>)formatAutocompleteList!.Invoke(service, [autocompleteJson, null])!;
 
         Assert.Equal(["School A (UKPRN: 1)", "School B (UKPRN: 2)"], formatted);
     }

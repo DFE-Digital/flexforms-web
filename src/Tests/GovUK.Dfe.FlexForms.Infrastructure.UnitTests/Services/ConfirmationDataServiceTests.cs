@@ -124,6 +124,20 @@ public class ConfirmationDataServiceTests
     }
 
     [Fact]
+    public void FormatDisplayData_augments_custom_json_properties()
+    {
+        var formData = new Dictionary<string, object>
+        {
+            ["member"] = "{\"displayName\":\"Jane Smith\",\"constituencyName\":\"Holborn\",\"email\":\"jane@example.test\"}"
+        };
+
+        var result = _service.FormatDisplayData(formData, ["displayName", "constituencyName"]);
+
+        Assert.Equal("Jane Smith", result["Display Name"]);
+        Assert.Equal("Holborn", result["Constituency Name"]);
+    }
+
+    [Fact]
     public void FormatDisplayData_ignores_malformed_json_augmentation()
     {
         var formData = new Dictionary<string, object>

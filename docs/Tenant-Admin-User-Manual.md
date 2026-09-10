@@ -61,6 +61,7 @@ You do not need to be a developer to use this manual. Where a change is made in 
     - [14.4 How to add or update a setting](#144-how-to-add-or-update-a-setting)
     - [14.5 Audit log](#145-audit-log)
     - [14.6 File validation (tenant function)](#146-file-validation-tenant-function)
+    - [14.7 Autocomplete search (FormEngine complex fields)](#147-autocomplete-search-formengine-complex-fields)
 15. [Applications (admin list)](#15-applications-admin-list)
 16. [What end users see](#16-what-end-users-see)
 17. [System tools and caches](#17-system-tools-and-caches)
@@ -1546,6 +1547,7 @@ Prefer the dedicated screens first. If you must use this page, these categories 
 | **EmailPlaceholderMappings** | Shared | Extra GOV.UK Notify personalisation from form answers | This page (JSON) — see [Email placeholder mappings](#13-email-placeholder-mappings) |
 | **Layout** | Web | Service name in the header, phase banner text and links | This page (JSON) — there is no separate form |
 | **FileValidation** | Shared | Whether submit is blocked until a tenant function validates eligible files | This page (JSON) — see [14.6](#146-file-validation-tenant-function) |
+| **FormEngine** | Web | Search APIs behind autocomplete questions (endpoint, API key or client credentials, dropdown/confirmation labels) | This page (JSON) — see [14.7](#147-autocomplete-search-formengine-complex-fields) |
 
 **Layout** example (illustrative):
 
@@ -1579,6 +1581,7 @@ Do not edit these unless you have been briefed. They can lock people out or brea
 | **AllowedHosts** | Which hostnames the app accepts |
 | **FeatureManagement** | Feature flags |
 | **Email** / **EmailTemplates** | Notify API key and template GUIDs (platform-owned) |
+| **FormEngine** | Contains search API keys or OAuth client secrets. You may add a `ComplexFields` entry when briefed — see [14.7](#147-autocomplete-search-formengine-complex-fields). Do not delete existing Trust / Establishment / Upload ids. |
 
 The page also explains how SuperAdmins switch login without a platform restart (TestAuthentication / EntraSso / Authentication `Scheme`). Tenant Admins should not do this unprompted.
 
@@ -1711,6 +1714,201 @@ Technical contract: [flexforms-api README — File validation](https://github.co
 - [ ] `FileUploaded` trigger publishes to the function
 - [ ] Non-prod test: upload → pending → function → status + submit gate
 
+### 14.7 Autocomplete search (FormEngine complex fields)
+
+Search questions (trusts, academies, members of parliament, and similar) are **not** fully defined in the form template. The template only names a **config id**. The live URL, secrets, and most display options live in Tenant Settings category **`FormEngine`** (Target **Web**).
+
+Applicants never talk to the third-party API. They type into FlexForms; FlexForms looks up the config for that id and calls the API on the server.
+
+**Related:** [Form Template Designer Manual — complexField](Form-Template-Designer-Manual.md#810-complexfield--search-or-upload).
+
+#### How the pieces fit together
+
+```
+Template field type "complexField"
+  └── complexField.id  (e.g. TrustComplexField)
+
+Tenant Settings  FormEngine  (Target Web)
+  └── ComplexFields[]  matching that Id
+        ├── ApiEndpoint
+        ├── Auth  (ApiKey  or  ClientCredentials)
+        └── optional DropdownDisplay / ConfirmationDisplay
+```
+
+You **cannot** invent a new `complexField.id` in the template alone. Add the id here first (or ask platform), then reference it in Template Manager.
+
+Tick **Secret (encrypt at rest)** on the `FormEngine` row whenever it contains an API key or client secret. After save, select **Refresh settings**.
+
+#### Step by step — register a search field
+
+1. Open **Admin → Tenant Admin → Tenant Settings**.
+2. Find **FormEngine** with Target **Web**, or **Add a setting** with Category `FormEngine`, Target **Web**.
+3. Put a `ComplexFields` array in the JSON (keep any existing entries; **add** a new object rather than deleting trusts/academies).
+4. Tick **Secret**.
+5. **Validate / diff**, then **Add setting** or **Update**.
+6. **Refresh settings**.
+7. In Template Manager, add a field with `"type": "complexField"` and `"complexField": { "id": "<same Id>" }`. Save a new version and preview.
+
+#### Authentication type A — API key
+
+Use this when the third-party API expects a static key in an `ApiKey` HTTP header (the Academies / Trusts pattern).
+
+```json
+{
+  "ComplexFields": [
+    {
+      "Id": "TrustComplexField",
+      "FieldType": "autocomplete",
+      "ApiEndpoint": "https://example.test/v4/trusts?search={0}",
+      "ApiKey": "your-api-key",
+      "MinLength": 3,
+      "Placeholder": "Start typing to search for Trusts...",
+      "Label": "Trust"
+    }
+  ]
+}
+```
+
+| Property | Required | What it does |
+|----------|----------|----------------|
+| `Id` | Yes | Must match `complexField.id` in the template. PascalCase, unique in this list. |
+| `FieldType` | Yes for search | `autocomplete`. Use `upload` only for file-upload complex fields. |
+| `ApiEndpoint` | Yes | HTTP GET URL. Put `{0}` where the user’s search text should go. If there is no `{0}`, FlexForms appends `?q=` (or `&q=` if a query string already exists). |
+| `ApiKey` | For this auth type | Sent as header `ApiKey`. |
+| `MinLength` | No | Characters before search runs (default `3`). |
+| `Placeholder` | No | Grey text in the search box. |
+| `AllowMultiple` | No | `true` to let the user pick more than one result. |
+| `MaxSelections` | No | `0` means no limit when multiple is allowed. |
+| `Label` | No | Used in “Is this the right {label}?” and collection item labels. Default `Item`. |
+
+If one complex field has no `ApiKey`, FlexForms may reuse another field’s key in the same list, or `FormEngine:AcademiesApiKey`. Do not rely on that for a new API — set `ApiKey` on the field that needs it.
+
+#### Authentication type B — OAuth2 client credentials (token)
+
+Use this when the third-party API does **not** take an API key. FlexForms first POSTs to a token URL (`grant_type=client_credentials`), then calls your search URL with `Authorization: Bearer …`. Tokens are cached until just before they expire; a 401 retries once with a fresh token.
+
+```json
+{
+  "ComplexFields": [
+    {
+      "Id": "MemberComplexField",
+      "FieldType": "autocomplete",
+      "ApiEndpoint": "https://members.example/search?q={0}",
+      "AuthType": "ClientCredentials",
+      "TokenEndpoint": "https://login.microsoftonline.com/{tenant-id}/oauth2/v2.0/token",
+      "ClientId": "your-app-id",
+      "ClientSecret": "your-client-secret",
+      "Scope": "api://your-api/.default",
+      "MinLength": 3,
+      "Placeholder": "Start typing a name...",
+      "Label": "Member"
+    }
+  ]
+}
+```
+
+| Property | Required | What it does |
+|----------|----------|----------------|
+| `AuthType` | Recommended | `ClientCredentials`. If you omit it, FlexForms still uses client credentials when `TokenEndpoint`, `ClientId`, and `ClientSecret` are all set. Set `ApiKey` (the auth type) only when you must force the API-key header. |
+| `TokenEndpoint` | Yes | Token URL. FlexForms POSTs `application/x-www-form-urlencoded` with `grant_type`, `client_id`, `client_secret`, and `scope` when present. |
+| `ClientId` | Yes | Confidential client id. |
+| `ClientSecret` | Yes | Confidential client secret. Always store this category as **Secret**. |
+| `Scope` | Usually | Many Entra APIs need `api://{app-id}/.default`. Omit only if the token endpoint does not use scope. |
+
+Do **not** put `ApiKey` on a client-credentials field. The two auth types are alternatives, not combined.
+
+Certificate / managed-identity login for the search API is not supported here. If the provider only offers those, talk to the platform team.
+
+#### Query URL tips
+
+| Endpoint pattern | What FlexForms does |
+|------------------|---------------------|
+| `https://api.example/search?q={0}` | Replaces `{0}` with the encoded query. |
+| `https://api.example/search/{0}` | Same, in the path. |
+| `https://api.example/search` (no `{0}`) | Calls `https://api.example/search?q=…`. |
+| Extra query flags | You may add them on the URL. `IncludeOnlyAcademies` is stripped before the HTTP call and used only for establishment filtering. |
+
+The search response must be a JSON **array**, or an object with `data`, `results`, `items`, or `values` as an array.
+
+FlexForms copies string, number, and boolean properties from each result (and a nested `name` where present). Arrays such as `roles` are ignored. A display `name` is still set from the first of: `name`, `title`, `label`, `value`, `displayName`, `groupName`, `text`.
+
+#### What appears in the dropdown and on check your answers
+
+By default (no extra properties):
+
+| Surface | Built-in behaviour |
+|---------|---------------------|
+| Dropdown row | The result `name`, plus UKPRN, code, and/or Companies House number when those properties exist |
+| “Is this the right …?” after Search | Trusts/academies-style fields (`trustname`, UKPRN, postcode, and so on) depending on the config id |
+| Check your answers | Bold **name**, then postcode, UKPRN, and Companies House number when present |
+
+To change that **without code**, add display expressions. The template can override the same keys; if neither is set, the table above still applies.
+
+**Expression syntax** (same in Tenant Settings and in the template):
+
+- Concatenate JSON properties and quoted text: `displayName + " - " + constituencyName`
+- Or placeholders: `{firstName} {lastName}`
+- Property names must match the JSON from the API (`displayName`, `firstName`, `constituencyName`, …).
+- Empty properties are skipped (you do not get a trailing ` - `).
+
+Worked example — members search:
+
+```json
+{
+  "Id": "MemberComplexField",
+  "FieldType": "autocomplete",
+  "ApiEndpoint": "https://members.example/search?q={0}",
+  "AuthType": "ClientCredentials",
+  "TokenEndpoint": "https://login.example/oauth2/v2.0/token",
+  "ClientId": "...",
+  "ClientSecret": "...",
+  "Scope": "api://members/.default",
+  "DropdownDisplay": "displayName + \" - \" + constituencyName",
+  "ConfirmationDisplay": "firstName + \" \" + lastName",
+  "Label": "Member"
+}
+```
+
+| Property | Where the user sees it |
+|----------|------------------------|
+| `DropdownDisplay` | Each row in the search list, and the text left in the box after they choose |
+| `ConfirmationDisplay` | Check your answers / preview. Also drives which JSON properties are listed on “Is this the right …?” |
+
+The **stored answer** is still the full JSON object (id, names, email, constituency, and so on), not only the label. Event mappings and email placeholders can still use `ComplexFieldProperty` with `nestedPath` such as `email` or `constituencyName`.
+
+If both the template and this config set `DropdownDisplay` / `ConfirmationDisplay`, **the template wins**.
+
+#### Who can change this
+
+| Role | Typical work |
+|-------|----------------|
+| **Tenant Admin** | Add or update `FormEngine` on **Web** (with platform-supplied URLs and secrets) |
+| **SuperAdmin / platform** | Issue API keys or Entra app registrations; confirm the token URL and scope |
+| **Template Manager** | Point a question at the `Id`; optional display expressions on `complexField` |
+
+#### Autocomplete checklist
+
+- [ ] `FormEngine` Target **Web**; **Secret** ticked if keys or secrets are present
+- [ ] New object **added** to `ComplexFields` (existing Trust / Establishment / Upload ids kept)
+- [ ] `Id` matches the template `complexField.id` exactly (case-insensitive, but keep PascalCase)
+- [ ] `FieldType` is `autocomplete`
+- [ ] `ApiEndpoint` reachable from the Web app (not only your laptop)
+- [ ] Either `ApiKey` **or** `TokenEndpoint` + `ClientId` + `ClientSecret` (not a mix)
+- [ ] **Refresh settings** after save
+- [ ] Preview the form: type past `MinLength`, pick a result, check the dropdown label and check your answers
+- [ ] If mapping emails or events, confirm nested property names on the stored JSON
+
+#### Troubleshooting autocomplete
+
+| What you see | Likely cause |
+|--------------|----------------|
+| Empty dropdown | Query shorter than `MinLength`; no `ApiEndpoint`; API returned an error; results had no `name` / `displayName` and no `DropdownDisplay` that resolved |
+| HTTP 401 / 403 in Web logs | Wrong `ApiKey`, or token request failed (`TokenEndpoint` / `ClientId` / `ClientSecret` / `Scope`) |
+| “No API endpoint configured” in logs | `Id` in the template does not match any `ComplexFields` entry after refresh |
+| Dropdown shows a name but confirmation is blank | `ConfirmationDisplay` uses property names that are not on the stored object; omit it to use the built-in name layout |
+| Old trust search still works, new search does not | You replaced the whole `ComplexFields` array instead of appending; restore the previous ids |
+| Changes not visible | **Refresh settings**, then hard-refresh the form (or clear sessions/caches) |
+
 ---
 
 ## 15. Applications (admin list)
@@ -1797,6 +1995,7 @@ If you need a second tenant administrator, ask a SuperAdmin to assign the Admin 
 | Submit succeeded but reporting never received a message | See [12.18 Troubleshooting event mappings](#1218-troubleshooting-event-mappings). Check triggers, mapping, Service Bus topic/subscription, and API logs. |
 | Confirmation email missing academy name / custom text | See [13.12 Troubleshooting email placeholders](#1312-troubleshooting-email-placeholders). Check Notify `((placeholder))` spelling, `EmailPlaceholderMappings` (Target Shared), and form `fieldId`. |
 | Upload stays “Validation pending” / submit stays blocked | See [14.6](#146-file-validation-tenant-function). Check `FileValidation` mode, `FileUploaded` trigger, function `X-Api-Key` (raw) vs `AuthProviders` `KeyHash`, `IsServicePrincipal: true`, and **Refresh settings**. |
+| Autocomplete search empty / 401 / wrong labels | See [14.7](#147-autocomplete-search-formengine-complex-fields). Check `FormEngine` Target **Web**, matching `Id`, **Refresh settings**, API key vs client credentials, and `DropdownDisplay` / `ConfirmationDisplay`. |
 
 
 ---
@@ -1830,6 +2029,9 @@ If you need a second tenant administrator, ask a SuperAdmin to assign the Admin 
 | **EmailPlaceholderMappings** | TenantConfig category that maps form field Ids (and metadata) onto Notify personalisation keys. |
 | **FileValidation** | Optional tenant-function check of uploads (not virus scanning). Modes: Off, FailOnInvalid, RequirePassed. |
 | **AuthProviders** | TenantConfig for machine API keys / mTLS. File-validation stores a SHA-256 `KeyHash`, never the raw key. |
+| **FormEngine** | Tenant Settings (Target **Web**) that register search/upload complex fields: `ApiEndpoint`, `ApiKey` or client-credentials token settings, optional display expressions. |
+| **complexField id** | The template’s `complexField.id`. Must match a `ComplexFields` `Id`. Does not contain URLs or secrets. |
+| **DropdownDisplay / ConfirmationDisplay** | Optional expressions that label search results and check-your-answers text. Template values override FormEngine. |
 
 ---
 

@@ -144,6 +144,23 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
             if (string.IsNullOrWhiteSpace(chNo) && root.TryGetProperty("companiesHousenumber", out var c2) && c2.ValueKind == JsonValueKind.String)
                 chNo = c2.GetString();
 
+            foreach (var property in root.EnumerateObject())
+            {
+                if (sink.ContainsKey(property.Name))
+                    continue;
+
+                if (property.Value.ValueKind == JsonValueKind.String)
+                {
+                    var text = property.Value.GetString();
+                    if (!string.IsNullOrWhiteSpace(text))
+                        sink[property.Name] = text;
+                }
+                else if (property.Value.ValueKind == JsonValueKind.Number)
+                {
+                    sink[property.Name] = property.Value.ToString();
+                }
+            }
+
             if (root.TryGetProperty("address", out var addr) && addr.ValueKind == JsonValueKind.Object)
             {
                 if (string.IsNullOrWhiteSpace(postcode) && addr.TryGetProperty("postcode", out var apc) && apc.ValueKind == JsonValueKind.String)
