@@ -12,6 +12,12 @@ public sealed class ComplexFieldConfigurationService(
     IRequestAppConfiguration requestConfiguration,
     ILogger<ComplexFieldConfigurationService> logger) : IComplexFieldConfigurationService
 {
+    private static readonly string[] KnownConfigurationKeys =
+    [
+        "ApiEndpoint", "ApiKey", "AuthType", "TokenEndpoint", "ClientId", "ClientSecret", "Scope",
+        "FieldType", "AllowMultiple", "MinLength", "Placeholder", "MaxSelections", "Label"
+    ];
+
     /// <inheritdoc />
     public ComplexFieldConfiguration GetConfiguration(string complexFieldId)
     {
@@ -30,8 +36,8 @@ public sealed class ComplexFieldConfigurationService(
                     NormalizeFieldType(config);
                     ApplySharedApiKeyFallback(config, configurations, configuration);
                     logger.LogDebug(
-                        "Loaded complex field configuration for {ComplexFieldId}: FieldType={FieldType}, Endpoint={Endpoint}, AllowMultiple={AllowMultiple}, MinLength={MinLength}, HasApiKey={HasApiKey}",
-                        complexFieldId, config.FieldType, config.ApiEndpoint, config.AllowMultiple, config.MinLength, !string.IsNullOrEmpty(config.ApiKey));
+                        "Loaded complex field configuration for {ComplexFieldId}: FieldType={FieldType}, Endpoint={Endpoint}, AllowMultiple={AllowMultiple}, MinLength={MinLength}, HasApiKey={HasApiKey}, UsesClientCredentials={UsesClientCredentials}",
+                        complexFieldId, config.FieldType, config.ApiEndpoint, config.AllowMultiple, config.MinLength, !string.IsNullOrEmpty(config.ApiKey), config.UsesClientCredentials);
                     return config;
                 }
             }
@@ -53,6 +59,11 @@ public sealed class ComplexFieldConfigurationService(
             Id = complexFieldId,
             ApiEndpoint = configSection["ApiEndpoint"] ?? string.Empty,
             ApiKey = configSection["ApiKey"] ?? string.Empty,
+            AuthType = configSection["AuthType"] ?? string.Empty,
+            TokenEndpoint = configSection["TokenEndpoint"] ?? string.Empty,
+            ClientId = configSection["ClientId"] ?? string.Empty,
+            ClientSecret = configSection["ClientSecret"] ?? string.Empty,
+            Scope = configSection["Scope"] ?? string.Empty,
             FieldType = configSection["FieldType"] ?? string.Empty,
             AllowMultiple = bool.TryParse(configSection["AllowMultiple"], out var allowMultiple) && allowMultiple,
             MinLength = int.TryParse(configSection["MinLength"], out var minLength) ? minLength : 3,
@@ -65,7 +76,7 @@ public sealed class ComplexFieldConfigurationService(
 
         foreach (var child in configSection.GetChildren())
         {
-            if (!new[] { "ApiEndpoint", "ApiKey", "FieldType", "AllowMultiple", "MinLength", "Placeholder", "MaxSelections", "Label" }.Contains(child.Key))
+            if (!KnownConfigurationKeys.Contains(child.Key, StringComparer.OrdinalIgnoreCase))
             {
                 fieldConfiguration.AdditionalProperties[child.Key] = child.Value ?? "";
             }
@@ -83,8 +94,8 @@ public sealed class ComplexFieldConfigurationService(
         }
 
         logger.LogDebug(
-            "Loaded complex field configuration for {ComplexFieldId}: FieldType={FieldType}, Endpoint={Endpoint}, AllowMultiple={AllowMultiple}, MinLength={MinLength}, HasApiKey={HasApiKey}",
-            complexFieldId, fieldConfiguration.FieldType, fieldConfiguration.ApiEndpoint, fieldConfiguration.AllowMultiple, fieldConfiguration.MinLength, !string.IsNullOrEmpty(fieldConfiguration.ApiKey));
+            "Loaded complex field configuration for {ComplexFieldId}: FieldType={FieldType}, Endpoint={Endpoint}, AllowMultiple={AllowMultiple}, MinLength={MinLength}, HasApiKey={HasApiKey}, UsesClientCredentials={UsesClientCredentials}",
+            complexFieldId, fieldConfiguration.FieldType, fieldConfiguration.ApiEndpoint, fieldConfiguration.AllowMultiple, fieldConfiguration.MinLength, !string.IsNullOrEmpty(fieldConfiguration.ApiKey), fieldConfiguration.UsesClientCredentials);
 
         return fieldConfiguration;
     }
@@ -149,6 +160,16 @@ public sealed class ComplexFieldConfigurationService(
             score += 2;
         }
 
+        if (!string.IsNullOrWhiteSpace(config.TokenEndpoint))
+        {
+            score += 3;
+        }
+
+        if (!string.IsNullOrWhiteSpace(config.ClientId))
+        {
+            score += 1;
+        }
+
         if (config.AllowMultiple)
         {
             score += 1;
@@ -186,7 +207,7 @@ public sealed class ComplexFieldConfigurationService(
         List<ComplexFieldConfiguration> allConfigurations,
         IConfiguration configuration)
     {
-        if (!string.IsNullOrEmpty(config.ApiKey))
+        if (!string.IsNullOrEmpty(config.ApiKey) || config.UsesClientCredentials)
         {
             return;
         }

@@ -55,4 +55,37 @@ public class ComplexFieldConfigurationServiceTests
         Assert.Equal("unknown", missing.Id);
         Assert.Equal("autocomplete", missing.FieldType);
     }
+
+    [Fact]
+    public void GetConfiguration_ShouldBindClientCredentialsAndSkipApiKeyFallback()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["FormEngine:ComplexFields:0:Id"] = "orgs",
+            ["FormEngine:ComplexFields:0:FieldType"] = "autocomplete",
+            ["FormEngine:ComplexFields:0:ApiEndpoint"] = "https://example.test/orgs",
+            ["FormEngine:ComplexFields:0:AuthType"] = "ClientCredentials",
+            ["FormEngine:ComplexFields:0:TokenEndpoint"] = "https://login.example.test/token",
+            ["FormEngine:ComplexFields:0:ClientId"] = "client-id",
+            ["FormEngine:ComplexFields:0:ClientSecret"] = "client-secret",
+            ["FormEngine:ComplexFields:0:Scope"] = "api://example/.default",
+            ["FormEngine:ComplexFields:1:Id"] = "school",
+            ["FormEngine:ComplexFields:1:ApiKey"] = "shared-key",
+            ["FormEngine:AcademiesApiKey"] = "fallback-key"
+        }).Build();
+        var requestConfig = Substitute.For<IRequestAppConfiguration>();
+        requestConfig.Current.Returns(configuration);
+        var service = new ComplexFieldConfigurationService(
+            requestConfig,
+            NullLogger<ComplexFieldConfigurationService>.Instance);
+
+        var found = service.GetConfiguration("orgs");
+
+        Assert.True(found.UsesClientCredentials);
+        Assert.Equal("https://login.example.test/token", found.TokenEndpoint);
+        Assert.Equal("client-id", found.ClientId);
+        Assert.Equal("client-secret", found.ClientSecret);
+        Assert.Equal("api://example/.default", found.Scope);
+        Assert.True(string.IsNullOrEmpty(found.ApiKey));
+    }
 }
