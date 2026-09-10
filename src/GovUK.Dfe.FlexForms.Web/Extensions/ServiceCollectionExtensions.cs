@@ -55,6 +55,7 @@ namespace GovUK.Dfe.FlexForms.Web.Extensions
 
             services.AddScoped<IFieldRendererService, FieldRendererService>();
             services.AddScoped<IFormErrorStore, FormErrorStore>();
+            services.AddSingleton<IAutocompleteAccessTokenProvider, AutocompleteAccessTokenProvider>();
             services.AddScoped<IAutocompleteService, AutocompleteService>();
             services.AddScoped<IApplicationStatusService, ApplicationStatusService>();
             services.AddScoped<ITemplateSelectionService, TemplateSelectionService>();
