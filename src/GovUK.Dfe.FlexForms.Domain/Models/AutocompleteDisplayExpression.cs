@@ -10,7 +10,10 @@ namespace GovUK.Dfe.FlexForms.Domain.Models;
 /// </summary>
 public static class AutocompleteDisplayExpression
 {
-    private static readonly Regex PlaceholderPattern = new(@"\{([A-Za-z_][A-Za-z0-9_]*)\}", RegexOptions.Compiled);
+    private static readonly Regex PlaceholderPattern = new(
+        @"\{([A-Za-z_][A-Za-z0-9_]*)\}",
+        RegexOptions.Compiled,
+        TimeSpan.FromMilliseconds(100));
 
     public static bool IsSpecified(string? expression) =>
         !string.IsNullOrWhiteSpace(expression);

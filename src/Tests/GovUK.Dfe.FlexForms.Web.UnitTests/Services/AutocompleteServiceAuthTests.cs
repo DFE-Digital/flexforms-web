@@ -98,6 +98,106 @@ public class AutocompleteServiceAuthTests
         Assert.Single(results);
     }
 
+    [Fact]
+    public async Task SearchAsync_ShouldSendRequestWithoutAuth_WhenTokenProviderReturnsNoToken()
+    {
+        HttpRequestMessage? captured = null;
+        var httpClient = CreateHttpClient(request =>
+        {
+            captured = request;
+            return JsonArray("Acme Trust");
+        });
+        var tokens = Substitute.For<IAutocompleteAccessTokenProvider>();
+        tokens.GetAccessTokenAsync(Arg.Any<ComplexFieldConfiguration>(), false, Arg.Any<CancellationToken>())
+            .Returns((string?)null);
+        var service = CreateService(httpClient, new ComplexFieldConfiguration
+        {
+            Id = "orgs",
+            ApiEndpoint = "https://example.test/orgs",
+            AuthType = "ClientCredentials",
+            TokenEndpoint = "https://login.example.test/token",
+            ClientId = "id",
+            ClientSecret = "secret"
+        }, tokens);
+
+        var results = await service.SearchAsync("orgs", "acme");
+
+        Assert.Single(results);
+        Assert.NotNull(captured);
+        Assert.Null(captured!.Headers.Authorization);
+        Assert.False(captured.Headers.Contains("ApiKey"));
+    }
+
+    [Fact]
+    public async Task SearchAsync_ShouldCopyAllScalarAndNestedNameProperties()
+    {
+        var httpClient = CreateHttpClient(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(
+                """
+                [{
+                  "id": 123,
+                  "displayName": "Jane Smith",
+                  "active": true,
+                  "retired": false,
+                  "constituency": { "name": "Example West" },
+                  "empty": "",
+                  "ignored": ["value"]
+                }]
+                """)
+            {
+                Headers = { ContentType = new MediaTypeHeaderValue("application/json") }
+            }
+        });
+        var service = CreateService(httpClient, new ComplexFieldConfiguration
+        {
+            Id = "members",
+            ApiEndpoint = "https://example.test/members",
+            MinLength = 1
+        });
+
+        var results = await service.SearchAsync("members", "jane");
+
+        var result = Assert.IsType<Dictionary<string, object>>(Assert.Single(results));
+        Assert.Equal("123", result["id"]);
+        Assert.Equal("Jane Smith", result["name"]);
+        Assert.Equal("Jane Smith", result["displayName"]);
+        Assert.Equal("True", result["active"]);
+        Assert.Equal("False", result["retired"]);
+        Assert.Equal("Example West", result["constituency"]);
+        Assert.False(result.ContainsKey("empty"));
+        Assert.False(result.ContainsKey("ignored"));
+    }
+
+    [Fact]
+    public async Task SearchAsync_ShouldRetryOnlyOnce_WhenRefreshedTokenIsAlsoUnauthorized()
+    {
+        var attempts = 0;
+        var httpClient = CreateHttpClient(_ =>
+        {
+            attempts++;
+            return new HttpResponseMessage(HttpStatusCode.Unauthorized)
+            {
+                Content = new StringContent("unauthorized")
+            };
+        });
+        var tokens = Substitute.For<IAutocompleteAccessTokenProvider>();
+        tokens.GetAccessTokenAsync(Arg.Any<ComplexFieldConfiguration>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(call => (bool)call[1] ? "fresh-token" : "stale-token");
+        var service = CreateService(httpClient, new ComplexFieldConfiguration
+        {
+            Id = "orgs",
+            ApiEndpoint = "https://example.test/orgs",
+            AuthType = "ClientCredentials",
+            TokenEndpoint = "https://login.example.test/token",
+            ClientId = "id",
+            ClientSecret = "secret"
+        }, tokens);
+
+        Assert.Empty(await service.SearchAsync("orgs", "acme"));
+        Assert.Equal(2, attempts);
+    }
+
     private static AutocompleteService CreateService(
         HttpClient httpClient,
         ComplexFieldConfiguration configuration,
