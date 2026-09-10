@@ -52,6 +52,8 @@ public class UserManagerEditAdminServiceTests
                 Arg.Any<int?>(),
                 Arg.Any<Guid?>(),
                 Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
                 Arg.Any<CancellationToken>())
             .Returns(EmptyPage());
 
@@ -83,6 +85,8 @@ public class UserManagerEditAdminServiceTests
                 Arg.Any<int?>(),
                 Arg.Any<int?>(),
                 Arg.Any<Guid?>(),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
                 Arg.Any<string>(),
                 Arg.Any<CancellationToken>())
             .Returns(Page(new TenantUserDto
@@ -117,6 +121,8 @@ public class UserManagerEditAdminServiceTests
                 Arg.Any<int?>(),
                 Arg.Any<int?>(),
                 Arg.Any<Guid?>(),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
                 Arg.Any<string>(),
                 Arg.Any<CancellationToken>())
             .Returns(Page(new TenantUserDto
@@ -153,6 +159,8 @@ public class UserManagerEditAdminServiceTests
                 Arg.Any<int?>(),
                 Arg.Any<Guid?>(),
                 Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
                 Arg.Any<CancellationToken>())
             .Returns(Page(new TenantUserDto
             {
@@ -180,6 +188,8 @@ public class UserManagerEditAdminServiceTests
                 Arg.Any<int?>(),
                 Arg.Any<Guid?>(),
                 Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
                 Arg.Any<CancellationToken>())
             .Returns(Page(new TenantUserDto
             {
@@ -204,6 +214,8 @@ public class UserManagerEditAdminServiceTests
                 Arg.Any<int?>(),
                 Arg.Any<Guid?>(),
                 Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
                 Arg.Any<CancellationToken>())
             .Throws(new InvalidOperationException("user lookup failed"));
 
@@ -220,6 +232,8 @@ public class UserManagerEditAdminServiceTests
                 Arg.Any<int?>(),
                 Arg.Any<int?>(),
                 Arg.Any<Guid?>(),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
                 Arg.Any<string>(),
                 Arg.Any<CancellationToken>())
             .Returns(Page(new TenantUserDto
@@ -244,6 +258,8 @@ public class UserManagerEditAdminServiceTests
                 Arg.Any<int?>(),
                 Arg.Any<Guid?>(),
                 Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
                 Arg.Any<CancellationToken>())
             .Returns(EmptyPage());
 
@@ -260,6 +276,8 @@ public class UserManagerEditAdminServiceTests
                 Arg.Any<int?>(),
                 Arg.Any<Guid?>(),
                 Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
                 Arg.Any<CancellationToken>())
             .Returns(EmptyPage());
 
@@ -275,6 +293,8 @@ public class UserManagerEditAdminServiceTests
                 Arg.Any<int?>(),
                 Arg.Any<int?>(),
                 Arg.Any<Guid?>(),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
                 Arg.Any<string>(),
                 Arg.Any<CancellationToken>())
             .Returns(Page(new TenantUserDto
