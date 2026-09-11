@@ -293,7 +293,7 @@ The cache refreshes immediately. Repeat for each base status you want to rename 
 
 There is **no Admin screen** for dashboard columns. You add them in the template JSON, then save a new version in Template Manager.
 
-The applications dashboard (`/applications/dashboard`) heading defaults to **Your {plural}** and can be overridden in [Organisation settings](#11-organisation-settings). The table columns come from the template’s `"dashboard"` section.
+The applications dashboard (`/applications/dashboard`) heading defaults to **Your {plural}** and can be overridden in [Organisation settings](#11-organisation-settings), including a `{template_name}` placeholder that names the form the user is in. The table columns come from the template’s `"dashboard"` section.
 
 ![Dashboard table with a mix of system and field columns](images/08-dashboard-custom-columns.png)
 
@@ -627,6 +627,23 @@ Show a GOV.UK notification banner on **every page** (for example “This is a te
 | **Start new button text** | Primary button label. Leave blank to use **Start new {singular}** |
 
 Listing options do **not** change which columns appear. Columns come from the template JSON ([section 7](#7-dashboard-columns-via-the-template)).
+
+#### Showing the template name in dashboard text
+
+Any of the five text fields above can include the placeholder `{template_name}`. It is replaced at page load with the name of the form the user is currently working in, so one setting covers every template in your tenant.
+
+| You type | A user in **Transfer** sees |
+|----------|-----------------------------|
+| `Your applications for {template_name}` | Your applications for Transfer |
+| `{template_name} applications in progress` | Transfer applications in progress |
+| `Start new {template_name} application` | Start new Transfer application |
+
+Notes:
+
+- The placeholder is not case sensitive, so `{TEMPLATE_NAME}` works too.
+- If the service cannot tell which form the user is in, the placeholder is removed and the spacing tidied up, so `Your applications for {template_name}` becomes **Your applications for**. Write your copy so it still reads sensibly without the name.
+- The name shown is the one on the form in Template Manager. If you rename a form, people already signed in keep seeing the old name until they choose a form again or their session ends.
+- Leaving a field blank still falls back to the terminology default ([section 11.1](#111-application-terminology)); the placeholder only applies to text you enter yourself.
 
 ### 11.4 Application submitted page
 

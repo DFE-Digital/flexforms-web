@@ -154,10 +154,15 @@
 
                     <h3 class="govuk-heading-s">Dashboard text</h3>
                     <p class="govuk-hint">Leave a field blank to keep the default text based on application terminology.</p>
+                    <p class="govuk-hint">
+                        Any of these fields can include <code>{template_name}</code>, which is replaced with the
+                        name of the template the user is working in. For example Your applications for {template_name}
+                        becomes Your applications for Transfer.
+                    </p>
 
                     <div class="govuk-form-group">
                         <label class="govuk-label" asp-for="DashboardMainHeading">Main heading</label>
-                        <div class="govuk-hint">For example Your visits</div>
+                        <div class="govuk-hint">For example Your visits for {template_name}</div>
                         <input class="govuk-input" asp-for="DashboardMainHeading" id="DashboardMainHeading" autocomplete="off" />
                     </div>
 
