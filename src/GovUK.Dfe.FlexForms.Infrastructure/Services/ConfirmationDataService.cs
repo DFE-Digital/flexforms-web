@@ -33,18 +33,23 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                 return result;
             }
 
-            // Enrich form data from any JSON object values (e.g. complex field "Data[EstablishmentComplexField]")
-            // so that trustname, ukprn, postcode etc. are available for display, same as UKPRN.
-            AugmentFormDataFromJsonValues(formData);
+            // Enrich a copy of the form data from any JSON object values (e.g. complex field
+            // "Data[EstablishmentComplexField]") so that trustname, ukprn, postcode etc. are available
+            // for display, same as UKPRN. The caller's dictionary is re-posted as hidden inputs by the
+            // confirmation page, so enriching it in place would submit a selected item's own properties
+            // (referenceNumber, type, ...) as top-level form fields, where they outrank the route values
+            // of the same name on the original page.
+            var displayData = new Dictionary<string, object>(formData);
+            AugmentFormDataFromJsonValues(displayData);
 
             // If no specific display fields are specified, show all non-system fields
             var fieldsToShow = displayFields?.Any() == true 
                 ? displayFields 
-                : formData.Keys.Where(k => !IsSystemField(k)).ToArray();
+                : displayData.Keys.Where(k => !IsSystemField(k)).ToArray();
 
             foreach (var fieldName in fieldsToShow)
             {
-                if (formData.TryGetValue(fieldName, out var value))
+                if (displayData.TryGetValue(fieldName, out var value))
                 {
                     var displayName = GetFieldDisplayName(fieldName);
                     var formattedValue = FormatFieldValue(fieldName, value);
