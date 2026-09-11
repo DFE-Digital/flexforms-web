@@ -68,6 +68,8 @@ public sealed class OrganisationSettingsAdminService(
     {
         try
         {
+            await LoadSubmittedPageCopyAsync(state, cancellationToken);
+
             await UpsertCategoryAsync(
                 state.TenantId,
                 CategoryTerminology,
@@ -325,6 +327,23 @@ public sealed class OrganisationSettingsAdminService(
 
         state.SubmittedPanelTitle = copy.PanelTitle;
         state.SubmittedBodyMarkdown = copy.BodyMarkdown;
+    }
+
+    /// <summary>
+    /// The submitted page category holds the copy for every template in a single document, so the entries
+    /// for templates that are not being edited have to be read back before the category is overwritten.
+    /// </summary>
+    private async Task LoadSubmittedPageCopyAsync(
+        OrganisationSettingsWorkState state,
+        CancellationToken cancellationToken)
+    {
+        var response = await tenantAdminClient.GetSafeTenantSettingsAsync(state.TenantId, cancellationToken);
+
+        foreach (var setting in response?.Settings ?? [])
+        {
+            if (string.Equals(setting.Category, CategoryApplicationSubmittedPage, StringComparison.OrdinalIgnoreCase))
+                ApplySettingJson(state, setting.Category, setting.SettingsJson);
+        }
     }
 
     private static void MergeSelectedSubmittedCopy(OrganisationSettingsWorkState state)
