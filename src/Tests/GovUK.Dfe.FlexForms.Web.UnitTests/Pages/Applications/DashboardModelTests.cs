@@ -29,6 +29,7 @@ public class DashboardModelTests
     private readonly IMemoryCache _memoryCache = new MemoryCache(new MemoryCacheOptions());
     private readonly IOptions<DashboardOptions> _options = Options.Create(new DashboardOptions { PageSize = 10, EnableApplicationFilters = true });
     private readonly IApplicationTerminologyProvider _terminology = Substitute.For<IApplicationTerminologyProvider>();
+    private readonly ITemplateSelectionService _templateSelection = Substitute.For<ITemplateSelectionService>();
     private readonly DashboardModel _model;
     private readonly ISession _session = Substitute.For<ISession>();
 
@@ -57,7 +58,8 @@ public class DashboardModelTests
             _applicationResponseService,
             _memoryCache,
             _options,
-            _terminology);
+            _terminology,
+            _templateSelection);
 
         var httpContext = Substitute.For<HttpContext>();
         httpContext.Session.Returns(_session);
@@ -223,7 +225,8 @@ public class DashboardModelTests
             applicationResponseService: _applicationResponseService,
             memoryCache: _memoryCache,
             dashboardOptions: options,
-            terminology: _terminology);
+            terminology: _terminology,
+            templateSelectionService: _templateSelection);
 
         var httpContext = Substitute.For<HttpContext>();
         httpContext.Session.Returns(_session);
@@ -246,5 +249,33 @@ public class DashboardModelTests
         await modelNoFilters.OnGetAsync();
 
         Assert.True(modelNoFilters.ModelState.IsValid);
+    }
+
+    [Fact]
+    public void Dashboard_copy_substitutes_the_template_name_placeholder()
+    {
+        _options.Value.MainHeading = "Your applications for {template_name}";
+        _options.Value.StartNewButtonText = "Start new {template_name} application";
+        _templateSelection.GetSelectedTemplateName(Arg.Any<HttpContext>()).Returns("Transfer");
+
+        Assert.Equal("Your applications for Transfer", _model.MainHeading);
+        Assert.Equal("Start new Transfer application", _model.StartNewButtonText);
+    }
+
+    [Fact]
+    public void Dashboard_copy_drops_the_placeholder_when_no_template_is_selected()
+    {
+        _options.Value.MainHeading = "Your applications for {template_name}";
+        _templateSelection.GetSelectedTemplateName(Arg.Any<HttpContext>()).Returns((string?)null);
+
+        Assert.Equal("Your applications for", _model.MainHeading);
+    }
+
+    [Fact]
+    public void Dashboard_copy_falls_back_to_terminology_when_not_configured()
+    {
+        _templateSelection.GetSelectedTemplateName(Arg.Any<HttpContext>()).Returns("Transfer");
+
+        Assert.Equal("Your applications", _model.MainHeading);
     }
 }

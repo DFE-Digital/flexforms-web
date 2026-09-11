@@ -170,4 +170,58 @@ public class OrganisationSettingsAdminServiceTests
                     .Contains("Plan submitted", StringComparison.Ordinal)),
             Arg.Any<CancellationToken>());
     }
+
+    [Fact]
+    public async Task SaveAsync_ShouldKeepStoredCopy_ForTemplatesNotBeingEdited()
+    {
+        var editedTemplateId = Guid.NewGuid();
+        var otherTemplateId = Guid.NewGuid();
+        var storedJson = $$$"""{"_default":{"PanelTitle":"Plan submitted","BodyMarkdown":"Default body"},"{{{otherTemplateId}}}":{"PanelTitle":"Conversion submitted","BodyMarkdown":"Other body"}}""";
+        _client.GetSafeTenantSettingsAsync(_state.TenantId, Arg.Any<CancellationToken>())
+            .Returns(new GetTenantSettingsResponse(
+                _state.TenantId,
+                "Transfers",
+                [
+                    new TenantSettingDto(
+                        Guid.NewGuid(),
+                        "ApplicationSubmittedPage",
+                        "Web",
+                        storedJson,
+                        false,
+                        DateTime.UtcNow)
+                ]));
+
+        _state.SubmittedTemplateId = editedTemplateId.ToString();
+        _state.SubmittedPanelTitle = "Transfer submitted";
+        _state.SubmittedBodyMarkdown = "## Next\n\nWe will contact you.";
+
+        await _service.SaveAsync(_state);
+
+        await _client.Received().UpsertSafeTenantSettingAsync(
+            _state.TenantId,
+            Arg.Is<UpsertTenantSettingRequest>(r =>
+                r.Category == "ApplicationSubmittedPage"
+                && Decode(r).Contains("Transfer submitted", StringComparison.Ordinal)
+                && Decode(r).Contains("Plan submitted", StringComparison.Ordinal)
+                && Decode(r).Contains("Conversion submitted", StringComparison.Ordinal)),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SaveAsync_ShouldNotUpsert_WhenStoredSettingsCannotBeRead()
+    {
+        _client.GetSafeTenantSettingsAsync(_state.TenantId, Arg.Any<CancellationToken>())
+            .Throws(new ExternalApplicationsException("boom", 500, "err", null!, null!));
+
+        var result = await _service.SaveAsync(_state);
+
+        Assert.Equal(AdminPageOutcomeKind.StayOnPage, result.Kind);
+        await _client.DidNotReceive().UpsertSafeTenantSettingAsync(
+            Arg.Any<Guid>(),
+            Arg.Any<UpsertTenantSettingRequest>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    private static string Decode(UpsertTenantSettingRequest request) =>
+        Encoding.UTF8.GetString(Convert.FromBase64String(request.SettingsJson));
 }
