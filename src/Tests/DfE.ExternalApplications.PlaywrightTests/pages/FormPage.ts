@@ -33,11 +33,22 @@ export abstract class FormPage {
     await this.confirmContinue();
   }
 
-  protected async searchAutocomplete(inputId: string, searchText: string): Promise<void> {
+  protected async searchAutocomplete(inputId: string, searchText: string, optionText = searchText): Promise<void> {
     const input = this.autocompleteInput(inputId);
     await input.click();
-    await input.pressSequentially(searchText, { delay: 50 });
-    await this.autocompleteFirstOption(inputId).click();
+
+    // The field fires one request per input event with no debounce and no stale-response
+    // guard, so typing character by character lets an earlier reply repopulate the menu
+    // last. Filling in one go issues a single request for the complete query.
+    const results = this.page.waitForResponse(
+      (response) =>
+        response.url().includes('handler=complexField') &&
+        response.url().includes(`query=${encodeURIComponent(searchText)}`),
+    );
+    await input.fill(searchText);
+    await results;
+
+    await this.autocompleteOption(inputId, optionText).click();
     await this.autocompleteConfirmButton().click();
   }
 
@@ -87,8 +98,11 @@ export abstract class FormPage {
     return this.byId(inputId);
   }
 
-  private autocompleteFirstOption(inputId: string): Locator {
-    return this.byId(`${inputId}-container__option--0`);
+  private autocompleteOption(inputId: string, optionText: string): Locator {
+    return this.byId(`${inputId}-container__listbox`)
+      .locator('.autocomplete__option')
+      .filter({ hasText: optionText })
+      .first();
   }
 
   private autocompleteConfirmButton(): Locator {
