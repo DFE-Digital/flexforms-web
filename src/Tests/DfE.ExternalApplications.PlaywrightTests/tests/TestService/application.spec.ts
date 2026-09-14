@@ -6,6 +6,7 @@ import { StandardFieldsTask } from '../../pages/tasks/StandardFieldsTask';
 import { ConfiguredFieldsTask } from '../../pages/tasks/ConfiguredFieldsTask';
 import { TrustDetailsTask } from '../../pages/tasks/TrustDetailsTask';
 import { AddSampleItemsTask } from '../../pages/tasks/AddSampleItemsTask';
+import { validateValidFileForApplication } from '../../api/files';
 
 const data = {
   academy: 'Testbourne Community School',
@@ -20,7 +21,7 @@ test.describe('Applications', () => {
     await login(page);
   });
 
-  test('Complete application', async ({ page, terminology }) => {
+  test('Complete application', async ({ page, terminology, apiClient }) => {
     const dashboardPage = new DashboardPage(page, terminology);
     const contributorsPage = new ContributorsPage(page, terminology);
 
@@ -36,6 +37,8 @@ test.describe('Applications', () => {
     await configuredFieldsTask.open();
     await configuredFieldsTask.complete(data);
     await configuredFieldsTask.expectCompleted();
+
+    await validateValidFileForApplication(apiClient, page);
 
     const trustDetailsTask = new TrustDetailsTask(page);
     await trustDetailsTask.open();

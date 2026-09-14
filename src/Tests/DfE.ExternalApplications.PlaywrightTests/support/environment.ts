@@ -3,13 +3,18 @@ import type { ServiceName } from './types';
 export const applications: readonly ServiceName[] = ['Transfers', 'Lsrp', 'RGVisits', 'TestService'];
 
 export function requireEnvironmentVariable(name: string): string {
-  const value = process.env[name]?.trim();
+  const value = optionalEnvironmentVariable(name);
 
   if (!value) {
     throw new Error(`${name} is required. Set it in .env locally or as a GitHub environment variable in CI.`);
   }
 
   return value;
+}
+
+export function optionalEnvironmentVariable(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  return value || undefined;
 }
 
 export function requireService(): ServiceName {

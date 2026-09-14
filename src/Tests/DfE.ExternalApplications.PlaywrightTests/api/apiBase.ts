@@ -25,11 +25,13 @@ export async function apiRequest<TResponse>(
   options: {
     method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
     data?: unknown;
+    headers?: Record<string, string>;
   } = {},
 ): Promise<TResponse> {
   const response = await request.fetch(path, {
     method: options.method ?? 'GET',
     data: options.data,
+    headers: options.headers,
   });
 
   if (!response.ok()) {

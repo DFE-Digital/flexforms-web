@@ -11,6 +11,13 @@ export interface CreateApplicationResponse {
   status?: string;
 }
 
+export type ApplicationFileResponse = UploadDto[];
+
+export interface UploadDto {
+  id: string;
+  applicationId: string;
+}
+
 export interface ExchangeTokenRequest {
   accessToken: string;
 }
@@ -28,6 +35,19 @@ export interface CustomApplicationStatus {
   label: string;
   createdOn: string;
   createdBy: string;
+}
+
+export interface FileValidationRequest {
+  isValid: boolean;
+  message: string;
+  correlationId?: string;
+  source: string;
+}
+
+export interface FileValidationResult {
+  id: string;
+  applicationId: string;
+  name: string;
 }
 
 export type CustomApplicationStatusResponse = CustomApplicationStatus[];

@@ -24,7 +24,6 @@ export class ConfiguredFieldsTask extends TaskPage {
     await this.confirmYesAndContinue();
 
     await this.uploadFile('supportingDocuments');
-    await this.page.pause();
     await this.markCompleteAndSave();
   }
 }
