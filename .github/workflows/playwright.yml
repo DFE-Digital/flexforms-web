@@ -1,0 +1,101 @@
+name: Run Playwright tests
+run-name: Playwright tests for '${{ inputs.environment }}'
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to run tests against'
+        required: true
+        type: environment
+
+concurrency:
+  group: playwright-${{ inputs.environment }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  playwright-tests:
+    name: Playwright (${{ matrix.service }})
+    runs-on: ubuntu-24.04
+    environment: ${{ inputs.environment }}
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        service: [ TestService, Transfers ]
+    defaults:
+      run:
+        working-directory: src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests
+    env:
+      CI: true
+      SERVICE: ${{ matrix.service }}
+      BASE_URL: ${{ vars.BASE_URL || secrets.BASE_URL }}
+      API_BASE_URL: ${{ vars.API_BASE_URL || secrets.API_BASE_URL }}
+      TENANT_ID: ${{ vars[format('TENANT_ID_{0}', matrix.service)] || secrets[format('TENANT_ID_{0}', matrix.service)] || vars.TENANT_ID || secrets.TENANT_ID }}
+      TEMPLATE_ID: ${{ vars[format('TEMPLATE_ID_{0}', matrix.service)] || secrets[format('TEMPLATE_ID_{0}', matrix.service)] || vars.TEMPLATE_ID || secrets.TEMPLATE_ID }}
+      DEFAULT_USER_EMAIL: ${{ vars.DEFAULT_USER_EMAIL || secrets.DEFAULT_USER_EMAIL }}
+      DEFAULT_USER_API_KEY: ${{ secrets.DEFAULT_USER_API_KEY }}
+      ADMIN_EMAIL: ${{ vars.ADMIN_EMAIL || secrets.ADMIN_EMAIL }}
+      ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
+      CASEWORKER_EMAIL: ${{ vars.CASEWORKER_EMAIL || secrets.CASEWORKER_EMAIL }}
+      CASEWORKER_API_KEY: ${{ secrets.CASEWORKER_API_KEY }}
+      TERMINOLOGY_SINGULAR: ${{ vars.TERMINOLOGY_SINGULAR || secrets.TERMINOLOGY_SINGULAR }}
+      TERMINOLOGY_PLURAL: ${{ vars.TERMINOLOGY_PLURAL || secrets.TERMINOLOGY_PLURAL }}
+      JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
+      INTERNAL_AUTH_ISSUER: ${{ vars.INTERNAL_AUTH_ISSUER || secrets.INTERNAL_AUTH_ISSUER }}
+      INTERNAL_AUTH_AUDIENCE: ${{ vars.INTERNAL_AUTH_AUDIENCE || secrets.INTERNAL_AUTH_AUDIENCE }}
+      INTERNAL_AUTH_TOKEN_LIFETIME_MINUTES: ${{ vars.INTERNAL_AUTH_TOKEN_LIFETIME_MINUTES || '10' }}
+      AUTH_PROVIDER_API_KEY: ${{ secrets.AUTH_PROVIDER_API_KEY }}
+      FILE_VALIDATION_API_KEY: ${{ secrets.FILE_VALIDATION_API_KEY }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        run: npm run pl:run
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-report-${{ inputs.environment }}-${{ matrix.service }}
+          path: |
+            src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/playwright-report
+            src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/reports
+          retention-days: 14
+
+      - name: Upload test results
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-results-${{ inputs.environment }}-${{ matrix.service }}
+          path: src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/test-results
+          retention-days: 14
+
+      - name: Report results to Teams
+        if: always()
+        run: node scripts/send-teams-notification.js
+        env:
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          INFORMATION_LINK: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
