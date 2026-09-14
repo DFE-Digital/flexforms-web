@@ -23,38 +23,33 @@ permissions:
 
 jobs:
   playwright-tests:
-    name: Playwright (${{ matrix.service }})
+    name: Playwright
     runs-on: ubuntu-24.04
     environment: ${{ inputs.environment }}
-    strategy:
-      fail-fast: false
-      max-parallel: 1
-      matrix:
-        service: [ TestService, Transfers ]
     defaults:
       run:
         working-directory: src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests
     env:
       CI: true
-      SERVICE: ${{ matrix.service }}
-      BASE_URL: ${{ vars.BASE_URL || secrets.BASE_URL }}
-      API_BASE_URL: ${{ vars.API_BASE_URL || secrets.API_BASE_URL }}
-      TENANT_ID: ${{ vars[format('TENANT_ID_{0}', matrix.service)] || secrets[format('TENANT_ID_{0}', matrix.service)] || vars.TENANT_ID || secrets.TENANT_ID }}
-      TEMPLATE_ID: ${{ vars[format('TEMPLATE_ID_{0}', matrix.service)] || secrets[format('TEMPLATE_ID_{0}', matrix.service)] || vars.TEMPLATE_ID || secrets.TEMPLATE_ID }}
-      DEFAULT_USER_EMAIL: ${{ vars.DEFAULT_USER_EMAIL || secrets.DEFAULT_USER_EMAIL }}
-      DEFAULT_USER_API_KEY: ${{ secrets.DEFAULT_USER_API_KEY }}
-      ADMIN_EMAIL: ${{ vars.ADMIN_EMAIL || secrets.ADMIN_EMAIL }}
-      ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
-      CASEWORKER_EMAIL: ${{ vars.CASEWORKER_EMAIL || secrets.CASEWORKER_EMAIL }}
-      CASEWORKER_API_KEY: ${{ secrets.CASEWORKER_API_KEY }}
-      TERMINOLOGY_SINGULAR: ${{ vars.TERMINOLOGY_SINGULAR || secrets.TERMINOLOGY_SINGULAR }}
-      TERMINOLOGY_PLURAL: ${{ vars.TERMINOLOGY_PLURAL || secrets.TERMINOLOGY_PLURAL }}
-      JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
-      INTERNAL_AUTH_ISSUER: ${{ vars.INTERNAL_AUTH_ISSUER || secrets.INTERNAL_AUTH_ISSUER }}
-      INTERNAL_AUTH_AUDIENCE: ${{ vars.INTERNAL_AUTH_AUDIENCE || secrets.INTERNAL_AUTH_AUDIENCE }}
-      INTERNAL_AUTH_TOKEN_LIFETIME_MINUTES: ${{ vars.INTERNAL_AUTH_TOKEN_LIFETIME_MINUTES || '10' }}
-      AUTH_PROVIDER_API_KEY: ${{ secrets.AUTH_PROVIDER_API_KEY }}
-      FILE_VALIDATION_API_KEY: ${{ secrets.FILE_VALIDATION_API_KEY }}
+      BASE_URL: ${{ vars.PL_BASE_URL}}
+      API_BASE_URL: ${{ vars.PL_API_BASE_URL }}
+      SERVICE: TestService
+      TENANT_ID: 99999999-9999-1999-2999-999999999999
+      TEMPLATE_ID: 22BC3831-734E-4F17-87AE-7993520039CE
+      TERMINOLOGY_SINGULAR: Application
+      TERMINOLOGY_PLURAL: Applications
+      INTERNAL_AUTH_TOKEN_LIFETIME_MINUTES: 60
+      DEFAULT_USER_EMAIL: ${{ secrets.PL_DEFAULT_USER_EMAIL }}
+      DEFAULT_USER_API_KEY: ${{ secrets.PL_DEFAULT_USER_API_KEY }}
+      ADMIN_EMAIL: ${{ secrets.PL_ADMIN_EMAIL }}
+      ADMIN_API_KEY: ${{ secrets.PL_ADMIN_API_KEY }}
+      CASEWORKER_EMAIL: ${{ secrets.PL_CASEWORKER_EMAIL }}
+      CASEWORKER_API_KEY: ${{ secrets.PL_CASEWORKER_API_KEY }}
+      JWT_SIGNING_KEY: ${{ secrets.PL_JWT_SIGNING_KEY }}
+      INTERNAL_AUTH_ISSUER: ${{ secrets.PL_INTERNAL_AUTH_ISSUER }}
+      INTERNAL_AUTH_AUDIENCE: ${{ secrets.PL_INTERNAL_AUTH_AUDIENCE }}
+      AUTH_PROVIDER_API_KEY: ${{ secrets.PL_AUTH_PROVIDER_API_KEY }}
+      FILE_VALIDATION_API_KEY: ${{ secrets.PL_FILE_VALIDATION_API_KEY }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
@@ -78,7 +73,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: playwright-report-${{ inputs.environment }}-${{ matrix.service }}
+          name: playwright-report-${{ inputs.environment }}
           path: |
             src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/playwright-report
             src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/reports
@@ -88,7 +83,7 @@ jobs:
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: playwright-results-${{ inputs.environment }}-${{ matrix.service }}
+          name: playwright-results-${{ inputs.environment }}
           path: src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/test-results
           retention-days: 14
 
@@ -96,6 +91,6 @@ jobs:
         if: always()
         run: node scripts/send-teams-notification.js
         env:
-          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          TEAMS_WEBHOOK_URL: ${{ secrets.PL_TEAMS_WEBHOOK_URL }}
           ENVIRONMENT: ${{ inputs.environment }}
           INFORMATION_LINK: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
