@@ -8,6 +8,12 @@ export abstract class TaskPage extends FormPage {
     await this.taskLink().click();
   }
 
+  async unableToOpen(): Promise<void> {
+    await expect(this.taskItemLocator()).toBeVisible();
+    await expect(this.taskName()).toBeVisible();
+    await expect(this.taskLinks()).toHaveCount(0);
+  }
+
   async expectCompleted(): Promise<void> {
     await expect(this.taskStatus()).toContainText('Completed');
   }
@@ -16,8 +22,16 @@ export abstract class TaskPage extends FormPage {
     return this.byId(this.taskItem);
   }
 
+  private taskLinks(): Locator {
+    return this.taskItemLocator().getByRole('link');
+  }
+
   private taskLink(): Locator {
-    return this.taskItemLocator().getByRole('link').first();
+    return this.taskLinks().first();
+  }
+
+  private taskName(): Locator {
+    return this.taskItemLocator().locator('.govuk-task-list__link');
   }
 
   private taskStatus(): Locator {
