@@ -6,8 +6,6 @@ export class SignItemDeclarationsTask extends TaskPage {
   async complete(establishment: string): Promise<void> {
     await this.byId(`view-${establishment}`).click();
 
-    await this.byIdData_('itemDeclaration').click();
-
     await this.byIdData_('declarationName').fill('Test User');
     await this.byIdData_('declarationAgreed_').check();
     await this.enterDate('Data_declarationSignedDate', '1', '1', '2027');

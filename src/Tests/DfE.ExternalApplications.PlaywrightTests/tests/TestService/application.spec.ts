@@ -7,6 +7,9 @@ import { ConfiguredFieldsTask } from '../../pages/tasks/ConfiguredFieldsTask';
 import { TrustDetailsTask } from '../../pages/tasks/TrustDetailsTask';
 import { AddSampleItemsTask } from '../../pages/tasks/AddSampleItemsTask';
 import { validateValidFileForApplication } from '../../api/files';
+import { SignItemDeclarationsTask } from '../../pages/tasks/SignItemDeclarationsTask';
+import { ApplicationPreviewPage } from '../../pages/ApplicationPreviewPage';
+import { TaskListPage } from '../../pages/TaskListPage';
 
 const data = {
   academy: 'Testbourne Community School',
@@ -49,5 +52,17 @@ test.describe('Applications', () => {
     await addSampleItemsTask.open();
     await addSampleItemsTask.complete(data.academy);
     await addSampleItemsTask.expectCompleted();
+
+    const signItemDeclarationsTask = new SignItemDeclarationsTask(page);
+    await signItemDeclarationsTask.open();
+    await signItemDeclarationsTask.complete(data.academy);
+    await signItemDeclarationsTask.expectCompleted();
+
+    const taskList = new TaskListPage(page);
+    await taskList.reviewApplication();
+
+    const preview = new ApplicationPreviewPage(page);
+    await preview.submit();
+    await preview.expectSubmitted();
   });
 });
