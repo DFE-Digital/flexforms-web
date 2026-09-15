@@ -61,10 +61,10 @@ jobs:
           cache-dependency-path: src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+        run: npm run pl:install
 
       - name: Run Playwright tests
         run: npm run pl:run

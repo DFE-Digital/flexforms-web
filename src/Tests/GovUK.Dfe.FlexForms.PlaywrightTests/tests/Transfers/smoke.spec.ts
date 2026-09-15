@@ -63,6 +63,7 @@ test.describe('Transfers smoke', () => {
         'Action',
         `Continue ${terminology.singular}`,
         `/applications/${application.applicationReference}`,
-      );
+      )
+      .verify();
   });
 });

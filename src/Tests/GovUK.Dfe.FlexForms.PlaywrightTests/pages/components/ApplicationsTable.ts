@@ -2,9 +2,9 @@ import { expect, type Locator, type Page } from '@playwright/test';
 
 /**
  * Fluent GOV.UK table assertions for the applications listing.
- * Chain methods and await the chain (thenable) so Playwright retries still apply.
+ * Chain methods then await verify() so Playwright retries still apply.
  */
-export class ApplicationsTable implements PromiseLike<void> {
+export class ApplicationsTable {
   private readonly page: Page;
   private readonly table: Locator;
   private reference = '';
@@ -56,11 +56,8 @@ export class ApplicationsTable implements PromiseLike<void> {
     return this;
   }
 
-  then<TResult1 = void, TResult2 = never>(
-    onfulfilled?: ((value: void) => TResult1 | PromiseLike<TResult1>) | null,
-    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
-  ): PromiseLike<TResult1 | TResult2> {
-    return this.assertions.then(onfulfilled, onrejected);
+  async verify(): Promise<void> {
+    await this.assertions;
   }
 
   private enqueue(assertion: () => Promise<void>): void {
