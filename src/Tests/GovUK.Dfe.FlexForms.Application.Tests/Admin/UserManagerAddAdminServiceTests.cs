@@ -26,6 +26,8 @@ public class UserManagerAddAdminServiceTests
                 Arg.Any<int?>(),
                 Arg.Any<Guid?>(),
                 Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
                 Arg.Any<CancellationToken>())
             .Returns(EmptyPage());
 
@@ -81,6 +83,8 @@ public class UserManagerAddAdminServiceTests
                 Arg.Any<int?>(),
                 Arg.Any<int?>(),
                 Arg.Any<Guid?>(),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
                 Arg.Any<string>(),
                 Arg.Any<CancellationToken>())
             .Returns(Page(new TenantUserDto { Email = "ADA@example.com", Name = "Existing" }));

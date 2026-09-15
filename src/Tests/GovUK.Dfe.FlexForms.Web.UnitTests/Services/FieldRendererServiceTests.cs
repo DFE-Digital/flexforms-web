@@ -81,8 +81,8 @@ public class FieldRendererServiceTests
     }
 
     [Theory]
-    [InlineData("text", "~/Views/Shared/Fields/_TextField.cshtml")]
-    [InlineData("email", "~/Views/Shared/Fields/_EmailField.cshtml")]
+    [InlineData("text", "~/Views/Shared/Fields/_TextInputField.cshtml")]
+    [InlineData("email", "~/Views/Shared/Fields/_TextInputField.cshtml")]
     [InlineData("select", "~/Views/Shared/Fields/_SelectField.cshtml")]
     [InlineData("text-area", "~/Views/Shared/Fields/_TextAreaField.cshtml")]
     [InlineData("radios", "~/Views/Shared/Fields/_RadiosField.cshtml")]

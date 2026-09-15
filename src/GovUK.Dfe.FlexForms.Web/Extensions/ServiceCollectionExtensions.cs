@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using GovUK.Dfe.FlexForms.Application.Admin;
+using GovUK.Dfe.FlexForms.Application.Applications;
 using GovUK.Dfe.FlexForms.Application.Dashboard;
 using GovUK.Dfe.FlexForms.Application.FormEngine;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
@@ -54,6 +55,7 @@ namespace GovUK.Dfe.FlexForms.Web.Extensions
 
             services.AddScoped<IFieldRendererService, FieldRendererService>();
             services.AddScoped<IFormErrorStore, FormErrorStore>();
+            services.AddSingleton<IAutocompleteAccessTokenProvider, AutocompleteAccessTokenProvider>();
             services.AddScoped<IAutocompleteService, AutocompleteService>();
             services.AddScoped<IApplicationStatusService, ApplicationStatusService>();
             services.AddScoped<ITemplateSelectionService, TemplateSelectionService>();
@@ -76,6 +78,7 @@ namespace GovUK.Dfe.FlexForms.Web.Extensions
             services.AddScoped<IDuplicateTenantAdmin, DuplicateTenantAdminService>();
             services.AddScoped<IAdminHome, AdminHomeService>();
             services.AddScoped<IOrganisationSettingsAdmin, OrganisationSettingsAdminService>();
+            services.AddScoped<IPrepareApplicationSubmittedPage, PrepareApplicationSubmittedPageService>();
             services.AddScoped<ICustomStatusLabelOverridesAdmin, CustomStatusLabelOverridesAdminService>();
             services.AddScoped<IContributorManagementAdmin, ContributorManagementAdminService>();
             services.AddScoped<IDashboardApplications, DashboardApplicationsService>();

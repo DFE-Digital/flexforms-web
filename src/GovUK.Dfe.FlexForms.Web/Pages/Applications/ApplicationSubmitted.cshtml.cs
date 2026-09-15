@@ -1,18 +1,30 @@
-using System.Diagnostics.CodeAnalysis;
+using GovUK.Dfe.FlexForms.Application.Applications;
+using GovUK.Dfe.FlexForms.Web.Utilities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
-namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
-{
-    [ExcludeFromCodeCoverage]
-    public class ApplicationSubmittedModel : PageModel
-    {
-        [BindProperty(SupportsGet = true, Name = "referenceNumber")] 
-        public string ReferenceNumber { get; set; }
+namespace GovUK.Dfe.FlexForms.Web.Pages.Applications;
 
-        public void OnGet()
+public sealed class ApplicationSubmittedModel(
+    IPrepareApplicationSubmittedPage prepareApplicationSubmittedPage) : PageModel
+{
+    [BindProperty(SupportsGet = true, Name = "referenceNumber")]
+    public string ReferenceNumber { get; set; } = string.Empty;
+
+    public string PanelTitle { get; private set; } = string.Empty;
+
+    public string BodyHtml { get; private set; } = string.Empty;
+
+    public async Task OnGetAsync(CancellationToken cancellationToken)
+    {
+        var state = new ApplicationSubmittedWorkState
         {
-            // Page loads with reference number from route
-        }
+            ReferenceNumber = ReferenceNumber ?? string.Empty
+        };
+
+        await prepareApplicationSubmittedPage.ExecuteAsync(state, cancellationToken);
+
+        PanelTitle = state.PanelTitle;
+        BodyHtml = MarkdownSafe.ToSafeGovUkHtml(state.BodyMarkdown);
     }
-} 
+}

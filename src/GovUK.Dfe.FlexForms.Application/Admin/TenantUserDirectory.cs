@@ -15,6 +15,8 @@ internal static class TenantUserDirectory
             pageSize: 1,
             userId: userId,
             email: null,
+            searchTerm: null,
+            role: null,
             cancellationToken);
         return page?.Items?.FirstOrDefault(u => u.UserId == userId);
     }
@@ -29,6 +31,8 @@ internal static class TenantUserDirectory
             pageSize: 1,
             userId: null,
             email: email.Trim(),
+            searchTerm: null,
+            role: null,
             cancellationToken);
         return page?.Items?.Any(u =>
             string.Equals(u.Email, email.Trim(), StringComparison.OrdinalIgnoreCase)) == true;

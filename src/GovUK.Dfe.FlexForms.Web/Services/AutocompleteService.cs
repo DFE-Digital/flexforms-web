@@ -10,15 +10,18 @@ namespace GovUK.Dfe.FlexForms.Web.Services
     {
         private readonly HttpClient _httpClient;
         private readonly IComplexFieldConfigurationService _complexFieldConfigurationService;
+        private readonly IAutocompleteAccessTokenProvider _accessTokenProvider;
         private readonly ILogger<AutocompleteService> _logger;
 
         public AutocompleteService(
             HttpClient httpClient, 
             IComplexFieldConfigurationService complexFieldConfigurationService,
+            IAutocompleteAccessTokenProvider accessTokenProvider,
             ILogger<AutocompleteService> logger)
         {
             _httpClient = httpClient;
             _complexFieldConfigurationService = complexFieldConfigurationService;
+            _accessTokenProvider = accessTokenProvider;
             _logger = logger;
         }
 
@@ -55,14 +58,7 @@ namespace GovUK.Dfe.FlexForms.Web.Services
                 
                 _logger.LogInformation("Making autocomplete request to: {RequestUrl} for complex field: {ComplexFieldId}", requestUrl, complexFieldId);
 
-                // Create the request
-                using var request = new HttpRequestMessage(HttpMethod.Get, requestUrl);
-                
-                // Add authentication headers if configured
-                AddAuthenticationHeaders(request, configuration);
-
-                // Make the API call
-                var response = await _httpClient.SendAsync(request);
+                var response = await SendAuthenticatedRequestAsync(requestUrl, configuration);
                 
                 _logger.LogDebug("HTTP response status: {StatusCode} for complex field: {ComplexFieldId}", response.StatusCode, complexFieldId);
                 
@@ -88,8 +84,8 @@ namespace GovUK.Dfe.FlexForms.Web.Services
                 if (sortedResults.Count == 0)
                 {
                     _logger.LogWarning(
-                        "No autocomplete results for complex field {ComplexFieldId}, query: {Query}, request: {RequestUrl}, hasApiKey: {HasApiKey}, response: {JsonResponse}",
-                        complexFieldId, query, requestUrl, !string.IsNullOrEmpty(configuration.ApiKey),
+                        "No autocomplete results for complex field {ComplexFieldId}, query: {Query}, request: {RequestUrl}, hasApiKey: {HasApiKey}, usesClientCredentials: {UsesClientCredentials}, response: {JsonResponse}",
+                        complexFieldId, query, requestUrl, !string.IsNullOrEmpty(configuration.ApiKey), configuration.UsesClientCredentials,
                         jsonResponse.Length > 500 ? jsonResponse[..500] : jsonResponse);
                 }
 
@@ -141,8 +137,50 @@ namespace GovUK.Dfe.FlexForms.Web.Services
             return $"{endpoint}{separator}q={encodedQuery}";
         }
 
-        private void AddAuthenticationHeaders(HttpRequestMessage request, ComplexFieldConfiguration configuration)
+        private async System.Threading.Tasks.Task<HttpResponseMessage> SendAuthenticatedRequestAsync(
+            string requestUrl,
+            ComplexFieldConfiguration configuration)
         {
+            var response = await SendOnceAsync(requestUrl, configuration, forceRefresh: false);
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized && configuration.UsesClientCredentials)
+            {
+                response.Dispose();
+                _logger.LogInformation("Retrying autocomplete request with a refreshed token for complex field {ComplexFieldId}", configuration.Id);
+                return await SendOnceAsync(requestUrl, configuration, forceRefresh: true);
+            }
+
+            return response;
+        }
+
+        private async System.Threading.Tasks.Task<HttpResponseMessage> SendOnceAsync(
+            string requestUrl,
+            ComplexFieldConfiguration configuration,
+            bool forceRefresh)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, requestUrl);
+            await AddAuthenticationHeadersAsync(request, configuration, forceRefresh);
+            return await _httpClient.SendAsync(request);
+        }
+
+        private async System.Threading.Tasks.Task AddAuthenticationHeadersAsync(
+            HttpRequestMessage request,
+            ComplexFieldConfiguration configuration,
+            bool forceRefresh)
+        {
+            if (configuration.UsesClientCredentials)
+            {
+                var accessToken = await _accessTokenProvider.GetAccessTokenAsync(configuration, forceRefresh);
+                if (string.IsNullOrWhiteSpace(accessToken))
+                {
+                    _logger.LogWarning("No access token available for complex field {ComplexFieldId}", configuration.Id);
+                    return;
+                }
+
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+                _logger.LogDebug("Added Bearer token authentication header for complex field {ComplexFieldId}", configuration.Id);
+                return;
+            }
+
             if (!string.IsNullOrEmpty(configuration.ApiKey))
             {
                 request.Headers.Add("ApiKey", configuration.ApiKey);
@@ -234,13 +272,12 @@ namespace GovUK.Dfe.FlexForms.Web.Services
                     }
                 }
                 
-                // For trust data, try to extract both name and URN
-                var result = new Dictionary<string, object>();
-                
-                // Try to get the display name
+                var result = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+                CopyScalarProperties(item, result);
+
                 var displayProperties = new[] { "name", "title", "label", "value", "displayName", "groupName", "text" };
                 string displayName = null;
-                
+
                 foreach (var propertyName in displayProperties)
                 {
                     if (item.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String)
@@ -251,42 +288,6 @@ namespace GovUK.Dfe.FlexForms.Web.Services
                             displayName = value;
                             result["name"] = value;
                             break;
-                        }
-                    }
-                }
-                
-                // Try to get UKPRN or other identifier/display fields (support common casing variants)
-                var identifierProperties = new[] { "ukprn", "id", "urn", "companiesHouseNumber", "companieshousenumber", "companies_house_number", "code", "localAuthorityName", "gor", "postcode", "postCode" };
-                foreach (var propertyName in identifierProperties)
-                {
-                    if (item.TryGetProperty(propertyName, out var property))
-                    {
-
-                        if (property.ValueKind == JsonValueKind.String)
-                        {
-                            var value = property.GetString();
-                            if (!string.IsNullOrEmpty(value))
-                            {
-                                result[propertyName] = value;
-                            }
-                        }
-                        else if (property.ValueKind == JsonValueKind.Number)
-                        {
-                            result[propertyName] = property.GetInt64().ToString();
-                        }
-                        else if (property.ValueKind == JsonValueKind.Object)
-                        {
-                            // Handle nested objects (e.g. gor: { name: "...", code: "..." })
-                            // Try to extract the "name" property from the nested object
-                            if (property.TryGetProperty("name", out var nameProperty) && 
-                                nameProperty.ValueKind == JsonValueKind.String)
-                            {
-                                var nameValue = nameProperty.GetString();
-                                if (!string.IsNullOrEmpty(nameValue))
-                                {
-                                    result[propertyName] = nameValue;
-                                }
-                            }
                         }
                     }
                 }
@@ -336,6 +337,35 @@ namespace GovUK.Dfe.FlexForms.Web.Services
             }
             
             return string.Empty;
+        }
+
+        private static void CopyScalarProperties(JsonElement item, Dictionary<string, object> result)
+        {
+            foreach (var property in item.EnumerateObject())
+            {
+                if (property.Value.ValueKind == JsonValueKind.String)
+                {
+                    var value = property.Value.GetString();
+                    if (!string.IsNullOrEmpty(value))
+                        result[property.Name] = value;
+                }
+                else if (property.Value.ValueKind == JsonValueKind.Number)
+                {
+                    result[property.Name] = property.Value.ToString();
+                }
+                else if (property.Value.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                {
+                    result[property.Name] = property.Value.GetBoolean().ToString();
+                }
+                else if (property.Value.ValueKind == JsonValueKind.Object
+                         && property.Value.TryGetProperty("name", out var nestedName)
+                         && nestedName.ValueKind == JsonValueKind.String)
+                {
+                    var nameValue = nestedName.GetString();
+                    if (!string.IsNullOrEmpty(nameValue))
+                        result[property.Name] = nameValue;
+                }
+            }
         }
 
         /// <summary>

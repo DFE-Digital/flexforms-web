@@ -5,12 +5,37 @@ namespace GovUK.Dfe.FlexForms.Domain.Models
         public string Id { get; set; } = string.Empty;
         public string ApiEndpoint { get; set; } = string.Empty;
         public string ApiKey { get; set; } = string.Empty;
+        /// <summary>
+        /// Authentication for the third-party autocomplete API.
+        /// <c>ApiKey</c> (default) or <c>ClientCredentials</c>.
+        /// When empty, client credentials are used if TokenEndpoint, ClientId and ClientSecret are set.
+        /// </summary>
+        public string AuthType { get; set; } = string.Empty;
+        public string TokenEndpoint { get; set; } = string.Empty;
+        public string ClientId { get; set; } = string.Empty;
+        public string ClientSecret { get; set; } = string.Empty;
+        public string Scope { get; set; } = string.Empty;
         public string FieldType { get; set; } = "autocomplete"; // autocomplete, composite, etc.
         public bool AllowMultiple { get; set; } = false;
         public int MinLength { get; set; } = 3;
         public string Placeholder { get; set; } = "Start typing to search...";
         public int MaxSelections { get; set; } = 0; // 0 means no limit
         public string Label { get; set; } = "Item"; // Default label for the field
+        /// <summary>
+        /// Expression for each autocomplete dropdown row. Empty keeps the built-in dropdown layout.
+        /// </summary>
+        public string DropdownDisplay { get; set; } = string.Empty;
+        /// <summary>
+        /// Expression for the check-your-answers / confirmation value. Empty keeps the built-in confirmation layout.
+        /// </summary>
+        public string ConfirmationDisplay { get; set; } = string.Empty;
         public Dictionary<string, object> AdditionalProperties { get; set; } = new(); // For field-specific config
+
+        public bool UsesClientCredentials =>
+            string.Equals(AuthType, "ClientCredentials", StringComparison.OrdinalIgnoreCase)
+            || (string.IsNullOrWhiteSpace(AuthType)
+                && !string.IsNullOrWhiteSpace(TokenEndpoint)
+                && !string.IsNullOrWhiteSpace(ClientId)
+                && !string.IsNullOrWhiteSpace(ClientSecret));
     }
 } 

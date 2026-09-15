@@ -33,6 +33,23 @@ public class AutocompleteSummaryFormatterTests
     }
 
     [Fact]
+    public void Render_uses_confirmation_display_expression_when_provided()
+    {
+        var json = """
+            {
+              "displayName": "Jane Smith",
+              "constituencyName": "Holborn and St Pancras",
+              "name": "Jane Smith"
+            }
+            """;
+
+        var html = AutocompleteSummaryFormatter.Render(json, "displayName + \" - \" + constituencyName");
+
+        Assert.Contains("Jane Smith - Holborn and St Pancras", html);
+        Assert.DoesNotContain("UKPRN", html);
+    }
+
+    [Fact]
     public void Render_reads_nested_address_postcode()
     {
         var json = """{"name":"School","address":{"postalCode":"M1 1AA"}}""";

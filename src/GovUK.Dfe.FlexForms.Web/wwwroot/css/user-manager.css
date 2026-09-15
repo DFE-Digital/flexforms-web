@@ -1,3 +1,37 @@
+.user-manager__filters-container.govuk-details {
+    margin-bottom: 30px;
+}
+
+.user-manager__filters-summary.govuk-details__summary {
+    display: block;
+    list-style: none;
+    padding-left: 0;
+}
+
+.user-manager__filters-summary::-webkit-details-marker {
+    display: none;
+}
+
+.user-manager__filters-summary::marker {
+    content: "";
+}
+
+.user-manager__filters-button.govuk-details__summary-text {
+    display: inline-block;
+    margin-bottom: 0;
+}
+
+    .user-manager__filters-button.govuk-details__summary-text::before {
+        display: none;
+    }
+
+.user-manager__filters-details.govuk-details__text {
+    margin-top: 15px;
+    padding: 20px;
+    border: 1px solid #b1b4b6;
+    background-color: #f3f2f1;
+}
+
 .govuk-table-responsive {
     overflow-x: auto;
     border-right: 1px solid #b1b4b6;

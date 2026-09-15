@@ -49,6 +49,11 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
 
         public string GetFormattedFieldValue(string fieldId, Dictionary<string, object> formData)
         {
+            return GetFormattedFieldValue(fieldId, formData, confirmationDisplay: null);
+        }
+
+        public string GetFormattedFieldValue(string fieldId, Dictionary<string, object> formData, string? confirmationDisplay)
+        {
             if (formData.TryGetValue(fieldId, out var rawForCollection))
             {
                 var looksLikeObject =
@@ -83,7 +88,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                     return FormatUploadValue(fieldValue);
                 }
 
-                return FormatAutocompleteValue(fieldValue);
+                return FormatAutocompleteValue(fieldValue, confirmationDisplay);
             }
 
             // Try to format common primitive types (e.g., dates)
@@ -97,6 +102,11 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
         }
 
         public List<string> GetFormattedFieldValues(string fieldId, Dictionary<string, object> formData)
+        {
+            return GetFormattedFieldValues(fieldId, formData, confirmationDisplay: null);
+        }
+
+        public List<string> GetFormattedFieldValues(string fieldId, Dictionary<string, object> formData, string? confirmationDisplay)
         {
             if (formData.TryGetValue(fieldId, out var rawForCollection))
             {
@@ -131,7 +141,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                     return FormatUploadValuesList(fieldValue);
                 }
 
-                return FormatAutocompleteValuesList(fieldValue);
+                return FormatAutocompleteValuesList(fieldValue, confirmationDisplay);
             }
 
             // Handle single primitive values (e.g., a single date)
@@ -189,7 +199,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
             return !string.IsNullOrWhiteSpace(value);
         }
 
-        private string FormatAutocompleteValue(string value)
+        private string FormatAutocompleteValue(string value, string? confirmationDisplay = null)
         {
             if (string.IsNullOrEmpty(value))
             {
@@ -205,13 +215,13 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                         var displayValues = new List<string>();
                         foreach (var element in doc.RootElement.EnumerateArray())
                         {
-                            displayValues.Add(FormatSingleAutocompleteValue(element));
+                            displayValues.Add(FormatSingleAutocompleteValue(element, confirmationDisplay));
                         }
                         return string.Join("<br />", displayValues);
                     }
                     else if (doc.RootElement.ValueKind == JsonValueKind.Object)
                     {
-                        return FormatSingleAutocompleteValue(doc.RootElement);
+                        return FormatSingleAutocompleteValue(doc.RootElement, confirmationDisplay);
                     }
                 }
             }
@@ -234,7 +244,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
             return string.Empty;
         }
 
-        private List<string> FormatAutocompleteValuesList(string value)
+        private List<string> FormatAutocompleteValuesList(string value, string? confirmationDisplay = null)
         {
             if (string.IsNullOrEmpty(value))
             {
@@ -250,13 +260,13 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                         var displayValues = new List<string>();
                         foreach (var element in doc.RootElement.EnumerateArray())
                         {
-                            displayValues.Add(FormatSingleAutocompleteValue(element));
+                            displayValues.Add(FormatSingleAutocompleteValue(element, confirmationDisplay));
                         }
                         return displayValues;
                     }
                     else if (doc.RootElement.ValueKind == JsonValueKind.Object)
                     {
-                        return new List<string> { FormatSingleAutocompleteValue(doc.RootElement) };
+                        return new List<string> { FormatSingleAutocompleteValue(doc.RootElement, confirmationDisplay) };
                     }
                 }
             }
@@ -268,10 +278,17 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
             return new List<string> { value };
         }
 
-        private string FormatSingleAutocompleteValue(JsonElement element)
+        private string FormatSingleAutocompleteValue(JsonElement element, string? confirmationDisplay = null)
         {
             if (element.ValueKind == JsonValueKind.Object)
             {
+                if (AutocompleteDisplayExpression.IsSpecified(confirmationDisplay))
+                {
+                    var formatted = AutocompleteDisplayExpression.Evaluate(confirmationDisplay, element);
+                    if (!string.IsNullOrWhiteSpace(formatted))
+                        return System.Web.HttpUtility.HtmlEncode(formatted);
+                }
+
                 string name = "";
                 string ukprn = "";
                 string code = "";

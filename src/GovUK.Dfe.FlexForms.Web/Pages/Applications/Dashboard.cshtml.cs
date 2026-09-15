@@ -31,7 +31,8 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
         IApplicationResponseService applicationResponseService,
         IMemoryCache memoryCache,
         IOptions<DashboardOptions> dashboardOptions,
-        IApplicationTerminologyProvider terminology)
+        IApplicationTerminologyProvider terminology,
+        ITemplateSelectionService templateSelectionService)
         : PageModel
     {
         public string? Email { get; private set; }
@@ -89,21 +90,27 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
         public bool CanStartNewApplication { get; private set; }
 
         public string MainHeading =>
-            FirstNonEmpty(dashboardOptions.Value.MainHeading, $"Your {terminology.Plural}");
+            Copy(dashboardOptions.Value.MainHeading, $"Your {terminology.Plural}");
 
         public string InProgressHeading =>
-            FirstNonEmpty(dashboardOptions.Value.InProgressHeading, $"{terminology.PluralCapitalised} in progress");
+            Copy(dashboardOptions.Value.InProgressHeading, $"{terminology.PluralCapitalised} in progress");
 
         public string StartNewHeading =>
-            FirstNonEmpty(dashboardOptions.Value.StartNewHeading, $"Start a new {terminology.Singular}");
+            Copy(dashboardOptions.Value.StartNewHeading, $"Start a new {terminology.Singular}");
 
         public string StartNewHint =>
-            FirstNonEmpty(
+            Copy(
                 dashboardOptions.Value.StartNewHint,
                 $"If you start an {terminology.Singular}, you will be the lead applicant for it.");
 
         public string StartNewButtonText =>
-            FirstNonEmpty(dashboardOptions.Value.StartNewButtonText, $"Start new {terminology.Singular}");
+            Copy(dashboardOptions.Value.StartNewButtonText, $"Start new {terminology.Singular}");
+
+        private string Copy(string? configured, string fallback) =>
+            DashboardCopyPlaceholders.Apply(FirstNonEmpty(configured, fallback), SelectedTemplateName);
+
+        private string? SelectedTemplateName =>
+            HttpContext is null ? null : templateSelectionService.GetSelectedTemplateName(HttpContext);
 
         private static string FirstNonEmpty(string? configured, string fallback) =>
             string.IsNullOrWhiteSpace(configured) ? fallback : configured.Trim();

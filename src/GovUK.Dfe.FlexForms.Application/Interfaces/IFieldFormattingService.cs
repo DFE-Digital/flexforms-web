@@ -23,6 +23,11 @@ namespace GovUK.Dfe.FlexForms.Application.Interfaces
         List<string> GetFormattedFieldValues(string fieldId, Dictionary<string, object> formData);
 
         /// <summary>
+        /// Gets formatted field values as a list, using a confirmation display expression when provided.
+        /// </summary>
+        List<string> GetFormattedFieldValues(string fieldId, Dictionary<string, object> formData, string? confirmationDisplay);
+
+        /// <summary>
         /// Gets the label for field items from template configuration
         /// </summary>
         string GetFieldItemLabel(string fieldId, FormTemplate template);

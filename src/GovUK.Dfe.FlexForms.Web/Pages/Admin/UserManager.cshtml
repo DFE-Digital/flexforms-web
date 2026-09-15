@@ -39,6 +39,23 @@
             </div>
         }
 
+        @if (!ViewData.ModelState.IsValid)
+        {
+            <div class="govuk-error-summary" data-module="govuk-error-summary">
+                <div role="alert">
+                    <h2 class="govuk-error-summary__title">There is a problem</h2>
+                    <div class="govuk-error-summary__body">
+                        <ul class="govuk-list govuk-error-summary__list">
+                            @foreach (var error in ViewData.ModelState.SelectMany(entry => entry.Value!.Errors))
+                            {
+                                <li><a href="#search-term">@error.ErrorMessage</a></li>
+                            }
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        }
+
         @if (Model.ShowSuccess)
         {
             <div class="govuk-notification-banner govuk-notification-banner--success" role="alert" data-module="govuk-notification-banner">
@@ -55,18 +72,104 @@
             <a asp-page="/Admin/UserManagerAdd" class="govuk-button" data-module="govuk-button">Add new user</a>
         </div>
 
+        <details class="govuk-details user-manager__filters-container" data-module="govuk-details" @(Model.ShowFiltersPanel ? "open" : null)>
+            <summary class="govuk-details__summary user-manager__filters-summary">
+                <span class="govuk-details__summary-text govuk-button govuk-button--secondary user-manager__filters-button" data-testid="filter-users-button">
+                    Filter users
+                </span>
+            </summary>
+            <div class="govuk-details__text user-manager__filters-details">
+                <form method="get" asp-page="/Admin/UserManager">
+                    <div class="govuk-grid-row">
+                        <div class="govuk-grid-column-one-half">
+                            <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.SearchTerm)]?.Errors.Count > 0 ? "govuk-form-group--error" : null)">
+                                <h2 class="govuk-label-wrapper">
+                                    <label class="govuk-label govuk-label--m" for="search-term">
+                                        Name or email address
+                                    </label>
+                                </h2>
+                                <div id="search-term-hint" class="govuk-hint">
+                                    Enter all or part of a name or email address
+                                </div>
+                                @if (ViewData.ModelState[nameof(Model.SearchTerm)]?.Errors.Count > 0)
+                                {
+                                    <span class="govuk-error-message">
+                                        <span class="govuk-visually-hidden">Error:</span>
+                                        @ViewData.ModelState[nameof(Model.SearchTerm)]!.Errors[0].ErrorMessage
+                                    </span>
+                                }
+                                <input class="govuk-input @(ViewData.ModelState[nameof(Model.SearchTerm)]?.Errors.Count > 0 ? "govuk-input--error" : null)"
+                                       id="search-term" name="searchTerm" type="search" value="@Model.SearchTerm"
+                                       autocomplete="off" aria-describedby="search-term-hint" data-testid="search-term">
+                            </div>
+                        </div>
+
+                        <div class="govuk-grid-column-one-half">
+                            <div class="govuk-form-group">
+                                <label class="govuk-label govuk-label--m" for="search-role">
+                                    Role
+                                </label>
+                                <div id="search-role-hint" class="govuk-hint">
+                                    Roles defined for this tenant
+                                </div>
+                                <select class="govuk-select" id="search-role" name="role"
+                                        aria-describedby="search-role-hint" data-testid="search-role">
+                                    <option value="">All roles</option>
+                                    @foreach (var role in Model.AvailableRoles)
+                                    {
+                                        <option value="@role" selected="@(string.Equals(role, Model.Role, StringComparison.OrdinalIgnoreCase))">@role</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="govuk-grid-row">
+                        <div class="govuk-grid-column-full">
+                            <div class="govuk-button-group">
+                                <button class="govuk-button govuk-button--secondary" type="submit" data-module="govuk-button" data-testid="apply-filters">
+                                    Apply filters
+                                </button>
+                                @if (Model.IsSearchActive)
+                                {
+                                    <a class="govuk-link" asp-page="/Admin/UserManager" data-testid="clear-filters">Clear filters</a>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </details>
+
         <h2 class="govuk-heading-l">
             Users (@Model.TotalCount)
         </h2>
 
         @if (Model.TotalCount == 0)
         {
-            <p class="govuk-body">No users currently have form access in this tenant.</p>
+            if (Model.IsSearchActive)
+            {
+                <p class="govuk-body">No users match your filters.</p>
+                <p class="govuk-body">
+                    <a class="govuk-link" asp-page="/Admin/UserManager">Clear filters</a> to see everyone with access.
+                </p>
+            }
+            else
+            {
+                <p class="govuk-body">No users currently have form access in this tenant.</p>
+            }
         }
         else
         {
             <p class="govuk-hint">
-                @(Model.TotalCount == 1 ? "1 person has" : $"{Model.TotalCount} people have") access in this tenant.
+                @if (Model.IsSearchActive)
+                {
+                    @(Model.TotalCount == 1 ? "1 person matches" : $"{Model.TotalCount} people match") <text>your filters.</text>
+                }
+                else
+                {
+                    @(Model.TotalCount == 1 ? "1 person has" : $"{Model.TotalCount} people have") <text>access in this tenant.</text>
+                }
                 Showing @(((Model.CurrentPage - 1) * Model.PageSize) + 1)
                 to @(Math.Min(Model.CurrentPage * Model.PageSize, Model.TotalCount))
                 of @Model.TotalCount.
@@ -181,6 +284,8 @@
                               onsubmit="return confirm('Remove this user from the tenant? Their form access for this tenant will be cleared.');">
                             <input type="hidden" name="userId" value="@user.UserId" />
                             <input type="hidden" name="CurrentPage" value="@Model.CurrentPage" />
+                            <input type="hidden" name="SearchTerm" value="@Model.SearchTerm" />
+                            <input type="hidden" name="Role" value="@Model.Role" />
                             <button type="submit"
                                     class="govuk-button govuk-button--warning govuk-!-margin-bottom-0"
                                     data-module="govuk-button">

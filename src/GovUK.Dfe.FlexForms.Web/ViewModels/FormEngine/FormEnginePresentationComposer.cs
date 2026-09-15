@@ -330,7 +330,10 @@ public sealed class FormEnginePresentationComposer(
         Field field,
         string fieldValue)
     {
-        var formattedValues = fieldFormattingService.GetFormattedFieldValues(field.FieldId, context.FormData);
+        var confirmationDisplay = ResolveConfirmationDisplay(field);
+        var formattedValues = confirmationDisplay == null
+            ? fieldFormattingService.GetFormattedFieldValues(field.FieldId, context.FormData)
+            : fieldFormattingService.GetFormattedFieldValues(field.FieldId, context.FormData, confirmationDisplay);
         var itemLabel = fieldFormattingService.GetFieldItemLabel(field.FieldId, context.Template);
         var allowMultiple = fieldFormattingService.IsFieldAllowMultiple(field.FieldId, context.Template);
         var isUploadField = LooksLikeUploadJson(fieldValue);
@@ -357,7 +360,7 @@ public sealed class FormEnginePresentationComposer(
             }
             else
             {
-                var html = AutocompleteSummaryFormatter.Render(DisplayHelpers.UnsanitiseHtmlInput(fieldValue));
+                var html = AutocompleteSummaryFormatter.Render(DisplayHelpers.UnsanitiseHtmlInput(fieldValue), confirmationDisplay);
                 headerValue = SummaryValueViewModel.FromAutocompleteHtml(html);
             }
         }
@@ -555,7 +558,7 @@ public sealed class FormEnginePresentationComposer(
                 valueVm = checkboxValues.Count > 0
                     ? SummaryValueViewModel.FromCheckboxes(checkboxValues.ToList())
                     : BuildCollectionFormattedValue(
-                        context, col.Field, value, item, isAutocompleteField, isUploadFieldByConfig, pageId, unsanitiseAutocomplete: false);
+                        context, col.Field, value, item, fieldConfig, isAutocompleteField, isUploadFieldByConfig, pageId, unsanitiseAutocomplete: false);
             }
             else
             {
@@ -564,6 +567,7 @@ public sealed class FormEnginePresentationComposer(
                     col.Field,
                     value,
                     item,
+                    fieldConfig,
                     isAutocompleteField,
                     isUploadFieldByConfig,
                     pageId,
@@ -587,12 +591,14 @@ public sealed class FormEnginePresentationComposer(
         string fieldId,
         string value,
         Dictionary<string, object> item,
+        Field? fieldConfig,
         bool isAutocompleteField,
         bool isUploadFieldByConfig,
         string pageId,
         bool unsanitiseAutocomplete)
     {
-        var formattedValues = FormatWithItemValue(context.FormData, fieldId, value);
+        var confirmationDisplay = ResolveConfirmationDisplay(fieldConfig);
+        var formattedValues = FormatWithItemValue(context.FormData, fieldId, value, confirmationDisplay);
 
         if (isAutocompleteField && string.IsNullOrEmpty(value))
         {
@@ -624,7 +630,7 @@ public sealed class FormEnginePresentationComposer(
             if (isAutocompleteField)
             {
                 var raw = unsanitiseAutocomplete ? DisplayHelpers.UnsanitiseHtmlInput(value) : value;
-                return SummaryValueViewModel.FromAutocompleteHtml(AutocompleteSummaryFormatter.Render(raw));
+                return SummaryValueViewModel.FromAutocompleteHtml(AutocompleteSummaryFormatter.Render(raw, ResolveConfirmationDisplay(fieldConfig)));
             }
 
             return SummaryValueViewModel.FromHtml(formattedValues[0]);
@@ -657,10 +663,29 @@ public sealed class FormEnginePresentationComposer(
             string.Equals(cfg.FieldType, "upload", StringComparison.OrdinalIgnoreCase));
     }
 
-    private List<string> FormatWithItemValue(Dictionary<string, object> formData, string fieldId, string value)
+    private string? ResolveConfirmationDisplay(Field? field)
+    {
+        var fromTemplate = field?.ComplexField?.ConfirmationDisplay;
+        if (AutocompleteDisplayExpression.IsSpecified(fromTemplate))
+            return fromTemplate;
+
+        if (field?.ComplexField == null || string.IsNullOrWhiteSpace(field.ComplexField.Id))
+            return null;
+
+        var cfg = complexFieldConfigurationService.GetConfiguration(field.ComplexField.Id);
+        return AutocompleteDisplayExpression.IsSpecified(cfg.ConfirmationDisplay) ? cfg.ConfirmationDisplay : null;
+    }
+
+    private List<string> FormatWithItemValue(
+        Dictionary<string, object> formData,
+        string fieldId,
+        string value,
+        string? confirmationDisplay = null)
     {
         var snapshot = new Dictionary<string, object>(formData) { [fieldId] = value };
-        return fieldFormattingService.GetFormattedFieldValues(fieldId, snapshot);
+        return confirmationDisplay == null
+            ? fieldFormattingService.GetFormattedFieldValues(fieldId, snapshot)
+            : fieldFormattingService.GetFormattedFieldValues(fieldId, snapshot, confirmationDisplay);
     }
 
     private SummaryValueViewModel TryBuildUploadValue(

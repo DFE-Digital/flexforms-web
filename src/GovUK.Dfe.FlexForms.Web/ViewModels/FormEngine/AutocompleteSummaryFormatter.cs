@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using GovUK.Dfe.FlexForms.Domain.Models;
 
 namespace GovUK.Dfe.FlexForms.Web.ViewModels.FormEngine;
 
@@ -8,7 +9,7 @@ namespace GovUK.Dfe.FlexForms.Web.ViewModels.FormEngine;
 /// </summary>
 public static class AutocompleteSummaryFormatter
 {
-    public static string Render(string? rawValue)
+    public static string Render(string? rawValue, string? confirmationDisplay = null)
     {
         if (string.IsNullOrWhiteSpace(rawValue))
             return string.Empty;
@@ -16,13 +17,37 @@ public static class AutocompleteSummaryFormatter
         try
         {
             using var doc = JsonDocument.Parse(rawValue);
+            if (doc.RootElement.ValueKind == JsonValueKind.Array)
+            {
+                var parts = new List<string>();
+                foreach (var element in doc.RootElement.EnumerateArray())
+                    parts.Add(RenderObject(element, confirmationDisplay));
+                return string.Join("<br/>", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
+            }
+
             if (doc.RootElement.ValueKind != JsonValueKind.Object)
                 return System.Net.WebUtility.HtmlEncode(rawValue);
 
-            var root = doc.RootElement;
-            var name = root.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String
-                ? n.GetString() ?? string.Empty
-                : string.Empty;
+            return RenderObject(doc.RootElement, confirmationDisplay);
+        }
+        catch (JsonException)
+        {
+            return System.Net.WebUtility.HtmlEncode(rawValue);
+        }
+    }
+
+    private static string RenderObject(JsonElement root, string? confirmationDisplay)
+    {
+        if (AutocompleteDisplayExpression.IsSpecified(confirmationDisplay))
+        {
+            var text = AutocompleteDisplayExpression.Evaluate(confirmationDisplay, root);
+            if (!string.IsNullOrWhiteSpace(text))
+                return $"<strong class=\"govuk-!-font-weight-bold\">{System.Net.WebUtility.HtmlEncode(text)}</strong>";
+        }
+
+        var name = root.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String
+            ? n.GetString() ?? string.Empty
+            : string.Empty;
             var postcode = root.TryGetProperty("postcode", out var pc) && pc.ValueKind == JsonValueKind.String
                 ? pc.GetString() ?? string.Empty
                 : string.Empty;
@@ -72,11 +97,6 @@ public static class AutocompleteSummaryFormatter
             if (!string.IsNullOrWhiteSpace(companiesHouse))
                 sb.Append($"<br/>Companies house number: {System.Net.WebUtility.HtmlEncode(companiesHouse)}");
             return sb.ToString();
-        }
-        catch (JsonException)
-        {
-            return System.Net.WebUtility.HtmlEncode(rawValue);
-        }
     }
 
     public static string TryFindJsonInItem(Dictionary<string, object> item)
@@ -94,6 +114,7 @@ public static class AutocompleteSummaryFormatter
                     continue;
 
                 if (doc.RootElement.TryGetProperty("name", out _)
+                    || doc.RootElement.TryGetProperty("displayName", out _)
                     || doc.RootElement.TryGetProperty("ukprn", out _)
                     || doc.RootElement.TryGetProperty("companiesHouseNumber", out _))
                 {

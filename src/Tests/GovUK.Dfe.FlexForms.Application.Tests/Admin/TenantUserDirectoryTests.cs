@@ -12,7 +12,7 @@ public class TenantUserDirectoryTests
     {
         var users = Substitute.For<IUsersClient>();
         var userId = Guid.NewGuid();
-        users.GetTenantUsersAsync(1, 1, userId, null, Arg.Any<CancellationToken>())
+        users.GetTenantUsersAsync(1, 1, userId, null, null, null, Arg.Any<CancellationToken>())
             .Returns(new PagedResultOfTenantUserDto
             {
                 Items = [new TenantUserDto { UserId = userId, Email = "ada@example.com" }]
@@ -27,7 +27,7 @@ public class TenantUserDirectoryTests
     public async Task EmailExistsAsync_ShouldBeCaseInsensitive()
     {
         var users = Substitute.For<IUsersClient>();
-        users.GetTenantUsersAsync(1, 1, null, "ada@example.com", Arg.Any<CancellationToken>())
+        users.GetTenantUsersAsync(1, 1, null, "ada@example.com", null, null, Arg.Any<CancellationToken>())
             .Returns(new PagedResultOfTenantUserDto
             {
                 Items = [new TenantUserDto { UserId = Guid.NewGuid(), Email = "ADA@example.com" }]

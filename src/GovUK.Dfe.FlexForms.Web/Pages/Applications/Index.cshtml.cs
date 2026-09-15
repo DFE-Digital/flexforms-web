@@ -8,6 +8,7 @@ using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Extensions.Options;
 
 namespace GovUK.Dfe.FlexForms.Web.Pages.Applications;
@@ -16,10 +17,19 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications;
 public class IndexModel(
     IDashboardApplications dashboardApplications,
     IApplicationStatusService applicationStatusService,
+    ITemplateSelectionService templateSelectionService,
     IOptions<DashboardOptions> dashboardOptions,
     ILogger<IndexModel> logger) : PageModel
 {
+    private Guid? _sessionTemplateId;
+
     public Guid? TemplateId { get; set; }
+
+    public string? TemplateName { get; private set; }
+
+    public IReadOnlyList<SelectListItem> TemplateOptions { get; private set; } = [];
+
+    public bool ShowTemplateFilter => TemplateOptions.Count > 1;
 
     public IReadOnlyList<ApplicationWithCalculatedStatus> Applications { get; private set; } = [];
     public IReadOnlyList<CustomApplicationStatusDto> CustomStatuses { get; private set; } = [];
@@ -33,9 +43,15 @@ public class IndexModel(
     public bool HasError { get; private set; }
     public string? ErrorMessage { get; private set; }
 
-    public bool IsSearchActive => FiltersEnabled && SearchFilters.HasActiveFilters;
+    public bool IsSearchActive => FiltersEnabled && (SearchFilters.HasActiveFilters || IsTemplateFilterActive);
 
     public bool ShowFiltersPanel => IsSearchActive;
+
+    private bool IsTemplateFilterActive =>
+        SelectedTemplateId.HasValue && SelectedTemplateId != _sessionTemplateId;
+
+    [BindProperty(SupportsGet = true)]
+    public Guid? SelectedTemplateId { get; set; }
 
     [BindProperty(SupportsGet = true)]
     public IList<KeyValuePair<ApplicationStatus, string>> StatusFilters { get; set; }
@@ -77,8 +93,7 @@ public class IndexModel(
     public async Task OnGetAsync(ApplicationStatus? status = null)
     {
         var statusFilters = new List<KeyValuePair<ApplicationStatus, string>>();
-        var templateId = HttpContext.Session.GetString("TemplateId");
-        TemplateId = !string.IsNullOrWhiteSpace(templateId) ? Guid.Parse(templateId) : null;
+        await ResolveTemplateAsync();
         var baseApplicationStatuses = applicationStatusService.GetBaseApplicationStatuses();
         CustomStatuses = await applicationStatusService.GetCustomApplicationStatusesAsync(TemplateId);
         foreach (var item in baseApplicationStatuses)
@@ -89,10 +104,71 @@ public class IndexModel(
         StatusFilters = statusFilters.Where(app => AdminAccessHelper.IsAdmin(User) || AdminAccessHelper.IsSuperAdmin(User) || app.Key != ApplicationStatus.Deleted)
             .OrderBy(app => app.Key).ToList();
         SelectedStatusFilter = status;
-        logger.LogInformation("TemplateId from session: {TemplateId}", TemplateId);
+        logger.LogInformation("Listing applications for template {TemplateId}", TemplateId);
         ValidateSearchFilters();
         await LoadApplicationsAsync();
     }
+
+    /// <summary>
+    /// The listing shows one template at a time. The filter overrides the template held in session
+    /// for this page only, so a caseworker can look at another template without losing their selection.
+    /// </summary>
+    private async Task ResolveTemplateAsync()
+    {
+        var sessionTemplateId = templateSelectionService.GetSelectedTemplateId(HttpContext);
+        _sessionTemplateId = Guid.TryParse(sessionTemplateId, out var parsed) ? parsed : null;
+
+        var templates = await LoadSelectableTemplatesAsync();
+
+        if (SelectedTemplateId.HasValue && templates.All(t => t.TemplateId != SelectedTemplateId.Value))
+        {
+            logger.LogWarning(
+                "Ignoring template filter {TemplateId} because it is not accessible to the user",
+                SelectedTemplateId);
+            SelectedTemplateId = null;
+        }
+
+        TemplateId = SelectedTemplateId ?? _sessionTemplateId;
+
+        TemplateName = templates.FirstOrDefault(t => t.TemplateId == TemplateId)?.Name
+            ?? templateSelectionService.GetSelectedTemplateName(HttpContext);
+
+        TemplateOptions = templates
+            .Select(t => new SelectListItem(t.Name, t.TemplateId.ToString(), t.TemplateId == TemplateId))
+            .ToList();
+    }
+
+    private async Task<IReadOnlyList<TemplateDto>> LoadSelectableTemplatesAsync()
+    {
+        try
+        {
+            return await templateSelectionService.GetSelectableTemplatesAsync() ?? [];
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not load the template list for the applications filter");
+            return [];
+        }
+    }
+
+    /// <summary>
+    /// Keeps the active filters, including the template, when moving between pages.
+    /// </summary>
+    public string BuildPaginationHref(int page)
+    {
+        var href = FiltersEnabled
+            ? SearchFilters.BuildPaginationHref(page)
+            : $"?currentPage={page}";
+
+        return SelectedTemplateId.HasValue
+            ? $"{href}&selectedTemplateId={SelectedTemplateId}"
+            : href;
+    }
+
+    public string ClearFiltersHref =>
+        SelectedTemplateId.HasValue
+            ? $"/applications?selectedTemplateId={SelectedTemplateId}"
+            : "/applications";
 
     private void ValidateSearchFilters()
     {
