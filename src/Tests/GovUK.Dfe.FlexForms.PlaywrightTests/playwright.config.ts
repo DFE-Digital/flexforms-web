@@ -32,7 +32,7 @@ export default defineConfig({
   projects: [
     {
       name: serviceConfig.name,
-      testMatch: new RegExp(`${serviceConfig.name}/.*\\.spec\\.ts`),
+      testMatch: new RegExp(String.raw`${serviceConfig.name}/.*\.spec\.ts`),
       use: {
         ...devices['Desktop Chrome'],
         baseURL: serviceConfig.url,

@@ -9,7 +9,7 @@ const reservedApplicationPathSegments = new Set(['dashboard']);
 
 export function applicationReferenceFromUrl(url: string): string {
   const pathname = new URL(url).pathname;
-  const match = pathname.match(/^\/applications\/([^/]+)/);
+  const match = /^\/applications\/([^/]+)/.exec(pathname);
   const applicationRef = match?.[1];
 
   if (!applicationRef || reservedApplicationPathSegments.has(applicationRef.toLowerCase())) {
