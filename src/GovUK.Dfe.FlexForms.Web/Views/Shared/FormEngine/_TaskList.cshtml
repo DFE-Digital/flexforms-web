@@ -57,13 +57,13 @@
                         <div class="govuk-task-list__name-and-hint">
                             @if (Model.IsApplicationEditable())
                             {
-                                <a class="govuk-link govuk-task-list__link" href="@taskUrl" aria-label="task-@taskNameHyphenated" aria-described-by="task-@taskNameHyphenated-status">
+                                <a class="govuk-link govuk-task-list__link" href="@taskUrl" aria-label="task-@taskNameHyphenated" aria-describedby="task-@taskNameHyphenated-status">
                                     @task.TaskName
                                 </a>
                             }
                             else
                             {
-                                <span class="govuk-task-list__link" aria-label="task-@taskNameHyphenated" aria-described-by="task-@taskNameHyphenated-status">@task.TaskName</span>
+                                <span class="govuk-task-list__link" aria-label="task-@taskNameHyphenated" aria-describedby="task-@taskNameHyphenated-status">@task.TaskName</span>
                             }
                         </div>
                         <div class="govuk-task-list__status" id="task-@taskNameHyphenated-status">
