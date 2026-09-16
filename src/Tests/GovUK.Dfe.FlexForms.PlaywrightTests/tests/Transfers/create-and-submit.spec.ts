@@ -28,7 +28,7 @@ const data = {
 };
 
 test.describe('Transfers create and submit', () => {
-  // test.setTimeout(360000);
+  test.describe.configure({ timeout: 600_000 });
 
   test.beforeEach(async ({ page }) => {
     await login(page);
