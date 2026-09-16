@@ -8,8 +8,7 @@ import { UploadYourLSRPDataTemplateTask } from '../../pages/lsrp/UploadYourLSRPD
 import { ApplicationPreviewPage } from '../../pages/ApplicationPreviewPage';
 import { validateValidFileForApplication } from '../../api/files';
 
-test.describe('Transfers create and submit', () => {
-  // test.describe.configure({ timeout: 120_000 });
+test.describe('LSRP create and submit', () => {
 
   test.beforeEach(async ({ page }) => {
     await login(page);
