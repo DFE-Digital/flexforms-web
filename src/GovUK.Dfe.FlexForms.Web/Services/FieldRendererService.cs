@@ -57,8 +57,7 @@ namespace GovUK.Dfe.FlexForms.Web.Services
 
             var partialName = field.Type switch
             {
-                "text" => "Fields/_TextField",
-                "email" => "Fields/_EmailField",
+                "text" or "email" => "Fields/_TextInputField",
                 "select" => "Fields/_SelectField",
                 "text-area" => "Fields/_TextAreaField",
                 "radios" => "Fields/_RadiosField",
