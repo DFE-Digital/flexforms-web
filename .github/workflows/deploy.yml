@@ -128,3 +128,15 @@ jobs:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID || '' }}
           AZURE_SUBSCRIPTION: ${{ secrets.AZURE_SUBSCRIPTION_ID || '' }}
           AZURE_ACA_CLIENT_ID: ${{ secrets.ACA_CLIENT_ID || '' }}
+
+  playwright-tests:
+    name: Playwright tests → ${{ needs.set-env.outputs.environment }}
+    needs: [deploy, set-env]
+    if: needs.set-env.outputs.environment-lower == 'development'
+    uses: ./.github/workflows/playwright.yml
+    with:
+      environment: ${{ needs.set-env.outputs.environment }}
+    secrets: inherit
+    permissions:
+      contents: read
+

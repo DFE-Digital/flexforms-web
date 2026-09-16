@@ -1,0 +1,96 @@
+name: Run Playwright tests
+run-name: Playwright tests for '${{ inputs.environment }}'
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to run tests against'
+        required: true
+        type: environment
+
+concurrency:
+  group: playwright-${{ inputs.environment }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  playwright-tests:
+    name: Playwright
+    runs-on: ubuntu-24.04
+    environment: ${{ inputs.environment }}
+    defaults:
+      run:
+        working-directory: src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests
+    env:
+      CI: true
+      BASE_URL: ${{ vars.PL_BASE_URL}}
+      API_BASE_URL: ${{ vars.PL_API_BASE_URL }}
+      SERVICE: TestService
+      TENANT_ID: 99999999-9999-1999-2999-999999999999
+      TEMPLATE_ID: 22BC3831-734E-4F17-87AE-7993520039CE
+      TERMINOLOGY_SINGULAR: Application
+      TERMINOLOGY_PLURAL: Applications
+      INTERNAL_AUTH_TOKEN_LIFETIME_MINUTES: 60
+      DEFAULT_USER_EMAIL: ${{ secrets.PL_DEFAULT_USER_EMAIL }}
+      DEFAULT_USER_API_KEY: ${{ secrets.PL_DEFAULT_USER_API_KEY }}
+      ADMIN_EMAIL: ${{ secrets.PL_ADMIN_EMAIL }}
+      ADMIN_API_KEY: ${{ secrets.PL_ADMIN_API_KEY }}
+      CASEWORKER_EMAIL: ${{ secrets.PL_CASEWORKER_EMAIL }}
+      CASEWORKER_API_KEY: ${{ secrets.PL_CASEWORKER_API_KEY }}
+      JWT_SIGNING_KEY: ${{ secrets.PL_JWT_SIGNING_KEY }}
+      INTERNAL_AUTH_ISSUER: ${{ secrets.PL_INTERNAL_AUTH_ISSUER }}
+      INTERNAL_AUTH_AUDIENCE: ${{ secrets.PL_INTERNAL_AUTH_AUDIENCE }}
+      AUTH_PROVIDER_API_KEY: ${{ secrets.PL_AUTH_PROVIDER_API_KEY }}
+      FILE_VALIDATION_API_KEY: ${{ secrets.PL_FILE_VALIDATION_API_KEY }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Install Playwright browser
+        run: npm run pl:install
+
+      - name: Run Playwright tests
+        run: npm run pl:run
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-report-${{ inputs.environment }}
+          path: |
+            src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/playwright-report
+            src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/reports
+          retention-days: 14
+
+      - name: Upload test results
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-results-${{ inputs.environment }}
+          path: src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/test-results
+          retention-days: 14
+
+      - name: Report results to Teams
+        if: always()
+        run: node scripts/send-teams-notification.js
+        env:
+          TEAMS_WEBHOOK_URL: ${{ secrets.PL_TEAMS_WEBHOOK_URL }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          INFORMATION_LINK: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
