@@ -99,10 +99,7 @@ export abstract class FormPage {
   }
 
   private autocompleteOption(inputId: string, optionText: string): Locator {
-    return this.byId(`${inputId}-container__listbox`)
-      .locator('.autocomplete__option')
-      .filter({ hasText: optionText })
-      .first();
+    return this.byId(`${inputId}-container`).locator('.autocomplete__option').filter({ hasText: optionText }).first();
   }
 
   private autocompleteConfirmButton(): Locator {
