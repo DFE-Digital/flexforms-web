@@ -9,7 +9,6 @@ import { ApplicationPreviewPage } from '../../pages/ApplicationPreviewPage';
 import { validateValidFileForApplication } from '../../api/files';
 
 test.describe('LSRP create and submit', () => {
-
   test.beforeEach(async ({ page }) => {
     await login(page);
   });
