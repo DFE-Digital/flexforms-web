@@ -16,9 +16,9 @@ export class ApplicationPreviewPage extends FormPage {
     await expect(this.leadApplicantSubmitMessage(singular)).toBeVisible();
   }
 
-  async expectSubmitted(): Promise<void> {
+  async expectSubmitted(submitMessage = 'submitted'): Promise<void> {
     await expect(this.page).toHaveURL(/\/application-submitted\//);
-    await expect(this.submittedHeading()).toContainText('submitted');
+    await expect(this.submittedHeading(submitMessage)).toBeVisible();
   }
 
   private preview(): Locator {
@@ -33,7 +33,7 @@ export class ApplicationPreviewPage extends FormPage {
     return this.page.getByText(`Only the lead applicant can submit this ${singular}.`, { exact: true });
   }
 
-  private submittedHeading(): Locator {
-    return this.page.getByRole('heading', { name: /submitted/i });
+  private submittedHeading(submitMessage: string): Locator {
+    return this.page.getByRole('heading', { name: submitMessage });
   }
 }
