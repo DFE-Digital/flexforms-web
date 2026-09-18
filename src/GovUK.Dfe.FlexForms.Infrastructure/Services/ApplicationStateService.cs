@@ -346,6 +346,18 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                     return false;
                 case JsonValueKind.Null:
                     return null;
+                case JsonValueKind.Array:
+                    var allStrings = element.EnumerateArray().All(e => e.ValueKind == JsonValueKind.String);
+                    if (allStrings)
+                    {
+                        return element.GetArrayLength() == 1
+                            ? element[0].GetString() ?? string.Empty
+                            : element.EnumerateArray().Select(x => x.GetString() ?? string.Empty).ToArray();
+                    }
+
+                    return element.GetRawText();
+                case JsonValueKind.Object:
+                    return element.GetRawText();
                 default:
                     return element.ToString();
             }
