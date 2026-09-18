@@ -211,9 +211,9 @@ public class ApplicationResponseService(
             }
         }
 
-        if (value is string[] stringArray && stringArray.Length == 1)
+        if (value is string[] stringArray)
         {
-            return stringArray[0];
+            return stringArray.Length == 1 ? stringArray[0] : string.Join(",", stringArray);
         }
         
         return value.ToString() ?? string.Empty;
