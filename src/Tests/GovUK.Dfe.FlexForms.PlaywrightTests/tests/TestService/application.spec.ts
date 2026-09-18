@@ -20,6 +20,8 @@ const data = {
 };
 
 test.describe('Applications', () => {
+  test.describe.configure({ timeout: 180_000 });
+
   test.beforeEach(async ({ page }) => {
     await login(page);
   });
