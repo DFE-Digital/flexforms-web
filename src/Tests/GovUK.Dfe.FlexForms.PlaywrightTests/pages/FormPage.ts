@@ -35,6 +35,12 @@ export abstract class FormPage {
 
   protected async searchAutocomplete(inputId: string, searchText: string, optionText = searchText): Promise<void> {
     const input = this.autocompleteInput(inputId);
+
+    // The field defers the last step of its setup behind a 100ms timeout, and that step
+    // ends by hiding the menu unconditionally. Searching before it runs means the results
+    // arrive first and then get hidden, leaving options present but unclickable. The
+    // govuk-input class is added in that same deferred step, so it marks the field ready.
+    await expect(input).toHaveClass(/govuk-input/);
     await input.click();
 
     // The field fires one request per input event with no debounce and no stale-response

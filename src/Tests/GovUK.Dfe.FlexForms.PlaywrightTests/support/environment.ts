@@ -1,6 +1,6 @@
 import type { ServiceName } from './types';
 
-export const applications: readonly ServiceName[] = ['Transfers', 'Lsrp', 'RGVisits', 'TestService'];
+export const applications: readonly ServiceName[] = ['Transfers', 'Lsrp', 'Visits', 'TestService'];
 
 export function requireEnvironmentVariable(name: string): string {
   const value = optionalEnvironmentVariable(name);

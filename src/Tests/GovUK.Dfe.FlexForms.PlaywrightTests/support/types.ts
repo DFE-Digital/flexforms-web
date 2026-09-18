@@ -1,4 +1,4 @@
-export type ServiceName = 'Transfers' | 'Lsrp' | 'RGVisits' | 'TestService';
+export type ServiceName = 'Transfers' | 'Lsrp' | 'Visits' | 'TestService';
 
 export interface Terminology {
   singular: string;
