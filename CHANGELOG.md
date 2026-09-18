@@ -2,6 +2,10 @@
 
 All notable changes to this service will be documented in this file.
 
+## [2.2.18] - Determine the env and use either Azure or Local for KeyRing
+### Notes
+- No release notes provided.
+
 ## [2.2.14] - Merge branch 'main' of https://github.com/DFE-Digital/flexforms-web
 ### Notes
 - No release notes provided.
