@@ -11,7 +11,14 @@
     @switch (Model.CurrentFormState)
     {
         case FormState.TaskList:
-            <govuk-back-link href="/applications/dashboard">Back to dashboard</govuk-back-link>
+            if (Model.UseApplicationsListBackLink)
+            {
+                <govuk-back-link href="/applications">Back to applications</govuk-back-link>
+            }
+            else
+            {
+                <govuk-back-link href="/applications/dashboard">Back to dashboard</govuk-back-link>
+            }
             break;
         case FormState.FormPage:
             <govuk-back-link href="@Model.BackLinkUrl">Back</govuk-back-link>
