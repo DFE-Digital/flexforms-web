@@ -54,6 +54,42 @@ public class ApplicationResponseServiceTests
     }
 
     [Fact]
+    public void TransformToResponseJson_SerializesMultiSelectCheckboxValues_AsJsonArrayString()
+    {
+        var service = CreateService();
+
+        var json = service.TransformToResponseJson(
+            new Dictionary<string, object>
+            {
+                ["significantChangeType"] = new[] { "change-trust-name", "change-address" }
+            },
+            new Dictionary<string, string>());
+
+        using var doc = JsonDocument.Parse(json);
+        var value = doc.RootElement.GetProperty("significantChangeType").GetProperty("value").GetString();
+
+        Assert.Equal("""["change-trust-name","change-address"]""", value);
+    }
+
+    [Fact]
+    public void GetAccumulatedFormData_PreservesMultiSelectCheckboxValues_AfterSessionRoundTrip()
+    {
+        var session = CreateSessionStore();
+        var service = CreateService(session);
+
+        service.AccumulateFormData(new Dictionary<string, object>
+        {
+            ["significantChangeType"] = new[] { "change-trust-name", "change-address" }
+        });
+
+        var accumulated = service.GetAccumulatedFormData();
+
+        Assert.True(accumulated.TryGetValue("significantChangeType", out var value));
+        var values = Assert.IsType<string[]>(value);
+        Assert.Equal(["change-trust-name", "change-address"], values);
+    }
+
+    [Fact]
     public void TransformToResponseJson_TaskStatusWrapperCompleted_IsFalse_WhenTaskIsInProgress()
     {
         var service = CreateService();
