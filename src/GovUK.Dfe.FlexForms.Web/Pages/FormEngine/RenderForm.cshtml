@@ -1,7 +1,6 @@
 @page "/applications/{referenceNumber}/{taskId?}/{*pageId}"
 @using GovUK.Dfe.FlexForms.Application.Interfaces
 @using GovUK.Dfe.FlexForms.Domain.FormEngine
-@using GovUK.Dfe.FlexForms.Web.Security
 @using GovUk.Frontend.AspNetCore.TagHelpers
 @model RenderFormModel
 @{
@@ -12,7 +11,7 @@
     @switch (Model.CurrentFormState)
     {
         case FormState.TaskList:
-            if (AdminAccessHelper.CanReadAnyApplication(User))
+            if (Model.UseApplicationsListBackLink)
             {
                 <govuk-back-link href="/applications">Back to applications</govuk-back-link>
             }

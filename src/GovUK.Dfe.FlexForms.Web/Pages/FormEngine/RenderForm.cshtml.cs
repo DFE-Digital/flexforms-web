@@ -8,6 +8,7 @@ using GovUK.Dfe.FlexForms.Domain.FormEngine;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using GovUK.Dfe.FlexForms.Web.Extensions;
 using GovUK.Dfe.FlexForms.Web.Interfaces;
+using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.FlexForms.Web.Services;
 using GovUK.Dfe.FlexForms.Web.ViewModels.FormEngine;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums;
@@ -94,12 +95,16 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
 
         public ApplicationPreviewViewModel? Preview { get; private set; }
 
+        public bool UseApplicationsListBackLink { get; private set; }
+
         public IReadOnlyList<CollectionFlowSectionViewModel> CollectionFlows { get; private set; } = [];
 
         public FormConditionalState? ConditionalState { get; set; }
 
         public async Task<IActionResult> OnGetAsync()
         {
+            UseApplicationsListBackLink = ShouldUseApplicationsListBackLink();
+
             try
             {
                 await CommonFormEngineInitializationAsync();
@@ -336,6 +341,21 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             ApplyWorkState(state);
             await TryNotifyFileOperationAsync(outcome);
             return MapOutcome(outcome);
+        }
+
+        private bool ShouldUseApplicationsListBackLink()
+        {
+            if (!AdminAccessHelper.CanReadAnyApplication(User))
+                return false;
+
+            if (string.Equals(Request.Query["returnTo"].FirstOrDefault(), "applications", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            var referer = Request.Headers.Referer.ToString();
+            if (string.IsNullOrWhiteSpace(referer) || !Uri.TryCreate(referer, UriKind.Absolute, out var uri))
+                return false;
+
+            return uri.AbsolutePath.TrimEnd('/').Equals("/applications", StringComparison.OrdinalIgnoreCase);
         }
     }
 }
