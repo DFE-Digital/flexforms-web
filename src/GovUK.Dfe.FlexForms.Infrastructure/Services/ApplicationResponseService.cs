@@ -211,12 +211,97 @@ public class ApplicationResponseService(
             }
         }
 
+        if (value is IEnumerable<string> stringEnumerable)
+        {
+            value = stringEnumerable.Where(v => !string.IsNullOrWhiteSpace(v)).ToArray();
+        }
+
         if (value is string[] stringArray)
         {
-            return stringArray.Length == 1 ? stringArray[0] : string.Join(",", stringArray);
+            if (stringArray.Length == 0)
+                return string.Empty;
+            return stringArray.Length == 1 ? stringArray[0] : stringArray;
         }
-        
+
         return value.ToString() ?? string.Empty;
+    }
+
+    private static string FormatValueForResponseStorage(object? value)
+    {
+        if (value == null)
+            return string.Empty;
+
+        if (value is string s)
+            return s;
+
+        if (value is string[] stringArray)
+        {
+            if (stringArray.Length == 0)
+                return string.Empty;
+            if (stringArray.Length == 1)
+                return stringArray[0];
+            return JsonSerializer.Serialize(stringArray);
+        }
+
+        if (value is JsonElement jsonElement)
+            return FormatJsonElementForResponseStorage(jsonElement);
+
+        if (value is IEnumerable<string> stringEnumerable)
+        {
+            var items = stringEnumerable.Where(v => !string.IsNullOrWhiteSpace(v)).ToArray();
+            if (items.Length == 0)
+                return string.Empty;
+            if (items.Length == 1)
+                return items[0];
+            return JsonSerializer.Serialize(items);
+        }
+
+        if (value is bool boolean)
+            return boolean ? "true" : "false";
+
+        if (value is IFormattable formattable)
+            return formattable.ToString(null, System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
+
+        try
+        {
+            return JsonSerializer.Serialize(value);
+        }
+        catch
+        {
+            return value.ToString() ?? string.Empty;
+        }
+    }
+
+    private static string FormatJsonElementForResponseStorage(JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.String:
+                return element.GetString() ?? string.Empty;
+            case JsonValueKind.Array:
+                var allStrings = element.EnumerateArray().All(e => e.ValueKind == JsonValueKind.String);
+                if (allStrings)
+                {
+                    var items = element.EnumerateArray()
+                        .Select(e => e.GetString() ?? string.Empty)
+                        .ToArray();
+                    if (items.Length == 0)
+                        return string.Empty;
+                    if (items.Length == 1)
+                        return items[0];
+                    return JsonSerializer.Serialize(items);
+                }
+
+                return element.GetRawText();
+            case JsonValueKind.Number:
+            case JsonValueKind.True:
+            case JsonValueKind.False:
+                return element.GetRawText();
+            case JsonValueKind.Object:
+                return element.GetRawText();
+            default:
+                return string.Empty;
+        }
     }
 
     public void ClearAccumulatedFormData()
@@ -346,7 +431,7 @@ public class ApplicationResponseService(
         foreach (var kvp in formData)
         {
             var fieldId = kvp.Key;
-            var value = kvp.Value?.ToString() ?? string.Empty;
+            var value = FormatValueForResponseStorage(kvp.Value);
             var completed = ResponseFieldMetadataResolver.ResolveCompleted(fieldId, fieldLookup, taskStatusData);
 
             responseData[fieldId] = ResponseFieldMetadataResolver.BuildFormFieldEntry(

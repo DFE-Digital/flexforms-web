@@ -328,6 +328,26 @@ public class ApplicationStateServiceTests
     }
 
     [Fact]
+    public void GetJsonElementValue_ReturnsStringArray_ForMultiValueJsonArray()
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse("""["change-trust-name","change-address"]""");
+        var service = CreateService(CreateSessionStore());
+
+        var value = service.GetJsonElementValue(doc.RootElement);
+
+        Assert.Equal(["change-trust-name", "change-address"], Assert.IsType<string[]>(value));
+    }
+
+    [Fact]
+    public void GetJsonElementValue_ReturnsSingleString_ForSingleItemJsonArray()
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse("""["chair"]""");
+        var service = CreateService(CreateSessionStore());
+
+        Assert.Equal("chair", service.GetJsonElementValue(doc.RootElement));
+    }
+
+    [Fact]
     public async Task LoadResponseDataIntoSessionAsync_RestoresTaskStatusAndFormData()
     {
         var applicationId = Guid.NewGuid();
