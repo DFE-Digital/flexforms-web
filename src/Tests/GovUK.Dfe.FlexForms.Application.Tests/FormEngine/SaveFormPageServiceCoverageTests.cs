@@ -332,6 +332,57 @@ public class SaveFormPageServiceCoverageTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_ShouldRedirectToTaskSummary_WhenConditionalLogicSkipsRemainingPages()
+    {
+        var first = CreatePage("p1", returnToSummaryPage: false);
+        var hiddenPage = CreatePage("gender-composition-flow-about-page", returnToSummaryPage: false);
+        var task = CreateStandardTask(first, hiddenPage);
+        Register(task, first);
+        _conditionalLogic.GetNextPageAsync(default!, default!, default!, default)
+            .ReturnsForAnyArgs((string?)null);
+
+        var state = EditablePageState("p1", task.TaskId, task);
+        state.Template!.ConditionalLogic =
+        [
+            new ConditionalLogic
+            {
+                Enabled = true,
+                ConditionGroup = new ConditionGroup
+                {
+                    LogicalOperator = "AND",
+                    Conditions =
+                    [
+                        new Condition
+                        {
+                            TriggerField = "significantChangeType",
+                            Operator = "contains",
+                            Value = "changeGenderComposition"
+                        }
+                    ]
+                },
+                AffectedElements =
+                [
+                    new AffectedElement
+                    {
+                        ElementId = "gender-composition-flow-about-page",
+                        ElementType = "page",
+                        Action = "show"
+                    }
+                ]
+            }
+        ];
+        state.Data["significantChangeType"] = new[] { "changeSatelliteSite", "changeAgeRange" };
+
+        var result = await _service.ExecuteAsync(
+            state,
+            Posted("Data[significantChangeType]", "changeSatelliteSite"),
+            null);
+
+        Assert.Equal(FormEngineOutcomeKind.Redirect, result.Kind);
+        Assert.Equal($"/applications/REF-1/{task.TaskId}", result.RedirectUrl);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_ShouldFollowConditionalNext_WhenReturnToSummaryHasShowPageTrigger()
     {
         var first = CreatePage("p1", returnToSummaryPage: true);

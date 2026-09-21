@@ -1297,6 +1297,62 @@ public class ConditionalLogicOrchestratorTests
     }
 
     [Fact]
+    public async Task GetNextPageAsync_ShouldReturnPage_WhenPageHasVisibleFieldNotInVisibilityMap()
+    {
+        var orchestrator = CreateOrchestrator();
+        var template = CreateTemplateWithPages(
+            ("page-1", ["significantChangeType"]),
+            ("page-2", ["hiddenField", "alwaysVisibleField"]),
+            ("page-3", ["field-c"]));
+        template.ConditionalLogic =
+        [
+            HideFieldWhen("hide-one-field", "significantChangeType", "hide", "hiddenField")
+        ];
+
+        var nextPage = await orchestrator.GetNextPageAsync(
+            template,
+            new Dictionary<string, object> { ["significantChangeType"] = "hide" },
+            "page-1");
+
+        Assert.Equal("page-2", nextPage);
+    }
+
+    [Fact]
+    public async Task GetNextPageAsync_ShouldShowGenderFlow_WhenGenderSelectedWithOtherCheckboxValues()
+    {
+        var orchestrator = CreateOrchestrator();
+        var template = CreateTemplateWithPages(
+            ("page-1", ["significantChangeType"]),
+            ("gender-composition-flow-about-page", ["genderField"]),
+            ("age-range-flow-about-page", ["ageField"]));
+        template.ConditionalLogic =
+        [
+            ShowPageWhenContains(
+                "show-gender",
+                "significantChangeType",
+                "changeGenderComposition",
+                "gender-composition-flow-about-page",
+                "genderField"),
+            ShowPageWhenContains(
+                "show-age",
+                "significantChangeType",
+                "changeAgeRange",
+                "age-range-flow-about-page",
+                "ageField")
+        ];
+
+        var nextPage = await orchestrator.GetNextPageAsync(
+            template,
+            new Dictionary<string, object>
+            {
+                ["significantChangeType"] = new[] { "changeSatelliteSite", "changeGenderComposition" }
+            },
+            "page-1");
+
+        Assert.Equal("gender-composition-flow-about-page", nextPage);
+    }
+
+    [Fact]
     public async Task ShouldSkipPageAsync_ShouldReturnTrue_WhenEveryFieldOnPageIsHidden()
     {
         var orchestrator = CreateOrchestrator();

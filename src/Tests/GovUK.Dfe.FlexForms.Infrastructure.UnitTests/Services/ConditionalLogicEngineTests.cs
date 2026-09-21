@@ -191,6 +191,65 @@ public class ConditionalLogicEngineTests
     }
 
     [Fact]
+    public void EvaluateCondition_Contains_ReturnsFalse_WhenExpectedValueIsEmpty()
+    {
+        var condition = SimpleCondition(
+            "significantChangeType",
+            ConditionalLogicConstants.Operators.Contains,
+            string.Empty);
+
+        Assert.False(_engine.EvaluateCondition(
+            condition,
+            new Dictionary<string, object>
+            {
+                ["significantChangeType"] = new[] { "changeAgeRange" }
+            }));
+    }
+
+    [Fact]
+    public void EvaluateCondition_Contains_MatchesSingleCheckboxSelection()
+    {
+        var condition = SimpleCondition(
+            "significantChangeType",
+            ConditionalLogicConstants.Operators.Contains,
+            "changeGenderComposition");
+
+        Assert.True(_engine.EvaluateCondition(
+            condition,
+            new Dictionary<string, object>
+            {
+                ["significantChangeType"] = new[] { "changeGenderComposition" }
+            }));
+    }
+
+    [Fact]
+    public void EvaluateCondition_Contains_MatchesSubstringInSingleValue()
+    {
+        var condition = SimpleCondition(
+            "note",
+            ConditionalLogicConstants.Operators.Contains,
+            "gender");
+
+        Assert.True(_engine.EvaluateCondition(
+            condition,
+            new Dictionary<string, object> { ["note"] = "change-gender-composition" }));
+        Assert.False(_engine.EvaluateCondition(
+            condition,
+            new Dictionary<string, object> { ["note"] = "change-age-range" }));
+    }
+
+    [Fact]
+    public void EvaluateCondition_Contains_ReturnsFalse_WhenFieldIsMissing()
+    {
+        var condition = SimpleCondition(
+            "significantChangeType",
+            ConditionalLogicConstants.Operators.Contains,
+            "changeAgeRange");
+
+        Assert.False(_engine.EvaluateCondition(condition, new Dictionary<string, object>()));
+    }
+
+    [Fact]
     public void EvaluateCondition_IsEmpty_ReturnsFalseForCamelCaseOperator()
     {
         Assert.False(_engine.EvaluateCondition(
