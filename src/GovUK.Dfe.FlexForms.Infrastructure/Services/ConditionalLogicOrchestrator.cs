@@ -274,10 +274,8 @@ public class ConditionalLogicOrchestrator(
                     continue;
                 }
 
-                // NEW: Check if all fields on the next page are hidden by conditional logic
                 var nextPageFields = GetFieldsForPage(template, nextPage.PageId);
-                
-                if (nextPageFields.Any() && nextPageFields.All(f => state.FieldVisibility.TryGetValue(f.FieldId, out var fieldIsVisible) && !fieldIsVisible))
+                if (nextPageFields.Count > 0 && !HasAnyVisibleField(state, nextPageFields))
                 {
                     continue;
                 }
@@ -309,8 +307,13 @@ public class ConditionalLogicOrchestrator(
                 return true;
             }
 
-            // Check if page is hidden
             if (state.PageVisibility.TryGetValue(pageId, out var isVisible) && !isVisible)
+            {
+                return true;
+            }
+
+            var pageFields = GetFieldsForPage(template, pageId);
+            if (pageFields.Count > 0 && !HasAnyVisibleField(state, pageFields))
             {
                 return true;
             }
@@ -629,6 +632,10 @@ public class ConditionalLogicOrchestrator(
 
         return rule;
     }
+
+    private static bool HasAnyVisibleField(FormConditionalState state, IReadOnlyList<Field> fields) =>
+        fields.Any(field =>
+            !state.FieldVisibility.TryGetValue(field.FieldId, out var isVisible) || isVisible);
 
     private List<Page> GetAllPages(FormTemplate template) =>
         GetOrCreateTemplateStructure(template).AllPages;

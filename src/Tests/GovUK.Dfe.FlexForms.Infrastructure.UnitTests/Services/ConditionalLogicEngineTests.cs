@@ -154,6 +154,43 @@ public class ConditionalLogicEngineTests
     }
 
     [Fact]
+    public void EvaluateCondition_Contains_MatchesValueInMultiSelectCheckboxArray()
+    {
+        var condition = SimpleCondition(
+            "significantChangeType",
+            ConditionalLogicConstants.Operators.Contains,
+            "changeGenderComposition");
+
+        var withGender = new Dictionary<string, object>
+        {
+            ["significantChangeType"] = new[] { "changeSatelliteSite", "changeGenderComposition" }
+        };
+        var withoutGender = new Dictionary<string, object>
+        {
+            ["significantChangeType"] = new[] { "changeSatelliteSite", "changeAgeRange" }
+        };
+
+        Assert.True(_engine.EvaluateCondition(condition, withGender));
+        Assert.False(_engine.EvaluateCondition(condition, withoutGender));
+    }
+
+    [Fact]
+    public void EvaluateCondition_Contains_MatchesValueInJsonSerializedCheckboxArray()
+    {
+        var condition = SimpleCondition(
+            "significantChangeType",
+            ConditionalLogicConstants.Operators.Contains,
+            "changeAgeRange");
+
+        Assert.True(_engine.EvaluateCondition(
+            condition,
+            new Dictionary<string, object>
+            {
+                ["significantChangeType"] = """["changeSatelliteSite","changeAgeRange"]"""
+            }));
+    }
+
+    [Fact]
     public void EvaluateCondition_IsEmpty_ReturnsFalseForCamelCaseOperator()
     {
         Assert.False(_engine.EvaluateCondition(

@@ -659,6 +659,48 @@ public class ConditionalLogicOrchestratorTests
             ]
         };
 
+    private static ConditionalLogic ShowPageWhenContains(
+        string ruleId,
+        string triggerField,
+        string triggerValue,
+        string targetPage,
+        string targetField) =>
+        new()
+        {
+            Id = ruleId,
+            Enabled = true,
+            Priority = 1,
+            ConditionGroup = new ConditionGroup
+            {
+                LogicalOperator = ConditionalLogicConstants.LogicalOperators.And,
+                Conditions =
+                [
+                    new Condition
+                    {
+                        TriggerField = triggerField,
+                        Operator = ConditionalLogicConstants.Operators.Contains,
+                        Value = triggerValue,
+                        DataType = ConditionalLogicConstants.DataTypes.String
+                    }
+                ]
+            },
+            AffectedElements =
+            [
+                new AffectedElement
+                {
+                    ElementId = targetPage,
+                    ElementType = ConditionalLogicConstants.ElementTypes.Page,
+                    Action = ConditionalLogicConstants.Actions.Show
+                },
+                new AffectedElement
+                {
+                    ElementId = targetField,
+                    ElementType = ConditionalLogicConstants.ElementTypes.Field,
+                    Action = ConditionalLogicConstants.Actions.Show
+                }
+            ]
+        };
+
     private static ConditionalLogic HideFieldWhen(string ruleId, string triggerField, string triggerValue, string targetField) =>
         new()
         {
@@ -1217,6 +1259,70 @@ public class ConditionalLogicOrchestratorTests
             "page-1");
 
         Assert.Null(nextPage);
+    }
+
+    [Fact]
+    public async Task GetNextPageAsync_ShouldSkipShowRulePage_WhenMultiSelectDoesNotContainTriggerValue()
+    {
+        var orchestrator = CreateOrchestrator();
+        var template = CreateTemplateWithPages(
+            ("page-1", ["significantChangeType"]),
+            ("gender-composition-flow-about-page", ["genderField"]),
+            ("age-range-flow-about-page", ["ageField"]));
+        template.ConditionalLogic =
+        [
+            ShowPageWhenContains(
+                "show-gender",
+                "significantChangeType",
+                "changeGenderComposition",
+                "gender-composition-flow-about-page",
+                "genderField"),
+            ShowPageWhenContains(
+                "show-age",
+                "significantChangeType",
+                "changeAgeRange",
+                "age-range-flow-about-page",
+                "ageField")
+        ];
+
+        var nextPage = await orchestrator.GetNextPageAsync(
+            template,
+            new Dictionary<string, object>
+            {
+                ["significantChangeType"] = new[] { "changeSatelliteSite", "changeAgeRange" }
+            },
+            "page-1");
+
+        Assert.Equal("age-range-flow-about-page", nextPage);
+    }
+
+    [Fact]
+    public async Task ShouldSkipPageAsync_ShouldReturnTrue_WhenEveryFieldOnPageIsHidden()
+    {
+        var orchestrator = CreateOrchestrator();
+        var template = CreateTemplateWithPages(
+            ("page-1", ["significantChangeType"]),
+            ("gender-composition-flow-about-page", ["genderField"]),
+            ("page-3", ["otherField"]));
+        template.ConditionalLogic =
+        [
+            ShowPageWhenContains(
+                "show-gender",
+                "significantChangeType",
+                "changeGenderComposition",
+                "gender-composition-flow-about-page",
+                "genderField")
+        ];
+
+        var shouldSkip = await orchestrator.ShouldSkipPageAsync(
+            template,
+            new Dictionary<string, object>
+            {
+                ["significantChangeType"] = new[] { "changeSatelliteSite", "changeAgeRange" }
+            },
+            "gender-composition-flow-about-page");
+
+        Assert.True(shouldSkip);
     }
 
     [Fact]

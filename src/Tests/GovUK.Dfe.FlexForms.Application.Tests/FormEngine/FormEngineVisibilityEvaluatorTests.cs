@@ -58,6 +58,51 @@ public class FormEngineVisibilityEvaluatorTests
     }
 
     [Fact]
+    public void HasConditionalLogicShowingPages_ShouldMatchContainsAgainstMultiSelectValues()
+    {
+        var template = Dummy();
+        template.ConditionalLogic =
+        [
+            new ConditionalLogic
+            {
+                Enabled = true,
+                ConditionGroup = new ConditionGroup
+                {
+                    LogicalOperator = "AND",
+                    Conditions =
+                    [
+                        new Condition
+                        {
+                            TriggerField = "significantChangeType",
+                            Operator = "contains",
+                            Value = "changeGenderComposition"
+                        }
+                    ]
+                },
+                AffectedElements =
+                [
+                    new AffectedElement
+                    {
+                        ElementId = "gender-composition-flow-about-page",
+                        ElementType = "page",
+                        Action = "show"
+                    }
+                ]
+            }
+        ];
+        var evaluator = Evaluator(template, new FormConditionalState());
+
+        Assert.True(evaluator.HasConditionalLogicShowingPages(new Dictionary<string, object>
+        {
+            ["significantChangeType"] = new[] { "changeSatelliteSite", "changeGenderComposition" }
+        }));
+        Assert.False(evaluator.HasConditionalLogicShowingPages(new Dictionary<string, object>
+        {
+            ["significantChangeType"] = new[] { "changeSatelliteSite", "changeAgeRange" }
+        }));
+    }
+
+    [Fact]
     public void HasConditionalLogicShowingPages_ShouldEvaluateOperators()
     {
         var template = Dummy();

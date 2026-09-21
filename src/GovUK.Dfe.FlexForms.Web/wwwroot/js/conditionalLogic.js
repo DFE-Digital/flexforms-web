@@ -114,6 +114,16 @@ class ConditionalLogicEngine {
      */
     getFieldValue(field) {
         if (field.type === 'checkbox') {
+            const fieldId = this.extractFieldId(field);
+            if (fieldId) {
+                const groupSelector = `input[type="checkbox"][name="Data[${fieldId}]"], input[type="checkbox"][data-field-id="${fieldId}"]`;
+                const checkboxes = document.querySelectorAll(groupSelector);
+                if (checkboxes.length > 1) {
+                    return Array.from(checkboxes)
+                        .filter(cb => cb.checked)
+                        .map(cb => cb.value);
+                }
+            }
             return field.checked;
         } else if (field.type === 'radio') {
             const radioGroup = document.querySelectorAll(`input[name="${field.name}"]`);
@@ -625,7 +635,17 @@ class ConditionalLogicEngine {
     }
 
     compareContains(fieldValue, expectedValue) {
-        return String(fieldValue || '').toLowerCase().includes(String(expectedValue || '').toLowerCase());
+        const expected = String(expectedValue || '').toLowerCase();
+        if (!expected) {
+            return false;
+        }
+
+        if (Array.isArray(fieldValue)) {
+            return fieldValue.some(val => String(val || '').toLowerCase() === expected);
+        }
+
+        const fieldStr = String(fieldValue || '').toLowerCase();
+        return fieldStr === expected || fieldStr.includes(expected);
     }
 
     compareStartsWith(fieldValue, expectedValue) {

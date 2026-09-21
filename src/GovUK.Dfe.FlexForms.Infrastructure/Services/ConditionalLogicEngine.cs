@@ -1,4 +1,5 @@
 using GovUK.Dfe.FlexForms.Application.Interfaces;
+using GovUK.Dfe.FlexForms.Domain.FormEngine;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using Microsoft.Extensions.Logging;
 using System.Globalization;
@@ -385,8 +386,25 @@ public class ConditionalLogicEngine(ILogger<ConditionalLogicEngine> logger) : IC
 
     private static bool CompareContains(object? fieldValue, object expectedValue)
     {
-        var fieldStr = fieldValue?.ToString() ?? string.Empty;
         var expectedStr = expectedValue?.ToString() ?? string.Empty;
+        if (string.IsNullOrEmpty(expectedStr))
+            return false;
+
+        var normalizedValues = CheckboxValueNormalizer.Normalize(fieldValue);
+        if (normalizedValues.Count > 1)
+        {
+            return normalizedValues.Any(v =>
+                v.Equals(expectedStr, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (normalizedValues.Count == 1)
+        {
+            var single = normalizedValues.First();
+            return single.Equals(expectedStr, StringComparison.OrdinalIgnoreCase)
+                || single.Contains(expectedStr, StringComparison.OrdinalIgnoreCase);
+        }
+
+        var fieldStr = fieldValue?.ToString() ?? string.Empty;
         return fieldStr.Contains(expectedStr, StringComparison.OrdinalIgnoreCase);
     }
 
