@@ -348,6 +348,61 @@ public class ApplicationStateServiceTests
     }
 
     [Fact]
+    public void GetJsonElementValue_ReturnsRawJson_ForObjectValues()
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse("""{"name":"Contoso","ukprn":"123"}""");
+        var service = CreateService(CreateSessionStore());
+
+        var value = service.GetJsonElementValue(doc.RootElement);
+
+        Assert.Equal("""{"name":"Contoso","ukprn":"123"}""", Assert.IsType<string>(value));
+    }
+
+    [Fact]
+    public void GetJsonElementValue_ReturnsRawJson_ForMixedTypeArrays()
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse("""[1,"two"]""");
+        var service = CreateService(CreateSessionStore());
+
+        var value = service.GetJsonElementValue(doc.RootElement);
+
+        Assert.Equal("""[1,"two"]""", Assert.IsType<string>(value));
+    }
+
+    [Fact]
+    public async Task LoadResponseDataIntoSessionAsync_RestoresMultiSelectCheckboxValues()
+    {
+        var applicationId = Guid.NewGuid();
+        var application = new ApplicationDto
+        {
+            ApplicationId = applicationId,
+            ApplicationReference = "APP-102",
+            TemplateVersionId = Guid.NewGuid(),
+            LatestResponse = new ApplicationResponseDetailsDto
+            {
+                ResponseId = Guid.NewGuid(),
+                ResponseBody = """
+                    {
+                      "significantChangeType": {
+                        "value": "[\"change-trust-name\",\"change-address\"]"
+                      }
+                    }
+                    """,
+                CreatedOn = DateTime.UtcNow,
+                CreatedBy = Guid.NewGuid()
+            }
+        };
+        var service = CreateService(CreateSessionStore());
+
+        await service.LoadResponseDataIntoSessionAsync(application);
+
+        _applicationResponseService.Received(1).StoreFormDataInSession(
+            Arg.Is<Dictionary<string, object>>(d =>
+                d.ContainsKey("significantChangeType")
+                && Equals(d["significantChangeType"], """["change-trust-name","change-address"]""")));
+    }
+
+    [Fact]
     public async Task LoadResponseDataIntoSessionAsync_RestoresTaskStatusAndFormData()
     {
         var applicationId = Guid.NewGuid();

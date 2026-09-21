@@ -90,6 +90,252 @@ public class ApplicationResponseServiceTests
     }
 
     [Fact]
+    public void TransformToResponseJson_FormatsNullValue_AsEmptyString()
+    {
+        var service = CreateService();
+
+        var json = service.TransformToResponseJson(
+            new Dictionary<string, object> { ["field"] = null! },
+            new Dictionary<string, string>());
+
+        Assert.Equal(string.Empty, ReadStoredFieldValue(json, "field"));
+    }
+
+    [Theory]
+    [InlineData("plain-text", "plain-text")]
+    [InlineData(true, "true")]
+    [InlineData(false, "false")]
+    public void TransformToResponseJson_FormatsPrimitiveValues(object input, string expected)
+    {
+        var service = CreateService();
+
+        var json = service.TransformToResponseJson(
+            new Dictionary<string, object> { ["field"] = input },
+            new Dictionary<string, string>());
+
+        Assert.Equal(expected, ReadStoredFieldValue(json, "field"));
+    }
+
+    [Fact]
+    public void TransformToResponseJson_SerializesSingleCheckboxValue_AsPlainString()
+    {
+        var service = CreateService();
+
+        var json = service.TransformToResponseJson(
+            new Dictionary<string, object> { ["choices"] = new[] { "only-one" } },
+            new Dictionary<string, string>());
+
+        Assert.Equal("only-one", ReadStoredFieldValue(json, "choices"));
+    }
+
+    [Fact]
+    public void TransformToResponseJson_SerializesEmptyCheckboxSelection_AsEmptyString()
+    {
+        var service = CreateService();
+
+        var json = service.TransformToResponseJson(
+            new Dictionary<string, object> { ["choices"] = Array.Empty<string>() },
+            new Dictionary<string, string>());
+
+        Assert.Equal(string.Empty, ReadStoredFieldValue(json, "choices"));
+    }
+
+    [Fact]
+    public void TransformToResponseJson_SerializesStringEnumerable_CheckboxValues()
+    {
+        var service = CreateService();
+
+        var json = service.TransformToResponseJson(
+            new Dictionary<string, object>
+            {
+                ["choices"] = new List<string> { "alpha", " ", "beta" }
+            },
+            new Dictionary<string, string>());
+
+        Assert.Equal("""["alpha","beta"]""", ReadStoredFieldValue(json, "choices"));
+    }
+
+    [Fact]
+    public void TransformToResponseJson_SerializesSingleItemStringEnumerable_AsPlainString()
+    {
+        var service = CreateService();
+
+        var json = service.TransformToResponseJson(
+            new Dictionary<string, object> { ["choices"] = new List<string> { "alpha" } },
+            new Dictionary<string, string>());
+
+        Assert.Equal("alpha", ReadStoredFieldValue(json, "choices"));
+    }
+
+    [Fact]
+    public void TransformToResponseJson_SerializesDecimalUsingInvariantCulture()
+    {
+        var service = CreateService();
+
+        var json = service.TransformToResponseJson(
+            new Dictionary<string, object> { ["amount"] = 12.5m },
+            new Dictionary<string, string>());
+
+        Assert.Equal("12.5", ReadStoredFieldValue(json, "amount"));
+    }
+
+    [Fact]
+    public void TransformToResponseJson_SerializesComplexObjectAsJson()
+    {
+        var service = CreateService();
+
+        var json = service.TransformToResponseJson(
+            new Dictionary<string, object>
+            {
+                ["establishment"] = new Dictionary<string, string>
+                {
+                    ["name"] = "Contoso Academy",
+                    ["ukprn"] = "123456"
+                }
+            },
+            new Dictionary<string, string>());
+
+        using var doc = JsonDocument.Parse(ReadStoredFieldValue(json, "establishment"));
+        Assert.Equal("Contoso Academy", doc.RootElement.GetProperty("name").GetString());
+        Assert.Equal("123456", doc.RootElement.GetProperty("ukprn").GetString());
+    }
+
+    [Theory]
+    [InlineData("\"stored\"", "stored")]
+    [InlineData("[\"one\",\"two\"]", """["one","two"]""")]
+    [InlineData("[\"only\"]", "only")]
+    [InlineData("[]", "")]
+    [InlineData("42", "42")]
+    [InlineData("true", "true")]
+    [InlineData("false", "false")]
+    [InlineData("{\"id\":\"x\"}", "{\"id\":\"x\"}")]
+    public void TransformToResponseJson_SerializesJsonElementValues(string rawJson, string expected)
+    {
+        using var elementDoc = JsonDocument.Parse(rawJson);
+        var service = CreateService();
+
+        var json = service.TransformToResponseJson(
+            new Dictionary<string, object> { ["field"] = elementDoc.RootElement.Clone() },
+            new Dictionary<string, string>());
+
+        Assert.Equal(expected, ReadStoredFieldValue(json, "field"));
+    }
+
+    [Fact]
+    public void TransformToResponseJson_SerializesMixedJsonArrayUsingRawJson()
+    {
+        using var elementDoc = JsonDocument.Parse("""[1,"two"]""");
+        var service = CreateService();
+
+        var json = service.TransformToResponseJson(
+            new Dictionary<string, object> { ["field"] = elementDoc.RootElement.Clone() },
+            new Dictionary<string, string>());
+
+        Assert.Equal("""[1,"two"]""", ReadStoredFieldValue(json, "field"));
+    }
+
+    [Theory]
+    [InlineData("null", "")]
+    [InlineData("\"answer\"", "answer")]
+    [InlineData("true", "true")]
+    [InlineData("false", "false")]
+    [InlineData("12.5", "12.5")]
+    [InlineData("[\"one\"]", "one")]
+    [InlineData("[\"one\",\"two\"]", null)]
+    public void GetAccumulatedFormData_CleansJsonElementValues(string storedJson, string? expectedSingle)
+    {
+        var session = CreateSessionStore(store =>
+            store.SetString(FormSessionKeys.AccumulatedFormData, $$"""{"field":{{storedJson}}}"""));
+        var service = CreateService(session);
+
+        var accumulated = service.GetAccumulatedFormData();
+
+        Assert.True(accumulated.TryGetValue("field", out var value));
+        if (expectedSingle is not null)
+        {
+            Assert.Equal(expectedSingle, value);
+            return;
+        }
+
+        Assert.Equal(["one", "two"], Assert.IsType<string[]>(value));
+    }
+
+    [Fact]
+    public void GetAccumulatedFormData_CleansJsonObjectArray_ToRawJsonString()
+    {
+        var session = CreateSessionStore(store =>
+            store.SetString(
+                FormSessionKeys.AccumulatedFormData,
+                """{"files":[{"id":"f1","originalFileName":"evidence.pdf"}]}"""));
+        var service = CreateService(session);
+
+        var accumulated = service.GetAccumulatedFormData();
+
+        Assert.True(accumulated.TryGetValue("files", out var value));
+        var raw = Assert.IsType<string>(value);
+        using var doc = JsonDocument.Parse(raw);
+        Assert.Equal(JsonValueKind.Array, doc.RootElement.ValueKind);
+        Assert.Equal("f1", doc.RootElement[0].GetProperty("id").GetString());
+    }
+
+    [Fact]
+    public void GetAccumulatedFormData_CleansJsonObject_ToRawJsonString()
+    {
+        var session = CreateSessionStore(store =>
+            store.SetString(
+                FormSessionKeys.AccumulatedFormData,
+                """{"establishment":{"name":"Contoso","ukprn":"123"}}"""));
+        var service = CreateService(session);
+
+        var accumulated = service.GetAccumulatedFormData();
+
+        Assert.True(accumulated.TryGetValue("establishment", out var value));
+        var raw = Assert.IsType<string>(value);
+        using var doc = JsonDocument.Parse(raw);
+        Assert.Equal("Contoso", doc.RootElement.GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public void GetAccumulatedFormData_CleansSingleStringArrayValue_ToPlainString()
+    {
+        var session = CreateSessionStore();
+        var service = CreateService(session);
+        service.AccumulateFormData(new Dictionary<string, object> { ["field"] = new[] { "one" } });
+
+        var accumulated = service.GetAccumulatedFormData();
+
+        Assert.Equal("one", accumulated["field"]);
+    }
+
+    [Fact]
+    public async Task SaveApplicationResponseAsync_PersistsMultiSelectCheckboxValues_InResponseBody()
+    {
+        var session = CreateSessionStore();
+        var applications = Substitute.For<IApplicationsClient>();
+        AddApplicationResponseRequest? capturedRequest = null;
+        applications
+            .When(x => x.AddApplicationResponseAsync(Arg.Any<Guid>(), Arg.Any<AddApplicationResponseRequest>(), Arg.Any<CancellationToken>()))
+            .Do(call => capturedRequest = call.Arg<AddApplicationResponseRequest>());
+
+        var service = CreateService(session, applications);
+        var applicationId = Guid.NewGuid();
+
+        await service.SaveApplicationResponseAsync(
+            applicationId,
+            new Dictionary<string, object>
+            {
+                ["significantChangeType"] = new[] { "change-trust-name", "change-address" }
+            });
+
+        Assert.NotNull(capturedRequest);
+        var decodedJson = Encoding.UTF8.GetString(Convert.FromBase64String(capturedRequest!.ResponseBody));
+        using var doc = JsonDocument.Parse(decodedJson);
+        Assert.Equal(
+            """["change-trust-name","change-address"]""",
+            doc.RootElement.GetProperty("significantChangeType").GetProperty("value").GetString());
+    }
+
+    [Fact]
     public void TransformToResponseJson_TaskStatusWrapperCompleted_IsFalse_WhenTaskIsInProgress()
     {
         var service = CreateService();
@@ -270,6 +516,12 @@ public class ApplicationResponseServiceTests
             service.SaveApplicationResponseAsync(
                 Guid.NewGuid(),
                 new Dictionary<string, object> { ["fieldOne"] = "value" }));
+    }
+
+    private static string ReadStoredFieldValue(string responseJson, string fieldId)
+    {
+        using var doc = JsonDocument.Parse(responseJson);
+        return doc.RootElement.GetProperty(fieldId).GetProperty("value").GetString() ?? string.Empty;
     }
 
     private static ApplicationResponseService CreateService(
