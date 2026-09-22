@@ -175,6 +175,23 @@ public class ConditionalLogicEngineTests
     }
 
     [Fact]
+    public void EvaluateCondition_Contains_MatchesSubstringAcrossMultiSelectCheckboxValues()
+    {
+        var containsSen = SimpleCondition("significantChangeType", ConditionalLogicConstants.Operators.Contains, "sen");
+        var equalsSen = SimpleCondition("significantChangeType", ConditionalLogicConstants.Operators.Equals, "sen");
+
+        Assert.True(_engine.EvaluateCondition(
+            containsSen,
+            new Dictionary<string, object> { ["significantChangeType"] = new[] { "senUnit", "mainstreamAndSen" } }));
+        Assert.False(_engine.EvaluateCondition(
+            equalsSen,
+            new Dictionary<string, object> { ["significantChangeType"] = new[] { "senUnit", "mainstreamAndSen" } }));
+        Assert.True(_engine.EvaluateCondition(
+            equalsSen,
+            new Dictionary<string, object> { ["significantChangeType"] = new[] { "sen", "senUnit" } }));
+    }
+
+    [Fact]
     public void EvaluateCondition_Contains_MatchesValueInJsonSerializedCheckboxArray()
     {
         var condition = SimpleCondition(
@@ -399,7 +416,7 @@ public class ConditionalLogicEngineTests
     public void EvaluateCondition_MissingField_TreatedAsNull_ForEquals()
     {
         var condition = SimpleCondition("missing", ConditionalLogicConstants.Operators.Equals, string.Empty);
-        Assert.True(_engine.EvaluateCondition(condition, []));
+        Assert.False(_engine.EvaluateCondition(condition, []));
     }
 
     [Fact]

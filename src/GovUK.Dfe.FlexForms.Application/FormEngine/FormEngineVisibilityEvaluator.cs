@@ -238,19 +238,11 @@ public sealed class FormEngineVisibilityEvaluator(
             return false;
 
         var normalizedValues = CheckboxValueNormalizer.Normalize(fieldValue);
-        if (normalizedValues.Count > 1)
-        {
-            return normalizedValues.Any(v =>
-                v.Equals(conditionValue, StringComparison.OrdinalIgnoreCase));
-        }
+        if (normalizedValues.Count == 0)
+            return false;
 
-        if (normalizedValues.Count == 1)
-        {
-            var single = normalizedValues.First();
-            return single.Equals(conditionValue, StringComparison.OrdinalIgnoreCase)
-                || single.Contains(conditionValue, StringComparison.OrdinalIgnoreCase);
-        }
-
-        return false;
+        return normalizedValues.Any(v =>
+            v.Equals(conditionValue, StringComparison.OrdinalIgnoreCase)
+            || v.Contains(conditionValue, StringComparison.OrdinalIgnoreCase));
     }
 }

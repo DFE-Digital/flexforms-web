@@ -321,9 +321,9 @@ public class ConditionalLogicEngine(ILogger<ConditionalLogicEngine> logger) : IC
 
     private static bool CompareStringEquals(object? fieldValue, object expectedValue)
     {
-        var fieldStr = fieldValue?.ToString() ?? string.Empty;
         var expectedStr = expectedValue?.ToString() ?? string.Empty;
-        return string.Equals(fieldStr, expectedStr, StringComparison.OrdinalIgnoreCase);
+        return CheckboxValueNormalizer.Normalize(fieldValue).Any(v =>
+            v.Equals(expectedStr, StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool CompareNumericEquals(object? fieldValue, object expectedValue)
@@ -391,17 +391,11 @@ public class ConditionalLogicEngine(ILogger<ConditionalLogicEngine> logger) : IC
             return false;
 
         var normalizedValues = CheckboxValueNormalizer.Normalize(fieldValue);
-        if (normalizedValues.Count > 1)
+        if (normalizedValues.Count > 0)
         {
             return normalizedValues.Any(v =>
-                v.Equals(expectedStr, StringComparison.OrdinalIgnoreCase));
-        }
-
-        if (normalizedValues.Count == 1)
-        {
-            var single = normalizedValues.First();
-            return single.Equals(expectedStr, StringComparison.OrdinalIgnoreCase)
-                || single.Contains(expectedStr, StringComparison.OrdinalIgnoreCase);
+                v.Equals(expectedStr, StringComparison.OrdinalIgnoreCase)
+                || v.Contains(expectedStr, StringComparison.OrdinalIgnoreCase));
         }
 
         var fieldStr = fieldValue?.ToString() ?? string.Empty;

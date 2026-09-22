@@ -332,6 +332,61 @@ public class SaveFormPageServiceCoverageTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_ShouldPassAccumulatedTriggerData_WhenChoosingNextConditionalPage()
+    {
+        var containsPage = CreatePage(
+            "contains-sen-test-page",
+            returnToSummaryPage: false,
+            fields: [new Field { FieldId = "containsSenTest", Type = "text", Label = new Label { Value = "Contains" }, Order = 1 }]);
+        var equalsPage = CreatePage(
+            "equals-sen-test-page",
+            returnToSummaryPage: false,
+            fields: [new Field { FieldId = "equalsSenTest", Type = "text", Label = new Label { Value = "Equals" }, Order = 1 }]);
+        var task = CreateStandardTask(containsPage, equalsPage);
+        Register(task, containsPage);
+
+        _responses.GetAccumulatedFormData().Returns(new Dictionary<string, object>
+        {
+            ["significantChangeType"] = new[] { "sen", "senUnit" }
+        });
+
+        Dictionary<string, object>? capturedData = null;
+        _conditionalLogic.GetNextPageAsync(
+                Arg.Any<FormTemplate>(),
+                Arg.Do<Dictionary<string, object>>(d => capturedData = new Dictionary<string, object>(d)),
+                Arg.Any<string>(),
+                Arg.Any<ConditionalLogicContext?>())
+            .Returns("equals-sen-test-page");
+
+        var state = EditablePageState("contains-sen-test-page", task.TaskId, task);
+        state.ConditionalState = new FormConditionalState();
+        state.Template!.ConditionalLogic =
+        [
+            new ConditionalLogic
+            {
+                Enabled = true,
+                ConditionGroup = new ConditionGroup
+                {
+                    LogicalOperator = "AND",
+                    Conditions = [new Condition { TriggerField = "significantChangeType", Operator = "equals", Value = "sen" }]
+                },
+                AffectedElements = [new AffectedElement { ElementId = "equals-sen-test-page", ElementType = "page", Action = "show" }]
+            }
+        ];
+
+        var result = await _service.ExecuteAsync(
+            state,
+            Posted("Data[containsSenTest]", "answer"),
+            null);
+
+        Assert.Equal(FormEngineOutcomeKind.Redirect, result.Kind);
+        Assert.Equal($"/applications/REF-1/{task.TaskId}/equals-sen-test-page", result.RedirectUrl);
+        Assert.NotNull(capturedData);
+        Assert.True(capturedData!.ContainsKey("significantChangeType"));
+        Assert.Equal("answer", capturedData["containsSenTest"]);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_ShouldRedirectToTaskSummary_WhenConditionalLogicSkipsRemainingPages()
     {
         var first = CreatePage("p1", returnToSummaryPage: false);
