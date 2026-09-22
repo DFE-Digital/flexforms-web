@@ -617,9 +617,14 @@ class ConditionalLogicEngine {
             return Number(fieldValue) === Number(expectedValue);
         } else if (dataType === 'boolean') {
             return Boolean(fieldValue) === Boolean(expectedValue);
-        } else {
-            return String(fieldValue || '').toLowerCase() === String(expectedValue || '').toLowerCase();
         }
+
+        if (Array.isArray(fieldValue)) {
+            const expected = String(expectedValue || '').toLowerCase();
+            return fieldValue.some(val => String(val || '').toLowerCase() === expected);
+        }
+
+        return String(fieldValue || '').toLowerCase() === String(expectedValue || '').toLowerCase();
     }
 
     compareIn(fieldValue, expectedValue) {
@@ -641,7 +646,10 @@ class ConditionalLogicEngine {
         }
 
         if (Array.isArray(fieldValue)) {
-            return fieldValue.some(val => String(val || '').toLowerCase() === expected);
+            return fieldValue.some(val => {
+                const option = String(val || '').toLowerCase();
+                return option === expected || option.includes(expected);
+            });
         }
 
         const fieldStr = String(fieldValue || '').toLowerCase();
