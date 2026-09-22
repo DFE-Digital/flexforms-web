@@ -6,6 +6,7 @@ using GovUK.Dfe.FlexForms.Web.Tenancy;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Hosting;
 
 namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 
@@ -17,7 +18,8 @@ public sealed class TenantSettingsModel(
     ITenantSettingsAdmin tenantSettingsAdmin,
     ITenantRequestContext tenantRequestContext,
     ITenantConfigurationCache tenantConfigurationCache,
-    ITenantIdResolver tenantIdResolver) : PageModel
+    ITenantIdResolver tenantIdResolver,
+    IHostEnvironment hostEnvironment) : PageModel
 {
     public static readonly string[] ValidTargets = TenantSettingsAdminService.ValidTargets;
 
@@ -52,6 +54,12 @@ public sealed class TenantSettingsModel(
     public string? SuccessMessage { get; private set; }
 
     public bool IsSuperAdmin => AdminAccessHelper.IsSuperAdmin(User);
+
+    /// <summary>
+    /// True when this host is Dev/Test and the caller is SuperAdmin — secrets may be plaintext.
+    /// </summary>
+    public bool CanViewPlaintextSecrets =>
+        TenantSettingSecretPlaintextGate.AllowsSuperAdminPlaintext(hostEnvironment, IsSuperAdmin);
 
     /// <summary>
     /// False for SuperAdmin-only categories (Templates HostMappings, ConnectionStrings, …)

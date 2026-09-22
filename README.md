@@ -587,7 +587,7 @@ Hub: `/admin` (`CanAccessAdminArea`). Each admin page follows the [Clean Archite
 | Organisation Settings | `/admin/organisation-settings` | Admin / SuperAdmin | `IOrganisationSettingsAdmin` |
 | Contributor Management | `/admin/contributor-management` | Admin / SuperAdmin | `IContributorManagementAdmin` |
 | Duplicate Tenant | `/admin/duplicate-tenant` | **SuperAdmin only** | `IDuplicateTenantAdmin` |
-| Tenant Settings | `/admin/tenant-settings` | **SuperAdmin only** | `ITenantSettingsAdmin` |
+| Tenant Settings | `/admin/tenant-settings` | Admin / SuperAdmin | `ITenantSettingsAdmin` |
 | Event Mappings | `/admin/event-mappings` | Admin / SuperAdmin | `IEventMappingsAdmin` |
 
 All admin use cases return `AdminPageOutcome` and use `AdminApiErrorMapper` for consistent error presentation.
@@ -739,7 +739,7 @@ Failed validation **keeps** the file (unlike malware, which deletes it). The ten
 | AuthZ | Folder policy `OpenIdConnectPolicy`; admin policies from `AdminAccessHelper` |
 | CSRF | Antiforgery on POSTs (`SessionController`, notifications, forms) |
 | Tenant binding | Hostname / header → config; API calls send `X-Tenant-ID` |
-| Secrets | Not stored in Web DB; Tenant Settings secrets encrypted in API |
+| Secrets | Not stored in Web DB. API encrypts secret Tenant Settings at rest. Admin UI shows `__REDACTED__` for secret leaves (SuperAdmin plaintext only in Dev/Test). See [Tenant Admin User Manual §14.4](docs/Tenant-Admin-User-Manual.md#144-how-secrets-are-shown-and-saved) |
 | Sanitisation | HtmlSanitizer + Markdig for tooltips/descriptions |
 | HSTS | Enabled outside Development |
 | Health | `/health`, `/healthz`, `/liveness` anonymous |
