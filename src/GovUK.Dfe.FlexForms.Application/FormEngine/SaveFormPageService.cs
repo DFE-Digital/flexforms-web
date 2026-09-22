@@ -609,7 +609,8 @@ public sealed class SaveFormPageService(
                     state.CurrentPageId,
                     state.TaskId,
                     logger);
-                hasConditionalTrigger = visibility.HasConditionalLogicShowingPages(state.Data);
+                var navigationData = BuildNavigationData(state);
+                hasConditionalTrigger = visibility.HasConditionalLogicShowingPages(navigationData);
 
                 logger.LogInformation(
                     "[FLOW DEBUG] ReturnToSummaryPage=true path - hasConditionalTrigger: {HasTrigger}, currentPageId: {PageId}",
@@ -618,7 +619,7 @@ public sealed class SaveFormPageService(
 
                 if (hasConditionalTrigger)
                 {
-                    LogDataPreview(state.Data);
+                    LogDataPreview(navigationData);
                     var context = new ConditionalLogicContext
                     {
                         CurrentPageId = state.CurrentPageId,
@@ -628,7 +629,7 @@ public sealed class SaveFormPageService(
                     };
                     conditionalNextPageId = await conditionalLogicOrchestrator.GetNextPageAsync(
                         state.Template,
-                        state.Data,
+                        navigationData,
                         state.CurrentPage.PageId,
                         context);
                     logger.LogInformation("[FLOW DEBUG] GetNextPageAsync returned: {NextPageId}", conditionalNextPageId ?? "null");
@@ -650,8 +651,9 @@ public sealed class SaveFormPageService(
         string? nextPageId = null;
         if (state.ConditionalState != null && state.Template != null)
         {
+            var navigationData = BuildNavigationData(state);
             logger.LogInformation("[FLOW DEBUG] ReturnToSummaryPage=false path - currentPageId: {PageId}", state.CurrentPage.PageId);
-            LogDataPreview(state.Data);
+            LogDataPreview(navigationData);
             var context = new ConditionalLogicContext
             {
                 CurrentPageId = state.CurrentPageId,
@@ -661,7 +663,7 @@ public sealed class SaveFormPageService(
             };
             nextPageId = await conditionalLogicOrchestrator.GetNextPageAsync(
                 state.Template,
-                state.Data,
+                navigationData,
                 state.CurrentPage.PageId,
                 context);
             logger.LogInformation("[FLOW DEBUG] GetNextPageAsync returned: {NextPageId}", nextPageId ?? "null");
@@ -851,6 +853,12 @@ public sealed class SaveFormPageService(
         var serialized = JsonSerializer.Serialize(list);
         applicationResponseService.AccumulateFormData(new Dictionary<string, object> { [fieldId] = serialized });
     }
+
+    private Dictionary<string, object> BuildNavigationData(FormEngineWorkState state) =>
+        FormEngineConditionalLogic.BuildEvaluationData(
+            state.Data,
+            state.FormData,
+            applicationResponseService.GetAccumulatedFormData());
 
     private void LogDataPreview(Dictionary<string, object> data)
     {

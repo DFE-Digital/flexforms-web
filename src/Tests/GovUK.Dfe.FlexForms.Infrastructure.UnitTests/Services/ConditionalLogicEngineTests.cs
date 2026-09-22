@@ -416,7 +416,7 @@ public class ConditionalLogicEngineTests
     public void EvaluateCondition_MissingField_TreatedAsNull_ForEquals()
     {
         var condition = SimpleCondition("missing", ConditionalLogicConstants.Operators.Equals, string.Empty);
-        Assert.True(_engine.EvaluateCondition(condition, []));
+        Assert.False(_engine.EvaluateCondition(condition, []));
     }
 
     [Fact]

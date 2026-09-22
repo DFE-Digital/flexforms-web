@@ -6,6 +6,36 @@ namespace GovUK.Dfe.FlexForms.Application.FormEngine;
 
 internal static class FormEngineConditionalLogic
 {
+    /// <summary>
+    /// Merges current page data with saved answers so conditional rules still see earlier triggers.
+    /// </summary>
+    public static Dictionary<string, object> BuildEvaluationData(
+        Dictionary<string, object> pageData,
+        Dictionary<string, object> formData,
+        Dictionary<string, object>? accumulated = null)
+    {
+        var dataForConditionalLogic = pageData.Count > 0
+            ? new Dictionary<string, object>(pageData)
+            : new Dictionary<string, object>(formData);
+
+        if (accumulated != null)
+        {
+            foreach (var kvp in accumulated)
+            {
+                if (!dataForConditionalLogic.ContainsKey(kvp.Key))
+                    dataForConditionalLogic[kvp.Key] = kvp.Value;
+            }
+        }
+
+        foreach (var kvp in formData)
+        {
+            if (!dataForConditionalLogic.ContainsKey(kvp.Key))
+                dataForConditionalLogic[kvp.Key] = kvp.Value;
+        }
+
+        return dataForConditionalLogic;
+    }
+
     public static async Task<FormConditionalState> ApplyAsync(
         FormTemplate? template,
         Dictionary<string, object> data,
@@ -22,18 +52,11 @@ internal static class FormEngineConditionalLogic
             if (template?.ConditionalLogic == null || !template.ConditionalLogic.Any())
                 return new FormConditionalState();
 
-            var dataForConditionalLogic = data.Count > 0
-                ? new Dictionary<string, object>(data)
-                : new Dictionary<string, object>(formData);
-
-            if (trigger == "change" && accumulatedForChange != null)
-            {
-                foreach (var kvp in accumulatedForChange)
-                {
-                    if (!dataForConditionalLogic.ContainsKey(kvp.Key))
-                        dataForConditionalLogic[kvp.Key] = kvp.Value;
-                }
-            }
+            var dataForConditionalLogic = trigger == "change"
+                ? BuildEvaluationData(data, formData, accumulatedForChange)
+                : data.Count > 0
+                    ? new Dictionary<string, object>(data)
+                    : new Dictionary<string, object>(formData);
 
             var context = new ConditionalLogicContext
             {
