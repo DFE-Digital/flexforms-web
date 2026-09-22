@@ -673,11 +673,15 @@ public sealed class SaveFormPageService(
             return FormEngineOutcome.Redirect(nextUrl);
         }
 
-        var sequentialNextPage = FormStepPolicy.GetNextPage(state.CurrentTask!.Pages, state.CurrentPage.PageId);
-        if (sequentialNextPage != null)
+        var hasConditionalLogic = state.Template?.ConditionalLogic?.Any() == true;
+        if (!hasConditionalLogic)
         {
-            var nextUrl = $"/applications/{state.ReferenceNumber}/{state.CurrentTask.TaskId}/{sequentialNextPage.PageId}";
-            return FormEngineOutcome.Redirect(nextUrl);
+            var sequentialNextPage = FormStepPolicy.GetNextPage(state.CurrentTask!.Pages, state.CurrentPage.PageId);
+            if (sequentialNextPage != null)
+            {
+                var nextUrl = $"/applications/{state.ReferenceNumber}/{state.CurrentTask.TaskId}/{sequentialNextPage.PageId}";
+                return FormEngineOutcome.Redirect(nextUrl);
+            }
         }
 
         var summaryFallbackScope = FormRouteParser.HistoryScope(state.ReferenceNumber, state.TaskId, state.CurrentPageId);

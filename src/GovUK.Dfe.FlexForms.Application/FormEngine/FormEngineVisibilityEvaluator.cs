@@ -1,4 +1,5 @@
 using GovUK.Dfe.FlexForms.Application.Interfaces;
+using GovUK.Dfe.FlexForms.Domain.FormEngine;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using Microsoft.Extensions.Logging;
 
@@ -206,14 +207,14 @@ public sealed class FormEngineVisibilityEvaluator(
         var results = new List<bool>();
         foreach (var condition in rule.ConditionGroup.Conditions)
         {
-            var fieldValue = data.TryGetValue(condition.TriggerField, out var value) ? value?.ToString() : "";
+            data.TryGetValue(condition.TriggerField, out var rawValue);
             var conditionValue = condition.Value?.ToString() ?? "";
             var conditionMet = condition.Operator.ToLowerInvariant() switch
             {
-                "equals" => string.Equals(fieldValue, conditionValue, StringComparison.OrdinalIgnoreCase),
-                "not_equals" => !string.Equals(fieldValue, conditionValue, StringComparison.OrdinalIgnoreCase),
-                "contains" => fieldValue?.Contains(conditionValue, StringComparison.OrdinalIgnoreCase) == true,
-                "not_contains" => fieldValue?.Contains(conditionValue, StringComparison.OrdinalIgnoreCase) != true,
+                "equals" => EvaluateEquals(rawValue, conditionValue),
+                "not_equals" => !EvaluateEquals(rawValue, conditionValue),
+                "contains" => EvaluateContains(rawValue, conditionValue),
+                "not_contains" => !EvaluateContains(rawValue, conditionValue),
                 _ => false
             };
             results.Add(conditionMet);
@@ -225,5 +226,31 @@ public sealed class FormEngineVisibilityEvaluator(
             "OR" => results.Any(r => r),
             _ => results.All(r => r)
         };
+    }
+
+    private static bool EvaluateEquals(object? fieldValue, string conditionValue) =>
+        CheckboxValueNormalizer.Normalize(fieldValue).Any(v =>
+            v.Equals(conditionValue, StringComparison.OrdinalIgnoreCase));
+
+    private static bool EvaluateContains(object? fieldValue, string conditionValue)
+    {
+        if (string.IsNullOrEmpty(conditionValue))
+            return false;
+
+        var normalizedValues = CheckboxValueNormalizer.Normalize(fieldValue);
+        if (normalizedValues.Count > 1)
+        {
+            return normalizedValues.Any(v =>
+                v.Equals(conditionValue, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (normalizedValues.Count == 1)
+        {
+            var single = normalizedValues.First();
+            return single.Equals(conditionValue, StringComparison.OrdinalIgnoreCase)
+                || single.Contains(conditionValue, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return false;
     }
 }

@@ -154,6 +154,102 @@ public class ConditionalLogicEngineTests
     }
 
     [Fact]
+    public void EvaluateCondition_Contains_MatchesValueInMultiSelectCheckboxArray()
+    {
+        var condition = SimpleCondition(
+            "significantChangeType",
+            ConditionalLogicConstants.Operators.Contains,
+            "changeGenderComposition");
+
+        var withGender = new Dictionary<string, object>
+        {
+            ["significantChangeType"] = new[] { "changeSatelliteSite", "changeGenderComposition" }
+        };
+        var withoutGender = new Dictionary<string, object>
+        {
+            ["significantChangeType"] = new[] { "changeSatelliteSite", "changeAgeRange" }
+        };
+
+        Assert.True(_engine.EvaluateCondition(condition, withGender));
+        Assert.False(_engine.EvaluateCondition(condition, withoutGender));
+    }
+
+    [Fact]
+    public void EvaluateCondition_Contains_MatchesValueInJsonSerializedCheckboxArray()
+    {
+        var condition = SimpleCondition(
+            "significantChangeType",
+            ConditionalLogicConstants.Operators.Contains,
+            "changeAgeRange");
+
+        Assert.True(_engine.EvaluateCondition(
+            condition,
+            new Dictionary<string, object>
+            {
+                ["significantChangeType"] = """["changeSatelliteSite","changeAgeRange"]"""
+            }));
+    }
+
+    [Fact]
+    public void EvaluateCondition_Contains_ReturnsFalse_WhenExpectedValueIsEmpty()
+    {
+        var condition = SimpleCondition(
+            "significantChangeType",
+            ConditionalLogicConstants.Operators.Contains,
+            string.Empty);
+
+        Assert.False(_engine.EvaluateCondition(
+            condition,
+            new Dictionary<string, object>
+            {
+                ["significantChangeType"] = new[] { "changeAgeRange" }
+            }));
+    }
+
+    [Fact]
+    public void EvaluateCondition_Contains_MatchesSingleCheckboxSelection()
+    {
+        var condition = SimpleCondition(
+            "significantChangeType",
+            ConditionalLogicConstants.Operators.Contains,
+            "changeGenderComposition");
+
+        Assert.True(_engine.EvaluateCondition(
+            condition,
+            new Dictionary<string, object>
+            {
+                ["significantChangeType"] = new[] { "changeGenderComposition" }
+            }));
+    }
+
+    [Fact]
+    public void EvaluateCondition_Contains_MatchesSubstringInSingleValue()
+    {
+        var condition = SimpleCondition(
+            "note",
+            ConditionalLogicConstants.Operators.Contains,
+            "gender");
+
+        Assert.True(_engine.EvaluateCondition(
+            condition,
+            new Dictionary<string, object> { ["note"] = "change-gender-composition" }));
+        Assert.False(_engine.EvaluateCondition(
+            condition,
+            new Dictionary<string, object> { ["note"] = "change-age-range" }));
+    }
+
+    [Fact]
+    public void EvaluateCondition_Contains_ReturnsFalse_WhenFieldIsMissing()
+    {
+        var condition = SimpleCondition(
+            "significantChangeType",
+            ConditionalLogicConstants.Operators.Contains,
+            "changeAgeRange");
+
+        Assert.False(_engine.EvaluateCondition(condition, new Dictionary<string, object>()));
+    }
+
+    [Fact]
     public void EvaluateCondition_IsEmpty_ReturnsFalseForCamelCaseOperator()
     {
         Assert.False(_engine.EvaluateCondition(
