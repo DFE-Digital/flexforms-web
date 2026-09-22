@@ -239,7 +239,7 @@ public sealed class SaveFormPageService(
         {
             foreach (var field in state.CurrentPage.Fields.Where(f => f.Type == "complexField" && f.ComplexField != null))
             {
-                var cfg = complexFieldConfigurationService.GetConfiguration(field.ComplexField.Id);
+                var cfg = complexFieldConfigurationService.GetConfiguration(field.ComplexField!.Id);
                 if (!string.Equals(cfg.FieldType, "autocomplete", StringComparison.OrdinalIgnoreCase) || !cfg.AllowMultiple)
                     continue;
 
@@ -394,14 +394,14 @@ public sealed class SaveFormPageService(
         if (!isLast)
         {
             string? nextPageId = null;
-            if (state.ConditionalState != null)
+            if (state.ConditionalState != null && state.Template != null)
             {
                 logger.LogDebug(
                     "Sub-flow navigation: checking conditional logic for pages. Current page: {CurrentPageId}, Flow: {FlowId}",
                     state.CurrentPage.PageId,
                     flowRoute.FlowId);
 
-                var mergedData = collectionFlowProgressStore.Load(state.FlowId, state.InstanceId);
+                var mergedData = collectionFlowProgressStore.Load(flowRoute.FlowId, flowRoute.InstanceId);
                 foreach (var kvp in state.Data)
                     mergedData[kvp.Key] = kvp.Value;
 
@@ -452,7 +452,8 @@ public sealed class SaveFormPageService(
         {
             if (kv.Value?.ToString() == FormEngineConstants.UploadFieldSessionPlaceholder && accumulated.ContainsKey(kv.Key))
                 continue;
-            accumulated[kv.Key] = kv.Value;
+            if (kv.Value is not null)
+                accumulated[kv.Key] = kv.Value;
         }
 
         AppendCollectionItemToSession(flowPages, flowFieldId, flowRoute.InstanceId, accumulated);
@@ -577,7 +578,7 @@ public sealed class SaveFormPageService(
             return FormEngineOutcome.RedirectToPage("/FormEngine/RenderForm", new { referenceNumber = state.ReferenceNumber });
         }
 
-        if (state.CurrentTask != null && state.ApplicationId.HasValue)
+        if (state.CurrentTask != null && state.ApplicationId.HasValue && state.Template != null)
         {
             var hasAnyData = applicationStateService.CalculateTaskStatus(
                     state.CurrentTask.TaskId,
@@ -688,7 +689,7 @@ public sealed class SaveFormPageService(
 
         var summaryFallbackScope = FormRouteParser.HistoryScope(state.ReferenceNumber, state.TaskId, state.CurrentPageId);
         navigationHistoryService.Clear(summaryFallbackScope);
-        var fallbackUrl = formNavigationService.GetTaskSummaryUrl(state.CurrentTask.TaskId, state.ReferenceNumber);
+        var fallbackUrl = formNavigationService.GetTaskSummaryUrl(state.CurrentTask!.TaskId, state.ReferenceNumber);
         return FormEngineOutcome.Redirect(fallbackUrl);
     }
 
@@ -758,7 +759,7 @@ public sealed class SaveFormPageService(
             }
         }
 
-        if (state.ApplicationId.HasValue && state.CurrentTask != null)
+        if (state.ApplicationId.HasValue && state.CurrentTask != null && state.Template != null)
         {
             if (isCompleted)
             {
@@ -821,7 +822,8 @@ public sealed class SaveFormPageService(
                     continue;
                 }
 
-                item[kvp.Key] = kvp.Value;
+                if (kvp.Value is not null)
+                    item[kvp.Key] = kvp.Value;
             }
         }
         else
@@ -836,7 +838,8 @@ public sealed class SaveFormPageService(
                         continue;
                     if (value?.ToString() == FormEngineConstants.UploadFieldSessionPlaceholder)
                         continue;
-                    item[key] = value;
+                    if (value is not null)
+                        item[key] = value;
                 }
             }
 
