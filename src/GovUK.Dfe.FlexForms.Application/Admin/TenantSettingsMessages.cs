@@ -43,6 +43,14 @@ public static class TenantSettingsMessages
 
     public const string RefreshSuccess = "Tenant configuration cache refreshed.";
 
+    public const string RedactedSentinel = "__REDACTED__";
+
+    public const string SecretsRedacted =
+        "Secret values are not loaded into the browser. Secret leaves are shown as __REDACTED__. Saving a row that still contains __REDACTED__ keeps the stored secret. In Production, SuperAdmins can read an individual value only via POST /v1/admin/tenants/{tenantId}/settings/reveal.";
+
+    public const string SecretsVisibleToSuperAdminInDevTest =
+        "This is a Dev/Test environment: SuperAdmin can see and edit secret values here. Tenant Admins still see __REDACTED__. Production never returns plaintext secrets in this UI.";
+
     public static string Deleted(string category, string target) =>
         $"Deleted '{category}' ({target}).";
 

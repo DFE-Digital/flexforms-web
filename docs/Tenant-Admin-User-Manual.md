@@ -58,10 +58,11 @@ You do not need to be a developer to use this manual. Where a change is made in 
     - [14.1 Tenant health](#141-tenant-health)
     - [14.2 What a tenant Admin should usually change here](#142-what-a-tenant-admin-should-usually-change-here)
     - [14.3 What to leave for SuperAdmin / platform](#143-what-to-leave-for-superadmin--platform)
-    - [14.4 How to add or update a setting](#144-how-to-add-or-update-a-setting)
-    - [14.5 Audit log](#145-audit-log)
-    - [14.6 File validation (tenant function)](#146-file-validation-tenant-function)
-    - [14.7 Autocomplete search (FormEngine complex fields)](#147-autocomplete-search-formengine-complex-fields)
+    - [14.4 How secrets are shown and saved](#144-how-secrets-are-shown-and-saved)
+    - [14.5 How to add or update a setting](#145-how-to-add-or-update-a-setting)
+    - [14.6 Audit log](#146-audit-log)
+    - [14.7 File validation (tenant function)](#147-file-validation-tenant-function)
+    - [14.8 Autocomplete search (FormEngine complex fields)](#148-autocomplete-search-formengine-complex-fields)
 15. [Applications (admin list)](#15-applications-admin-list)
 16. [What end users see](#16-what-end-users-see)
 17. [System tools and caches](#17-system-tools-and-caches)
@@ -1106,7 +1107,7 @@ FlexForms Web does **not** subscribe to your reporting topics. It only consumes 
 
 Every upload still publishes `ScanRequestedEvent` to `file-scanner-requests`. You **cannot** disable that on this page (`ScanRequestedEvent` is rejected as a trigger event type). Infected files are handled by the platform scan result pipeline, separate from your reporting events.
 
-Tenant **file validation** (Excel schema checks and similar) is optional and separate. Infected files are still deleted; a failed validation only marks the file. Setup: [14.6 File validation](#146-file-validation-tenant-function).
+Tenant **file validation** (Excel schema checks and similar) is optional and separate. Infected files are still deleted; a failed validation only marks the file. Setup: [14.7 File validation](#147-file-validation-tenant-function).
 
 ### 12.16 Who can change this
 
@@ -1529,7 +1530,7 @@ Page: `/admin/tenant-settings`
 
 This is the **full configuration editor**: categories of JSON stored for Web, API, or Shared. Organisation settings and Event mappings write into the same store through friendlier screens. Use Tenant Settings when you need a category that has no dedicated page (for example [Email placeholder mappings](#13-email-placeholder-mappings)), or when you are asked to by the platform team.
 
-Secret values are shown decrypted here and encrypted again when **Secret** is ticked on save.
+**Secrets are not shown as full plaintext to Tenant Admins.** Rows marked **Secret** (or forced-secret categories such as `ConnectionStrings`, `Authorization`, `Email`) keep non-secret fields visible, but secret-looking values are replaced with `__REDACTED__`. See [14.4 How secrets are shown and saved](#144-how-secrets-are-shown-and-saved).
 
 Select **Refresh settings** after another admin has changed config, or if health looks stale.
 
@@ -1563,8 +1564,8 @@ Prefer the dedicated screens first. If you must use this page, these categories 
 | **EventTriggers** | Shared | Submit / upload publish bindings | Event mappings |
 | **EmailPlaceholderMappings** | Shared | Extra GOV.UK Notify personalisation from form answers | This page (JSON) — see [Email placeholder mappings](#13-email-placeholder-mappings) |
 | **Layout** | Web | Service name in the header, phase banner text and links | This page (JSON) — there is no separate form |
-| **FileValidation** | Shared | Whether submit is blocked until a tenant function validates eligible files | This page (JSON) — see [14.6](#146-file-validation-tenant-function) |
-| **FormEngine** | Web | Search APIs behind autocomplete questions (endpoint, API key or client credentials, dropdown/confirmation labels) | This page (JSON) — see [14.7](#147-autocomplete-search-formengine-complex-fields) |
+| **FileValidation** | Shared | Whether submit is blocked until a tenant function validates eligible files | This page (JSON) — see [14.7](#147-file-validation-tenant-function) |
+| **FormEngine** | Web | Search APIs behind autocomplete questions (endpoint, API key or client credentials, dropdown/confirmation labels) | This page (JSON) — see [14.8](#148-autocomplete-search-formengine-complex-fields) |
 
 **Layout** example (illustrative):
 
@@ -1594,20 +1595,64 @@ Do not edit these unless you have been briefed. They can lock people out or brea
 | **Authorization** | API token behaviour |
 | **ConnectionStrings** | Databases |
 | **InternalServiceAuth** | Machine-to-machine keys |
-| **AuthProviders** | API keys / mTLS. Needed for the file-validation callback — see [14.6](#146-file-validation-tenant-function) |
+| **AuthProviders** | API keys / mTLS. Needed for the file-validation callback — see [14.7](#147-file-validation-tenant-function) |
 | **AllowedHosts** | Which hostnames the app accepts |
 | **FeatureManagement** | Feature flags |
 | **Email** / **EmailTemplates** | Notify API key and template GUIDs (platform-owned) |
-| **FormEngine** | Contains search API keys or OAuth client secrets. You may add a `ComplexFields` entry when briefed — see [14.7](#147-autocomplete-search-formengine-complex-fields). Do not delete existing Trust / Establishment / Upload ids. |
+| **FormEngine** | Contains search API keys or OAuth client secrets. You may add a `ComplexFields` entry when briefed — see [14.8](#148-autocomplete-search-formengine-complex-fields). Do not delete existing Trust / Establishment / Upload ids. |
 
 The page also explains how SuperAdmins switch login without a platform restart (TestAuthentication / EntraSso / Authentication `Scheme`). Tenant Admins should not do this unprompted.
 
-### 14.4 How to add or update a setting
+### 14.4 How secrets are shown and saved
+
+Tick **Secret (encrypt at rest)** when a category stores passwords or keys. Some categories are **always** encrypted at rest even if you forget the checkbox (`ConnectionStrings`, `Authorization`, `AzureAd`, `DfESignIn`, `EntraSso`, `TestAuthentication`, `InternalServiceAuth`, `Email`, `FileStorage`, `ApplicationInsights`, `AuthProviders`).
+
+#### What you see in the editor
+
+The page does **not** redact the whole JSON blob. Only **secret leaves** (individual string values) are replaced with `__REDACTED__`. Everything else stays readable so you can edit non-secret fields safely.
+
+| Example property | Shown as |
+|------------------|----------|
+| `Issuer`, `Audience`, `ClientId`, `Email`, `Enabled` | Real value (not a secret leaf) |
+| `SecretKey`, `ClientSecret`, `ApiKey`, `Password`, `KeyHash`, `JwtSigningKey`, … | `__REDACTED__` |
+| Any value under **ConnectionStrings** | `__REDACTED__` |
+
+**Who can see plaintext**
+
+| Role | Environment | What the UI / list API returns |
+|------|-------------|-------------------------------|
+| Tenant Admin | Any | Secret leaves redacted |
+| SuperAdmin | Development, Local, Dev, Test, Testing | Full plaintext (so platform work is fast) |
+| SuperAdmin | Production, Staging, or unknown | Secret leaves redacted |
+
+In Production, a SuperAdmin who must read one secret leaf uses the API only:
+
+`POST /v1/admin/tenants/{tenantId}/settings/reveal`  
+with `category`, `target`, `path` (for example `SecretKey` or `Providers[0]:KeyHash`), and a **reason**. That call is rate-limited and written to the audit log as `SecretRevealed` (path and reason only — never the value).
+
+#### What is saved when you Update
+
+Saving always posts the JSON in the textarea. The API then:
+
+1. Finds every `__REDACTED__` leaf and **puts back the currently stored secret** for that path.
+2. Keeps any **new plaintext** you typed in place of a sentinel (that rotates the secret).
+3. Saves non-secret fields exactly as you typed them.
+4. Encrypts the whole category again when the row is secret.
+
+| What you do in the UI | What is stored |
+|-----------------------|----------------|
+| Leave `__REDACTED__` on `SecretKey`, change `Issuer` | Old secret kept; new Issuer saved |
+| Replace `__REDACTED__` with a new secret string | New secret saved |
+| Paste `__REDACTED__` on a path that did not exist before | Save is **rejected** (nothing to restore) |
+| SuperAdmin in Dev/Test edits plaintext secrets | New values saved as typed |
+
+**Practical tip for Tenant Admins:** edit only the fields you can see. Do not delete or invent `__REDACTED__` placeholders.
+
+### 14.5 How to add or update a setting
 
 Existing rows show **Category**, **Target**, JSON, **Secret**, then:
 
-- **Show value** / **Hide value** (secrets)
-- **Validate / diff** — checks the JSON before save
+- **Validate / diff** — checks the JSON before save (secret leaves stay redacted in the preview unless you are SuperAdmin in Dev/Test)
 - **Update**
 - **Delete** (cannot be undone)
 
@@ -1619,13 +1664,13 @@ Existing rows show **Category**, **Target**, JSON, **Secret**, then:
 4. Tick **Secret (encrypt at rest)** if the payload contains passwords or keys.
 5. **Validate / diff**, then **Add setting**.
 
-**Export settings** / **Import settings** copy configuration between environments. Import skips secret placeholders. Use with care.
+**Export settings** / **Import settings** copy configuration between environments. Export replaces secret categories with a placeholder; import skips those placeholders so existing secrets in the target environment are not wiped. Re-enter secrets in the target environment when promoting.
 
-### 14.5 Audit log
+### 14.6 Audit log
 
-**Audit log** on this page lists recent setting changes: When (UTC), Action, Category, Target, Actor.
+**Audit log** on this page lists recent setting changes: When (UTC), Action, Category, Target, Actor. Actions include Created, Updated, Deleted, and `SecretRevealed` (SuperAdmin break-glass reveal via the API).
 
-### 14.6 File validation (tenant function)
+### 14.7 File validation (tenant function)
 
 This is **optional**. It is **not** virus scanning (that is always on — see [12.15](#1215-virus-scanning-always-on)).
 
@@ -1701,6 +1746,8 @@ Copy that value into the function’s `X-Api-Key` setting.
 
 Leave `"IsServicePrincipal": true`. If it is missing or `false`, the function gets **403** even with a correct key.
 
+When you reopen the row later, `KeyHash` appears as `__REDACTED__`. Leave that sentinel unless you are rotating the key (see [14.4](#144-how-secrets-are-shown-and-saved)).
+
 4. **Validate / diff**, then **Add setting** or **Update**. Select **Refresh settings**.
 
 Do **not** put this key in `InternalServiceAuth`. That category is for a different machine login.
@@ -1731,7 +1778,7 @@ Technical contract: [flexforms-api README — File validation](https://github.co
 - [ ] `FileUploaded` trigger publishes to the function
 - [ ] Non-prod test: upload → pending → function → status + submit gate
 
-### 14.7 Autocomplete search (FormEngine complex fields)
+### 14.8 Autocomplete search (FormEngine complex fields)
 
 Search questions (trusts, academies, members of parliament, and similar) are **not** fully defined in the form template. The template only names a **config id**. The live URL, secrets, and most display options live in Tenant Settings category **`FormEngine`** (Target **Web**).
 
@@ -1754,7 +1801,7 @@ Tenant Settings  FormEngine  (Target Web)
 
 You **cannot** invent a new `complexField.id` in the template alone. Add the id here first (or ask platform), then reference it in Template Manager.
 
-Tick **Secret (encrypt at rest)** on the `FormEngine` row whenever it contains an API key or client secret. After save, select **Refresh settings**.
+Tick **Secret (encrypt at rest)** on the `FormEngine` row whenever it contains an API key or client secret. After save, select **Refresh settings**. On later edits, leave `__REDACTED__` on `ApiKey` / `ClientSecret` unless you intend to rotate them (see [14.4](#144-how-secrets-are-shown-and-saved)).
 
 #### Step by step — register a search field
 
@@ -1988,6 +2035,7 @@ You will **not** see these as a tenant Admin (by design):
 | **New tenant** (`/admin/duplicate-tenant`) | Clone a tenant, including a new service name |
 | **Platform tenants** (`/admin/platform-tenants`) | List every tenant on the platform |
 | Assigning the **Admin** role in User Manager | Only SuperAdmins get Admin in the role dropdown |
+| **Reveal a secret leaf in Production** | API `POST .../settings/reveal` with a reason (audited). The Tenant Settings page never shows Production secrets as plaintext, even for SuperAdmin. See [14.4](#144-how-secrets-are-shown-and-saved). |
 
 If you need a second tenant administrator, ask a SuperAdmin to assign the Admin role.
 
@@ -2011,8 +2059,8 @@ If you need a second tenant administrator, ask a SuperAdmin to assign the Admin 
 | Grant to all users succeeded but the banner showed zeros | Fixed in a recent release; counts should match people actually updated. |
 | Submit succeeded but reporting never received a message | See [12.18 Troubleshooting event mappings](#1218-troubleshooting-event-mappings). Check triggers, mapping, Service Bus topic/subscription, and API logs. |
 | Confirmation email missing academy name / custom text | See [13.12 Troubleshooting email placeholders](#1312-troubleshooting-email-placeholders). Check Notify `((placeholder))` spelling, `EmailPlaceholderMappings` (Target Shared), and form `fieldId`. |
-| Upload stays “Validation pending” / submit stays blocked | See [14.6](#146-file-validation-tenant-function). Check `FileValidation` mode, `FileUploaded` trigger, function `X-Api-Key` (raw) vs `AuthProviders` `KeyHash`, `IsServicePrincipal: true`, and **Refresh settings**. |
-| Autocomplete search empty / 401 / wrong labels | See [14.7](#147-autocomplete-search-formengine-complex-fields). Check `FormEngine` Target **Web**, matching `Id`, **Refresh settings**, API key vs client credentials, and `DropdownDisplay` / `ConfirmationDisplay`. |
+| Upload stays “Validation pending” / submit stays blocked | See [14.7](#147-file-validation-tenant-function). Check `FileValidation` mode, `FileUploaded` trigger, function `X-Api-Key` (raw) vs `AuthProviders` `KeyHash`, `IsServicePrincipal: true`, and **Refresh settings**. |
+| Autocomplete search empty / 401 / wrong labels | See [14.8](#148-autocomplete-search-formengine-complex-fields). Check `FormEngine` Target **Web**, matching `Id`, **Refresh settings**, API key vs client credentials, and `DropdownDisplay` / `ConfirmationDisplay`. |
 
 
 ---
