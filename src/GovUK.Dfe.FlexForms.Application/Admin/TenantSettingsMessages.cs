@@ -51,6 +51,9 @@ public static class TenantSettingsMessages
     public const string SecretsVisibleToSuperAdminInDevTest =
         "This is a Dev/Test environment: SuperAdmin can see and edit secret values here. Tenant Admins still see __REDACTED__. Production never returns plaintext secrets in this UI.";
 
+    public const string SecretFlagLockedForAdmin =
+        "Only SuperAdmin can remove the Secret flag once a category is marked secret.";
+
     public static string Deleted(string category, string target) =>
         $"Deleted '{category}' ({target}).";
 

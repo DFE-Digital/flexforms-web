@@ -352,16 +352,38 @@
 
                                     <div class="govuk-checkboxes govuk-checkboxes--small govuk-!-margin-bottom-2" data-module="govuk-checkboxes">
                                         <div class="govuk-checkboxes__item">
-                                            <input class="govuk-checkboxes__input"
-                                                   id="secret-@rowId"
-                                                   name="isSecret"
-                                                   type="checkbox"
-                                                   value="true"
-                                                   @(setting.IsSecret ? "checked" : null) />
-                                            <label class="govuk-label govuk-checkboxes__label" for="secret-@rowId">
-                                                Secret
-                                            </label>
+                                            @if (setting.IsSecret && !Model.IsSuperAdmin)
+                                            {
+                                                <input type="hidden" name="isSecret" value="true" />
+                                                <input class="govuk-checkboxes__input"
+                                                       id="secret-@rowId"
+                                                       type="checkbox"
+                                                       value="true"
+                                                       checked
+                                                       disabled />
+                                                <label class="govuk-label govuk-checkboxes__label" for="secret-@rowId">
+                                                    Secret
+                                                </label>
+                                            }
+                                            else
+                                            {
+                                                <input class="govuk-checkboxes__input"
+                                                       id="secret-@rowId"
+                                                       name="isSecret"
+                                                       type="checkbox"
+                                                       value="true"
+                                                       @(setting.IsSecret ? "checked" : null) />
+                                                <label class="govuk-label govuk-checkboxes__label" for="secret-@rowId">
+                                                    Secret
+                                                </label>
+                                            }
                                         </div>
+                                        @if (setting.IsSecret && !Model.IsSuperAdmin)
+                                        {
+                                            <div class="govuk-hint govuk-!-margin-top-1">
+                                                @TenantSettingsMessages.SecretFlagLockedForAdmin
+                                            </div>
+                                        }
                                     </div>
 
                                     <div class="govuk-button-group">
