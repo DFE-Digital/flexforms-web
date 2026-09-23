@@ -27,6 +27,10 @@ namespace GovUK.Dfe.FlexForms.Web.Utilities
             allowHttp: false,
             allowMailto: true,
             allowHeadings: true);
+        private static readonly HtmlSanitizer SanitizerGovUkContentHttp = CreateSanitizer(
+            allowHttp: true,
+            allowMailto: true,
+            allowHeadings: true);
 
         private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(250);
 
@@ -49,6 +53,14 @@ namespace GovUK.Dfe.FlexForms.Web.Utilities
         // Presence of a list block
         private static readonly Regex HasListBlock =
             new(@"<\s*(ul|ol)\b", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled, RegexTimeout);
+
+        // Presence of a heading block
+        private static readonly Regex HasHeadingBlock =
+            new(@"<\s*h[1-3]\b", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout);
+
+        // Exactly one <p ...>...</p> (optional attributes, e.g. class="govuk-body")
+        private static readonly Regex SingleParagraphWithAttrs =
+            new(@"^\s*<p\b[^>]*>([\s\S]*)<\/p>\s*$", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled, RegexTimeout);
 
         private static readonly Regex ParagraphOpen =
             new(@"<p\b([^>]*)>", RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout);
@@ -181,7 +193,7 @@ namespace GovUK.Dfe.FlexForms.Web.Utilities
         /// Convert Markdown to sanitised HTML with GOV.UK content classes.
         /// Allows headings and mailto links for admin-authored confirmation copy.
         /// </summary>
-        public static string ToSafeGovUkHtml(string? markdown, int maxChars = 20000)
+        public static string ToSafeGovUkHtml(string? markdown, int maxChars = 20000, bool allowHttp = false)
         {
             if (string.IsNullOrWhiteSpace(markdown))
                 return string.Empty;
@@ -192,7 +204,8 @@ namespace GovUK.Dfe.FlexForms.Web.Utilities
             markdown = NormaliseWhitespace(markdown);
 
             var rawHtml = Markdig.Markdown.ToHtml(markdown, Pipeline);
-            var safe = SanitizerGovUkContent.Sanitize(rawHtml);
+            var sanitizer = allowHttp ? SanitizerGovUkContentHttp : SanitizerGovUkContent;
+            var safe = sanitizer.Sanitize(rawHtml);
 
             safe = AnchorWithoutHref.Replace(safe, "$1");
             safe = EmptyParagraph.Replace(safe, string.Empty);
@@ -243,18 +256,29 @@ namespace GovUK.Dfe.FlexForms.Web.Utilities
         /// <summary>
         /// Render once for hint usage and decide class automatically:
         /// - Single paragraph → unwrap &lt;p&gt;…&lt;/p&gt;, no class (keep default grey).
-        /// - Multi (2+ paragraphs or any list) → keep blocks, return "hint--default" (black/default text colour).
+        /// - Multi (2+ paragraphs, any list, or any heading) → keep blocks, return "hint--default" (black/default text colour).
+        /// Supports headings and GOV.UK content classes (same allow-list as <see cref="ToSafeGovUkHtml"/>).
         /// </summary>
         public static (string html, string? cssClass) RenderHintWithClass(string? markdown, int maxChars = 8000, bool allowHttp = false)
         {
-            var full = ToSafeHtml(markdown, maxChars, allowHttp); // already normalised & cleaned
+            var full = ToSafeGovUkHtml(markdown, maxChars, allowHttp);
             var paraCount = ParagraphTag.Matches(full).Count;
             var hasList = HasListBlock.IsMatch(full);
-            var isMulti = paraCount >= 2 || hasList;
+            var hasHeading = HasHeadingBlock.IsMatch(full);
+            var isMulti = paraCount >= 2 || hasList || hasHeading;
 
-            var html = isMulti ? full : ToSafeHtmlInline(markdown, maxChars, allowHttp);
+            var html = isMulti ? full : UnwrapSingleParagraph(full);
             var cssClass = isMulti ? "hint--default" : null;
             return (html, cssClass);
+        }
+
+        private static string UnwrapSingleParagraph(string html)
+        {
+            if (string.IsNullOrWhiteSpace(html))
+                return string.Empty;
+
+            var match = SingleParagraphWithAttrs.Match(html.Trim());
+            return match.Success ? match.Groups[1].Value : html;
         }
     }
 }
