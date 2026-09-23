@@ -480,8 +480,8 @@ public sealed class FormEnginePresentationComposer(
                 ItemId = itemId,
                 ItemTitle = memberTitle,
                 TaskName = task.TaskName,
-                ConfirmationTitle = $"Are you sure you want to remove this {itemLabel.ToLower()}?",
-                RequiredMessage = $"Select yes if you are sure you want to remove this {itemLabel.ToLower()}",
+                ConfirmationTitle = $"Are you sure you want to remove this {itemLabel}?",
+                RequiredMessage = $"Select yes if you are sure you want to remove this {itemLabel}",
                 ButtonId = "remove-flow-item-@memberNumber"
             };
 
