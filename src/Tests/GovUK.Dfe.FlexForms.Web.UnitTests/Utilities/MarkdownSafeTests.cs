@@ -92,4 +92,26 @@ public class MarkdownSafeTests
         Assert.DoesNotContain("govuk-body", html);
         Assert.Null(cssClass);
     }
+
+    [Fact]
+    public void RenderHintWithClass_ShouldRenderH3HeadingAtLineStart()
+    {
+        var (html, cssClass) = MarkdownSafe.RenderHintWithClass(
+            "### This is a tooltip this is a header in the tooltip");
+
+        Assert.Contains("govuk-heading-s", html);
+        Assert.Contains("<h3", html);
+        Assert.DoesNotContain("###", html);
+        Assert.Equal("hint--default", cssClass);
+    }
+
+    [Fact]
+    public void RenderHintWithClass_ShouldNotTreatMidlineHashesAsHeading()
+    {
+        var (html, _) = MarkdownSafe.RenderHintWithClass(
+            "This is a tooltip this is a ###header in the tooltip");
+
+        Assert.DoesNotContain("<h3", html);
+        Assert.Contains("###header", html);
+    }
 }

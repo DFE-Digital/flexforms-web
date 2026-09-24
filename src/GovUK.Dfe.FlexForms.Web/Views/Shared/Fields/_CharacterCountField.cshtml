@@ -24,10 +24,18 @@
         <govuk-character-count-label class="@labelClasses" asp-for="@Model.Field.FieldId">@Model.Field.Label.Value</govuk-character-count-label>
         @{
             var (hintHtml, hintClass) = MarkdownSafe.RenderHintWithClass(Model.Field.Tooltip);
+            var hasBlockHint = !string.IsNullOrEmpty(hintClass);
         }
-        <govuk-character-count-hint class="@hintClass">
-            @Html.Raw(hintHtml)
-        </govuk-character-count-hint>
+        @if (!string.IsNullOrEmpty(Model.Field.Tooltip) && hasBlockHint)
+        {
+            <govuk-character-count-before-input>
+                <div class="govuk-hint @hintClass">@Html.Raw(hintHtml)</div>
+            </govuk-character-count-before-input>
+        }
+        else if (!string.IsNullOrEmpty(Model.Field.Tooltip))
+        {
+            <govuk-character-count-hint>@Html.Raw(hintHtml)</govuk-character-count-hint>
+        }
 
         @if (Model.ErrorMessage != String.Empty)
         {
@@ -45,10 +53,18 @@ else
         <govuk-character-count-label class="@labelClasses" asp-for="@Model.Field.FieldId">@Model.Field.Label.Value</govuk-character-count-label>
         @{
             var (hintHtml, hintClass) = MarkdownSafe.RenderHintWithClass(Model.Field.Tooltip);
+            var hasBlockHint = !string.IsNullOrEmpty(hintClass);
         }
-        <govuk-character-count-hint class="@hintClass">
-            @Html.Raw(hintHtml)
-        </govuk-character-count-hint>
+        @if (!string.IsNullOrEmpty(Model.Field.Tooltip) && hasBlockHint)
+        {
+            <govuk-character-count-before-input>
+                <div class="govuk-hint @hintClass">@Html.Raw(hintHtml)</div>
+            </govuk-character-count-before-input>
+        }
+        else if (!string.IsNullOrEmpty(Model.Field.Tooltip))
+        {
+            <govuk-character-count-hint>@Html.Raw(hintHtml)</govuk-character-count-hint>
+        }
 
         @if (Model.ErrorMessage != String.Empty)
         {

@@ -366,7 +366,7 @@ Every field shares this shape:
 | `label.isVisible` | Show label (`true`) or hide it (`false`) when the page title is enough. |
 | `label.validationLabelValue` | Name used in errors (useful for dates: “Proposed transfer date”). |
 | `placeholder` | Grey hint inside empty inputs. |
-| `tooltip` | Hint under the label. Supports Markdown and links, e.g. `[text](https://...)`. |
+| `tooltip` | Hint under the label. Supports Markdown (including `##` / `###` headings at the **start of a line**, `**bold**`, lists, and links). Mid-line `###` is shown as plain text. |
 | `required` | Optional bool; usually prefer a `required` **validation** instead. |
 | `order` | Display order on the page. |
 | `visibility.default` | Starting visibility before conditional logic runs. |
