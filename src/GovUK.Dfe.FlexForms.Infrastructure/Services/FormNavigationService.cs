@@ -1,5 +1,6 @@
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.FormEngine;
+using GovUK.Dfe.FlexForms.Domain.Models;
 
 namespace GovUK.Dfe.FlexForms.Infrastructure.Services
 {
@@ -124,28 +125,25 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
         }
 
         /// <summary>
-        /// Gets the next navigation target after saving a page, considering the returnToSummaryPage property
+        /// Gets the next navigation target after saving a page, considering
+        /// <see cref="Domain.Models.Page.NavigationAfterSave"/> when set, otherwise
+        /// <see cref="Domain.Models.Page.ReturnToSummaryPage"/>.
+        /// Branch mode without conditional evaluation falls back to the task summary.
         /// </summary>
-        /// <param name="currentPage">The current page that was just saved</param>
-        /// <param name="currentTask">The current task</param>
-        /// <param name="referenceNumber">The application reference number</param>
-        /// <returns>The URL for the next navigation target</returns>
         public string GetNextNavigationTargetAfterSave(Domain.Models.Page currentPage, Domain.Models.Task currentTask, string referenceNumber)
         {
-            // If the page has returnToSummaryPage set to true, go to task summary
-            if (currentPage.ReturnToSummaryPage)
+            var mode = PageNavigationPolicy.Resolve(currentPage);
+            if (mode is NavigationAfterSave.Summary or NavigationAfterSave.Branch)
             {
                 return GetTaskSummaryUrl(currentTask.TaskId, referenceNumber);
             }
 
-            // Find the next page in the same task
             var nextPage = FormStepPolicy.GetNextPage(currentTask.Pages, currentPage.PageId);
             if (nextPage != null)
             {
                 return $"/applications/{referenceNumber}/{currentTask.TaskId}/{nextPage.PageId}";
             }
 
-            // If there's no next page in the task, go to task summary
             return GetTaskSummaryUrl(currentTask.TaskId, referenceNumber);
         }
 

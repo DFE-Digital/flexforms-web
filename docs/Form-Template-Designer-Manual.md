@@ -314,6 +314,7 @@ Two shapes:
   "pageOrder": 2,
   "fields": [ ],
   "returnToSummaryPage": false,
+  "navigationAfterSave": "linear",
   "saveButtonLabel": null
 }
 ```
@@ -326,10 +327,13 @@ Two shapes:
 | `description` | Extra body text (Markdown-friendly). Can include links and `{displayName}` in derived flows. |
 | `pageOrder` | Order in the task or collection wizard. |
 | `fields` | One or more fields. |
-| `returnToSummaryPage` | After save: return to task/collection summary (`true`) or continue the wizard (`false`). Transfer often uses `false` mid-wizard and `true` on the last page of a sub-flow. |
+| `returnToSummaryPage` | Legacy. After save: return to task/collection summary (`true`) or continue the wizard (`false`). Used only when `navigationAfterSave` is omitted. Default `true`. |
+| `navigationAfterSave` | Optional. Overrides `returnToSummaryPage` when set. Values: `"summary"` (always task summary), `"linear"` (next visible page in the task, else summary), `"branch"` (next page only if revealed by conditional logic from this page’s answers; otherwise summary). Omit on existing templates to keep current behaviour. |
 | `saveButtonLabel` | Override button text, e.g. `"Sign the declaration"`. |
 
 **Design tip:** Prefer **one question per page** (GOV.UK pattern). Put related short fields (name / phone / email) on one page when they form one “contact details” block.
+
+**Navigation tip:** Use `"linear"` for a full wizard through the task. Use `"branch"` on questions that open conditional follow-ups so the user returns to the summary when the branch ends, instead of walking into the next always-visible question. Use `"summary"` when editing a single page from the task summary.
 
 ---
 

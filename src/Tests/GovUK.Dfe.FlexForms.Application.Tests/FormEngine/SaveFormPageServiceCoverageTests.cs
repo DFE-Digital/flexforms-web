@@ -137,6 +137,125 @@ public class SaveFormPageServiceCoverageTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_ShouldPreferNavigationAfterSaveSummary_OverReturnToSummaryPageFalse()
+    {
+        var first = CreatePage("p1", returnToSummaryPage: false, navigationAfterSave: NavigationAfterSave.Summary);
+        var second = CreatePage("p2", returnToSummaryPage: false);
+        var task = CreateStandardTask(first, second);
+        Register(task, first);
+
+        var result = await _service.ExecuteAsync(EditablePageState("p1", task.TaskId), Posted("name", "Ada"), null);
+
+        Assert.Equal(FormEngineOutcomeKind.Redirect, result.Kind);
+        Assert.Equal($"/applications/REF-1/{task.TaskId}", result.RedirectUrl);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ShouldPreferNavigationAfterSaveLinear_OverReturnToSummaryPageTrue()
+    {
+        var first = CreatePage("p1", returnToSummaryPage: true, navigationAfterSave: NavigationAfterSave.Linear);
+        var second = CreatePage("p2", returnToSummaryPage: false);
+        var task = CreateStandardTask(first, second);
+        Register(task, first);
+
+        var result = await _service.ExecuteAsync(EditablePageState("p1", task.TaskId), Posted("name", "Ada"), null);
+
+        Assert.Equal(FormEngineOutcomeKind.Redirect, result.Kind);
+        Assert.Equal($"/applications/REF-1/{task.TaskId}/p2", result.RedirectUrl);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ShouldRedirectToRevealedPage_WhenNavigationAfterSaveIsBranchAndConditionMet()
+    {
+        var first = CreatePage(
+            "p1",
+            returnToSummaryPage: false,
+            navigationAfterSave: NavigationAfterSave.Branch,
+            fields:
+            [
+                new Field
+                {
+                    FieldId = "hasSen",
+                    Type = "radios",
+                    Label = new Label { Value = "SEN?" },
+                    Order = 1
+                }
+            ]);
+        var revealed = CreatePage("p2-sen", returnToSummaryPage: false);
+        var alwaysVisible = CreatePage("p3", returnToSummaryPage: false);
+        var task = CreateStandardTask(first, revealed, alwaysVisible);
+        Register(task, first);
+
+        var state = EditablePageState("p1", task.TaskId, task);
+        state.Template!.ConditionalLogic =
+        [
+            new ConditionalLogic
+            {
+                Enabled = true,
+                ConditionGroup = new ConditionGroup
+                {
+                    LogicalOperator = "AND",
+                    Conditions = [new Condition { TriggerField = "hasSen", Operator = "equals", Value = "yes" }]
+                },
+                AffectedElements = [new AffectedElement { ElementId = "p2-sen", ElementType = "page", Action = "show" }]
+            }
+        ];
+
+        var result = await _service.ExecuteAsync(state, Posted("Data[hasSen]", "yes"), null);
+
+        Assert.Equal(FormEngineOutcomeKind.Redirect, result.Kind);
+        Assert.Equal($"/applications/REF-1/{task.TaskId}/p2-sen", result.RedirectUrl);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ShouldRedirectToSummary_WhenNavigationAfterSaveIsBranchAndNoPageRevealed()
+    {
+        var first = CreatePage(
+            "p1",
+            returnToSummaryPage: false,
+            navigationAfterSave: NavigationAfterSave.Branch,
+            fields:
+            [
+                new Field
+                {
+                    FieldId = "hasSen",
+                    Type = "radios",
+                    Label = new Label { Value = "SEN?" },
+                    Order = 1
+                }
+            ]);
+        var revealed = CreatePage("p2-sen", returnToSummaryPage: false);
+        var alwaysVisible = CreatePage("p3", returnToSummaryPage: false);
+        var task = CreateStandardTask(first, revealed, alwaysVisible);
+        Register(task, first);
+
+        // Linear GetNextPageAsync would walk to p3; branch must ignore that and go to summary.
+        _conditionalLogic.GetNextPageAsync(default!, default!, default!, default)
+            .ReturnsForAnyArgs("p3");
+
+        var state = EditablePageState("p1", task.TaskId, task);
+        state.Template!.ConditionalLogic =
+        [
+            new ConditionalLogic
+            {
+                Enabled = true,
+                ConditionGroup = new ConditionGroup
+                {
+                    LogicalOperator = "AND",
+                    Conditions = [new Condition { TriggerField = "hasSen", Operator = "equals", Value = "yes" }]
+                },
+                AffectedElements = [new AffectedElement { ElementId = "p2-sen", ElementType = "page", Action = "show" }]
+            }
+        ];
+
+        var result = await _service.ExecuteAsync(state, Posted("Data[hasSen]", "no"), null);
+
+        Assert.Equal(FormEngineOutcomeKind.Redirect, result.Kind);
+        Assert.Equal($"/applications/REF-1/{task.TaskId}", result.RedirectUrl);
+        _history.Received().Clear($"REF-1:{task.TaskId}");
+    }
+
+    [Fact]
     public async Task ExecuteAsync_ShouldRedirectToNextSubFlowPage_WhenCollectionFlowNotLast()
     {
         var fp1 = CreatePage("fp1", returnToSummaryPage: false);
@@ -775,7 +894,11 @@ public class SaveFormPageServiceCoverageTests
             Data = new Dictionary<string, object>()
         };
 
-    private static PageModel CreatePage(string pageId, bool returnToSummaryPage, List<Field>? fields = null) =>
+    private static PageModel CreatePage(
+        string pageId,
+        bool returnToSummaryPage,
+        List<Field>? fields = null,
+        NavigationAfterSave? navigationAfterSave = null) =>
         new()
         {
             PageId = pageId,
@@ -784,6 +907,7 @@ public class SaveFormPageServiceCoverageTests
             Description = pageId,
             PageOrder = 1,
             ReturnToSummaryPage = returnToSummaryPage,
+            NavigationAfterSave = navigationAfterSave,
             Fields = fields ?? []
         };
 

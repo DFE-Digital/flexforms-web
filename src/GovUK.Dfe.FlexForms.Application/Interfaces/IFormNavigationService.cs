@@ -64,7 +64,8 @@ namespace GovUK.Dfe.FlexForms.Application.Interfaces
         string GetBackLinkUrl(string currentPageId, string taskId, string referenceNumber);
 
         /// <summary>
-        /// Gets the next navigation target after saving a page, considering the returnToSummaryPage property
+        /// Gets the next navigation target after saving a page, considering
+        /// <c>navigationAfterSave</c> when set, otherwise <c>returnToSummaryPage</c>.
         /// </summary>
         /// <param name="currentPage">The current page that was just saved</param>
         /// <param name="currentTask">The current task</param>
