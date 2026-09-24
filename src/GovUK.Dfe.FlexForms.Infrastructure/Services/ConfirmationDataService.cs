@@ -1,4 +1,5 @@
 using GovUK.Dfe.FlexForms.Application.Interfaces;
+using GovUK.Dfe.FlexForms.Domain.Models;
 using Microsoft.Extensions.Logging;
 using System.Globalization;
 using System.Text.Json;
@@ -17,12 +18,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
             _logger = logger;
         }
 
-        /// <summary>
-        /// Formats form data for display on the confirmation page
-        /// </summary>
-        /// <param name="formData">The raw form data</param>
-        /// <param name="displayFields">The fields to include in the display</param>
-        /// <returns>A dictionary of display-friendly field names and values</returns>
+        /// <inheritdoc />
         public Dictionary<string, string> FormatDisplayData(Dictionary<string, object> formData, string[] displayFields)
         {
             var result = new Dictionary<string, string>();
@@ -67,6 +63,78 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
 
             _logger.LogInformation("Formatted {Count} fields for confirmation display", result.Count);
             return result;
+        }
+
+        /// <inheritdoc />
+        public string? EvaluateDisplayExpression(Dictionary<string, object> formData, string expression)
+        {
+            if (!AutocompleteDisplayExpression.IsSpecified(expression) || formData == null || formData.Count == 0)
+                return null;
+
+            foreach (var value in formData.Values)
+            {
+                if (value is null)
+                    continue;
+
+                if (value is string s)
+                {
+                    var trimmed = s.TrimStart();
+                    if (!trimmed.StartsWith('{') && !trimmed.StartsWith('['))
+                        continue;
+
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(s);
+                        var text = EvaluateAgainstJson(expression, doc.RootElement);
+                        if (!string.IsNullOrWhiteSpace(text))
+                            return text;
+                    }
+                    catch (JsonException)
+                    {
+                        // Not JSON; keep looking.
+                    }
+                }
+                else if (value is JsonElement je)
+                {
+                    var text = EvaluateAgainstJson(expression, je);
+                    if (!string.IsNullOrWhiteSpace(text))
+                        return text;
+                }
+            }
+
+            // Fall back to flattened key/value evaluation (non-JSON form posts).
+            var flattened = formData.ToDictionary(
+                kv => kv.Key,
+                kv => (object)(kv.Value?.ToString() ?? string.Empty),
+                StringComparer.OrdinalIgnoreCase);
+            var fallback = AutocompleteDisplayExpression.Evaluate(expression, flattened);
+            return string.IsNullOrWhiteSpace(fallback) ? null : fallback;
+        }
+
+        private static string? EvaluateAgainstJson(string expression, JsonElement root)
+        {
+            if (root.ValueKind == JsonValueKind.Object)
+            {
+                var text = AutocompleteDisplayExpression.Evaluate(expression, root);
+                return string.IsNullOrWhiteSpace(text) ? null : text;
+            }
+
+            if (root.ValueKind == JsonValueKind.Array)
+            {
+                var parts = new List<string>();
+                foreach (var element in root.EnumerateArray())
+                {
+                    if (element.ValueKind != JsonValueKind.Object)
+                        continue;
+                    var text = AutocompleteDisplayExpression.Evaluate(expression, element);
+                    if (!string.IsNullOrWhiteSpace(text))
+                        parts.Add(text);
+                }
+
+                return parts.Count == 0 ? null : string.Join("\n\n", parts);
+            }
+
+            return null;
         }
 
         /// <summary>

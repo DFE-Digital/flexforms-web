@@ -38,6 +38,13 @@ namespace GovUK.Dfe.FlexForms.Domain.Models
         public string[] DisplayFields { get; set; } = Array.Empty<string>();
 
         /// <summary>
+        /// When set, fully replaces the confirmation inset with the evaluated expression result
+        /// (Markdown). Takes precedence over <see cref="DisplayFields"/>.
+        /// </summary>
+        [JsonPropertyName("displayExpression")]
+        public string? DisplayExpression { get; set; }
+
+        /// <summary>
         /// Optional custom title/heading to show on the confirmation page
         /// </summary>
         [JsonPropertyName("title")]

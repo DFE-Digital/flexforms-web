@@ -23,6 +23,28 @@ public class MarkdownSafeTests
     }
 
     [Fact]
+    public void ToSafeHtml_ShouldRenderBoldLabelTightlyFollowedByValue()
+    {
+        // CommonMark would otherwise leave "**Constituency:**Wycombe" as literal asterisks.
+        var html = MarkdownSafe.ToSafeHtml("Emma Reynolds\n**Constituency:**Wycombe");
+
+        Assert.Contains("<strong>Constituency:</strong>", html);
+        Assert.Contains("Wycombe", html);
+        Assert.DoesNotContain("**Constituency:**", html);
+    }
+
+    [Fact]
+    public void ToSafeGovUkHtml_ShouldRenderBoldLabelTightlyFollowedByValue()
+    {
+        var html = MarkdownSafe.ToSafeGovUkHtml("Emma Reynolds\n**Constituency:**Wycombe");
+
+        Assert.Contains("<strong>Constituency:</strong>", html);
+        Assert.Contains("govuk-body", html);
+        Assert.Contains("Wycombe", html);
+        Assert.DoesNotContain("**Constituency:**", html);
+    }
+
+    [Fact]
     public void ToSafeHtml_ShouldTruncateLongInput()
     {
         var html = MarkdownSafe.ToSafeHtml(new string('a', 50), maxChars: 10);

@@ -42,6 +42,12 @@ namespace GovUK.Dfe.FlexForms.Web.Utilities
         private static readonly Regex SingleParagraph =
             new(@"^\s*<p>([\s\S]*)<\/p>\s*$", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled, RegexTimeout);
 
+        // CommonMark: closing ** preceded by punctuation (e.g. colon) and followed by a word is not
+        // right-flanking, so "**Label:**Value" leaves literal asterisks. Insert a space after the
+        // closer so confirmation/summary labels still render as bold (same MarkdownSafe path as tooltips).
+        private static readonly Regex BoldLabelColonTightAgainstValue =
+            new(@"\*\*([^*]+):\*\*(?=\S)", RegexOptions.Compiled, RegexTimeout);
+
         // Count paragraph tags
         private static readonly Regex ParagraphTag =
             new(@"<p\b[^>]*>", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled, RegexTimeout);
@@ -139,6 +145,7 @@ namespace GovUK.Dfe.FlexForms.Web.Utilities
 
         /// <summary>
         /// Normalise whitespace: turn space-only lines into real blank lines; trim trailing spaces.
+        /// Also fixes CommonMark emphasis adjacent to punctuation (e.g. <c>**Label:**Value</c>).
         /// </summary>
         private static string NormaliseWhitespace(string s)
         {
@@ -149,7 +156,10 @@ namespace GovUK.Dfe.FlexForms.Web.Utilities
                 if (string.IsNullOrWhiteSpace(lines[i])) lines[i] = string.Empty;
                 else lines[i] = lines[i].TrimEnd();
             }
-            return string.Join("\n", lines);
+            s = string.Join("\n", lines);
+
+            // "**Constituency:**Wycombe" → "**Constituency:** Wycombe"
+            return BoldLabelColonTightAgainstValue.Replace(s, "**$1:** ");
         }
 
         /// <summary>

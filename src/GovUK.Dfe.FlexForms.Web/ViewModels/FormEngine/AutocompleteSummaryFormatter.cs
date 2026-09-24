@@ -1,15 +1,19 @@
 using System.Text;
 using System.Text.Json;
 using GovUK.Dfe.FlexForms.Domain.Models;
+using GovUK.Dfe.FlexForms.Web.Utilities;
 
 namespace GovUK.Dfe.FlexForms.Web.ViewModels.FormEngine;
 
 /// <summary>
-/// Formats autocomplete JSON objects into the HTML used on confirmation and preview pages.
+/// Formats autocomplete JSON objects into the HTML used on confirmation and summary pages.
 /// </summary>
 public static class AutocompleteSummaryFormatter
 {
-    public static string Render(string? rawValue, string? confirmationDisplay = null)
+    /// <param name="displayExpression">
+    /// When set, fully replaces the built-in layout with the evaluated expression (Markdown-rendered).
+    /// </param>
+    public static string Render(string? rawValue, string? displayExpression = null)
     {
         if (string.IsNullOrWhiteSpace(rawValue))
             return string.Empty;
@@ -21,14 +25,14 @@ public static class AutocompleteSummaryFormatter
             {
                 var parts = new List<string>();
                 foreach (var element in doc.RootElement.EnumerateArray())
-                    parts.Add(RenderObject(element, confirmationDisplay));
+                    parts.Add(RenderObject(element, displayExpression));
                 return string.Join("<br/>", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
             }
 
             if (doc.RootElement.ValueKind != JsonValueKind.Object)
                 return System.Net.WebUtility.HtmlEncode(rawValue);
 
-            return RenderObject(doc.RootElement, confirmationDisplay);
+            return RenderObject(doc.RootElement, displayExpression);
         }
         catch (JsonException)
         {
@@ -36,67 +40,67 @@ public static class AutocompleteSummaryFormatter
         }
     }
 
-    private static string RenderObject(JsonElement root, string? confirmationDisplay)
+    private static string RenderObject(JsonElement root, string? displayExpression)
     {
-        if (AutocompleteDisplayExpression.IsSpecified(confirmationDisplay))
+        if (AutocompleteDisplayExpression.IsSpecified(displayExpression))
         {
-            var text = AutocompleteDisplayExpression.Evaluate(confirmationDisplay, root);
+            var text = AutocompleteDisplayExpression.Evaluate(displayExpression, root);
             if (!string.IsNullOrWhiteSpace(text))
-                return $"<strong class=\"govuk-!-font-weight-bold\">{System.Net.WebUtility.HtmlEncode(text)}</strong>";
+                return MarkdownSafe.ToSafeHtml(text);
         }
 
         var name = root.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String
             ? n.GetString() ?? string.Empty
             : string.Empty;
-            var postcode = root.TryGetProperty("postcode", out var pc) && pc.ValueKind == JsonValueKind.String
-                ? pc.GetString() ?? string.Empty
+        var postcode = root.TryGetProperty("postcode", out var pc) && pc.ValueKind == JsonValueKind.String
+            ? pc.GetString() ?? string.Empty
+            : string.Empty;
+        if (string.IsNullOrWhiteSpace(postcode)
+            && root.TryGetProperty("postCode", out var pc2)
+            && pc2.ValueKind == JsonValueKind.String)
+        {
+            postcode = pc2.GetString() ?? string.Empty;
+        }
+
+        if (string.IsNullOrWhiteSpace(postcode)
+            && root.TryGetProperty("address", out var addr)
+            && addr.ValueKind == JsonValueKind.Object)
+        {
+            if (addr.TryGetProperty("postcode", out var apc) && apc.ValueKind == JsonValueKind.String)
+                postcode = apc.GetString() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(postcode)
+                && addr.TryGetProperty("postCode", out var apc2)
+                && apc2.ValueKind == JsonValueKind.String)
+            {
+                postcode = apc2.GetString() ?? string.Empty;
+            }
+
+            if (string.IsNullOrWhiteSpace(postcode)
+                && addr.TryGetProperty("postalCode", out var apc3)
+                && apc3.ValueKind == JsonValueKind.String)
+            {
+                postcode = apc3.GetString() ?? string.Empty;
+            }
+        }
+
+        var ukprn = root.TryGetProperty("ukprn", out var u) ? u.ToString() : string.Empty;
+        var companiesHouse = root.TryGetProperty("companiesHouseNumber", out var c)
+            && c.ValueKind == JsonValueKind.String
+                ? c.GetString() ?? string.Empty
                 : string.Empty;
-            if (string.IsNullOrWhiteSpace(postcode)
-                && root.TryGetProperty("postCode", out var pc2)
-                && pc2.ValueKind == JsonValueKind.String)
-            {
-                postcode = pc2.GetString() ?? string.Empty;
-            }
+        if (string.IsNullOrWhiteSpace(companiesHouse) && root.TryGetProperty("companiesHousenumber", out var c2))
+            companiesHouse = c2.ToString();
 
-            if (string.IsNullOrWhiteSpace(postcode)
-                && root.TryGetProperty("address", out var addr)
-                && addr.ValueKind == JsonValueKind.Object)
-            {
-                if (addr.TryGetProperty("postcode", out var apc) && apc.ValueKind == JsonValueKind.String)
-                    postcode = apc.GetString() ?? string.Empty;
-                if (string.IsNullOrWhiteSpace(postcode)
-                    && addr.TryGetProperty("postCode", out var apc2)
-                    && apc2.ValueKind == JsonValueKind.String)
-                {
-                    postcode = apc2.GetString() ?? string.Empty;
-                }
-
-                if (string.IsNullOrWhiteSpace(postcode)
-                    && addr.TryGetProperty("postalCode", out var apc3)
-                    && apc3.ValueKind == JsonValueKind.String)
-                {
-                    postcode = apc3.GetString() ?? string.Empty;
-                }
-            }
-
-            var ukprn = root.TryGetProperty("ukprn", out var u) ? u.ToString() : string.Empty;
-            var companiesHouse = root.TryGetProperty("companiesHouseNumber", out var c)
-                && c.ValueKind == JsonValueKind.String
-                    ? c.GetString() ?? string.Empty
-                    : string.Empty;
-            if (string.IsNullOrWhiteSpace(companiesHouse) && root.TryGetProperty("companiesHousenumber", out var c2))
-                companiesHouse = c2.ToString();
-
-            var sb = new StringBuilder();
-            if (!string.IsNullOrWhiteSpace(name))
-                sb.Append($"<strong class=\"govuk-!-font-weight-bold\">{System.Net.WebUtility.HtmlEncode(name)}</strong>");
-            if (!string.IsNullOrWhiteSpace(postcode))
-                sb.Append($"<br/>Postcode: {System.Net.WebUtility.HtmlEncode(postcode)}");
-            if (!string.IsNullOrWhiteSpace(ukprn))
-                sb.Append($"<br/>UKPRN: {System.Net.WebUtility.HtmlEncode(ukprn)}");
-            if (!string.IsNullOrWhiteSpace(companiesHouse))
-                sb.Append($"<br/>Companies house number: {System.Net.WebUtility.HtmlEncode(companiesHouse)}");
-            return sb.ToString();
+        var sb = new StringBuilder();
+        if (!string.IsNullOrWhiteSpace(name))
+            sb.Append($"<strong class=\"govuk-!-font-weight-bold\">{System.Net.WebUtility.HtmlEncode(name)}</strong>");
+        if (!string.IsNullOrWhiteSpace(postcode))
+            sb.Append($"<br/>Postcode: {System.Net.WebUtility.HtmlEncode(postcode)}");
+        if (!string.IsNullOrWhiteSpace(ukprn))
+            sb.Append($"<br/>UKPRN: {System.Net.WebUtility.HtmlEncode(ukprn)}");
+        if (!string.IsNullOrWhiteSpace(companiesHouse))
+            sb.Append($"<br/>Companies house number: {System.Net.WebUtility.HtmlEncode(companiesHouse)}");
+        return sb.ToString();
     }
 
     public static string TryFindJsonInItem(Dictionary<string, object> item)

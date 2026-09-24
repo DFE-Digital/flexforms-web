@@ -594,7 +594,8 @@ Template field:
   "complexField": {
     "id": "MemberComplexField",
     "dropdownDisplay": "displayName + \" - \" + constituencyName",
-    "confirmationDisplay": "firstName + \" \" + lastName"
+    "confirmationDisplay": "firstName + \" \" + lastName + \"\\n\\n**Constituency:** \" + constituencyName",
+    "summaryDisplay": "displayName + \"\\n\" + constituencyName"
   },
   "validations": [
     { "type": "required", "rule": true, "message": "Search for and select a member" }
@@ -608,12 +609,14 @@ What the applicant sees:
 |---------|-----------------------------|
 | Dropdown row | `Jane Smith MP - Example West` |
 | After they choose | Same text in the search box |
-| Check your answers | `Jane Smith` |
-| “Is this the right …?” | Lists the properties used in `confirmationDisplay` (`firstName`, `lastName`) |
+| “Is this the right …?” | Full inset replaced by `confirmationDisplay` (Markdown: name, then bold Constituency line) |
+| Check your answers / task summary | `summaryDisplay` (name and constituency on separate lines) |
 
 The **saved answer** is still the full object (`email`, `constituencyName`, and so on). Use those names in collection captions, event mappings, and email `ComplexFieldProperty` paths.
 
-If you omit `dropdownDisplay` / `confirmationDisplay` here, FormEngine’s `DropdownDisplay` / `ConfirmationDisplay` apply. If those are also empty, the built-in name/UKPRN layout applies (often a poor fit for a members API).
+If you omit `dropdownDisplay` / `confirmationDisplay` / `summaryDisplay` here, FormEngine’s `DropdownDisplay` / `ConfirmationDisplay` / `SummaryDisplay` apply. If those are also empty, the built-in name/UKPRN layout applies (often a poor fit for a members API).
+
+`confirmationDisplay` only affects the “Is this the right …?” page. Use `summaryDisplay` for check-your-answers and collection summaries — they are independent.
 
 #### Display expression syntax
 
@@ -624,6 +627,7 @@ Two equivalent styles. Property names must match the JSON from the search API (c
 ```text
 displayName + " - " + constituencyName
 firstName + " " + lastName
+name + "\n\n**UKPRN:** " + ukprn
 ```
 
 **Placeholders** (only when the expression has **no** `+`):
@@ -639,6 +643,7 @@ Rules:
 - Separator-only literals (` - `, `|`, `/`, `,`, `:`) are also dropped when there is nothing after them.
 - Nested objects and arrays (for example `roles`) cannot be used in the expression; only strings, numbers, and booleans copied from the result.
 - FlexForms still sets a fallback `name` from the first of: `name`, `title`, `label`, `value`, `displayName`, `groupName`, `text`. Use `dropdownDisplay` when you need more than that one field.
+- All three displays support **Markdown** (bold, links, lists, line breaks) via the same `MarkdownSafe` renderer used for tooltips. Use `\n` in quoted literals for line breaks (for example `"\n\n**UKPRN:** "`). Prefer a space after a bold label that ends with a colon (`**Constituency:** Wycombe`); FlexForms also accepts the tight form (`**Constituency:**Wycombe`).
 
 #### File upload
 
@@ -655,7 +660,7 @@ Rules:
 }
 ```
 
-`dropdownDisplay` / `confirmationDisplay` do not apply to uploads.
+`dropdownDisplay` / `confirmationDisplay` / `summaryDisplay` do not apply to uploads.
 
 #### Designer checklist for a new search question
 

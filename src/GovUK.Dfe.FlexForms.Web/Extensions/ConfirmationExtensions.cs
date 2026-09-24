@@ -24,7 +24,8 @@ namespace GovUK.Dfe.FlexForms.Web.Extensions
             string? buttonId = null,
             object? additionalAttributes = null,
             string? title = null,
-            string? requiredMessage = null)
+            string? requiredMessage = null,
+            string? displayExpression = null)
         {
             var html = new StringBuilder();
 
@@ -59,7 +60,11 @@ namespace GovUK.Dfe.FlexForms.Web.Extensions
                 html.AppendLine($"<input type=\"hidden\" name=\"confirmation-check-{handler}\" value=\"true\" />");
                 if (!string.IsNullOrEmpty(displayFields))
                 {
-                    html.AppendLine($"<input type=\"hidden\" name=\"confirmation-display-fields-{handler}\" value=\"{displayFields}\" />");
+                    html.AppendLine($"<input type=\"hidden\" name=\"confirmation-display-fields-{handler}\" value=\"{System.Net.WebUtility.HtmlEncode(displayFields)}\" />");
+                }
+                if (!string.IsNullOrWhiteSpace(displayExpression))
+                {
+                    html.AppendLine($"<input type=\"hidden\" name=\"confirmation-display-expression-{handler}\" value=\"{System.Net.WebUtility.HtmlEncode(displayExpression)}\" />");
                 }
                 if (!string.IsNullOrWhiteSpace(title))
                 {
@@ -82,7 +87,8 @@ namespace GovUK.Dfe.FlexForms.Web.Extensions
             string displayFields = "",
             string? buttonId = null,
             string? title = null,
-            string? requiredMessage = null)
+            string? requiredMessage = null,
+            string? displayExpression = null)
         {
             return htmlHelper.RenderConfirmationButton(
                 buttonText: buttonText,
@@ -92,7 +98,8 @@ namespace GovUK.Dfe.FlexForms.Web.Extensions
                 displayFields: displayFields,
                 buttonId: buttonId,
                 title: title,
-                requiredMessage: requiredMessage);
+                requiredMessage: requiredMessage,
+                displayExpression: displayExpression);
         }
 
         public static IHtmlContent RenderSecondaryConfirmationButton(
@@ -102,7 +109,8 @@ namespace GovUK.Dfe.FlexForms.Web.Extensions
             string displayFields = "",
             string? buttonId = null,
             string? title = null,
-            string? requiredMessage = null)
+            string? requiredMessage = null,
+            string? displayExpression = null)
         {
             return htmlHelper.RenderConfirmationButton(
                 buttonText: buttonText,
@@ -112,7 +120,8 @@ namespace GovUK.Dfe.FlexForms.Web.Extensions
                 displayFields: displayFields,
                 buttonId: buttonId,
                 title: title,
-                requiredMessage: requiredMessage);
+                requiredMessage: requiredMessage,
+                displayExpression: displayExpression);
         }
 
         public static IHtmlContent RenderWarningConfirmationButton(
@@ -122,7 +131,8 @@ namespace GovUK.Dfe.FlexForms.Web.Extensions
             string displayFields = "",
             string? buttonId = null,
             string? title = null,
-            string? requiredMessage = null)
+            string? requiredMessage = null,
+            string? displayExpression = null)
         {
             return htmlHelper.RenderConfirmationButton(
                 buttonText: buttonText,
@@ -132,7 +142,8 @@ namespace GovUK.Dfe.FlexForms.Web.Extensions
                 displayFields: displayFields,
                 buttonId: buttonId,
                 title: title,
-                requiredMessage: requiredMessage);
+                requiredMessage: requiredMessage,
+                displayExpression: displayExpression);
         }
 
         public static IHtmlContent RenderLinkConfirmationButton(
@@ -142,7 +153,8 @@ namespace GovUK.Dfe.FlexForms.Web.Extensions
             string displayFields = "",
             string? buttonId = null,
             string? title = null,
-            string? requiredMessage = null)
+            string? requiredMessage = null,
+            string? displayExpression = null)
         {
             return htmlHelper.RenderConfirmationButton(
                 buttonText: buttonText,
@@ -157,7 +169,8 @@ namespace GovUK.Dfe.FlexForms.Web.Extensions
                     style = "background: none; border: 0; padding: 0; font: inherit; cursor: pointer; font-family: GDS Transport, arial, sans-serif; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-decoration: underline; text-decoration-thickness: max(1px, .0625rem); text-underline-offset: .1578em; color: #1d70b8;"
                 },
                 title: title,
-                requiredMessage: requiredMessage);
+                requiredMessage: requiredMessage,
+                displayExpression: displayExpression);
         }
     }
 }
