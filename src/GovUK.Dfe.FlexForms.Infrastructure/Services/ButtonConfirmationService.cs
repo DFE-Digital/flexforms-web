@@ -120,15 +120,29 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
             // Normalize form data to primitive types so the confirmation view can re-post it
             var normalizedFormData = NormalizeFormData(context.Request.OriginalFormData);
 
-            var displayData = _dataService.FormatDisplayData(
-                normalizedFormData,
-                context.Request.DisplayFields);
+            string? displayHtml = null;
+            Dictionary<string, string> displayData;
+            if (!string.IsNullOrWhiteSpace(context.Request.DisplayExpression))
+            {
+                var evaluated = _dataService.EvaluateDisplayExpression(
+                    normalizedFormData,
+                    context.Request.DisplayExpression);
+                displayHtml = evaluated;
+                displayData = new Dictionary<string, string>();
+            }
+            else
+            {
+                displayData = _dataService.FormatDisplayData(
+                    normalizedFormData,
+                    context.Request.DisplayFields);
+            }
 
             return new ConfirmationDisplayModel
             {
                 Title = string.IsNullOrWhiteSpace(context.Request.Title) ? "Confirm your action" : context.Request.Title!,
                 RequiredMessage = string.IsNullOrWhiteSpace(context.Request.RequiredMessage) ? "Select yes if you want to continue": context.Request.RequiredMessage!,
                 DisplayData = displayData,
+                DisplayHtml = displayHtml,
                 ReturnUrl = context.Request.ReturnUrl,
                 ConfirmationToken = token,
                 OriginalActionUrl = $"{context.Request.OriginalPagePath}?handler={context.Request.OriginalHandler}",

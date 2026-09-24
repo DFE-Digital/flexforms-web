@@ -16,7 +16,7 @@ public sealed class ComplexFieldConfigurationService(
     [
         "ApiEndpoint", "ApiKey", "AuthType", "TokenEndpoint", "ClientId", "ClientSecret", "Scope",
         "FieldType", "AllowMultiple", "MinLength", "Placeholder", "MaxSelections", "Label",
-        "DropdownDisplay", "ConfirmationDisplay"
+        "DropdownDisplay", "ConfirmationDisplay", "SummaryDisplay"
     ];
 
     /// <inheritdoc />
@@ -67,6 +67,7 @@ public sealed class ComplexFieldConfigurationService(
             Scope = configSection["Scope"] ?? string.Empty,
             DropdownDisplay = configSection["DropdownDisplay"] ?? string.Empty,
             ConfirmationDisplay = configSection["ConfirmationDisplay"] ?? string.Empty,
+            SummaryDisplay = configSection["SummaryDisplay"] ?? string.Empty,
             FieldType = configSection["FieldType"] ?? string.Empty,
             AllowMultiple = bool.TryParse(configSection["AllowMultiple"], out var allowMultiple) && allowMultiple,
             MinLength = int.TryParse(configSection["MinLength"], out var minLength) ? minLength : 3,

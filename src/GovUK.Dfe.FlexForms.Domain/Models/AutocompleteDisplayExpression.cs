@@ -183,7 +183,25 @@ public static class AutocompleteDisplayExpression
 
                 if (i == start)
                 {
-                    i++;
+                    // Markdown markers (e.g. ** around a property) and other punctuation must be
+                    // kept as literals — previously they were skipped, so **displayName** lost bold.
+                    var litStart = i;
+                    while (i < expression.Length
+                           && !char.IsWhiteSpace(expression[i])
+                           && expression[i] != '+'
+                           && expression[i] != '"'
+                           && expression[i] != '\''
+                           && !char.IsLetterOrDigit(expression[i])
+                           && expression[i] != '_')
+                    {
+                        i++;
+                    }
+
+                    if (i > litStart)
+                        tokens.Add(Token.Literal(expression[litStart..i]));
+                    else
+                        i++;
+
                     continue;
                 }
 
@@ -202,6 +220,23 @@ public static class AutocompleteDisplayExpression
         {
             if (expression[i] == quote)
                 return (builder.ToString(), i + 1);
+
+            if (expression[i] == '\\' && i + 1 < expression.Length)
+            {
+                i++;
+                builder.Append(expression[i] switch
+                {
+                    'n' => '\n',
+                    'r' => '\r',
+                    't' => '\t',
+                    '\\' => '\\',
+                    '"' => '"',
+                    '\'' => '\'',
+                    var other => other
+                });
+                i++;
+                continue;
+            }
 
             builder.Append(expression[i]);
             i++;

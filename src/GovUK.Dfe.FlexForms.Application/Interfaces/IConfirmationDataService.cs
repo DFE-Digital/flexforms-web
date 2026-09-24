@@ -14,6 +14,12 @@ namespace GovUK.Dfe.FlexForms.Application.Interfaces
         Dictionary<string, string> FormatDisplayData(Dictionary<string, object> formData, string[] displayFields);
 
         /// <summary>
+        /// Evaluates a display expression against JSON object values in <paramref name="formData"/>
+        /// (e.g. complex-field autocomplete selections). Returns null when the expression cannot be resolved.
+        /// </summary>
+        string? EvaluateDisplayExpression(Dictionary<string, object> formData, string expression);
+
+        /// <summary>
         /// Gets a user-friendly display name for a field
         /// </summary>
         /// <param name="fieldName">The field name</param>

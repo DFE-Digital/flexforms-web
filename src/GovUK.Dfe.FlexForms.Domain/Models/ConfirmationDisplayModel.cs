@@ -24,6 +24,12 @@ namespace GovUK.Dfe.FlexForms.Domain.Models
         public Dictionary<string, string> DisplayData { get; set; } = new();
 
         /// <summary>
+        /// When set, fully replaces <see cref="DisplayData"/> in the confirmation inset.
+        /// Expected to be safe HTML (e.g. Markdown-rendered).
+        /// </summary>
+        public string? DisplayHtml { get; set; }
+
+        /// <summary>
         /// The URL to return to if the user cancels
         /// </summary>
         public string ReturnUrl { get; set; } = string.Empty;

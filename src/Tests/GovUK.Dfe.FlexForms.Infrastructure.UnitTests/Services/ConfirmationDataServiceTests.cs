@@ -180,6 +180,112 @@ public class ConfirmationDataServiceTests
 
     #endregion
 
+    #region EvaluateDisplayExpression
+
+    [Fact]
+    public void EvaluateDisplayExpression_returns_null_for_blank_expression_or_empty_form_data()
+    {
+        Assert.Null(_service.EvaluateDisplayExpression(new Dictionary<string, object> { ["a"] = "1" }, "  "));
+        Assert.Null(_service.EvaluateDisplayExpression(new Dictionary<string, object>(), "name"));
+        Assert.Null(_service.EvaluateDisplayExpression(null!, "name"));
+    }
+
+    [Fact]
+    public void EvaluateDisplayExpression_evaluates_against_json_object_string()
+    {
+        var formData = new Dictionary<string, object>
+        {
+            ["Data[MpComplexField]"] =
+                "{\"displayName\":\"Alan Gemmell\",\"constituencyName\":\"Central Ayrshire\"}"
+        };
+
+        var result = _service.EvaluateDisplayExpression(
+            formData,
+            "**displayName**\"\\n**Constituency:** \"constituencyName");
+
+        Assert.Equal("**Alan Gemmell**\n**Constituency:** Central Ayrshire", result);
+    }
+
+    [Fact]
+    public void EvaluateDisplayExpression_joins_array_of_objects_with_blank_lines()
+    {
+        var formData = new Dictionary<string, object>
+        {
+            ["items"] = "[{\"name\":\"One\"},{\"name\":\"Two\"},\"skip-me\"]"
+        };
+
+        var result = _service.EvaluateDisplayExpression(formData, "name");
+
+        Assert.Equal("One\n\nTwo", result);
+    }
+
+    [Fact]
+    public void EvaluateDisplayExpression_evaluates_against_json_element()
+    {
+        using var doc = JsonDocument.Parse("{\"name\":\"Json Trust\",\"ukprn\":\"10000001\"}");
+        var formData = new Dictionary<string, object>
+        {
+            ["complex"] = doc.RootElement.Clone()
+        };
+
+        var result = _service.EvaluateDisplayExpression(formData, "name + \" / \" + ukprn");
+
+        Assert.Equal("Json Trust / 10000001", result);
+    }
+
+    [Fact]
+    public void EvaluateDisplayExpression_skips_non_json_strings_and_falls_back_to_flattened_keys()
+    {
+        var formData = new Dictionary<string, object>
+        {
+            ["notes"] = "not-json",
+            ["displayName"] = "Ada Lovelace"
+        };
+
+        var result = _service.EvaluateDisplayExpression(formData, "displayName");
+
+        Assert.Equal("Ada Lovelace", result);
+    }
+
+    [Fact]
+    public void EvaluateDisplayExpression_ignores_malformed_json_and_null_values()
+    {
+        var formData = new Dictionary<string, object>
+        {
+            ["broken"] = "{not-json",
+            ["empty"] = null!,
+            ["name"] = "Fallback"
+        };
+
+        var result = _service.EvaluateDisplayExpression(formData, "name");
+
+        Assert.Equal("Fallback", result);
+    }
+
+    [Fact]
+    public void EvaluateDisplayExpression_returns_null_when_expression_resolves_empty()
+    {
+        var formData = new Dictionary<string, object>
+        {
+            ["Data[x]"] = "{\"other\":\"value\"}"
+        };
+
+        Assert.Null(_service.EvaluateDisplayExpression(formData, "missingProperty"));
+    }
+
+    [Fact]
+    public void EvaluateDisplayExpression_returns_null_for_json_array_without_objects()
+    {
+        var formData = new Dictionary<string, object>
+        {
+            ["items"] = "[\"a\",\"b\"]"
+        };
+
+        Assert.Null(_service.EvaluateDisplayExpression(formData, "name"));
+    }
+
+    #endregion
+
     #region GetFieldDisplayName
 
     [Theory]

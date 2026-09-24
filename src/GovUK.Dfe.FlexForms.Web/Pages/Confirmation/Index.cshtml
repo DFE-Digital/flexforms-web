@@ -1,6 +1,7 @@
 @page "/Confirmation"
 @model GovUK.Dfe.FlexForms.Web.Pages.Confirmation.IndexModel
 @using System.Linq
+@using GovUK.Dfe.FlexForms.Web.Utilities
 @{
     ViewData["Title"] = Model.DisplayModel.Title;
     ViewData["RequiredMessage"] = Model.DisplayModel.RequiredMessage;
@@ -30,7 +31,13 @@
             </h1>
         </legend>
         
-        @if (Model.DisplayModel.DisplayData.Any())
+        @if (!string.IsNullOrWhiteSpace(Model.DisplayModel.DisplayHtml))
+        {
+            <div class="govuk-inset-text">
+                @Html.Raw(MarkdownSafe.ToSafeGovUkHtml(Model.DisplayModel.DisplayHtml))
+            </div>
+        }
+        else if (Model.DisplayModel.DisplayData.Any())
         {
             var first = Model.DisplayModel.DisplayData.First();
             var rest = Model.DisplayModel.DisplayData.Skip(1);
