@@ -596,19 +596,63 @@ public sealed class SaveFormPageService(
 
     private async Task<FormEngineOutcome> NavigateStandardPageAsync(FormEngineWorkState state)
     {
-        if (state.CurrentPage!.ReturnToSummaryPage)
+        var currentPage = state.CurrentPage!;
+        var navigationMode = PageNavigationPolicy.Resolve(currentPage);
+        logger.LogInformation(
+            "[FLOW DEBUG] NavigationAfterSave={Mode} (explicit={HasExplicit}) currentPageId: {PageId}",
+            navigationMode,
+            currentPage.NavigationAfterSave.HasValue,
+            currentPage.PageId);
+
+        if (navigationMode == NavigationAfterSave.Summary)
+            return RedirectToTaskSummary(state);
+
+        if (navigationMode == NavigationAfterSave.Branch)
+            return await NavigateBranchPageAsync(state);
+
+        return await NavigateLinearPageAsync(state);
+    }
+
+    private async Task<FormEngineOutcome> NavigateBranchPageAsync(FormEngineWorkState state)
+    {
+        if (state.Template != null && state.CurrentTask?.Pages != null)
         {
-            var summaryScope = FormRouteParser.HistoryScope(state.ReferenceNumber, state.TaskId, state.CurrentPageId);
-            navigationHistoryService.Clear(summaryScope);
-            var summaryUrl = formNavigationService.GetTaskSummaryUrl(state.CurrentTask!.TaskId, state.ReferenceNumber);
-            return FormEngineOutcome.Redirect(summaryUrl);
+            var visibility = new FormEngineVisibilityEvaluator(
+                state.Template,
+                state.ConditionalState,
+                conditionalLogicOrchestrator,
+                state.CurrentPageId,
+                state.TaskId,
+                logger);
+            var navigationData = BuildNavigationData(state);
+            LogDataPreview(navigationData);
+
+            var nextPageId = visibility.GetNextPageRevealedByCurrentPageFields(
+                state.CurrentPage!,
+                navigationData,
+                state.CurrentTask.Pages);
+
+            logger.LogInformation(
+                "[FLOW DEBUG] Branch navigation next revealed page: {NextPageId}",
+                nextPageId ?? "null");
+
+            if (!string.IsNullOrEmpty(nextPageId))
+            {
+                var nextUrl = $"/applications/{state.ReferenceNumber}/{state.CurrentTask.TaskId}/{nextPageId}";
+                return FormEngineOutcome.Redirect(nextUrl);
+            }
         }
 
+        return RedirectToTaskSummary(state);
+    }
+
+    private async Task<FormEngineOutcome> NavigateLinearPageAsync(FormEngineWorkState state)
+    {
         string? nextPageId = null;
         if (state.ConditionalState != null && state.Template != null)
         {
             var navigationData = BuildNavigationData(state);
-            logger.LogInformation("[FLOW DEBUG] ReturnToSummaryPage=false path - currentPageId: {PageId}", state.CurrentPage.PageId);
+            logger.LogInformation("[FLOW DEBUG] Linear navigation path - currentPageId: {PageId}", state.CurrentPage!.PageId);
             LogDataPreview(navigationData);
             var context = new ConditionalLogicContext
             {
@@ -634,7 +678,7 @@ public sealed class SaveFormPageService(
         var hasConditionalLogic = state.Template?.ConditionalLogic?.Any() == true;
         if (!hasConditionalLogic)
         {
-            var sequentialNextPage = FormStepPolicy.GetNextPage(state.CurrentTask!.Pages, state.CurrentPage.PageId);
+            var sequentialNextPage = FormStepPolicy.GetNextPage(state.CurrentTask!.Pages, state.CurrentPage!.PageId);
             if (sequentialNextPage != null)
             {
                 var nextUrl = $"/applications/{state.ReferenceNumber}/{state.CurrentTask.TaskId}/{sequentialNextPage.PageId}";
@@ -642,10 +686,15 @@ public sealed class SaveFormPageService(
             }
         }
 
-        var summaryFallbackScope = FormRouteParser.HistoryScope(state.ReferenceNumber, state.TaskId, state.CurrentPageId);
-        navigationHistoryService.Clear(summaryFallbackScope);
-        var fallbackUrl = formNavigationService.GetTaskSummaryUrl(state.CurrentTask!.TaskId, state.ReferenceNumber);
-        return FormEngineOutcome.Redirect(fallbackUrl);
+        return RedirectToTaskSummary(state);
+    }
+
+    private FormEngineOutcome RedirectToTaskSummary(FormEngineWorkState state)
+    {
+        var summaryScope = FormRouteParser.HistoryScope(state.ReferenceNumber, state.TaskId, state.CurrentPageId);
+        navigationHistoryService.Clear(summaryScope);
+        var summaryUrl = formNavigationService.GetTaskSummaryUrl(state.CurrentTask!.TaskId, state.ReferenceNumber);
+        return FormEngineOutcome.Redirect(summaryUrl);
     }
 
     private async Task<FormEngineOutcome> CompleteDerivedSummaryFallbackAsync(

@@ -112,6 +112,34 @@ public class FormNavigationServiceTests
         Assert.Equal("/applications/REF-1/t1/p2", navigation.GetNextNavigationTargetAfterSave(first, task, "REF-1"));
         Assert.Equal("/applications/REF-1/t1", navigation.GetNextNavigationTargetAfterSave(second, task, "REF-1"));
     }
+
+    [Fact]
+    public void GetNextNavigationTargetAfterSave_ShouldPreferNavigationAfterSaveOverReturnToSummaryPage()
+    {
+        var navigation = new FormNavigationService(Substitute.For<INavigationHistoryService>());
+        var first = new Page
+        {
+            PageId = "p1",
+            Slug = "p1",
+            Title = "p1",
+            Description = "p1",
+            PageOrder = 1,
+            Fields = [],
+            ReturnToSummaryPage = true,
+            NavigationAfterSave = NavigationAfterSave.Linear
+        };
+        var second = new Page { PageId = "p2", Slug = "p2", Title = "p2", Description = "p2", PageOrder = 2, Fields = [], ReturnToSummaryPage = false };
+        var task = new TaskModel { TaskId = "t1", TaskName = "t", TaskOrder = 1, TaskStatusString = "NotStarted", Pages = [first, second] };
+
+        Assert.Equal("/applications/REF-1/t1/p2", navigation.GetNextNavigationTargetAfterSave(first, task, "REF-1"));
+
+        first.NavigationAfterSave = NavigationAfterSave.Branch;
+        Assert.Equal("/applications/REF-1/t1", navigation.GetNextNavigationTargetAfterSave(first, task, "REF-1"));
+
+        first.NavigationAfterSave = NavigationAfterSave.Summary;
+        first.ReturnToSummaryPage = false;
+        Assert.Equal("/applications/REF-1/t1", navigation.GetNextNavigationTargetAfterSave(first, task, "REF-1"));
+    }
 }
 
 public class ComplexFieldRendererFactoryTests
