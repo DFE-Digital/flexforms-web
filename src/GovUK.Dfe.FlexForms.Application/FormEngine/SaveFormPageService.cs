@@ -598,51 +598,6 @@ public sealed class SaveFormPageService(
     {
         if (state.CurrentPage!.ReturnToSummaryPage)
         {
-            string? conditionalNextPageId = null;
-            var hasConditionalTrigger = false;
-
-            if (state.ConditionalState != null && state.Template != null)
-            {
-                var visibility = new FormEngineVisibilityEvaluator(
-                    state.Template,
-                    state.ConditionalState,
-                    conditionalLogicOrchestrator,
-                    state.CurrentPageId,
-                    state.TaskId,
-                    logger);
-                var navigationData = BuildNavigationData(state);
-                hasConditionalTrigger = visibility.HasConditionalLogicShowingPages(navigationData);
-
-                logger.LogInformation(
-                    "[FLOW DEBUG] ReturnToSummaryPage=true path - hasConditionalTrigger: {HasTrigger}, currentPageId: {PageId}",
-                    hasConditionalTrigger,
-                    state.CurrentPage.PageId);
-
-                if (hasConditionalTrigger)
-                {
-                    LogDataPreview(navigationData);
-                    var context = new ConditionalLogicContext
-                    {
-                        CurrentPageId = state.CurrentPageId,
-                        CurrentTaskId = state.TaskId,
-                        IsClientSide = false,
-                        Trigger = "change"
-                    };
-                    conditionalNextPageId = await conditionalLogicOrchestrator.GetNextPageAsync(
-                        state.Template,
-                        navigationData,
-                        state.CurrentPage.PageId,
-                        context);
-                    logger.LogInformation("[FLOW DEBUG] GetNextPageAsync returned: {NextPageId}", conditionalNextPageId ?? "null");
-                }
-            }
-
-            if (hasConditionalTrigger && !string.IsNullOrEmpty(conditionalNextPageId))
-            {
-                var nextUrl = $"/applications/{state.ReferenceNumber}/{state.CurrentTask!.TaskId}/{conditionalNextPageId}";
-                return FormEngineOutcome.Redirect(nextUrl);
-            }
-
             var summaryScope = FormRouteParser.HistoryScope(state.ReferenceNumber, state.TaskId, state.CurrentPageId);
             navigationHistoryService.Clear(summaryScope);
             var summaryUrl = formNavigationService.GetTaskSummaryUrl(state.CurrentTask!.TaskId, state.ReferenceNumber);

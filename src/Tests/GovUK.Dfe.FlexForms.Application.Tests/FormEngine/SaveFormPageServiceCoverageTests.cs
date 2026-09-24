@@ -100,6 +100,43 @@ public class SaveFormPageServiceCoverageTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_ShouldRedirectToTaskSummary_WhenReturnToSummaryPageIsTrue_EvenIfConditionalLogicHasNextPage()
+    {
+        var summaryPage = CreatePage("reason-and-benefits-trust-developmental-needs", returnToSummaryPage: true);
+        var nextPage = CreatePage("next-question-page", returnToSummaryPage: false);
+        var task = CreateStandardTask(summaryPage, nextPage);
+        Register(task, summaryPage);
+
+        _conditionalLogic.GetNextPageAsync(default!, default!, default!, default)
+            .ReturnsForAnyArgs("next-question-page");
+
+        var state = EditablePageState("reason-and-benefits-trust-developmental-needs", task.TaskId, task);
+        state.ConditionalState = new FormConditionalState();
+        state.Template!.ConditionalLogic =
+        [
+            new ConditionalLogic
+            {
+                Enabled = true,
+                ConditionGroup = new ConditionGroup
+                {
+                    LogicalOperator = "AND",
+                    Conditions = [new Condition { TriggerField = "someField", Operator = "equals", Value = "yes" }]
+                },
+                AffectedElements = [new AffectedElement { ElementId = "next-question-page", ElementType = "page", Action = "show" }]
+            }
+        ];
+
+        var result = await _service.ExecuteAsync(
+            state,
+            Posted("Data[reasonAndBenefitsTrustDevelopmentalNeeds]", "answer"),
+            null);
+
+        Assert.Equal(FormEngineOutcomeKind.Redirect, result.Kind);
+        Assert.Equal($"/applications/REF-1/{task.TaskId}", result.RedirectUrl);
+        _history.Received().Clear($"REF-1:{task.TaskId}");
+    }
+
+    [Fact]
     public async Task ExecuteAsync_ShouldRedirectToNextSubFlowPage_WhenCollectionFlowNotLast()
     {
         var fp1 = CreatePage("fp1", returnToSummaryPage: false);
@@ -435,37 +472,6 @@ public class SaveFormPageServiceCoverageTests
 
         Assert.Equal(FormEngineOutcomeKind.Redirect, result.Kind);
         Assert.Equal($"/applications/REF-1/{task.TaskId}", result.RedirectUrl);
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_ShouldFollowConditionalNext_WhenReturnToSummaryHasShowPageTrigger()
-    {
-        var first = CreatePage("p1", returnToSummaryPage: true);
-        var task = CreateStandardTask(first, CreatePage("p2", returnToSummaryPage: false));
-        Register(task, first);
-        _conditionalLogic.GetNextPageAsync(default!, default!, default!, default)
-            .ReturnsForAnyArgs("p2");
-
-        var state = EditablePageState("p1", task.TaskId);
-        state.Template!.ConditionalLogic =
-        [
-            new ConditionalLogic
-            {
-                Enabled = true,
-                ConditionGroup = new ConditionGroup
-                {
-                    LogicalOperator = "AND",
-                    Conditions = [new Condition { TriggerField = "name", Operator = "equals", Value = "Ada" }]
-                },
-                AffectedElements = [new AffectedElement { ElementId = "p2", ElementType = "page", Action = "show" }]
-            }
-        ];
-
-        state.Data["name"] = "Ada";
-        var result = await _service.ExecuteAsync(state, Posted("Data[name]", "Ada"), null);
-
-        Assert.Equal(FormEngineOutcomeKind.Redirect, result.Kind);
-        Assert.Equal($"/applications/REF-1/{task.TaskId}/p2", result.RedirectUrl);
     }
 
     [Fact]
