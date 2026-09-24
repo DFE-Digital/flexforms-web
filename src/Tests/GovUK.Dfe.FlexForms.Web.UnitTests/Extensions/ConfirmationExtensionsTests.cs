@@ -44,6 +44,40 @@ public class ConfirmationExtensionsTests
     }
 
     [Fact]
+    public void RenderConfirmationButton_ShouldIncludeDisplayExpression_WhenProvided()
+    {
+        var html = _html.RenderConfirmationButton(
+            "Search",
+            handler: "Page",
+            requiresConfirmation: true,
+            displayExpression: "**displayName**\"\\n**Constituency:** \"constituencyName",
+            title: "Is this the right Member of Parliament?").ToString();
+
+        Assert.Contains("confirmation-display-expression-Page", html);
+        Assert.Contains("**displayName**", html);
+        Assert.Contains("Is this the right Member of Parliament?", html);
+    }
+
+    [Fact]
+    public void NamedConfirmationButtons_ShouldPassDisplayExpressionThrough()
+    {
+        const string expression = "name + \"\\n\" + ukprn";
+
+        Assert.Contains(
+            "confirmation-display-expression-Page",
+            _html.RenderPrimaryConfirmationButton("Primary", displayExpression: expression).ToString());
+        Assert.Contains(
+            "confirmation-display-expression-Page",
+            _html.RenderSecondaryConfirmationButton("Secondary", displayExpression: expression).ToString());
+        Assert.Contains(
+            "confirmation-display-expression-Page",
+            _html.RenderWarningConfirmationButton("Warning", displayExpression: expression).ToString());
+        Assert.Contains(
+            "confirmation-display-expression-Page",
+            _html.RenderLinkConfirmationButton("Link", displayExpression: expression).ToString());
+    }
+
+    [Fact]
     public void NamedConfirmationButtons_ShouldUseExpectedCssClasses()
     {
         Assert.Contains("govuk-button", _html.RenderPrimaryConfirmationButton("Primary").ToString());

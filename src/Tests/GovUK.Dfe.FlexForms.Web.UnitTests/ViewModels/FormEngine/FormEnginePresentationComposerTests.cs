@@ -355,6 +355,140 @@ public class FormEnginePresentationComposerTests
     }
 
     [Fact]
+    public void BuildPreview_uses_summaryDisplay_not_confirmationDisplay_for_autocomplete()
+    {
+        var memberJson = """{"displayName":"Alan Gemmell","constituencyName":"Central Ayrshire"}""";
+        var field = new Field
+        {
+            FieldId = "mp",
+            Type = "complexField",
+            Order = 1,
+            Label = new Label { Value = "MP" },
+            ComplexField = new ComplexField
+            {
+                Id = "MpComplexField",
+                ConfirmationDisplay = "ignored-for-summary",
+                SummaryDisplay = "displayName + \"\\n\" + constituencyName"
+            }
+        };
+        _complexFields.GetConfiguration("MpComplexField")
+            .Returns(new ComplexFieldConfiguration
+            {
+                Id = "MpComplexField",
+                FieldType = "autocomplete",
+                ConfirmationDisplay = "also-ignored",
+                SummaryDisplay = string.Empty
+            });
+
+        var task = Task("t1", "Visit", pages: [Page("p1", [field])]);
+        var formData = new Dictionary<string, object> { ["mp"] = memberJson };
+
+        _formatting.GetFieldValue("mp", formData).Returns(memberJson);
+        _formatting.HasFieldValue("mp", formData).Returns(true);
+        _formatting.GetFormattedFieldValues("mp", formData, "displayName + \"\\n\" + constituencyName")
+            .Returns(["Alan Gemmell\nCentral Ayrshire"]);
+        _formatting.GetFieldItemLabel("mp", Arg.Any<FormTemplate>()).Returns("MP");
+        _formatting.IsFieldAllowMultiple("mp", Arg.Any<FormTemplate>()).Returns(false);
+
+        var value = _composer.BuildPreview(Context(formData, Template(task)))
+            .Groups.Single().Tasks.Single().Rows.Single().Value;
+
+        Assert.Equal(SummaryDisplayKind.AutocompleteHtml, value.Kind);
+        Assert.Contains("Alan Gemmell", value.Html);
+        Assert.Contains("Central Ayrshire", value.Html);
+        Assert.DoesNotContain("ignored-for-summary", value.Html);
+        _formatting.DidNotReceive().GetFormattedFieldValues("mp", formData, "ignored-for-summary");
+    }
+
+    [Fact]
+    public void BuildPreview_renders_multiple_autocomplete_items_with_summaryDisplay()
+    {
+        var arrayJson = """
+            [
+              {"displayName":"Ada Lovelace","constituencyName":"East"},
+              {"displayName":"Alan Turing","constituencyName":"West"}
+            ]
+            """;
+        var field = new Field
+        {
+            FieldId = "mps",
+            Type = "complexField",
+            Order = 1,
+            Label = new Label { Value = "MPs" },
+            ComplexField = new ComplexField
+            {
+                Id = "MpComplexField",
+                SummaryDisplay = "**displayName**"
+            }
+        };
+        _complexFields.GetConfiguration("MpComplexField")
+            .Returns(new ComplexFieldConfiguration { Id = "MpComplexField", FieldType = "autocomplete" });
+
+        var task = Task("t1", "Visit", pages: [Page("p1", [field])]);
+        var formData = new Dictionary<string, object> { ["mps"] = arrayJson };
+
+        _formatting.GetFieldValue("mps", formData).Returns(arrayJson);
+        _formatting.HasFieldValue("mps", formData).Returns(true);
+        _formatting.GetFormattedFieldValues("mps", formData, "**displayName**")
+            .Returns(["Ada", "Alan"]);
+        _formatting.GetFieldItemLabel("mps", Arg.Any<FormTemplate>()).Returns("MP");
+        _formatting.IsFieldAllowMultiple("mps", Arg.Any<FormTemplate>()).Returns(true);
+
+        var rows = _composer.BuildPreview(Context(formData, Template(task)))
+            .Groups.Single().Tasks.Single().Rows;
+
+        Assert.Equal(SummaryDisplayKind.Empty, rows[0].Value.Kind);
+        Assert.Equal("MP 1", rows[1].Key);
+        Assert.Equal(SummaryDisplayKind.AutocompleteHtml, rows[1].Value.Kind);
+        Assert.Contains("<strong>Ada Lovelace</strong>", rows[1].Value.Html);
+        Assert.Equal("MP 2", rows[2].Key);
+        Assert.Contains("<strong>Alan Turing</strong>", rows[2].Value.Html);
+    }
+
+    [Fact]
+    public void BuildCollectionFlows_uses_summaryDisplay_for_autocomplete_column()
+    {
+        var autocompleteField = new Field
+        {
+            FieldId = "org",
+            Type = "complexField",
+            Order = 1,
+            Label = new Label { Value = "Organisation" },
+            ComplexField = new ComplexField
+            {
+                Id = "org-auto",
+                ConfirmationDisplay = "should-not-appear",
+                SummaryDisplay = "displayName + \" - \" + constituencyName"
+            }
+        };
+        _complexFields.GetConfiguration("org-auto")
+            .Returns(new ComplexFieldConfiguration { Id = "org-auto", FieldType = "autocomplete" });
+
+        var orgJson = """{"displayName":"Jane Smith","constituencyName":"Holborn"}""";
+        var flow = CollectionFlow(
+            "members",
+            "memberList",
+            "Members",
+            summaryColumns: [new FlowSummaryColumn { Field = "org", Label = "Organisation" }],
+            pages: [Page("p1", [autocompleteField])]);
+        var task = Task("t1", "Team", mode: FormStepPolicy.MultiCollectionFlowMode, flows: [flow]);
+        var formData = ItemsFormData(
+            "memberList",
+            new Dictionary<string, object> { ["id"] = "i1", ["org"] = orgJson });
+
+        _formatting.GetFormattedFieldValues("org", Arg.Any<Dictionary<string, object>>(), "displayName + \" - \" + constituencyName")
+            .Returns(["Jane Smith - Holborn"]);
+
+        var value = _composer
+            .BuildCollectionFlows(Context(formData, Template(task), taskId: "t1"), task)
+            .Single().Items.Single().Rows.Single().Value;
+
+        Assert.Equal(SummaryDisplayKind.AutocompleteHtml, value.Kind);
+        Assert.Contains("Jane Smith - Holborn", value.Html);
+        Assert.DoesNotContain("should-not-appear", value.Html);
+    }
+
+    [Fact]
     public void BuildCollectionFlows_returns_empty_when_task_has_no_flows()
     {
         var task = Task("t1", "Team", mode: FormStepPolicy.MultiCollectionFlowMode, flows: []);

@@ -66,6 +66,23 @@ public class AutocompleteSummaryFormatterTests
     }
 
     [Fact]
+    public void Render_applies_display_expression_to_each_array_item()
+    {
+        var json = """
+            [
+              {"displayName":"Ada"},
+              {"displayName":"Alan"}
+            ]
+            """;
+
+        var html = AutocompleteSummaryFormatter.Render(json, "**displayName**");
+
+        Assert.Contains("<strong>Ada</strong>", html);
+        Assert.Contains("<strong>Alan</strong>", html);
+        Assert.Contains("<br/>", html);
+    }
+
+    [Fact]
     public void Render_reads_nested_address_postcode()
     {
         var json = """{"name":"School","address":{"postalCode":"M1 1AA"}}""";

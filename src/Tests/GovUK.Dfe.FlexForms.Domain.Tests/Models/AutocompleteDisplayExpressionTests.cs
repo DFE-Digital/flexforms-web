@@ -170,6 +170,19 @@ public class AutocompleteDisplayExpressionTests
     }
 
     [Fact]
+    public void Evaluate_keeps_unknown_escape_characters_in_quoted_literals()
+    {
+        var values = new Dictionary<string, object>();
+
+        Assert.Equal(
+            "a?b",
+            AutocompleteDisplayExpression.Evaluate("\"a\\?b\"", values));
+        Assert.Equal(
+            "line\rbreak",
+            AutocompleteDisplayExpression.Evaluate("\"line\\rbreak\"", values));
+    }
+
+    [Fact]
     public void Evaluate_discards_leading_and_orphaned_separators()
     {
         var values = new Dictionary<string, object>
