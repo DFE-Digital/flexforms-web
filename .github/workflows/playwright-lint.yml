@@ -15,8 +15,8 @@ permissions:
   contents: read
 
 jobs:
-  lint-format:
-    name: Lint and format
+  format:
+    name: Format check
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -24,17 +24,13 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - name: Setup .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/package-lock.json
+          dotnet-version: '10.0.x'
 
-      - name: Install dependencies
-        run: npm ci --ignore-scripts
+      - name: Restore dependencies
+        run: dotnet restore GovUK.Dfe.FlexForms.PlaywrightTests.csproj
 
       - name: Check formatting
-        run: npm run format:check
-
-      - name: Lint
-        run: npm run lint
+        run: dotnet format GovUK.Dfe.FlexForms.PlaywrightTests.csproj --verify-no-changes
