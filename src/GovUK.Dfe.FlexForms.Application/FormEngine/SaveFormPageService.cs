@@ -597,12 +597,25 @@ public sealed class SaveFormPageService(
     private async Task<FormEngineOutcome> NavigateStandardPageAsync(FormEngineWorkState state)
     {
         var currentPage = state.CurrentPage!;
+
+        // Last visible page in the task always returns to the task summary,
+        // regardless of returnToSummaryPage / navigationAfterSave.
+        var nextVisibleInTask = await GetNextVisiblePageInCurrentTaskAsync(state);
+        if (string.IsNullOrEmpty(nextVisibleInTask))
+        {
+            logger.LogInformation(
+                "[FLOW DEBUG] Last visible page of task - forcing summary. currentPageId: {PageId}",
+                currentPage.PageId);
+            return RedirectToTaskSummary(state);
+        }
+
         var navigationMode = PageNavigationPolicy.Resolve(currentPage);
         logger.LogInformation(
-            "[FLOW DEBUG] NavigationAfterSave={Mode} (explicit={HasExplicit}) currentPageId: {PageId}",
+            "[FLOW DEBUG] NavigationAfterSave={Mode} (explicit={HasExplicit}) currentPageId: {PageId}, nextInTask: {NextPageId}",
             navigationMode,
             currentPage.NavigationAfterSave.HasValue,
-            currentPage.PageId);
+            currentPage.PageId,
+            nextVisibleInTask);
 
         if (navigationMode == NavigationAfterSave.Summary)
             return RedirectToTaskSummary(state);
@@ -610,7 +623,48 @@ public sealed class SaveFormPageService(
         if (navigationMode == NavigationAfterSave.Branch)
             return await NavigateBranchPageAsync(state);
 
-        return await NavigateLinearPageAsync(state);
+        var nextUrl = $"/applications/{state.ReferenceNumber}/{state.CurrentTask!.TaskId}/{nextVisibleInTask}";
+        return FormEngineOutcome.Redirect(nextUrl);
+    }
+
+    private async Task<string?> GetNextVisiblePageInCurrentTaskAsync(FormEngineWorkState state)
+    {
+        if (state.CurrentTask?.Pages == null || state.CurrentTask.Pages.Count == 0)
+            return null;
+
+        if (state.Template != null)
+        {
+            var navigationData = BuildNavigationData(state);
+            var context = new ConditionalLogicContext
+            {
+                CurrentPageId = state.CurrentPageId,
+                CurrentTaskId = state.TaskId,
+                IsClientSide = false,
+                Trigger = "change"
+            };
+            var nextPageId = await conditionalLogicOrchestrator.GetNextPageAsync(
+                state.Template,
+                navigationData,
+                state.CurrentPage!.PageId,
+                context);
+
+            if (!string.IsNullOrEmpty(nextPageId)
+                && state.CurrentTask.Pages.Any(p => p.PageId == nextPageId))
+            {
+                return nextPageId;
+            }
+
+            // Orchestrator returned nothing (or a page outside this task).
+            // Without conditional logic, fall back to sequential order within the task.
+            if (state.Template.ConditionalLogic?.Any() != true)
+            {
+                return FormStepPolicy.GetNextPage(state.CurrentTask.Pages, state.CurrentPage!.PageId)?.PageId;
+            }
+
+            return null;
+        }
+
+        return FormStepPolicy.GetNextPage(state.CurrentTask.Pages, state.CurrentPage!.PageId)?.PageId;
     }
 
     private async Task<FormEngineOutcome> NavigateBranchPageAsync(FormEngineWorkState state)
@@ -639,49 +693,6 @@ public sealed class SaveFormPageService(
             if (!string.IsNullOrEmpty(nextPageId))
             {
                 var nextUrl = $"/applications/{state.ReferenceNumber}/{state.CurrentTask.TaskId}/{nextPageId}";
-                return FormEngineOutcome.Redirect(nextUrl);
-            }
-        }
-
-        return RedirectToTaskSummary(state);
-    }
-
-    private async Task<FormEngineOutcome> NavigateLinearPageAsync(FormEngineWorkState state)
-    {
-        string? nextPageId = null;
-        if (state.ConditionalState != null && state.Template != null)
-        {
-            var navigationData = BuildNavigationData(state);
-            logger.LogInformation("[FLOW DEBUG] Linear navigation path - currentPageId: {PageId}", state.CurrentPage!.PageId);
-            LogDataPreview(navigationData);
-            var context = new ConditionalLogicContext
-            {
-                CurrentPageId = state.CurrentPageId,
-                CurrentTaskId = state.TaskId,
-                IsClientSide = false,
-                Trigger = "change"
-            };
-            nextPageId = await conditionalLogicOrchestrator.GetNextPageAsync(
-                state.Template,
-                navigationData,
-                state.CurrentPage.PageId,
-                context);
-            logger.LogInformation("[FLOW DEBUG] GetNextPageAsync returned: {NextPageId}", nextPageId ?? "null");
-        }
-
-        if (!string.IsNullOrEmpty(nextPageId))
-        {
-            var nextUrl = $"/applications/{state.ReferenceNumber}/{state.CurrentTask!.TaskId}/{nextPageId}";
-            return FormEngineOutcome.Redirect(nextUrl);
-        }
-
-        var hasConditionalLogic = state.Template?.ConditionalLogic?.Any() == true;
-        if (!hasConditionalLogic)
-        {
-            var sequentialNextPage = FormStepPolicy.GetNextPage(state.CurrentTask!.Pages, state.CurrentPage!.PageId);
-            if (sequentialNextPage != null)
-            {
-                var nextUrl = $"/applications/{state.ReferenceNumber}/{state.CurrentTask.TaskId}/{sequentialNextPage.PageId}";
                 return FormEngineOutcome.Redirect(nextUrl);
             }
         }

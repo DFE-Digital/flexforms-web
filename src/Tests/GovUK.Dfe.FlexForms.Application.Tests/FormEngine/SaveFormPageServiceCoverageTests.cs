@@ -186,6 +186,9 @@ public class SaveFormPageServiceCoverageTests
         var task = CreateStandardTask(first, revealed, alwaysVisible);
         Register(task, first);
 
+        _conditionalLogic.GetNextPageAsync(default!, default!, default!, default)
+            .ReturnsForAnyArgs("p2-sen");
+
         var state = EditablePageState("p1", task.TaskId, task);
         state.Template!.ConditionalLogic =
         [
@@ -479,12 +482,46 @@ public class SaveFormPageServiceCoverageTests
         var task = CreateStandardTask(first, CreatePage("p2", returnToSummaryPage: false));
         Register(task, first);
         _conditionalLogic.GetNextPageAsync(default!, default!, default!, default)
-            .ReturnsForAnyArgs("p3");
+            .ReturnsForAnyArgs("p2");
 
         var result = await _service.ExecuteAsync(EditablePageState("p1", task.TaskId), Posted("name", "Ada"), null);
 
         Assert.Equal(FormEngineOutcomeKind.Redirect, result.Kind);
-        Assert.Equal($"/applications/REF-1/{task.TaskId}/p3", result.RedirectUrl);
+        Assert.Equal($"/applications/REF-1/{task.TaskId}/p2", result.RedirectUrl);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ShouldRedirectToTaskSummary_WhenLastVisiblePageEvenIfOrchestratorReturnsOutsideTask()
+    {
+        var first = CreatePage("p1", returnToSummaryPage: false);
+        var hidden = CreatePage("p2-hidden", returnToSummaryPage: false);
+        var task = CreateStandardTask(first, hidden);
+        Register(task, first);
+
+        // Simulate old cross-task leak: orchestrator returns a page from another task.
+        _conditionalLogic.GetNextPageAsync(default!, default!, default!, default)
+            .ReturnsForAnyArgs("reason-and-benefits-trust-strategic-needs");
+
+        var state = EditablePageState("p1", task.TaskId, task);
+        state.Template!.ConditionalLogic =
+        [
+            new ConditionalLogic
+            {
+                Enabled = true,
+                ConditionGroup = new ConditionGroup
+                {
+                    LogicalOperator = "AND",
+                    Conditions = [new Condition { TriggerField = "otherRisks", Operator = "equals", Value = "yes" }]
+                },
+                AffectedElements = [new AffectedElement { ElementId = "p2-hidden", ElementType = "page", Action = "show" }]
+            }
+        ];
+
+        var result = await _service.ExecuteAsync(state, Posted("Data[otherRisks]", "no"), null);
+
+        Assert.Equal(FormEngineOutcomeKind.Redirect, result.Kind);
+        Assert.Equal($"/applications/REF-1/{task.TaskId}", result.RedirectUrl);
+        _history.Received().Clear($"REF-1:{task.TaskId}");
     }
 
     [Fact]

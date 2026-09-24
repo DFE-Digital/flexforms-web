@@ -328,7 +328,7 @@ Two shapes:
 | `pageOrder` | Order in the task or collection wizard. |
 | `fields` | One or more fields. |
 | `returnToSummaryPage` | Legacy. After save: return to task/collection summary (`true`) or continue the wizard (`false`). Used only when `navigationAfterSave` is omitted. Default `true`. |
-| `navigationAfterSave` | Optional. Overrides `returnToSummaryPage` when set. Values: `"summary"` (always task summary), `"linear"` (next visible page in the task, else summary), `"branch"` (next page only if revealed by conditional logic from this page’s answers; otherwise summary). Omit on existing templates to keep current behaviour. |
+| `navigationAfterSave` | Optional. Overrides `returnToSummaryPage` when set. Values: `"summary"` (always task summary), `"linear"` (next visible page in the task, else summary), `"branch"` (next page only if revealed by conditional logic from this page’s answers; otherwise summary). Omit on existing templates to keep current behaviour. **Regardless of these flags, if there is no next visible page left in the same task, Save and Continue always returns to the task summary.** |
 | `saveButtonLabel` | Override button text, e.g. `"Sign the declaration"`. |
 
 **Design tip:** Prefer **one question per page** (GOV.UK pattern). Put related short fields (name / phone / email) on one page when they form one “contact details” block.

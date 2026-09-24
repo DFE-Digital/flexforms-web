@@ -1262,6 +1262,135 @@ public class ConditionalLogicOrchestratorTests
     }
 
     [Fact]
+    public async Task GetNextPageAsync_ShouldNotLeaveCurrentTask_WhenLaterTasksHavePages()
+    {
+        var orchestrator = CreateOrchestrator();
+        var template = new FormTemplate
+        {
+            TemplateId = "multi-task",
+            TemplateName = "Multi task",
+            Description = "Test",
+            TaskGroups =
+            [
+                new TaskGroup
+                {
+                    GroupId = "g1",
+                    GroupName = "Group",
+                    GroupOrder = 1,
+                    GroupStatus = "NotStarted",
+                    Tasks =
+                    [
+                        new Domain.Models.Task
+                        {
+                            TaskId = "risks",
+                            TaskName = "Risks",
+                            TaskOrder = 1,
+                            TaskStatusString = "NotStarted",
+                            Pages =
+                            [
+                                new Page
+                                {
+                                    PageId = "risks-other-risks",
+                                    Slug = "risks-other-risks",
+                                    Title = "Other risks",
+                                    Description = "",
+                                    PageOrder = 1,
+                                    Fields =
+                                    [
+                                        new Field
+                                        {
+                                            FieldId = "risksOtherRisks",
+                                            Type = "radios",
+                                            Label = new Label { Value = "Other?" },
+                                            Order = 1
+                                        }
+                                    ]
+                                },
+                                new Page
+                                {
+                                    PageId = "risks-risk-management",
+                                    Slug = "risks-risk-management",
+                                    Title = "Risk management",
+                                    Description = "",
+                                    PageOrder = 2,
+                                    Fields =
+                                    [
+                                        new Field
+                                        {
+                                            FieldId = "risksRiskManagement",
+                                            Type = "text",
+                                            Label = new Label { Value = "Summary" },
+                                            Order = 1
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        new Domain.Models.Task
+                        {
+                            TaskId = "reason-and-benefits-trust",
+                            TaskName = "Reason and benefits",
+                            TaskOrder = 2,
+                            TaskStatusString = "NotStarted",
+                            Pages =
+                            [
+                                new Page
+                                {
+                                    PageId = "reason-and-benefits-trust-strategic-needs",
+                                    Slug = "reason-and-benefits-trust-strategic-needs",
+                                    Title = "Strategic needs",
+                                    Description = "",
+                                    PageOrder = 1,
+                                    Fields = []
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ],
+            ConditionalLogic =
+            [
+                new ConditionalLogic
+                {
+                    Id = "skip-risk-mgmt",
+                    Enabled = true,
+                    ConditionGroup = new ConditionGroup
+                    {
+                        LogicalOperator = "AND",
+                        Conditions =
+                        [
+                            new Condition
+                            {
+                                TriggerField = "risksOtherRisks",
+                                Operator = "equals",
+                                Value = "no",
+                                DataType = "string"
+                            }
+                        ]
+                    },
+                    AffectedElements =
+                    [
+                        new AffectedElement
+                        {
+                            ElementId = "risks-risk-management",
+                            ElementType = "page",
+                            Action = "skip"
+                        }
+                    ]
+                }
+            ]
+        };
+
+        var nextPage = await orchestrator.GetNextPageAsync(
+            template,
+            new Dictionary<string, object> { ["risksOtherRisks"] = "no" },
+            "risks-other-risks",
+            new ConditionalLogicContext { CurrentTaskId = "risks", CurrentPageId = "risks-other-risks" });
+
+        Assert.Null(nextPage);
+    }
+
+    [Fact]
     public async Task GetNextPageAsync_ShouldSkipShowRulePage_WhenMultiSelectDoesNotContainTriggerValue()
     {
         var orchestrator = CreateOrchestrator();
