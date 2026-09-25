@@ -18,6 +18,7 @@
     var (hintHtml, hintClass) = MarkdownSafe.RenderHintWithClass(Model.Field.Tooltip);
     var hintClassAttribute = string.IsNullOrEmpty(hintClass) ? null : hintClass;
 }
+@* GovUK character-count tag helpers allow only one of max-words or max-length; child markup is duplicated by design (Sonar: sonar.cpd.exclusions + issue e3 in dotnet-ci.yml). *@
 @if (useWordLimit)
 {
     <govuk-character-count id="@Model.Id" name="Data[@Model.Field.FieldId]" max-words="@limitAttributeValue">
@@ -39,6 +40,7 @@
 }
 else
 {
+    @* //NOSONAR duplicate branch — see comment above *@
     <govuk-character-count id="@Model.Id" name="Data[@Model.Field.FieldId]" max-length="@limitAttributeValue">
         <govuk-character-count-label class="@labelClasses" asp-for="@Model.Field.FieldId">@Model.Field.Label.Value</govuk-character-count-label>
         @if (!string.IsNullOrEmpty(Model.Field.Tooltip))
