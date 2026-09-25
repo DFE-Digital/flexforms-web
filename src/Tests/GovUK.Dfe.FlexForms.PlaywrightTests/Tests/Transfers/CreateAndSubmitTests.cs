@@ -6,7 +6,6 @@ using NUnit.Framework;
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.Transfers;
 
 [TestFixture(Description = "Transfers create and submit")]
-[Category("Transfers")]
 public sealed class CreateAndSubmitTests : PlaywrightTestBase
 {
     private const string IncomingTrustName = "CANONS HIGH SCHOOL";

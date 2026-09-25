@@ -8,7 +8,6 @@ using NUnit.Framework;
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.Transfers;
 
 [TestFixture(Description = "Transfers smoke")]
-[Category("Transfers")]
 public sealed class SmokeTests : PlaywrightTestBase
 {
     private const string ContributorName = "Playwright Test";

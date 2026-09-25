@@ -71,7 +71,7 @@ jobs:
       - name: Run Playwright tests
         run: >
           dotnet test GovUK.Dfe.FlexForms.PlaywrightTests.csproj --no-build
-          --filter "Category=${{ env.SERVICE }}"
+          --filter "FullyQualifiedName~.Tests.${{ env.SERVICE }}."
           --logger "trx;LogFileName=report.trx"
           --results-directory reports
           -- NUnit.NumberOfTestWorkers=4

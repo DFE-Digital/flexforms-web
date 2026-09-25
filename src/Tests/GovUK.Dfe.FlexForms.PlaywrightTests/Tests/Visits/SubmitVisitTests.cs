@@ -6,7 +6,6 @@ using NUnit.Framework;
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.Visits;
 
 [TestFixture(Description = "Visit create and submit")]
-[Category("Visits")]
 public sealed class SubmitVisitTests : PlaywrightTestBase
 {
     protected override int TestTimeoutMilliseconds => 180_000;

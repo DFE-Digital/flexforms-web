@@ -7,7 +7,6 @@ using NUnit.Framework;
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService;
 
 [TestFixture(Description = "Applications")]
-[Category("TestService")]
 public sealed class ApplicationsTests : PlaywrightTestBase
 {
     private static readonly ConfiguredFieldsData Data = new(

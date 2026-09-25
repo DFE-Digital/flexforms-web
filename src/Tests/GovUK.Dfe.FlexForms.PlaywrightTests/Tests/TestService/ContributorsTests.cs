@@ -10,7 +10,6 @@ using NUnit.Framework;
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService;
 
 [TestFixture(Description = "Contributor permission tests")]
-[Category("TestService")]
 public sealed class ContributorsTests : PlaywrightTestBase
 {
     private const string ContributorName = "Test Automation User";

@@ -7,7 +7,6 @@ using NUnit.Framework;
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.Lsrp;
 
 [TestFixture(Description = "LSRP create and submit")]
-[Category("Lsrp")]
 public sealed class SubmitApplicationTests : PlaywrightTestBase
 {
     [SetUp]
