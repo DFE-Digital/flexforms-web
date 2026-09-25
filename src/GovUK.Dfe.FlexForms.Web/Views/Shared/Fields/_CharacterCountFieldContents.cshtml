@@ -1,0 +1,28 @@
+@using Microsoft.AspNetCore.Html;
+@model GovUK.Dfe.FlexForms.Web.Services.FieldViewModel
+@{
+    var labelClasses = ViewData["LabelClasses"] as string ?? "govuk-label govuk-label--m";
+    var hintHtml = ViewData["HintHtml"] as string ?? string.Empty;
+    var hintClass = ViewData["HintClass"] as string;
+    var hasBlockHint = ViewData["HasBlockHint"] as bool? == true;
+}
+<govuk-character-count-label class="@labelClasses" asp-for="@Model.Field.FieldId">@Model.Field.Label.Value</govuk-character-count-label>
+@if (!string.IsNullOrEmpty(Model.Field.Tooltip) && hasBlockHint)
+{
+    <govuk-character-count-before-input>
+        <div class="govuk-hint @hintClass">@Html.Raw(hintHtml)</div>
+    </govuk-character-count-before-input>
+}
+else if (!string.IsNullOrEmpty(Model.Field.Tooltip))
+{
+    <govuk-character-count-hint>@Html.Raw(hintHtml)</govuk-character-count-hint>
+}
+
+@if (Model.ErrorMessage != String.Empty)
+{
+    <govuk-character-count-error-message>
+        <span class="govuk-visually-hidden">Error: </span>
+        @Model.ErrorMessage
+    </govuk-character-count-error-message>
+}
+<govuk-character-count-value>@Model.CurrentValue</govuk-character-count-value>
