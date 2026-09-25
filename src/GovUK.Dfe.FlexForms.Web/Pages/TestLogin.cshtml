@@ -2,6 +2,10 @@
 @model TestLoginModel
 @{
     ViewData["Title"] = "Test Login";
+    var emailError = Html.ValidationMessageFor(m => m.Input.Email);
+    var passwordError = Html.ValidationMessageFor(m => m.Input.Password);
+    var hasEmailError = !ViewData.ModelState.IsValid && ViewData.ModelState.TryGetValue("Input.Email", out var emailState) && emailState.Errors.Count > 0;
+    var hasPasswordError = !ViewData.ModelState.IsValid && ViewData.ModelState.TryGetValue("Input.Password", out var passwordState) && passwordState.Errors.Count > 0;
 }
 
 <div class="govuk-grid-row">
@@ -16,7 +20,7 @@
             </strong>
         </div>
 
-        @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+        @if (!string.IsNullOrEmpty(Model.ErrorMessage) || hasEmailError || hasPasswordError)
         {
             <div class="govuk-error-summary" aria-labelledby="error-summary-title" role="alert" data-module="govuk-error-summary">
                 <h2 class="govuk-error-summary__title" id="error-summary-title">
@@ -24,42 +28,109 @@
                 </h2>
                 <div class="govuk-error-summary__body">
                     <ul class="govuk-list govuk-error-summary__list">
-                        <li>
-                            @Model.ErrorMessage
-                        </li>
+                        @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+                        {
+                            <li>@Model.ErrorMessage</li>
+                        }
+                        @if (hasEmailError)
+                        {
+                            <li><a href="#Input.Email">@emailError</a></li>
+                        }
+                        @if (hasPasswordError)
+                        {
+                            <li><a href="#Input.Password">@passwordError</a></li>
+                        }
                     </ul>
                 </div>
             </div>
         }
 
-        <form method="post">
-            <div class="govuk-form-group @(Html.ValidationMessageFor(m => m.Input.Email) == null ? "" : "govuk-form-group--error")">
-                <label class="govuk-label govuk-label--m" for="Input.Email">
-                    Enter your email address
-                </label>
-                <div class="govuk-hint" id="email-hint">
-                    This will be used to simulate authentication for testing purposes.
+        @if (!Model.PasswordSent)
+        {
+            <form method="post" asp-page="/TestLogin" asp-route-returnUrl="@Model.ReturnUrl">
+                <div class="govuk-form-group @(hasEmailError ? "govuk-form-group--error" : "")">
+                    <label class="govuk-label govuk-label--m" for="Input.Email">
+                        Enter your email address
+                    </label>
+                    <div class="govuk-hint" id="email-hint">
+                        We will email you a one-time password to sign in.
+                    </div>
+                    @if (hasEmailError)
+                    {
+                        <p id="email-error" class="govuk-error-message">
+                            <span class="govuk-visually-hidden">Error:</span>
+                            @emailError
+                        </p>
+                    }
+                    <input class="govuk-input @(hasEmailError ? "govuk-input--error" : "")"
+                           id="Input.Email"
+                           name="Input.Email"
+                           type="email"
+                           value="@Model.Input.Email"
+                           autocomplete="email"
+                           spellcheck="false"
+                           aria-describedby="@(hasEmailError ? "email-hint email-error" : "email-hint")">
                 </div>
-                @if (Html.ValidationMessageFor(m => m.Input.Email) != null)
-                {
-                    <p id="email-error" class="govuk-error-message">
-                        <span class="govuk-visually-hidden">Error:</span>
-                        @Html.ValidationMessageFor(m => m.Input.Email)
-                    </p>
-                }
-                <input class="govuk-input @(Html.ValidationMessageFor(m => m.Input.Email) == null ? "" : "govuk-input--error")" 
-                       id="Input.Email" 
-                       name="Input.Email" 
-                       type="email" 
-                       value="@Model.Input.Email"
-                       autocomplete="email"
-                       aria-describedby="@(Html.ValidationMessageFor(m => m.Input.Email) == null ? "email-hint" : "email-hint email-error")">
+
+                <button type="submit" class="govuk-button" data-module="govuk-button" id="test-login-button">
+                    Continue
+                </button>
+            </form>
+        }
+        else
+        {
+            <div class="govuk-inset-text" id="password-sent-message">
+                We have sent a one-time password to <strong>@Model.Input.Email</strong>. It expires in 1 hour.
             </div>
 
-            <button type="submit" class="govuk-button" data-module="govuk-button" id="test-login-button">
-                Continue
-            </button>
-        </form>
+            <form method="post" asp-page="/TestLogin" asp-page-handler="Verify" asp-route-returnUrl="@Model.ReturnUrl">
+                <input type="hidden" name="Input.Email" value="@Model.Input.Email" />
+
+                <div class="govuk-form-group @(hasPasswordError ? "govuk-form-group--error" : "")">
+                    <label class="govuk-label govuk-label--m" for="Input.Password">
+                        Enter your one-time password
+                    </label>
+                    <div class="govuk-hint" id="password-hint">
+                        This is the 6 digit password that has been emailed to you.
+                    </div>
+                    @if (hasPasswordError)
+                    {
+                        <p id="password-error" class="govuk-error-message">
+                            <span class="govuk-visually-hidden">Error:</span>
+                            @passwordError
+                        </p>
+                    }
+                    <input class="govuk-input govuk-input--width-5 @(hasPasswordError ? "govuk-input--error" : "")"
+                           id="Input.Password"
+                           name="Input.Password"
+                           type="text"
+                           inputmode="numeric"
+                           pattern="[0-9]*"
+                           maxlength="6"
+                           autocomplete="one-time-code"
+                           spellcheck="false"
+                           aria-describedby="@(hasPasswordError ? "password-hint password-error" : "password-hint")">
+                </div>
+
+                <button type="submit" class="govuk-button" data-module="govuk-button" id="test-login-verify-button">
+                    Sign in
+                </button>
+            </form>
+
+            <form method="post" asp-page="/TestLogin" asp-route-returnUrl="@Model.ReturnUrl">
+                <input type="hidden" name="Input.Email" value="@Model.Input.Email" />
+                <p class="govuk-body">
+                    Not received it?
+                    <button type="submit" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="test-login-resend-button">
+                        Send a new password
+                    </button>
+                </p>
+            </form>
+
+            <p class="govuk-body">
+                <a class="govuk-link" href="@Url.Page("/TestLogin", new { returnUrl = Model.ReturnUrl })" id="test-login-change-email">Use a different email address</a>
+            </p>
+        }
 
         <details class="govuk-details" data-module="govuk-details">
             <summary class="govuk-details__summary">
@@ -73,10 +144,10 @@
                     for development and testing purposes.
                 </p>
                 <p class="govuk-body">
-                    Simply enter any valid email address to authenticate as that user. This feature is only available
-                    when test authentication is enabled in the application configuration.
+                    Enter your email address and we will email you a one-time password. Enter that password to sign in
+                    as that user. This feature is only available when test authentication is enabled in the application configuration.
                 </p>
             </div>
         </details>
     </div>
-</div> 
+</div>
