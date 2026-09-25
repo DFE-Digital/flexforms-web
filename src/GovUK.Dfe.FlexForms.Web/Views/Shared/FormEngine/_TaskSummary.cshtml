@@ -97,79 +97,63 @@
 
                 var itemLabelHyphenated = itemLabel.Replace(" ", "-").ToLower();
 
-@*                 @if (!allowMultiple) 
-                { *@
-                    // Show main field header with change link for single-select only
-                    <div class="govuk-summary-list__row" id="field-@fieldIdHyphenated" data-testid="field-@fieldIdHyphenated">
-                        <dt class="govuk-summary-list__key">
-                            @field.Label.Value
-                        </dt>
-                        <dd class="govuk-summary-list__value">
-                            @if (formattedValues.Count == 0)
+                // Show main field header with change link for single-select only
+                <div class="govuk-summary-list__row" id="field-@fieldIdHyphenated" data-testid="field-@fieldIdHyphenated">
+                    <dt class="govuk-summary-list__key">
+                        @field.Label.Value
+                    </dt>
+                    <dd class="govuk-summary-list__value">
+                        @if (formattedValues.Count == 0)
+                        {
+                            <span class="govuk-hint">Not answered</span>
+                        }
+                        else
+                        {
+                            @if (isUploadField)
                             {
-                                <span class="govuk-hint">Not answered</span>
-                            }
-                            else
-                            {
-                                @if (isUploadField)
+                                // For upload fields, render as download link
+                                var uploadData = Model.GetFieldValue(field.FieldId);
+                                if (!string.IsNullOrEmpty(uploadData) && uploadData.StartsWith("[") && uploadData.Contains("\"id\""))
                                 {
-                                    // For upload fields, render as download link
-                                    var uploadData = Model.GetFieldValue(field.FieldId);
-                                    if (!string.IsNullOrEmpty(uploadData) && uploadData.StartsWith("[") && uploadData.Contains("\"id\""))
+                                    try
                                     {
-                                        try
-                                        {
-                                            var uploadFiles = System.Text.Json.JsonSerializer.Deserialize<List<GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response.UploadDto>>(uploadData);
-                                        @*  if (uploadFiles != null && uploadFiles.Any())
-                                            {
-                                                var file = uploadFiles.First();
-                                                <form method="post" asp-page="/FormEngine/RenderForm" asp-route-referenceNumber="@Model.ReferenceNumber" asp-route-taskId="@Model.TaskId" asp-route-pageId="@(page.PageId)" asp-page-handler="DownloadFile" style="display:inline">
-                                                    <input type="hidden" name="FileId" value="@file.Id" />
-                                                    <input type="hidden" name="ApplicationId" value="@Model.ApplicationId" />
-                                                    <button type="submit" class="govuk-link" style="border: none; background: none; padding: 0; color: #1d70b8; text-decoration: underline; cursor: pointer;">
-                                                        @file.OriginalFileName
-                                                    </button>
-                                                </form>
-                                            }
-                                            else
-                                            { *@
+                                        var uploadFiles = System.Text.Json.JsonSerializer.Deserialize<List<GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response.UploadDto>>(uploadData);
+                                    
                                         if (uploadFiles == null || !uploadFiles.Any())
                                         {
                                             @Html.Raw(formattedValues.FirstOrDefault())
                                         }
-                                        @* } *@
-                                        }
-                                        catch
-                                        {
-                                            @Html.Raw(formattedValues.FirstOrDefault())
-                                        }
                                     }
-                                    else
+                                    catch
                                     {
                                         @Html.Raw(formattedValues.FirstOrDefault())
                                     }
-                                }
-                                else if (isAutocompleteField)
-                                {
-                                    var html = RenderAutocompleteSummary(DisplayHelpers.UnsanitiseHtmlInput(fieldValue));
-                                    @Html.Raw(html)
                                 }
                                 else
                                 {
                                     @Html.Raw(formattedValues.FirstOrDefault())
                                 }
                             }
-                        </dd>
-                        <dd class="govuk-summary-list__actions">
-                            @if (Model.IsApplicationEditable())
+                            else if (isAutocompleteField)
                             {
-                                <a class="govuk-link" href="@changeUrl" id="field-@fieldIdHyphenated-change-link" data-testid="field-@fieldIdHyphenated-change-link">
-                                    Change<span class="govuk-visually-hidden"> @field.Label.Value</span>
-                                </a>
+                                var html = RenderAutocompleteSummary(DisplayHelpers.UnsanitiseHtmlInput(fieldValue));
+                                @Html.Raw(html)
                             }
-                        </dd>
-                    </div>
-                @* } *@
+                            else
+                            {
+                                @Html.Raw(formattedValues.FirstOrDefault())
+                            }
+                        }
+                    </dd>
+                    <dd class="govuk-summary-list__actions">
+                        @if (Model.IsApplicationEditable())
+                        {
+                            <a class="govuk-link" href="@changeUrl" id="field-@fieldIdHyphenated-change-link" data-testid="field-@fieldIdHyphenated-change-link">
+                                Change<span class="govuk-visually-hidden"> @field.Label.Value</span>
+                            </a>
+                        }
+                    </dd>
+                </div>
 
                 @* Show individual items if multiple selection is enabled *@
                 @if (allowMultiple && formattedValues.Count > 0)
@@ -254,7 +238,7 @@
                     }
                     else
                     {
-                        @* For non-upload fields, render each value and provide a confirmation-backed remove post *@
+                        // For non-upload fields, render each value and provide a confirmation-backed remove post 
                         // Build display fields dynamically based on likely autocomplete keys
                         var displayFieldsForRemove = "itemTitle";
                         try
@@ -376,7 +360,7 @@
                     }
                 }
 
-                @* Add another button for multi-select autocomplete, routes back to the page *@
+                // Add another button for multi-select autocomplete, routes back to the page 
                 @if (allowMultiple && isAutocompleteField && Model.IsApplicationEditable())
                 {
                     <div class="govuk-!-margin-top-2 govuk-!-margin-bottom-4">
