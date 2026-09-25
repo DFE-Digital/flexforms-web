@@ -2,11 +2,11 @@
 .env
 !.env.example
 
-# Playwright
-node_modules/
-/test-results/
-/playwright-report/
-/reports/
-/blob-report/
-/playwright/.cache/
-/playwright/.auth/
+# .NET build output
+bin/
+obj/
+
+# Test artefacts
+test-results/
+reports/
+playwright-report/
