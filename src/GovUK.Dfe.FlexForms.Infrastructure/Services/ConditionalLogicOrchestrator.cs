@@ -242,33 +242,26 @@ public class ConditionalLogicOrchestrator(
     {
         try
         {
-            
-
             var state = await ApplyConditionalLogicAsync(template, formData, context);
 
+            // Stay within the current task so navigation never jumps into another task.
+            var pages = GetPagesForNextNavigation(template, currentPageId, context?.CurrentTaskId);
+            var currentPageIndex = pages.FindIndex(p => p.PageId == currentPageId);
 
-            // Find the current page and get the next one in sequence
-            var allPages = GetAllPages(template);
-            var currentPageIndex = allPages.FindIndex(p => p.PageId == currentPageId);
-
-
-            if (currentPageIndex == -1 || currentPageIndex >= allPages.Count - 1)
+            if (currentPageIndex == -1 || currentPageIndex >= pages.Count - 1)
             {
-                return null; // Last page or page not found
+                return null; // Last page in scope, or page not found
             }
 
-            // Look for the next visible page
-            for (int i = currentPageIndex + 1; i < allPages.Count; i++)
+            for (int i = currentPageIndex + 1; i < pages.Count; i++)
             {
-                var nextPage = allPages[i];
-                
-                // Check if this page should be skipped
+                var nextPage = pages[i];
+
                 if (state.SkippedPages.Contains(nextPage.PageId))
                 {
                     continue;
                 }
 
-                // Check if this page is visible
                 if (state.PageVisibility.TryGetValue(nextPage.PageId, out var isVisible) && !isVisible)
                 {
                     continue;
@@ -283,13 +276,76 @@ public class ConditionalLogicOrchestrator(
                 return nextPage.PageId;
             }
 
-            return null; // No more visible pages
+            return null; // No more visible pages in this task
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error getting next page for '{CurrentPageId}'", currentPageId);
             return null;
         }
+    }
+
+    /// <summary>
+    /// Pages to consider when choosing the next step: the current task's pages when known,
+    /// otherwise the task that owns <paramref name="currentPageId"/>, otherwise all template pages.
+    /// </summary>
+    private List<Page> GetPagesForNextNavigation(
+        FormTemplate template,
+        string currentPageId,
+        string? currentTaskId)
+    {
+        if (!string.IsNullOrEmpty(currentTaskId))
+        {
+            var taskPages = GetTaskPages(template, currentTaskId);
+            if (taskPages.Count > 0)
+                return taskPages;
+        }
+
+        var owningTaskPages = FindTaskPagesContainingPage(template, currentPageId);
+        if (owningTaskPages is { Count: > 0 })
+            return owningTaskPages;
+
+        return GetAllPages(template);
+    }
+
+    private static List<Page> GetTaskPages(FormTemplate template, string taskId)
+    {
+        if (template.TaskGroups == null)
+            return [];
+
+        foreach (var group in template.TaskGroups)
+        {
+            if (group.Tasks == null)
+                continue;
+
+            foreach (var task in group.Tasks)
+            {
+                if (string.Equals(task.TaskId, taskId, StringComparison.OrdinalIgnoreCase))
+                    return task.Pages?.ToList() ?? [];
+            }
+        }
+
+        return [];
+    }
+
+    private static List<Page>? FindTaskPagesContainingPage(FormTemplate template, string pageId)
+    {
+        if (template.TaskGroups == null)
+            return null;
+
+        foreach (var group in template.TaskGroups)
+        {
+            if (group.Tasks == null)
+                continue;
+
+            foreach (var task in group.Tasks)
+            {
+                if (task.Pages?.Any(p => p.PageId == pageId) == true)
+                    return task.Pages.ToList();
+            }
+        }
+
+        return null;
     }
 
     public async Task<bool> ShouldSkipPageAsync(FormTemplate template,

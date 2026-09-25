@@ -28,6 +28,13 @@ public class Page
     [JsonPropertyName("returnToSummaryPage")]
     public bool ReturnToSummaryPage { get; set; } = true; // Default to true for backward compatibility
 
+    /// <summary>
+    /// Optional. When set, overrides <see cref="ReturnToSummaryPage"/> for post-save navigation.
+    /// Omitted in existing templates so they keep using <see cref="ReturnToSummaryPage"/>.
+    /// </summary>
+    [JsonPropertyName("navigationAfterSave")]
+    public NavigationAfterSave? NavigationAfterSave { get; set; }
+
     [JsonPropertyName("saveButtonLabel")]
     public string? SaveButtonLabel { get; set; }
 }

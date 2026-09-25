@@ -330,10 +330,10 @@ public sealed class FormEnginePresentationComposer(
         Field field,
         string fieldValue)
     {
-        var confirmationDisplay = ResolveConfirmationDisplay(field);
-        var formattedValues = confirmationDisplay == null
+        var summaryDisplay = ResolveSummaryDisplay(field);
+        var formattedValues = summaryDisplay == null
             ? fieldFormattingService.GetFormattedFieldValues(field.FieldId, context.FormData)
-            : fieldFormattingService.GetFormattedFieldValues(field.FieldId, context.FormData, confirmationDisplay);
+            : fieldFormattingService.GetFormattedFieldValues(field.FieldId, context.FormData, summaryDisplay);
         var itemLabel = fieldFormattingService.GetFieldItemLabel(field.FieldId, context.Template);
         var allowMultiple = fieldFormattingService.IsFieldAllowMultiple(field.FieldId, context.Template);
         var isUploadField = LooksLikeUploadJson(fieldValue);
@@ -360,7 +360,7 @@ public sealed class FormEnginePresentationComposer(
             }
             else
             {
-                var html = AutocompleteSummaryFormatter.Render(DisplayHelpers.UnsanitiseHtmlInput(fieldValue), confirmationDisplay);
+                var html = AutocompleteSummaryFormatter.Render(DisplayHelpers.UnsanitiseHtmlInput(fieldValue), summaryDisplay);
                 headerValue = SummaryValueViewModel.FromAutocompleteHtml(html);
             }
         }
@@ -389,6 +389,22 @@ public sealed class FormEnginePresentationComposer(
                     Value = SummaryValueViewModel.FromFiles(
                         [ToFileLink(file, context, task.TaskId, pageId: null)],
                         wrapFilesInDivs: false)
+                });
+            }
+
+            return rows;
+        }
+
+        var rawFieldValue = DisplayHelpers.UnsanitiseHtmlInput(fieldValue);
+        if (TryRenderAutocompleteItems(rawFieldValue, summaryDisplay, out var autocompleteHtmlItems)
+            && autocompleteHtmlItems.Count > 0)
+        {
+            for (var i = 0; i < autocompleteHtmlItems.Count; i++)
+            {
+                rows.Add(new SummaryRowViewModel
+                {
+                    Key = $"{itemLabel} {i + 1}",
+                    Value = SummaryValueViewModel.FromAutocompleteHtml(autocompleteHtmlItems[i])
                 });
             }
 
@@ -480,8 +496,8 @@ public sealed class FormEnginePresentationComposer(
                 ItemId = itemId,
                 ItemTitle = memberTitle,
                 TaskName = task.TaskName,
-                ConfirmationTitle = $"Are you sure you want to remove this {itemLabel.ToLower()}?",
-                RequiredMessage = $"Select yes if you are sure you want to remove this {itemLabel.ToLower()}",
+                ConfirmationTitle = $"Are you sure you want to remove this {itemLabel}?",
+                RequiredMessage = $"Select yes if you are sure you want to remove this {itemLabel}",
                 ButtonId = "remove-flow-item-@memberNumber"
             };
 
@@ -597,8 +613,8 @@ public sealed class FormEnginePresentationComposer(
         string pageId,
         bool unsanitiseAutocomplete)
     {
-        var confirmationDisplay = ResolveConfirmationDisplay(fieldConfig);
-        var formattedValues = FormatWithItemValue(context.FormData, fieldId, value, confirmationDisplay);
+        var summaryDisplay = ResolveSummaryDisplay(fieldConfig);
+        var formattedValues = FormatWithItemValue(context.FormData, fieldId, value, summaryDisplay);
 
         if (isAutocompleteField && string.IsNullOrEmpty(value))
         {
@@ -630,7 +646,14 @@ public sealed class FormEnginePresentationComposer(
             if (isAutocompleteField)
             {
                 var raw = unsanitiseAutocomplete ? DisplayHelpers.UnsanitiseHtmlInput(value) : value;
-                return SummaryValueViewModel.FromAutocompleteHtml(AutocompleteSummaryFormatter.Render(raw, ResolveConfirmationDisplay(fieldConfig)));
+                if (TryRenderAutocompleteItems(raw, summaryDisplay, out var items) && items.Count > 0)
+                {
+                    return items.Count == 1
+                        ? SummaryValueViewModel.FromAutocompleteHtml(items[0])
+                        : SummaryValueViewModel.FromHtmlList(items);
+                }
+
+                return SummaryValueViewModel.FromAutocompleteHtml(AutocompleteSummaryFormatter.Render(raw, summaryDisplay));
             }
 
             return SummaryValueViewModel.FromHtml(formattedValues[0]);
@@ -649,7 +672,56 @@ public sealed class FormEnginePresentationComposer(
                 fallbackWhenEmpty: SummaryValueViewModel.FromHtmlList(formattedValues));
         }
 
+        if (isAutocompleteField)
+        {
+            var raw = unsanitiseAutocomplete ? DisplayHelpers.UnsanitiseHtmlInput(value) : value;
+            if (TryRenderAutocompleteItems(raw, summaryDisplay, out var items) && items.Count > 0)
+                return SummaryValueViewModel.FromHtmlList(items);
+        }
+
         return SummaryValueViewModel.FromHtmlList(formattedValues);
+    }
+
+    private static bool TryRenderAutocompleteItems(
+        string? rawValue,
+        string? summaryDisplay,
+        out List<string> htmlItems)
+    {
+        htmlItems = [];
+        if (string.IsNullOrWhiteSpace(rawValue))
+            return false;
+
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(rawValue);
+            if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array)
+            {
+                foreach (var element in doc.RootElement.EnumerateArray())
+                {
+                    if (element.ValueKind != System.Text.Json.JsonValueKind.Object)
+                        continue;
+                    var html = AutocompleteSummaryFormatter.Render(element.GetRawText(), summaryDisplay);
+                    if (!string.IsNullOrWhiteSpace(html))
+                        htmlItems.Add(html);
+                }
+
+                return htmlItems.Count > 0;
+            }
+
+            if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                var html = AutocompleteSummaryFormatter.Render(rawValue, summaryDisplay);
+                if (!string.IsNullOrWhiteSpace(html))
+                    htmlItems.Add(html);
+                return htmlItems.Count > 0;
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            // Not autocomplete JSON.
+        }
+
+        return false;
     }
 
     private (bool IsAutocomplete, bool IsUpload) DetectComplexFieldTypes(Field? fieldConfig)
@@ -663,9 +735,12 @@ public sealed class FormEnginePresentationComposer(
             string.Equals(cfg.FieldType, "upload", StringComparison.OrdinalIgnoreCase));
     }
 
-    private string? ResolveConfirmationDisplay(Field? field)
+    /// <summary>
+    /// Summary pages use <c>summaryDisplay</c> only (not <c>confirmationDisplay</c>).
+    /// </summary>
+    private string? ResolveSummaryDisplay(Field? field)
     {
-        var fromTemplate = field?.ComplexField?.ConfirmationDisplay;
+        var fromTemplate = field?.ComplexField?.SummaryDisplay;
         if (AutocompleteDisplayExpression.IsSpecified(fromTemplate))
             return fromTemplate;
 
@@ -673,19 +748,19 @@ public sealed class FormEnginePresentationComposer(
             return null;
 
         var cfg = complexFieldConfigurationService.GetConfiguration(field.ComplexField.Id);
-        return AutocompleteDisplayExpression.IsSpecified(cfg.ConfirmationDisplay) ? cfg.ConfirmationDisplay : null;
+        return AutocompleteDisplayExpression.IsSpecified(cfg.SummaryDisplay) ? cfg.SummaryDisplay : null;
     }
 
     private List<string> FormatWithItemValue(
         Dictionary<string, object> formData,
         string fieldId,
         string value,
-        string? confirmationDisplay = null)
+        string? displayExpression = null)
     {
         var snapshot = new Dictionary<string, object>(formData) { [fieldId] = value };
-        return confirmationDisplay == null
+        return displayExpression == null
             ? fieldFormattingService.GetFormattedFieldValues(fieldId, snapshot)
-            : fieldFormattingService.GetFormattedFieldValues(fieldId, snapshot, confirmationDisplay);
+            : fieldFormattingService.GetFormattedFieldValues(fieldId, snapshot, displayExpression);
     }
 
     private SummaryValueViewModel TryBuildUploadValue(

@@ -107,6 +107,7 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
                 OriginalHandler = confirmationInfo.Handler,
                 OriginalFormData = ExtractFormData(form),
                 DisplayFields = confirmationInfo.DisplayFields,
+                DisplayExpression = confirmationInfo.DisplayExpression,
                 ReturnUrl = returnUrl,
                 Title = title,
                 RequiredMessage = requiredMessage,
@@ -229,6 +230,7 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
                 OriginalHandler = confirmationInfo.Handler,
                 OriginalFormData = ExtractFormData(form),
                 DisplayFields = confirmationInfo.DisplayFields,
+                DisplayExpression = confirmationInfo.DisplayExpression,
                 ReturnUrl = returnUrl2,
                 Title = title2,
                 RequiredMessage = requiredMessage2,
@@ -269,6 +271,7 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
             // Check if this handler requires confirmation
             var confirmationCheckKey = $"confirmation-check-{clickedHandler}";
             var displayFieldsKey = $"confirmation-display-fields-{clickedHandler}";
+            var displayExpressionKey = $"confirmation-display-expression-{clickedHandler}";
 
             if (form.ContainsKey(confirmationCheckKey) && form[confirmationCheckKey] == "true")
             {
@@ -282,10 +285,15 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
                         .Select(f => f.Trim())
                         .ToArray();
 
+                var displayExpression = form.ContainsKey(displayExpressionKey)
+                    ? form[displayExpressionKey].ToString()
+                    : null;
+
                 return new ConfirmationButtonInfo
                 {
                     Handler = clickedHandler,
-                    DisplayFields = displayFields
+                    DisplayFields = displayFields,
+                    DisplayExpression = string.IsNullOrWhiteSpace(displayExpression) ? null : displayExpression
                 };
             }
 
@@ -362,5 +370,10 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
         /// The fields to display on the confirmation page
         /// </summary>
         public string[] DisplayFields { get; set; } = Array.Empty<string>();
+
+        /// <summary>
+        /// When set, fully replaces the confirmation inset with the evaluated expression.
+        /// </summary>
+        public string? DisplayExpression { get; set; }
     }
 }

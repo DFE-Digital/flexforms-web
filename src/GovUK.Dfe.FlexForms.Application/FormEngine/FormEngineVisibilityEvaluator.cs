@@ -79,6 +79,95 @@ public sealed class FormEngineVisibilityEvaluator(
         return false;
     }
 
+    /// <summary>
+    /// Finds the next page in <paramref name="orderedPages"/> that is shown by a conditional
+    /// show-page rule whose trigger fields are answered on <paramref name="currentPage"/>.
+    /// Used by <see cref="NavigationAfterSave.Branch"/> navigation.
+    /// </summary>
+    public string? GetNextPageRevealedByCurrentPageFields(
+        Page currentPage,
+        Dictionary<string, object> data,
+        IReadOnlyList<Page> orderedPages)
+    {
+        var revealed = GetPageIdsRevealedByCurrentPageFields(currentPage, data);
+        if (revealed.Count == 0)
+            return null;
+
+        var index = FormStepPolicy.IndexOfPage(orderedPages, currentPage.PageId);
+        if (index == -1)
+            return null;
+
+        for (var i = index + 1; i < orderedPages.Count; i++)
+        {
+            if (revealed.Contains(orderedPages[i].PageId))
+                return orderedPages[i].PageId;
+        }
+
+        return null;
+    }
+
+    public HashSet<string> GetPageIdsRevealedByCurrentPageFields(
+        Page currentPage,
+        Dictionary<string, object> data)
+    {
+        var revealed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (template?.ConditionalLogic == null || currentPage.Fields == null || currentPage.Fields.Count == 0)
+            return revealed;
+
+        var currentFieldIds = new HashSet<string>(
+            currentPage.Fields.Select(f => f.FieldId),
+            StringComparer.OrdinalIgnoreCase);
+
+        foreach (var rule in template.ConditionalLogic.Where(r => r.Enabled))
+        {
+            var showPageIds = rule.AffectedElements
+                .Where(e => e.ElementType == "page"
+                    && string.Equals(e.Action, "show", StringComparison.OrdinalIgnoreCase)
+                    && !string.IsNullOrEmpty(e.ElementId))
+                .Select(e => e.ElementId)
+                .ToList();
+            if (showPageIds.Count == 0)
+                continue;
+
+            var triggerFields = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            CollectTriggerFields(rule.ConditionGroup, triggerFields);
+            if (!triggerFields.Any(t => currentFieldIds.Contains(t)))
+                continue;
+
+            if (!EvaluateRuleConditions(rule, data))
+                continue;
+
+            foreach (var pageIdToShow in showPageIds)
+                revealed.Add(pageIdToShow);
+        }
+
+        return revealed;
+    }
+
+    private static void CollectTriggerFields(ConditionGroup? group, HashSet<string> targets)
+    {
+        if (group?.Conditions == null)
+            return;
+
+        foreach (var condition in group.Conditions)
+            CollectTriggerFields(condition, targets);
+    }
+
+    private static void CollectTriggerFields(Condition? condition, HashSet<string> targets)
+    {
+        if (condition == null)
+            return;
+
+        if (!string.IsNullOrEmpty(condition.TriggerField))
+            targets.Add(condition.TriggerField);
+
+        if (condition.Conditions == null)
+            return;
+
+        foreach (var nested in condition.Conditions)
+            CollectTriggerFields(nested, targets);
+    }
+
     public void EnsureItemFieldVisibility(Dictionary<string, object> itemData, IEnumerable<string> fieldIds)
     {
         if (template?.ConditionalLogic == null || !template.ConditionalLogic.Any())

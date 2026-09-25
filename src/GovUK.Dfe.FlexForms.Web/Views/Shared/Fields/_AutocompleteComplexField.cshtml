@@ -160,12 +160,11 @@
         configuration.DropdownDisplay);
 
     // For establishment/academy fields, show postcode on confirmation; for LA/diocese show name and code
+    // Only used when confirmationDisplay is not set (built-in property list).
     var isNameAndCodeField = string.Equals(complexFieldId, "LocalAuthorityComplexField", StringComparison.OrdinalIgnoreCase)
         || string.Equals(complexFieldId, "DioceseComplexField", StringComparison.OrdinalIgnoreCase);
-    var confirmationDisplayFields = AutocompleteDisplayExpression.IsSpecified(confirmationDisplay)
-        ? string.Join(",", AutocompleteDisplayExpression.GetPropertyNames(confirmationDisplay))
-        : string.Empty;
-    if (string.IsNullOrWhiteSpace(confirmationDisplayFields))
+    var confirmationDisplayFields = string.Empty;
+    if (!AutocompleteDisplayExpression.IsSpecified(confirmationDisplay))
     {
         confirmationDisplayFields = string.Equals(complexFieldId, "EstablishmentComplexField", StringComparison.OrdinalIgnoreCase)
             ? "trustname,postcode,ukprn,companiesHousenumber"
@@ -264,9 +263,10 @@ else
                 buttonText: "Search",
                 handler: "Page",
                 displayFields: confirmationDisplayFields,
+                displayExpression: AutocompleteDisplayExpression.IsSpecified(confirmationDisplay) ? confirmationDisplay : null,
                 buttonId: "autocomplete-confirm-button",
-                title: $"Is this the right {@configuration.Label.ToLower()}?",
-                requiredMessage: $"Select yes if this is the right { @configuration.Label.ToLower()}")
+                title: $"Is this the right {@configuration.Label}?",
+                requiredMessage: $"Select yes if this is the right { @configuration.Label}")
     </div>
 }
 
@@ -660,7 +660,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         suggestion: function(result) {
                             if (typeof result === 'object' && result !== null) {
                                 if (dropdownDisplay) {
-                                    return '<div class="complex-field-suggestion">' + escapeHtml(evaluateDisplayExpression(dropdownDisplay, result)) + '</div>';
+                                    return '<div class="complex-field-suggestion">' + markdownToSafeHtml(evaluateDisplayExpression(dropdownDisplay, result)) + '</div>';
                                 }
                                 var name = result.name ? escapeHtml(result.name) : '';
                                 var ukprn = (result.ukprn !== undefined && result.ukprn !== null) ? escapeHtml(result.ukprn.toString()) : '';
@@ -1432,6 +1432,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 return lookup[name.toLowerCase()] || '';
             }
 
+            function unescapeLiteral(value) {
+                return String(value).replace(/\\([nrt\\'"])/g, function(_, ch) {
+                    if (ch === 'n') return '\n';
+                    if (ch === 'r') return '\r';
+                    if (ch === 't') return '\t';
+                    return ch;
+                });
+            }
+
             if (expression.indexOf('{') !== -1 && expression.indexOf('+') === -1) {
                 return expression.replace(/\{([A-Za-z_][A-Za-z0-9_]*)\}/g, function(_, name) {
                     return readProperty(name);
@@ -1449,17 +1458,39 @@ document.addEventListener('DOMContentLoaded', function() {
                     i++;
                     var literal = '';
                     while (i < expression.length && expression[i] !== quote) {
+                        if (expression[i] === '\\' && i + 1 < expression.length) {
+                            literal += expression[i] + expression[i + 1];
+                            i += 2;
+                            continue;
+                        }
                         literal += expression[i];
                         i++;
                     }
                     if (i < expression.length) i++;
-                    parts.push({ literal: true, value: literal });
+                    parts.push({ literal: true, value: unescapeLiteral(literal) });
                 } else if (ch === '+') {
                     i++;
                 } else {
                     var start = i;
                     while (i < expression.length && /[A-Za-z0-9_]/.test(expression[i])) i++;
-                    if (i === start) { i++; continue; }
+                    if (i === start) {
+                        // Keep markdown markers (e.g. **) as literals around property names
+                        var litStart = i;
+                        while (i < expression.length
+                            && !/\s/.test(expression[i])
+                            && expression[i] !== '+'
+                            && expression[i] !== '"'
+                            && expression[i] !== "'"
+                            && !/[A-Za-z0-9_]/.test(expression[i])) {
+                            i++;
+                        }
+                        if (i > litStart) {
+                            parts.push({ literal: true, value: expression.substring(litStart, i) });
+                        } else {
+                            i++;
+                        }
+                        continue;
+                    }
                     parts.push({ literal: false, value: expression.substring(start, i) });
                 }
             }
@@ -1476,6 +1507,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 output += resolved[p];
             }
             return output.trim();
+        }
+
+        function markdownToSafeHtml(text) {
+            if (!text) return '';
+            var html = escapeHtml(String(text));
+            html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" rel="noopener noreferrer" target="_blank">$1</a>');
+            html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, '$1<em>$2</em>');
+            html = html.replace(/\r\n|\r|\n/g, '<br>');
+            return html;
         }
 
         function isSeparatorLiteral(value) {

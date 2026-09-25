@@ -90,7 +90,7 @@ public class ComplexFieldConfigurationServiceTests
     }
 
     [Fact]
-    public void GetConfiguration_ShouldBindDropdownAndConfirmationDisplay()
+    public void GetConfiguration_ShouldBindDropdownConfirmationAndSummaryDisplay()
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
@@ -98,7 +98,8 @@ public class ComplexFieldConfigurationServiceTests
             ["FormEngine:ComplexFields:0:FieldType"] = "autocomplete",
             ["FormEngine:ComplexFields:0:ApiEndpoint"] = "https://example.test/members",
             ["FormEngine:ComplexFields:0:DropdownDisplay"] = "displayName + \" - \" + constituencyName",
-            ["FormEngine:ComplexFields:0:ConfirmationDisplay"] = "firstName + \" \" + lastName"
+            ["FormEngine:ComplexFields:0:ConfirmationDisplay"] = "firstName + \" \" + lastName",
+            ["FormEngine:ComplexFields:0:SummaryDisplay"] = "displayName + \"\\n\" + constituencyName"
         }).Build();
         var requestConfig = Substitute.For<IRequestAppConfiguration>();
         requestConfig.Current.Returns(configuration);
@@ -110,5 +111,6 @@ public class ComplexFieldConfigurationServiceTests
 
         Assert.Equal("displayName + \" - \" + constituencyName", found.DropdownDisplay);
         Assert.Equal("firstName + \" \" + lastName", found.ConfirmationDisplay);
+        Assert.Equal("displayName + \"\\n\" + constituencyName", found.SummaryDisplay);
     }
 }

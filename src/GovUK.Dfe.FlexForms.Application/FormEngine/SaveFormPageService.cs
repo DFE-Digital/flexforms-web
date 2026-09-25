@@ -596,65 +596,45 @@ public sealed class SaveFormPageService(
 
     private async Task<FormEngineOutcome> NavigateStandardPageAsync(FormEngineWorkState state)
     {
-        if (state.CurrentPage!.ReturnToSummaryPage)
+        var currentPage = state.CurrentPage!;
+
+        // Last visible page in the task always returns to the task summary,
+        // regardless of returnToSummaryPage / navigationAfterSave.
+        var nextVisibleInTask = await GetNextVisiblePageInCurrentTaskAsync(state);
+        if (string.IsNullOrEmpty(nextVisibleInTask))
         {
-            string? conditionalNextPageId = null;
-            var hasConditionalTrigger = false;
-
-            if (state.ConditionalState != null && state.Template != null)
-            {
-                var visibility = new FormEngineVisibilityEvaluator(
-                    state.Template,
-                    state.ConditionalState,
-                    conditionalLogicOrchestrator,
-                    state.CurrentPageId,
-                    state.TaskId,
-                    logger);
-                var navigationData = BuildNavigationData(state);
-                hasConditionalTrigger = visibility.HasConditionalLogicShowingPages(navigationData);
-
-                logger.LogInformation(
-                    "[FLOW DEBUG] ReturnToSummaryPage=true path - hasConditionalTrigger: {HasTrigger}, currentPageId: {PageId}",
-                    hasConditionalTrigger,
-                    state.CurrentPage.PageId);
-
-                if (hasConditionalTrigger)
-                {
-                    LogDataPreview(navigationData);
-                    var context = new ConditionalLogicContext
-                    {
-                        CurrentPageId = state.CurrentPageId,
-                        CurrentTaskId = state.TaskId,
-                        IsClientSide = false,
-                        Trigger = "change"
-                    };
-                    conditionalNextPageId = await conditionalLogicOrchestrator.GetNextPageAsync(
-                        state.Template,
-                        navigationData,
-                        state.CurrentPage.PageId,
-                        context);
-                    logger.LogInformation("[FLOW DEBUG] GetNextPageAsync returned: {NextPageId}", conditionalNextPageId ?? "null");
-                }
-            }
-
-            if (hasConditionalTrigger && !string.IsNullOrEmpty(conditionalNextPageId))
-            {
-                var nextUrl = $"/applications/{state.ReferenceNumber}/{state.CurrentTask!.TaskId}/{conditionalNextPageId}";
-                return FormEngineOutcome.Redirect(nextUrl);
-            }
-
-            var summaryScope = FormRouteParser.HistoryScope(state.ReferenceNumber, state.TaskId, state.CurrentPageId);
-            navigationHistoryService.Clear(summaryScope);
-            var summaryUrl = formNavigationService.GetTaskSummaryUrl(state.CurrentTask!.TaskId, state.ReferenceNumber);
-            return FormEngineOutcome.Redirect(summaryUrl);
+            logger.LogInformation(
+                "[FLOW DEBUG] Last visible page of task - forcing summary. currentPageId: {PageId}",
+                currentPage.PageId);
+            return RedirectToTaskSummary(state);
         }
 
-        string? nextPageId = null;
-        if (state.ConditionalState != null && state.Template != null)
+        var navigationMode = PageNavigationPolicy.Resolve(currentPage);
+        logger.LogInformation(
+            "[FLOW DEBUG] NavigationAfterSave={Mode} (explicit={HasExplicit}) currentPageId: {PageId}, nextInTask: {NextPageId}",
+            navigationMode,
+            currentPage.NavigationAfterSave.HasValue,
+            currentPage.PageId,
+            nextVisibleInTask);
+
+        if (navigationMode == NavigationAfterSave.Summary)
+            return RedirectToTaskSummary(state);
+
+        if (navigationMode == NavigationAfterSave.Branch)
+            return await NavigateBranchPageAsync(state);
+
+        var nextUrl = $"/applications/{state.ReferenceNumber}/{state.CurrentTask!.TaskId}/{nextVisibleInTask}";
+        return FormEngineOutcome.Redirect(nextUrl);
+    }
+
+    private async Task<string?> GetNextVisiblePageInCurrentTaskAsync(FormEngineWorkState state)
+    {
+        if (state.CurrentTask?.Pages == null || state.CurrentTask.Pages.Count == 0)
+            return null;
+
+        if (state.Template != null)
         {
             var navigationData = BuildNavigationData(state);
-            logger.LogInformation("[FLOW DEBUG] ReturnToSummaryPage=false path - currentPageId: {PageId}", state.CurrentPage.PageId);
-            LogDataPreview(navigationData);
             var context = new ConditionalLogicContext
             {
                 CurrentPageId = state.CurrentPageId,
@@ -662,35 +642,70 @@ public sealed class SaveFormPageService(
                 IsClientSide = false,
                 Trigger = "change"
             };
-            nextPageId = await conditionalLogicOrchestrator.GetNextPageAsync(
+            var nextPageId = await conditionalLogicOrchestrator.GetNextPageAsync(
                 state.Template,
                 navigationData,
-                state.CurrentPage.PageId,
+                state.CurrentPage!.PageId,
                 context);
-            logger.LogInformation("[FLOW DEBUG] GetNextPageAsync returned: {NextPageId}", nextPageId ?? "null");
-        }
 
-        if (!string.IsNullOrEmpty(nextPageId))
-        {
-            var nextUrl = $"/applications/{state.ReferenceNumber}/{state.CurrentTask!.TaskId}/{nextPageId}";
-            return FormEngineOutcome.Redirect(nextUrl);
-        }
-
-        var hasConditionalLogic = state.Template?.ConditionalLogic?.Any() == true;
-        if (!hasConditionalLogic)
-        {
-            var sequentialNextPage = FormStepPolicy.GetNextPage(state.CurrentTask!.Pages, state.CurrentPage.PageId);
-            if (sequentialNextPage != null)
+            if (!string.IsNullOrEmpty(nextPageId)
+                && state.CurrentTask.Pages.Any(p => p.PageId == nextPageId))
             {
-                var nextUrl = $"/applications/{state.ReferenceNumber}/{state.CurrentTask.TaskId}/{sequentialNextPage.PageId}";
+                return nextPageId;
+            }
+
+            // Orchestrator returned nothing (or a page outside this task).
+            // Without conditional logic, fall back to sequential order within the task.
+            if (state.Template.ConditionalLogic?.Any() != true)
+            {
+                return FormStepPolicy.GetNextPage(state.CurrentTask.Pages, state.CurrentPage!.PageId)?.PageId;
+            }
+
+            return null;
+        }
+
+        return FormStepPolicy.GetNextPage(state.CurrentTask.Pages, state.CurrentPage!.PageId)?.PageId;
+    }
+
+    private async Task<FormEngineOutcome> NavigateBranchPageAsync(FormEngineWorkState state)
+    {
+        if (state.Template != null && state.CurrentTask?.Pages != null)
+        {
+            var visibility = new FormEngineVisibilityEvaluator(
+                state.Template,
+                state.ConditionalState,
+                conditionalLogicOrchestrator,
+                state.CurrentPageId,
+                state.TaskId,
+                logger);
+            var navigationData = BuildNavigationData(state);
+            LogDataPreview(navigationData);
+
+            var nextPageId = visibility.GetNextPageRevealedByCurrentPageFields(
+                state.CurrentPage!,
+                navigationData,
+                state.CurrentTask.Pages);
+
+            logger.LogInformation(
+                "[FLOW DEBUG] Branch navigation next revealed page: {NextPageId}",
+                nextPageId ?? "null");
+
+            if (!string.IsNullOrEmpty(nextPageId))
+            {
+                var nextUrl = $"/applications/{state.ReferenceNumber}/{state.CurrentTask.TaskId}/{nextPageId}";
                 return FormEngineOutcome.Redirect(nextUrl);
             }
         }
 
-        var summaryFallbackScope = FormRouteParser.HistoryScope(state.ReferenceNumber, state.TaskId, state.CurrentPageId);
-        navigationHistoryService.Clear(summaryFallbackScope);
-        var fallbackUrl = formNavigationService.GetTaskSummaryUrl(state.CurrentTask!.TaskId, state.ReferenceNumber);
-        return FormEngineOutcome.Redirect(fallbackUrl);
+        return RedirectToTaskSummary(state);
+    }
+
+    private FormEngineOutcome RedirectToTaskSummary(FormEngineWorkState state)
+    {
+        var summaryScope = FormRouteParser.HistoryScope(state.ReferenceNumber, state.TaskId, state.CurrentPageId);
+        navigationHistoryService.Clear(summaryScope);
+        var summaryUrl = formNavigationService.GetTaskSummaryUrl(state.CurrentTask!.TaskId, state.ReferenceNumber);
+        return FormEngineOutcome.Redirect(summaryUrl);
     }
 
     private async Task<FormEngineOutcome> CompleteDerivedSummaryFallbackAsync(

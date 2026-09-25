@@ -391,5 +391,49 @@ public class ButtonConfirmationServiceTests
         Assert.Equal("Choose yes to delete", model.RequiredMessage);
     }
 
+    [Fact]
+    public void PrepareDisplayModel_uses_display_expression_instead_of_field_list()
+    {
+        var session = new InMemorySession();
+        var dataService = Substitute.For<IConfirmationDataService>();
+        var accessor = Substitute.For<IHttpContextAccessor>();
+        accessor.HttpContext.Returns(new DefaultHttpContext { Session = session });
+        var service = new ButtonConfirmationService(
+            accessor,
+            dataService,
+            NullLogger<ButtonConfirmationService>.Instance);
+
+        const string token = "expr-token";
+        var request = new ConfirmationRequest
+        {
+            OriginalPagePath = "/page",
+            OriginalHandler = "Page",
+            DisplayExpression = "name + \"\\n\" + ukprn",
+            DisplayFields = ["trustname", "ukprn"],
+            OriginalFormData = new Dictionary<string, object>
+            {
+                ["Data[MemberComplexField]"] = "{\"name\":\"Contoso\",\"ukprn\":\"12345678\"}"
+            }
+        };
+
+        session.SetString($"Confirmation_{token}", JsonSerializer.Serialize(new ConfirmationContext
+        {
+            Token = token,
+            Request = request,
+            ExpiresAt = DateTime.UtcNow.AddMinutes(5)
+        }));
+
+        dataService
+            .EvaluateDisplayExpression(Arg.Any<Dictionary<string, object>>(), "name + \"\\n\" + ukprn")
+            .Returns("Contoso\n12345678");
+
+        var model = service.PrepareDisplayModel(token);
+
+        Assert.NotNull(model);
+        Assert.Equal("Contoso\n12345678", model!.DisplayHtml);
+        Assert.Empty(model.DisplayData);
+        dataService.DidNotReceive().FormatDisplayData(Arg.Any<Dictionary<string, object>>(), Arg.Any<string[]>());
+    }
+
     #endregion
 }

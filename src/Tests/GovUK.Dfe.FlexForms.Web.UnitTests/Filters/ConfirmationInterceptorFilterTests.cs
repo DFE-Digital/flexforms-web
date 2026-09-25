@@ -74,6 +74,27 @@ public class ConfirmationInterceptorFilterTests
     }
 
     [Fact]
+    public void OnActionExecuting_ShouldPassDisplayExpression_WhenProvided()
+    {
+        var form = new FormCollection(new Dictionary<string, StringValues>
+        {
+            ["handler"] = "Page",
+            ["confirmation-check-Page"] = "true",
+            ["confirmation-display-expression-Page"] = "**displayName**\"\\n**Constituency:** \"constituencyName",
+            ["Data[MpComplexField]"] = "{\"displayName\":\"Alan Gemmell\"}"
+        });
+
+        var context = ExecutingContext(method: "POST", query: "", form: form);
+
+        _filter.OnActionExecuting(context);
+
+        Assert.IsType<RedirectToPageResult>(context.Result);
+        _confirmations.Received().CreateConfirmation(Arg.Is<ConfirmationRequest>(r =>
+            r.DisplayExpression == "**displayName**\"\\n**Constituency:** \"constituencyName"
+            && r.OriginalHandler == "Page"));
+    }
+
+    [Fact]
     public void OnActionExecuting_ShouldUseConfirmationReturnOverride()
     {
         var form = ConfirmationForm();

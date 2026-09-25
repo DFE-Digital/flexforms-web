@@ -330,6 +330,132 @@ public class FormEngineVisibilityEvaluatorTests
         Assert.False(evaluator.IsFieldHiddenForItem("other", new Dictionary<string, object>()));
     }
 
+    [Fact]
+    public void GetNextPageRevealedByCurrentPageFields_ShouldReturnRevealedPage_WhenConditionMet()
+    {
+        var current = new Page
+        {
+            PageId = "p1",
+            Slug = "p1",
+            Title = "p1",
+            Description = "p1",
+            PageOrder = 1,
+            Fields =
+            [
+                new Field
+                {
+                    FieldId = "hasSen",
+                    Type = "radios",
+                    Label = new Label { Value = "SEN?" },
+                    Order = 1
+                }
+            ]
+        };
+        var revealed = new Page
+        {
+            PageId = "p2",
+            Slug = "p2",
+            Title = "p2",
+            Description = "p2",
+            PageOrder = 2,
+            Fields = []
+        };
+        var alwaysVisible = new Page
+        {
+            PageId = "p3",
+            Slug = "p3",
+            Title = "p3",
+            Description = "p3",
+            PageOrder = 3,
+            Fields = []
+        };
+
+        var template = Dummy();
+        template.ConditionalLogic =
+        [
+            new ConditionalLogic
+            {
+                Enabled = true,
+                ConditionGroup = new ConditionGroup
+                {
+                    LogicalOperator = "AND",
+                    Conditions = [new Condition { TriggerField = "hasSen", Operator = "equals", Value = "yes" }]
+                },
+                AffectedElements = [new AffectedElement { ElementId = "p2", ElementType = "page", Action = "show" }]
+            }
+        ];
+
+        var evaluator = Evaluator(template, new FormConditionalState());
+        var pages = new List<Page> { current, revealed, alwaysVisible };
+
+        Assert.Equal(
+            "p2",
+            evaluator.GetNextPageRevealedByCurrentPageFields(
+                current,
+                new Dictionary<string, object> { ["hasSen"] = "yes" },
+                pages));
+
+        Assert.Null(
+            evaluator.GetNextPageRevealedByCurrentPageFields(
+                current,
+                new Dictionary<string, object> { ["hasSen"] = "no" },
+                pages));
+    }
+
+    [Fact]
+    public void GetNextPageRevealedByCurrentPageFields_ShouldIgnoreRulesTriggeredByOtherPages()
+    {
+        var current = new Page
+        {
+            PageId = "p1",
+            Slug = "p1",
+            Title = "p1",
+            Description = "p1",
+            PageOrder = 1,
+            Fields =
+            [
+                new Field
+                {
+                    FieldId = "name",
+                    Type = "text",
+                    Label = new Label { Value = "Name" },
+                    Order = 1
+                }
+            ]
+        };
+        var later = new Page
+        {
+            PageId = "p2",
+            Slug = "p2",
+            Title = "p2",
+            Description = "p2",
+            PageOrder = 2,
+            Fields = []
+        };
+
+        var template = Dummy();
+        template.ConditionalLogic =
+        [
+            new ConditionalLogic
+            {
+                Enabled = true,
+                ConditionGroup = new ConditionGroup
+                {
+                    LogicalOperator = "AND",
+                    Conditions = [new Condition { TriggerField = "otherField", Operator = "equals", Value = "yes" }]
+                },
+                AffectedElements = [new AffectedElement { ElementId = "p2", ElementType = "page", Action = "show" }]
+            }
+        ];
+
+        var evaluator = Evaluator(template, new FormConditionalState());
+        Assert.Null(
+            evaluator.GetNextPageRevealedByCurrentPageFields(
+                current,
+                new Dictionary<string, object> { ["otherField"] = "yes", ["name"] = "Ada" },
+                [current, later]));
+    }
+
     private static FormEngineVisibilityEvaluator Evaluator(FormTemplate template, FormConditionalState? conditionalState) =>
         new(template, conditionalState, Substitute.For<IConditionalLogicOrchestrator>(), "p1", "t1", NullLogger.Instance);
 

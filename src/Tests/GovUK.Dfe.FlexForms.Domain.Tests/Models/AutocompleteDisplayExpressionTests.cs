@@ -129,6 +129,60 @@ public class AutocompleteDisplayExpressionTests
     }
 
     [Fact]
+    public void Evaluate_unescapes_common_sequences_in_quoted_literals()
+    {
+        var values = new Dictionary<string, object>
+        {
+            ["name"] = "Contoso",
+            ["ukprn"] = "12345678"
+        };
+
+        Assert.Equal(
+            "Contoso\n\nUKPRN: 12345678",
+            AutocompleteDisplayExpression.Evaluate("name + \"\\n\\nUKPRN: \" + ukprn", values));
+        Assert.Equal(
+            "Contoso\tTrust",
+            AutocompleteDisplayExpression.Evaluate("\"Contoso\\tTrust\"", values));
+        Assert.Equal(
+            "Say \"hi\"",
+            AutocompleteDisplayExpression.Evaluate("\"Say \\\"hi\\\"\"", values));
+    }
+
+    [Fact]
+    public void Evaluate_preserves_markdown_markers_around_property_names()
+    {
+        var values = new Dictionary<string, object>
+        {
+            ["displayName"] = "Alan Gemmell",
+            ["constituencyName"] = "Central Ayrshire"
+        };
+
+        // Same shape as template confirmationDisplay: **displayName** … **Constituency:** …
+        Assert.Equal(
+            "**Alan Gemmell**\n**Constituency:** Central Ayrshire",
+            AutocompleteDisplayExpression.Evaluate(
+                "**displayName**\"\\n**Constituency:** \"constituencyName",
+                values));
+
+        Assert.Equal(
+            "**Alan Gemmell**",
+            AutocompleteDisplayExpression.Evaluate("**displayName**", values));
+    }
+
+    [Fact]
+    public void Evaluate_keeps_unknown_escape_characters_in_quoted_literals()
+    {
+        var values = new Dictionary<string, object>();
+
+        Assert.Equal(
+            "a?b",
+            AutocompleteDisplayExpression.Evaluate("\"a\\?b\"", values));
+        Assert.Equal(
+            "line\rbreak",
+            AutocompleteDisplayExpression.Evaluate("\"line\\rbreak\"", values));
+    }
+
+    [Fact]
     public void Evaluate_discards_leading_and_orphaned_separators()
     {
         var values = new Dictionary<string, object>

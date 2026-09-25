@@ -1796,7 +1796,7 @@ Tenant Settings  FormEngine  (Target Web)
   └── ComplexFields[]  matching that Id
         ├── ApiEndpoint
         ├── Auth  (ApiKey  or  ClientCredentials)
-        └── optional DropdownDisplay / ConfirmationDisplay
+        └── optional DropdownDisplay / ConfirmationDisplay / SummaryDisplay
 ```
 
 You **cannot** invent a new `complexField.id` in the template alone. Add the id here first (or ask platform), then reference it in Template Manager.
@@ -1928,7 +1928,8 @@ Worked example — members search:
   "ClientSecret": "...",
   "Scope": "api://members/.default",
   "DropdownDisplay": "displayName + \" - \" + constituencyName",
-  "ConfirmationDisplay": "firstName + \" \" + lastName",
+  "ConfirmationDisplay": "firstName + \" \" + lastName + \"\\n\\n**Constituency:** \" + constituencyName",
+  "SummaryDisplay": "displayName + \"\\n\" + constituencyName",
   "Label": "Member"
 }
 ```
@@ -1936,11 +1937,12 @@ Worked example — members search:
 | Property | Where the user sees it |
 |----------|------------------------|
 | `DropdownDisplay` | Each row in the search list, and the text left in the box after they choose |
-| `ConfirmationDisplay` | Check your answers / preview. Also drives which JSON properties are listed on “Is this the right …?” |
+| `ConfirmationDisplay` | Fully replaces the inset on “Is this the right …?” (Markdown supported) |
+| `SummaryDisplay` | Check your answers / task and collection summaries (Markdown supported). Independent of `ConfirmationDisplay` |
 
 The **stored answer** is still the full JSON object (id, names, email, constituency, and so on), not only the label. Event mappings and email placeholders can still use `ComplexFieldProperty` with `nestedPath` such as `email` or `constituencyName`.
 
-If both the template and this config set `DropdownDisplay` / `ConfirmationDisplay`, **the template wins**.
+If both the template and this config set `DropdownDisplay` / `ConfirmationDisplay` / `SummaryDisplay`, **the template wins**.
 
 #### Who can change this
 
@@ -1970,6 +1972,7 @@ If both the template and this config set `DropdownDisplay` / `ConfirmationDispla
 | HTTP 401 / 403 in Web logs | Wrong `ApiKey`, or token request failed (`TokenEndpoint` / `ClientId` / `ClientSecret` / `Scope`) |
 | “No API endpoint configured” in logs | `Id` in the template does not match any `ComplexFields` entry after refresh |
 | Dropdown shows a name but confirmation is blank | `ConfirmationDisplay` uses property names that are not on the stored object; omit it to use the built-in name layout |
+| Summary ignores confirmation text | Set `SummaryDisplay` separately — `ConfirmationDisplay` is not used on summary pages |
 | Old trust search still works, new search does not | You replaced the whole `ComplexFields` array instead of appending; restore the previous ids |
 | Changes not visible | **Refresh settings**, then hard-refresh the form (or clear sessions/caches) |
 
@@ -2060,7 +2063,7 @@ If you need a second tenant administrator, ask a SuperAdmin to assign the Admin 
 | Submit succeeded but reporting never received a message | See [12.18 Troubleshooting event mappings](#1218-troubleshooting-event-mappings). Check triggers, mapping, Service Bus topic/subscription, and API logs. |
 | Confirmation email missing academy name / custom text | See [13.12 Troubleshooting email placeholders](#1312-troubleshooting-email-placeholders). Check Notify `((placeholder))` spelling, `EmailPlaceholderMappings` (Target Shared), and form `fieldId`. |
 | Upload stays “Validation pending” / submit stays blocked | See [14.7](#147-file-validation-tenant-function). Check `FileValidation` mode, `FileUploaded` trigger, function `X-Api-Key` (raw) vs `AuthProviders` `KeyHash`, `IsServicePrincipal: true`, and **Refresh settings**. |
-| Autocomplete search empty / 401 / wrong labels | See [14.8](#148-autocomplete-search-formengine-complex-fields). Check `FormEngine` Target **Web**, matching `Id`, **Refresh settings**, API key vs client credentials, and `DropdownDisplay` / `ConfirmationDisplay`. |
+| Autocomplete search empty / 401 / wrong labels | See [14.8](#148-autocomplete-search-formengine-complex-fields). Check `FormEngine` Target **Web**, matching `Id`, **Refresh settings**, API key vs client credentials, and `DropdownDisplay` / `ConfirmationDisplay` / `SummaryDisplay`. |
 
 
 ---
@@ -2096,7 +2099,7 @@ If you need a second tenant administrator, ask a SuperAdmin to assign the Admin 
 | **AuthProviders** | TenantConfig for machine API keys / mTLS. File-validation stores a SHA-256 `KeyHash`, never the raw key. |
 | **FormEngine** | Tenant Settings (Target **Web**) that register search/upload complex fields: `ApiEndpoint`, `ApiKey` or client-credentials token settings, optional display expressions. |
 | **complexField id** | The template’s `complexField.id`. Must match a `ComplexFields` `Id`. Does not contain URLs or secrets. |
-| **DropdownDisplay / ConfirmationDisplay** | Optional expressions that label search results and check-your-answers text. Template values override FormEngine. |
+| **DropdownDisplay / ConfirmationDisplay / SummaryDisplay** | Optional expressions for search rows, confirmation inset, and summary text (Markdown). Template values override FormEngine. |
 
 ---
 
