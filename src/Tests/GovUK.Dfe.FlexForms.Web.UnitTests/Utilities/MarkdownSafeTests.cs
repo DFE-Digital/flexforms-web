@@ -91,4 +91,49 @@ public class MarkdownSafeTests
         var html = MarkdownSafe.ToSafeGovUkHtml("Hello <script>alert(1)</script>");
         Assert.DoesNotContain("<script>", html);
     }
+
+    [Fact]
+    public void RenderHintWithClass_ShouldRenderHeadingsAndLists()
+    {
+        var (html, cssClass) = MarkdownSafe.RenderHintWithClass(
+            "## Upload requirements\n\n- Use **PDF** format\n- Maximum 10MB");
+
+        Assert.Contains("govuk-heading-m", html);
+        Assert.Contains("Upload requirements", html);
+        Assert.Contains("govuk-list govuk-list--bullet", html);
+        Assert.Contains("<strong>PDF</strong>", html);
+        Assert.Equal("hint--default", cssClass);
+    }
+
+    [Fact]
+    public void RenderHintWithClass_ShouldRenderInlineBoldWithoutExtraClass()
+    {
+        var (html, cssClass) = MarkdownSafe.RenderHintWithClass("**Important**");
+
+        Assert.Contains("<strong>Important</strong>", html);
+        Assert.DoesNotContain("govuk-body", html);
+        Assert.Null(cssClass);
+    }
+
+    [Fact]
+    public void RenderHintWithClass_ShouldRenderH3HeadingAtLineStart()
+    {
+        var (html, cssClass) = MarkdownSafe.RenderHintWithClass(
+            "### This is a tooltip this is a header in the tooltip");
+
+        Assert.Contains("govuk-heading-s", html);
+        Assert.Contains("<h3", html);
+        Assert.DoesNotContain("###", html);
+        Assert.Equal("hint--default", cssClass);
+    }
+
+    [Fact]
+    public void RenderHintWithClass_ShouldNotTreatMidlineHashesAsHeading()
+    {
+        var (html, _) = MarkdownSafe.RenderHintWithClass(
+            "This is a tooltip this is a ###header in the tooltip");
+
+        Assert.DoesNotContain("<h3", html);
+        Assert.Contains("###header", html);
+    }
 }
