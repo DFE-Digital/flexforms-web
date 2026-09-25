@@ -17,24 +17,29 @@
     var labelClasses = Model.Field.Label.IsVisible ? "govuk-label govuk-label--m" : "govuk-visually-hidden";
     var (hintHtml, hintClass) = MarkdownSafe.RenderHintWithClass(Model.Field.Tooltip);
     var hasBlockHint = !string.IsNullOrEmpty(hintClass);
-
-    var contentsViewData = new ViewDataDictionary(ViewData)
+}
+<govuk-character-count id="@Model.Id"
+                       name="Data[@Model.Field.FieldId]"
+                       max-words="@(useWordLimit ? limitAttributeValue : null)"
+                       max-length="@(useWordLimit ? null : limitAttributeValue)">
+    <govuk-character-count-label class="@labelClasses" asp-for="@Model.Field.FieldId">@Model.Field.Label.Value</govuk-character-count-label>
+    @if (!string.IsNullOrEmpty(Model.Field.Tooltip) && hasBlockHint)
     {
-        { "LabelClasses", labelClasses },
-        { "HintHtml", hintHtml },
-        { "HintClass", hintClass },
-        { "HasBlockHint", hasBlockHint }
-    };
-}
-@if (useWordLimit)
-{
-    <govuk-character-count id="@Model.Id" name="Data[@Model.Field.FieldId]" max-words="@limitAttributeValue">
-        @await Html.PartialAsync("~/Views/Shared/Fields/_CharacterCountFieldContents.cshtml", Model, contentsViewData)
-    </govuk-character-count>
-}
-else
-{
-    <govuk-character-count id="@Model.Id" name="Data[@Model.Field.FieldId]" max-length="@limitAttributeValue">
-        @await Html.PartialAsync("~/Views/Shared/Fields/_CharacterCountFieldContents.cshtml", Model, contentsViewData)
-    </govuk-character-count>
-}
+        <govuk-character-count-before-input>
+            <div class="govuk-hint @hintClass">@Html.Raw(hintHtml)</div>
+        </govuk-character-count-before-input>
+    }
+    else if (!string.IsNullOrEmpty(Model.Field.Tooltip))
+    {
+        <govuk-character-count-hint>@Html.Raw(hintHtml)</govuk-character-count-hint>
+    }
+
+    @if (Model.ErrorMessage != String.Empty)
+    {
+        <govuk-character-count-error-message>
+            <span class="govuk-visually-hidden">Error: </span>
+            @Model.ErrorMessage
+        </govuk-character-count-error-message>
+    }
+    <govuk-character-count-value>@Model.CurrentValue</govuk-character-count-value>
+</govuk-character-count>
