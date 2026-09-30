@@ -5,7 +5,6 @@ using GovUK.Dfe.FlexForms.PlaywrightTests.Pages;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Tasks;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 using Microsoft.Playwright;
-using NUnit.Framework;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService;
 
@@ -79,7 +78,8 @@ public sealed class ContributorsTests : PlaywrightTestBase
         await Assertions.Expect(Page).ToHaveURLAsync("Error/NotFound");
     }
 
-    [TestCase(TestName = "should be able to add a contributor and that contributor should be able to edit the application")]
+    [TestCase(TestName =
+        "should be able to add a contributor and that contributor should be able to edit the application")]
     [CiRetry]
     public async Task AddContributorAndContributorCanEditAsync()
     {
@@ -106,6 +106,7 @@ public sealed class ContributorsTests : PlaywrightTestBase
         await dashboardPage.ExpectApplicationPresentAsync(application.ApplicationReference);
     }
 
-    private static Task<CreateApplicationResponse> CreateApplicationForTemplateAsync(IAPIRequestContext request, string templateId) =>
+    private static Task<CreateApplicationResponse> CreateApplicationForTemplateAsync(IAPIRequestContext request,
+        string templateId) =>
         ApplicationApi.CreateApplicationAsync(request, ApplicationBuilder.CreateApplicationRequest(templateId));
 }

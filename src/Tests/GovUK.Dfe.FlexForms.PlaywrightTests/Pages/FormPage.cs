@@ -17,10 +17,25 @@ public abstract class FormPage(IPage page)
 
     protected async Task MarkCompleteAndSaveAsync()
     {
-        await TaskCompletedCheckbox().CheckAsync();
-        await SaveTaskSummaryButton().ClickAsync();
+        await SubmitTaskCompletionAsync();
         await Assertions.Expect(Page).ToHaveURLAsync(new Regex(@"/applications/[^/]+$"));
     }
+
+    /// <summary>Ticks "Mark this section as complete" and saves, without assuming the save succeeds.</summary>
+    protected async Task SubmitTaskCompletionAsync()
+    {
+        await TaskCompletedCheckbox().CheckAsync();
+        await SaveTaskSummaryButton().ClickAsync();
+    }
+
+    protected async Task ChooseAsync(string label) =>
+        await Page.GetByRole(AriaRole.Radio, new PageGetByRoleOptions { Name = label, Exact = true }).CheckAsync();
+
+    protected async Task TickAsync(string label) =>
+        await Page.GetByRole(AriaRole.Checkbox, new PageGetByRoleOptions { Name = label, Exact = true }).CheckAsync();
+
+    protected async Task ExpectUrlEndsWithAsync(string path) =>
+        await Assertions.Expect(Page).ToHaveURLAsync(new Regex($"{Regex.Escape(path)}$"));
 
     protected async Task ConfirmContinueAsync() => await ConfirmationContinueButton().ClickAsync();
 
