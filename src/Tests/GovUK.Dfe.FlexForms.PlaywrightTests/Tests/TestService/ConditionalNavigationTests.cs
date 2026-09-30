@@ -2,7 +2,6 @@ using GovUK.Dfe.FlexForms.PlaywrightTests.Api;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Api.Builders;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Infrastructure;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Tasks;
-using NUnit.Framework;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService;
 
@@ -12,7 +11,8 @@ public sealed class ConditionalNavigationTests : PlaywrightTestBase
     [SetUp]
     public async Task LoginAsDefaultUserAsync() => await LoginAsync();
 
-    [TestCase(TestName = "a question that returns to the summary lists its follow-up there and blocks completion until it is answered")]
+    [TestCase(TestName =
+        "a question that returns to the summary lists its follow-up there and blocks completion until it is answered")]
     [CiRetry]
     public async Task ReturnToSummaryQuestionListsFollowUpAsync()
     {

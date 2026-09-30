@@ -38,7 +38,8 @@ public sealed class ConditionalNavigationTask(IPage page) : TaskPage(page)
 
     public async Task AnswerContactPreferencesQuestionAsync(string answer) => await AnswerAsync(answer);
 
-    public async Task GiveContactPreferencesAsync(string preferences) => await FillAndSaveAsync(ContactPreferences, preferences);
+    public async Task GiveContactPreferencesAsync(string preferences) =>
+        await FillAndSaveAsync(ContactPreferences, preferences);
 
     public async Task AnswerNotesQuestionAsync(string answer) => await AnswerAsync(answer);
 
