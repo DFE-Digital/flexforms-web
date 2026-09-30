@@ -44,6 +44,11 @@ public sealed class ApplicationsTests : PlaywrightTestBase
 
         await Files.ValidateValidFileForApplicationAsync(ApiClient, Page);
 
+        var conditionalNavigationTask = new ConditionalNavigationTask(Page);
+        await conditionalNavigationTask.OpenAsync();
+        await conditionalNavigationTask.CompleteAsync();
+        await conditionalNavigationTask.ExpectCompletedAsync();
+
         var trustDetailsTask = new TrustDetailsTask(Page);
         await trustDetailsTask.OpenAsync();
         await trustDetailsTask.CompleteAsync(Trust);
