@@ -23,6 +23,6 @@ public static class Login
         ]);
 
         await page.GotoAsync("/");
-        await page.WaitForURLAsync(new Regex(@"/applications/dashboard"));
+        await page.WaitForURLAsync(new Regex(@"(/applications/dashboard|/templates)"));
     }
 }

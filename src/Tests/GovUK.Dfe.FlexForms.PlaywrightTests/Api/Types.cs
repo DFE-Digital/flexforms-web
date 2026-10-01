@@ -35,3 +35,10 @@ public sealed record CustomApplicationStatus(
 public sealed record FileValidationRequest(bool IsValid, string Message, string? CorrelationId, string Source);
 
 public sealed record FileValidationResult(string Id, string ApplicationId, string Name);
+
+public sealed record TemplateDto(
+    string TemplateId,
+    string? Name,
+    DateTimeOffset CreatedOn,
+    string? LatestVersionNumber,
+    bool IsLive);
