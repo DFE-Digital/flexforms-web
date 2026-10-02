@@ -2,7 +2,7 @@ using GovUK.Dfe.FlexForms.PlaywrightTests.Api;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Infrastructure;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Pages;
 
-namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService;
+namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService.Admin;
 
 public sealed class TenantTemplateTests : PlaywrightTestBase
 {

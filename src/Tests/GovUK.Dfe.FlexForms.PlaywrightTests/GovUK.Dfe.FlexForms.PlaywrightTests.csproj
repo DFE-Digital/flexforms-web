@@ -29,4 +29,8 @@
         <None Include=".env.example" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="Tests\Admin\" />
+    </ItemGroup>
+
 </Project>
