@@ -46,3 +46,26 @@ public sealed record TemplateDto(
     DateTimeOffset CreatedOn,
     string? LatestVersionNumber,
     bool IsLive);
+
+public sealed record TenantUserDto(string UserId, string? Email, string? Name);
+
+public sealed record TenantUsersResult(IReadOnlyList<TenantUserDto>? Items);
+
+public sealed record CreateUserRoleRequest(string Email, string Name, string Role, string[] TemplateIds);
+
+public sealed record CreateUserRoleResponse(
+    string UserId,
+    string Name,
+    string Email,
+    string RoleId,
+    CreateUserRoleAuthorization Authorization);
+
+public sealed record CreateUserRoleAuthorization(
+    IReadOnlyList<CreateUserRolePermission> Permissions,
+    IReadOnlyList<string> Roles);
+
+public sealed record CreateUserRolePermission(
+    string ApplicationId,
+    string ResourceKey,
+    string ResourceType,
+    string AccessType);

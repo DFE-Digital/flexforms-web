@@ -12,13 +12,20 @@ public static class Templates
 
     public static async Task<TemplateDto> UpdateTemplateLiveAsync(IAPIRequestContext request, string name, bool live)
     {
+        var templateId = await GetTemplateIdByNameAsync(request, name);
+
+        return await UpdateTemplateAsync(request, templateId, live);
+    }
+    
+    public static async Task<string> GetTemplateIdByNameAsync(IAPIRequestContext request, string name)
+    {
         var templates = await GetTemplatesAsync(request);
 
         var template = templates.FirstOrDefault(t =>
             string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase))
             ?? throw new ApiRequestException($"Template '{name}' not found.");
 
-        return await UpdateTemplateAsync(request, template.TemplateId, live);
+        return template.TemplateId;
     }
 
     public static Task<IReadOnlyList<CustomApplicationStatus>> GetTemplateCustomStatusesAsync(IAPIRequestContext request, string templateId) =>

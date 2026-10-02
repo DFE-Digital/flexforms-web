@@ -183,6 +183,8 @@ public abstract class PlaywrightTestBase : PageTest
 
     protected Task LoginAsync(string? userName = null) => Login.LoginAsync(Page, userName);
 
+    protected Task SignInAsync(string? userName = null) => Login.SignInAsync(Page, userName);
+
     private static bool IsHeadedModeEnabled()
     {
         var headed = TestEnvironment.OptionalEnvironmentVariable("PW_HEADED");

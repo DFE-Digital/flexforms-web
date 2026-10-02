@@ -31,4 +31,10 @@ public sealed class AdminPage(IPage page, Terminology terminology) : BasePage(pa
 
     private ILocator TemplateRow(string templateName) =>
         Page.Locator("tr.govuk-table__row").Filter(new LocatorFilterOptions { HasText = templateName }).First;
+
+    public async Task OpenUserManagerAsync()
+    {
+        await ById("go-to-user-manager-button").ClickAsync();
+        await Page.WaitForURLAsync("/admin/user-manager");
+    }
 }
