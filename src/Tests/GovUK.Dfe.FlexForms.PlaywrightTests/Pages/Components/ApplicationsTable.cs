@@ -74,6 +74,9 @@ public sealed class ApplicationsTable
         {
             await assertion();
         }
+
+        _assertions.Clear();
+        _reference = string.Empty;
     }
 
     private void Enqueue(Func<Task> assertion) => _assertions.Add(assertion);

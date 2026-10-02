@@ -15,6 +15,10 @@ public sealed record CreateApplicationRequest(string TemplateId, string? Initial
 
 public sealed record CreateApplicationResponse(string ApplicationId, string ApplicationReference, string? Status);
 
+public sealed record AddApplicationResponseRequest(string ResponseBody);
+
+public sealed record CustomApplicationStatusRequest(ApplicationStatus ApplicationStatus, string Label);
+
 public sealed record UploadDto(string Id, string ApplicationId);
 
 public sealed record ExchangeTokenRequest([property: JsonPropertyName("accessToken")] string AccessToken);

@@ -23,4 +23,21 @@ public static class Templates
 
     public static Task<IReadOnlyList<CustomApplicationStatus>> GetTemplateCustomStatusesAsync(IAPIRequestContext request, string templateId) =>
         ApiBase.ApiRequestAsync<IReadOnlyList<CustomApplicationStatus>>(request, $"/v1/Templates/{templateId}/custom-statuses");
+
+    public static Task<CustomApplicationStatus> CreateCustomApplicationStatusAsync(
+        IAPIRequestContext request,
+        string templateId,
+        ApplicationStatus status,
+        string label) =>
+        ApiBase.ApiRequestAsync<CustomApplicationStatus>(
+            request,
+            $"/v1/Templates/{templateId}/custom-statuses",
+            method: "POST",
+            data: new CustomApplicationStatusRequest(status, label));
+
+    public static async Task<string?> GetTemplateNameAsync(IAPIRequestContext request, string templateId)
+    {
+        var templates = await GetTemplatesAsync(request);
+        return templates.FirstOrDefault(t => t.TemplateId == templateId)?.Name;
+    }
 }
