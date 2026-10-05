@@ -14,7 +14,7 @@ public sealed class ContributorManagementTests : PlaywrightTestBase
     private readonly string _leadApplicantEmail = TestEnvironment.RequireEnvironmentVariable("ADMIN_EMAIL");
 
     [OneTimeSetUp]
-    public async Task CreateApplicationsForStatusVerificationAsync()
+    public async Task CreateApplicationWithContributorAsync()
     {
         var createRequest = ApplicationBuilder.CreateApplicationRequest(ApiConfig.TemplateId);
         _application = await ApplicationApi.CreateApplicationAsync(AdminApiClient, createRequest);
