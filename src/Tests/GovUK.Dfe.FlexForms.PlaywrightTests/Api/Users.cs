@@ -14,10 +14,10 @@ public static class Users
         await AssignUserRoleAsync(request, body);
     }
 
-    public static Task<CreateUserRoleResponse> AssignUserRoleAsync(IAPIRequestContext request,
+    public static Task<UserDto> AssignUserRoleAsync(IAPIRequestContext request,
         CreateUserRoleRequest body)
         =>
-            ApiBase.ApiRequestAsync<CreateUserRoleResponse>(request, "/v1/users/roles", method: "POST", data: body);
+            ApiBase.ApiRequestAsync<UserDto>(request, "/v1/users/roles", method: "POST", data: body);
 
     public static async Task<string?> GetTenantUserIdByEmailAsync(IAPIRequestContext request, string email)
     {

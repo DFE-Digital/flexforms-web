@@ -17,6 +17,8 @@ public sealed record CreateApplicationResponse(string ApplicationId, string Appl
 
 public sealed record AddApplicationResponseRequest(string ResponseBody);
 
+public sealed record AddContributorRequest(string Email, string Name);
+
 public sealed record CustomApplicationStatusRequest(ApplicationStatus ApplicationStatus, string Label);
 
 public sealed record UploadDto(string Id, string ApplicationId);
@@ -56,7 +58,7 @@ public sealed record TenantRoleDto(string RoleId, string Name, bool IsSystem);
 
 public sealed record CreateUserRoleRequest(string Email, string Name, string Role, string[] TemplateIds);
 
-public sealed record CreateUserRoleResponse(
+public sealed record UserDto(
     string UserId,
     string Name,
     string Email,

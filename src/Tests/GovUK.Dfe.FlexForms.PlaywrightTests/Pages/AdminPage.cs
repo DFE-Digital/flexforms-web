@@ -38,6 +38,12 @@ public sealed class AdminPage(IPage page, Terminology terminology) : BasePage(pa
         await Page.WaitForURLAsync("/admin/user-manager");
     }
 
+    public async Task OpenContributorManagementAsync()
+    {
+        await ById("go-to-contributor-management-button").ClickAsync();
+        await Page.WaitForURLAsync("/admin/contributor-management");
+    }
+
     public async Task OpenRoleManagerAsync()
     {
         await ById("go-to-role-manager-button").ClickAsync();
