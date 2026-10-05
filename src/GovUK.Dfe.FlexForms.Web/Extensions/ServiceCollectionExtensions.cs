@@ -46,6 +46,8 @@ namespace GovUK.Dfe.FlexForms.Web.Extensions
                 configuration, enableTokenExchange: enableTokenExchange);
             services.AddExternalApplicationsApiClient<ITenantAdminClient, TenantAdminClient>(
                 configuration, enableTokenExchange: enableTokenExchange);
+            services.AddExternalApplicationsApiClient<IReportingExportClient, ReportingExportClient>(
+                configuration, enableTokenExchange: enableTokenExchange);
             return services;
         }
 
@@ -73,6 +75,7 @@ namespace GovUK.Dfe.FlexForms.Web.Extensions
             services.AddScoped<IDeleteFormFile, DeleteFormFileService>();
             services.AddScoped<IDownloadFormFile, DownloadFormFileService>();
             services.AddScoped<ITenantSettingsAdmin, TenantSettingsAdminService>();
+            services.AddScoped<IReportingExportAdmin, ReportingExportAdminService>();
             services.AddScoped<IEventMappingsAdmin, EventMappingsAdminService>();
             services.AddScoped<ITemplateManagerAdmin, TemplateManagerAdminService>();
             services.AddScoped<IDuplicateTenantAdmin, DuplicateTenantAdminService>();

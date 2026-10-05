@@ -1,0 +1,278 @@
+@page "/admin/reporting-export"
+@using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums
+@model GovUK.Dfe.FlexForms.Web.Pages.Admin.ReportingExportModel
+@{
+    ViewData["Title"] = "Reporting export";
+}
+
+@functions {
+    private static string ModeLabel(ReportingExportMode mode) => mode switch
+    {
+        ReportingExportMode.ExportAll => "Export automatically",
+        _ => "Hold until approved",
+    };
+
+    private static string SourceLabel(ReportingExportDefaultSource source) => source switch
+    {
+        ReportingExportDefaultSource.Template => "set for this template",
+        ReportingExportDefaultSource.Tenant => "the tenant default",
+        _ => "the built-in default",
+    };
+
+    private static (string Text, string Css) StatusTag(ReportingExportStatus status) => status switch
+    {
+        ReportingExportStatus.Allowed => ("Exported", "govuk-tag--green"),
+        ReportingExportStatus.AllowedByDefault => ("Exported by default", "govuk-tag--turquoise"),
+        ReportingExportStatus.Denied => ("Not exported", "govuk-tag--red"),
+        _ => ("Waiting for approval", "govuk-tag--yellow"),
+    };
+
+    private static string When(DateTime? value) => value?.ToLocalTime().ToString("d MMM yyyy HH:mm") ?? string.Empty;
+}
+
+<div class="govuk-grid-row">
+    <div class="govuk-grid-column-full">
+        <h1 class="govuk-heading-xl">@ViewData["Title"]</h1>
+        <p class="govuk-body-l">Choose which answers are sent to reporting for this tenant.</p>
+        <p class="govuk-body">
+            A decision on a field always applies. Fields nobody has decided about follow the default: the template’s
+            own default if it has one, otherwise the tenant default. Every change refreshes the reporting data for this
+            tenant’s applications, which can take a few minutes.
+        </p>
+
+        @if (Model.ShowSuccess)
+        {
+            <div class="govuk-notification-banner govuk-notification-banner--success" role="alert" aria-labelledby="reporting-export-success-title" data-module="govuk-notification-banner">
+                <div class="govuk-notification-banner__header">
+                    <h2 class="govuk-notification-banner__title" id="reporting-export-success-title">Success</h2>
+                </div>
+                <div class="govuk-notification-banner__content">
+                    <p class="govuk-notification-banner__heading">@Model.SuccessMessage</p>
+                </div>
+            </div>
+        }
+
+        @if (Model.HasError)
+        {
+            <div class="govuk-error-summary" data-module="govuk-error-summary">
+                <div role="alert">
+                    <h2 class="govuk-error-summary__title">There is a problem</h2>
+                    <div class="govuk-error-summary__body">
+                        <p class="govuk-body">@Model.ErrorMessage</p>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (Model.Refresh is { } refresh)
+        {
+            <div class="govuk-notification-banner" role="region" aria-labelledby="reporting-refresh-title" data-module="govuk-notification-banner" id="reporting-refresh-banner">
+                <div class="govuk-notification-banner__header">
+                    <h2 class="govuk-notification-banner__title" id="reporting-refresh-title">Reporting refresh</h2>
+                </div>
+                <div class="govuk-notification-banner__content">
+                    @switch (refresh.Status)
+                    {
+                        case ReportingExportRefreshStatus.Completed:
+                            <p class="govuk-notification-banner__heading">Reporting data is up to date.</p>
+                            <p class="govuk-body">@refresh.ApplicationsScanned applications checked.</p>
+                            break;
+                        case ReportingExportRefreshStatus.Failed:
+                        case ReportingExportRefreshStatus.Cancelled:
+                            <p class="govuk-notification-banner__heading">The refresh did not finish.</p>
+                            <p class="govuk-body">Your change is saved but some applications may still show the old setting. Ask the platform team to run the refresh again.@(refresh.Error is null ? "" : $" ({refresh.Error})")</p>
+                            break;
+                        default:
+                            <p class="govuk-notification-banner__heading">Reporting data is being refreshed.</p>
+                            <p class="govuk-body">
+                                @refresh.ApplicationsScanned applications checked so far.
+                                <a class="govuk-notification-banner__link" asp-page="/Admin/ReportingExport" asp-route-selectedTemplateId="@Model.SelectedTemplateId" asp-route-refreshId="@refresh.RefreshId">Check progress</a>
+                            </p>
+                            break;
+                    }
+                </div>
+            </div>
+        }
+
+        @if (Model.TenantDefault is { } tenantDefault)
+        {
+            <h2 class="govuk-heading-l">Tenant default</h2>
+            <p class="govuk-body">
+                Fields without a decision are currently <strong>@ModeLabel(tenantDefault.EffectiveMode).ToLowerInvariant()</strong>
+                (@SourceLabel(tenantDefault.Source))@(tenantDefault.DecidedBy is null ? "" : $", changed by {tenantDefault.DecidedBy} on {When(tenantDefault.DecidedAt)}").
+            </p>
+            @if (!string.IsNullOrWhiteSpace(tenantDefault.Reason))
+            {
+                <div class="govuk-inset-text">Reason: @tenantDefault.Reason</div>
+            }
+
+            <form method="post" asp-page-handler="TenantDefault" novalidate>
+                <input type="hidden" name="selectedTemplateId" value="@Model.SelectedTemplateId" />
+                <div class="govuk-form-group">
+                    <fieldset class="govuk-fieldset" aria-describedby="tenant-mode-hint">
+                        <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">What should happen to fields nobody has decided about?</legend>
+                        <div id="tenant-mode-hint" class="govuk-hint">Templates can override this.</div>
+                        <div class="govuk-radios" data-module="govuk-radios">
+                            <div class="govuk-radios__item">
+                                <input class="govuk-radios__input" id="tenant-mode-approve" name="Mode" type="radio" value="@ReportingExportModeSetting.ApproveFirst"
+                                       checked="@(tenantDefault.EffectiveMode == ReportingExportMode.ApproveFirst)" aria-describedby="tenant-mode-approve-hint">
+                                <label class="govuk-label govuk-radios__label" for="tenant-mode-approve">Hold until approved (recommended)</label>
+                                <div id="tenant-mode-approve-hint" class="govuk-hint govuk-radios__hint">New fields are not exported until an admin allows them.</div>
+                            </div>
+                            <div class="govuk-radios__item">
+                                <input class="govuk-radios__input" id="tenant-mode-export" name="Mode" type="radio" value="@ReportingExportModeSetting.ExportAll"
+                                       checked="@(tenantDefault.EffectiveMode == ReportingExportMode.ExportAll)" aria-describedby="tenant-mode-export-hint">
+                                <label class="govuk-label govuk-radios__label" for="tenant-mode-export">Export automatically</label>
+                                <div id="tenant-mode-export-hint" class="govuk-hint govuk-radios__hint">New fields are exported unless an admin denies them. Only choose this if your data protection agreement covers every answer, including personal data.</div>
+                            </div>
+                        </div>
+                    </fieldset>
+                </div>
+                <div class="govuk-form-group">
+                    <label class="govuk-label" for="tenant-reason">Reason for the change</label>
+                    <div class="govuk-hint">Required for “Export automatically”. Recorded in the audit trail.</div>
+                    <textarea class="govuk-textarea" id="tenant-reason" name="Reason" rows="2" maxlength="1000"></textarea>
+                </div>
+                <button class="govuk-button" type="submit" data-module="govuk-button" id="save-tenant-default-button">Save tenant default</button>
+            </form>
+        }
+
+        <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible">
+
+        <h2 class="govuk-heading-l">Template fields</h2>
+        <div class="govuk-form-group">
+            <label class="govuk-label govuk-label--s" for="template-selector">Template</label>
+            <select class="govuk-select" id="template-selector" name="selectedTemplateId"
+                    onchange="window.location.href='?selectedTemplateId=' + this.value">
+                <option value="">-- Select a template --</option>
+                @foreach (var template in Model.AvailableTemplates)
+                {
+                    <option value="@template.TemplateId" selected="@(Model.SelectedTemplateId == template.TemplateId)">@template.Name</option>
+                }
+            </select>
+        </div>
+
+        @if (!Model.SelectedTemplateId.HasValue)
+        {
+            <div class="govuk-inset-text">Select a template to see its fields and choose which are exported.</div>
+        }
+        else if (Model.PolicyMessage is not null)
+        {
+            <div class="govuk-inset-text">@Model.PolicyMessage</div>
+        }
+
+        @if (Model.TemplateDefault is { } templateDefault)
+        {
+            <form method="post" asp-page-handler="TemplateDefault" novalidate>
+                <input type="hidden" name="selectedTemplateId" value="@Model.SelectedTemplateId" />
+                <div class="govuk-form-group">
+                    <fieldset class="govuk-fieldset">
+                        <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Default for this template</legend>
+                        <div class="govuk-radios govuk-radios--small" data-module="govuk-radios">
+                            <div class="govuk-radios__item">
+                                <input class="govuk-radios__input" id="template-mode-inherit" name="Mode" type="radio" value="@ReportingExportModeSetting.Inherit"
+                                       checked="@(templateDefault.Mode == ReportingExportModeSetting.Inherit)">
+                                <label class="govuk-label govuk-radios__label" for="template-mode-inherit">Use the tenant default (@(Model.TenantDefault is null ? "unknown" : ModeLabel(Model.TenantDefault.EffectiveMode).ToLowerInvariant()))</label>
+                            </div>
+                            <div class="govuk-radios__item">
+                                <input class="govuk-radios__input" id="template-mode-approve" name="Mode" type="radio" value="@ReportingExportModeSetting.ApproveFirst"
+                                       checked="@(templateDefault.Mode == ReportingExportModeSetting.ApproveFirst)">
+                                <label class="govuk-label govuk-radios__label" for="template-mode-approve">Hold until approved</label>
+                            </div>
+                            <div class="govuk-radios__item">
+                                <input class="govuk-radios__input" id="template-mode-export" name="Mode" type="radio" value="@ReportingExportModeSetting.ExportAll"
+                                       checked="@(templateDefault.Mode == ReportingExportModeSetting.ExportAll)">
+                                <label class="govuk-label govuk-radios__label" for="template-mode-export">Export automatically</label>
+                            </div>
+                        </div>
+                    </fieldset>
+                </div>
+                <div class="govuk-form-group">
+                    <label class="govuk-label" for="template-reason">Reason for the change</label>
+                    <textarea class="govuk-textarea" id="template-reason" name="Reason" rows="2" maxlength="1000"></textarea>
+                </div>
+                <button class="govuk-button govuk-button--secondary" type="submit" data-module="govuk-button" id="save-template-default-button">Save template default</button>
+            </form>
+        }
+
+        @if (Model.Policy is { } policy)
+        {
+            <p class="govuk-body">
+                Undecided fields in this template are <strong>@ModeLabel(policy.DefaultMode).ToLowerInvariant()</strong> (@SourceLabel(policy.DefaultSource)).
+            </p>
+
+            @if (policy.Fields.Count == 0)
+            {
+                <div class="govuk-inset-text">Reporting does not know of any fields in this template yet.</div>
+            }
+            else
+            {
+                <form method="post" novalidate>
+                    <input type="hidden" name="selectedTemplateId" value="@Model.SelectedTemplateId" />
+                    <table class="govuk-table" id="reporting-export-fields">
+                        <caption class="govuk-table__caption govuk-table__caption--m">Fields</caption>
+                        <thead class="govuk-table__head">
+                            <tr class="govuk-table__row">
+                                <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Select</span></th>
+                                <th scope="col" class="govuk-table__header">Field</th>
+                                <th scope="col" class="govuk-table__header">Where it is asked</th>
+                                <th scope="col" class="govuk-table__header">Status</th>
+                                <th scope="col" class="govuk-table__header">Decision</th>
+                            </tr>
+                        </thead>
+                        <tbody class="govuk-table__body">
+                            @for (var i = 0; i < policy.Fields.Count; i++)
+                            {
+                                var field = policy.Fields[i];
+                                var tag = StatusTag(field.Status);
+                                var name = string.IsNullOrWhiteSpace(field.Label) ? field.FieldId : field.Label;
+                                <tr class="govuk-table__row">
+                                    <td class="govuk-table__cell">
+                                        <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+                                            <div class="govuk-checkboxes__item">
+                                                <input class="govuk-checkboxes__input" id="field-@i" name="SelectedFields" type="checkbox" value="@ReportingExportModel.FieldKey(field)">
+                                                <label class="govuk-label govuk-checkboxes__label" for="field-@i"><span class="govuk-visually-hidden">Select @name</span></label>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="govuk-table__cell">
+                                        @name
+                                        <span class="govuk-hint govuk-!-font-size-16 govuk-!-margin-bottom-0">
+                                            @(string.IsNullOrEmpty(field.ParentFieldId) ? field.FieldId : $"{field.ParentFieldId} › {field.FieldId}")@(field.IsCollection ? " (repeating)" : "")
+                                        </span>
+                                    </td>
+                                    <td class="govuk-table__cell">@string.Join(" › ", new[] { field.TaskName, field.PageTitle }.Where(s => !string.IsNullOrWhiteSpace(s)))</td>
+                                    <td class="govuk-table__cell"><strong class="govuk-tag @tag.Css">@tag.Text</strong></td>
+                                    <td class="govuk-table__cell govuk-!-font-size-16">
+                                        @if (field.DecidedBy is not null)
+                                        {
+                                            @($"{field.DecidedBy}, {When(field.DecidedAt)}")
+                                            @if (!string.IsNullOrWhiteSpace(field.Reason))
+                                            {
+                                                <br /><span class="govuk-hint govuk-!-font-size-16">@field.Reason</span>
+                                            }
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" for="decision-reason">Reason for the decision</label>
+                        <div class="govuk-hint">Recorded in the audit trail against each selected field.</div>
+                        <textarea class="govuk-textarea" id="decision-reason" name="Reason" rows="2" maxlength="1000"></textarea>
+                    </div>
+                    <div class="govuk-button-group">
+                        <button class="govuk-button" type="submit" asp-page-handler="Allow" data-module="govuk-button" id="allow-fields-button">Export selected fields</button>
+                        <button class="govuk-button govuk-button--warning" type="submit" asp-page-handler="Deny" data-module="govuk-button" id="deny-fields-button">Do not export selected fields</button>
+                    </div>
+                </form>
+            }
+        }
+
+        <div class="govuk-!-margin-top-6">
+            <a asp-page="/Admin/Admin" class="govuk-link">← Back to admin</a>
+        </div>
+    </div>
+</div>

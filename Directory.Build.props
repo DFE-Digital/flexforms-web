@@ -1,0 +1,11 @@
+<Project>
+	<!-- Local development: GovUK.Dfe.FlexForms.Api.Client (and through it GovUK.Dfe.CoreLibs.Contracts) is referenced from
+	     sibling flexforms-api and DfE.CoreLibs checkouts instead of NuGet packages. The local Contracts project has no
+	     version (1.0.0), so packages that depend on a newer Contracts raise NU1605, and Directory.Build.targets stamps
+	     the assembly with LocalCoreLibsVersion so those packages still bind to it at runtime. -->
+	<PropertyGroup>
+		<LocalFlexFormsApiSrc>$(MSBuildThisFileDirectory)..\flexforms-api\src\</LocalFlexFormsApiSrc>
+		<LocalCoreLibsVersion>1.0.999</LocalCoreLibsVersion>
+		<NoWarn>$(NoWarn);NU1605</NoWarn>
+	</PropertyGroup>
+</Project>
