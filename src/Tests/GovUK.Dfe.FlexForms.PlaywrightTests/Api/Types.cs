@@ -51,6 +51,9 @@ public sealed record TenantUserDto(string UserId, string? Email, string? Name);
 
 public sealed record TenantUsersResult(IReadOnlyList<TenantUserDto>? Items);
 
+public sealed record TenantRoleDto(string RoleId, string Name, bool IsSystem);
+
+
 public sealed record CreateUserRoleRequest(string Email, string Name, string Role, string[] TemplateIds);
 
 public sealed record CreateUserRoleResponse(

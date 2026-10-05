@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 using Microsoft.Playwright;
 
@@ -27,11 +28,56 @@ public sealed class UserManager(IPage page, Terminology terminology) : BasePage(
         await ExpectUserAddedAsync(email, role);
     }
 
-    public async Task GrantFormAccessAsync(string formName)
+    public async Task GrantFormAccessAsync(string formName) =>
+        await FormAccessCheckbox(formName).CheckAsync();
+
+    public async Task RevokeFormAccessAsync(string formName) =>
+        await FormAccessCheckbox(formName).UncheckAsync();
+
+    public async Task EditUserAsync(
+        string email,
+        string? newRole = null,
+        IEnumerable<string>? formNamesToGrant = null,
+        IEnumerable<string>? formNamesToRevoke = null)
     {
-        var item = Page.Locator(".govuk-checkboxes__item").Filter(new LocatorFilterOptions { HasText = formName });
-        await item.GetByRole(AriaRole.Checkbox).CheckAsync();
+        var grant = formNamesToGrant?.ToArray() ?? [];
+        var revoke = formNamesToRevoke?.ToArray() ?? [];
+        if (string.IsNullOrWhiteSpace(newRole) && grant.Length == 0 && revoke.Length == 0)
+        {
+            return;
+        }
+
+        await FilterUsersBySearchTermAsync(email);
+        await UserSummaryCard(email)
+            .GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = "Edit" })
+            .ClickAsync();
+        await Page.WaitForURLAsync("**/admin/user-manager/edit**");
+
+        if (!string.IsNullOrWhiteSpace(newRole))
+        {
+            await ById("Role").SelectOptionAsync(newRole);
+        }
+
+        foreach (var formName in grant)
+        {
+            await GrantFormAccessAsync(formName);
+        }
+
+        foreach (var formName in revoke)
+        {
+            await RevokeFormAccessAsync(formName);
+        }
+
+        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save" }).ClickAsync();
+        await Page.WaitForURLAsync(new Regex(@"/admin/user-manager(\?|$)"));
+        await Assertions.Expect(Page.GetByRole(AriaRole.Alert))
+            .ToContainTextAsync("User role and form access updated.");
     }
+
+    private ILocator FormAccessCheckbox(string formName) =>
+        Page.Locator(".govuk-checkboxes__item")
+            .Filter(new LocatorFilterOptions { HasText = formName })
+            .GetByRole(AriaRole.Checkbox);
 
     public async Task RemoveUserFromTenantAsync(string email)
     {
