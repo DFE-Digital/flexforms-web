@@ -10,6 +10,13 @@ public sealed class OrganisationSettings(IPage page, Terminology terminology) : 
         await ById("TerminologySingular").FillAsync(singular);
         await ById("TerminologyPlural").FillAsync(plural);
     }
+    
+    public async Task SetNotificationBannerAsync(string heading, string message)
+    {
+        await ById("BannerEnabled").CheckAsync();
+        await ById("BannerHeading").FillAsync(heading);
+        await ById("BannerMessage").FillAsync(message);
+    }
 
     public async Task SaveSettingsAsync()
     {

@@ -8,6 +8,7 @@ public static class TenantAdmin
 {
     private const string WebTarget = "Web";
     private const string ApplicationTerminologyCategory = "ApplicationTerminology";
+    private const string NotificationBannerCategory = "NotificationBanner";
 
     public static Task UpsertSafeSettingAsync(
         IAPIRequestContext request,
@@ -43,6 +44,16 @@ public static class TenantAdmin
             tenantId,
             ApplicationTerminologyCategory,
             JsonSerializer.Serialize(new { Singular = singular, Plural = plural }));
+        await RefreshTenantSettingsAsync(request);
+    }
+
+    public static async Task ClearNotificationBannerAsync(IAPIRequestContext request, string tenantId)
+    {
+        await UpsertSafeSettingAsync(
+            request,
+            tenantId,
+            NotificationBannerCategory,
+            JsonSerializer.Serialize(new { Enabled = false, Heading = "Important", Message = "" }));
         await RefreshTenantSettingsAsync(request);
     }
 }
