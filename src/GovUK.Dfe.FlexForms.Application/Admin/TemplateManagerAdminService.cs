@@ -182,13 +182,11 @@ public sealed class TemplateManagerAdminService(
         {
             logger.LogError(ex, "Failed to save template version {NewVersion} for {TemplateId}",
                 state.NewVersion, templateId);
+            // The API puts each problem with the schema on its own line, so each is shown as a separate error.
+            var problems = AdminApiErrorMapper.Format(ex, TemplateManagerMessages.SaveFailed)
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             return AdminPageOutcome.Stay(
-                errors:
-                [
-                    new FormValidationError(
-                        nameof(TemplateManagerWorkState.NewSchema),
-                        AdminApiErrorMapper.Format(ex, TemplateManagerMessages.SaveFailed))
-                ]);
+                errors: [.. problems.Select(problem => new FormValidationError(nameof(TemplateManagerWorkState.NewSchema), problem))]);
         }
     }
 

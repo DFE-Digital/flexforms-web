@@ -1023,6 +1023,34 @@ Grow by adding pages, then radios + follow-up logic, then a small collection flo
 
 Keep **pageId** and **fieldId** distinct: conditional logic targets both.
 
+### 15.1 Changing fields once a template is in use
+
+Reports line answers up across template versions by `fieldId`. Once any application uses the template, Template
+Manager refuses a new version that would break that, and lists each problem with the fix:
+
+| Change | Allowed? |
+|---|---|
+| Change a label, hint, validation message, page or order | Yes |
+| Add a field | Yes |
+| Switch between types that store the same answer (`text` ↔ `text-area` ↔ `email` ↔ `character-count`, `radios` ↔ `select`, `date` ↔ `datetime`) | Yes |
+| Remove or rename a `fieldId` (including a collection's `fieldId`) | Only if you retire it (below) |
+| Change what a field stores (text to number, one choice to many, a lookup of trusts to a lookup of academies, a field to a collection) | No: give the new field a new `fieldId` and retire the old one |
+| Reuse a `fieldId` that an earlier version used and later dropped | No: pick a new `fieldId` |
+
+To remove or rename a field, list it in `retiredFields` at the top level of the template. Name the fields that
+replace it in `replacedBy`, so the data team knows how the old answers map to the new ones. For a field inside a
+collection, add its collection's `fieldId` as `parentFieldId`. Retiring a collection retires every field in it.
+
+```json
+"retiredFields": [
+  { "fieldId": "name", "replacedBy": ["firstName", "lastName"] },
+  { "fieldId": "attendeeRole", "parentFieldId": "attendees" }
+]
+```
+
+You can leave `retiredFields` entries in later versions. Until a template has its first application, you can
+change fields freely.
+
 ---
 
 ## 16. Design checklist
@@ -1030,7 +1058,7 @@ Keep **pageId** and **fieldId** distinct: conditional logic targets both.
 1. Sketch the **task list** (groups → tasks) before JSON.
 2. Decide per task: **linear pages** vs **collection** vs **derived**.
 3. One clear **question per page** where possible.
-4. Give every field a stable **`fieldId`**.
+4. Give every field a stable **`fieldId`**. Once applications exist, IDs can't be renamed or reused (see 15.1).
 5. Add **required** messages that sound like GOV.UK (“Enter…”, “Select…”).
 6. For Yes/No follow-ups, add **paired** show/hide rules.
 7. For collections, set **min/max**, **columns**, and **itemTitleBinding**.

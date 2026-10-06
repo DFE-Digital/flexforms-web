@@ -93,6 +93,34 @@ public class TemplateManagerAdminServiceTests
     }
 
     [Fact]
+    public async Task CreateVersionAsync_ShouldShowEachProblem_WhenApiRejectsFieldChanges()
+    {
+        var templateId = Guid.NewGuid();
+        var apiError = new ExternalApplicationsException<GovUK.Dfe.CoreLibs.Http.Models.ExceptionResponse>(
+            "Validation failed",
+            400,
+            "body",
+            new Dictionary<string, IEnumerable<string>>(),
+            new GovUK.Dfe.CoreLibs.Http.Models.ExceptionResponse
+            {
+                Message = "Validation failed. Please check the following errors:",
+                Details = "This version can't be saved.\nField \"name\" is missing.\nField \"age\" changes kind."
+            },
+            null);
+        _templates.CreateTemplateVersionAsync(templateId, Arg.Any<CreateTemplateVersionRequest>(), Arg.Any<CancellationToken>())
+            .Returns<TemplateSchemaDto>(_ => throw apiError);
+
+        var result = await _service.CreateVersionAsync(
+            new TemplateManagerWorkState { NewVersion = "1.0.2", NewSchema = "{}" },
+            templateId);
+
+        Assert.Equal(
+            new[] { "This version can't be saved.", "Field \"name\" is missing.", "Field \"age\" changes kind." },
+            result.Errors.Select(e => e.Message));
+        Assert.All(result.Errors, e => Assert.Equal(nameof(TemplateManagerWorkState.NewSchema), e.FieldKey));
+    }
+
+    [Fact]
     public void SuggestNextVersion_ShouldPreferLatestVersion()
     {
         Assert.Equal("1.0.3", _service.SuggestNextVersion("1.0.2", "1.0.0"));
