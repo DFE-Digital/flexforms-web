@@ -9,12 +9,19 @@ namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService.Admin;
 public sealed class OrganisationSettingsTests : PlaywrightTestBase
 {
     private CreateApplicationResponse _application = null!;
+    private CreateApplicationResponse _otherTemplateApplication = null!;
+    private const string OtherTemplateName = "live switch only";
 
     [OneTimeSetUp]
     public async Task CreateApplicationWithContributorAsync()
     {
         var createRequest = ApplicationBuilder.CreateApplicationRequest(ApiConfig.TemplateId);
         _application = await ApplicationApi.CreateApplicationAsync(AdminApiClient, createRequest);
+
+        var otherTemplateId = await Templates.GetTemplateIdByNameAsync(AdminApiClient, OtherTemplateName);
+        var otherTemplateApplicationRequest = ApplicationBuilder.CreateApplicationRequest(otherTemplateId);
+        _otherTemplateApplication =
+            await ApplicationApi.CreateApplicationAsync(AdminApiClient, otherTemplateApplicationRequest);
     }
 
     [SetUp]
@@ -130,6 +137,51 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
         await applicationPage.ExpectButton("Submit your apple answers");
     }
 
+    [TestCase(TestName = "Admin can customise application submitted page for all templates")]
+    [CiRetry]
+    public async Task AdminCanCustomiseApplicationSubmittedPageAsync()
+    {
+        var organisationSettings = new OrganisationSettings(Page, Terminology);
+        var applicationPage = new ApplicationPage(Page, Terminology);
+
+        await organisationSettings.ApplicationSubmittedSettings.ForAllTemplates()
+            .WithConfirmationTitle("Orange app submitted")
+            .WithPageBody(
+                "## Next steps for your orange application\n\nThank you for submitting your orange application. We will review it and get back to you shortly.")
+            .SaveAsync();
+
+        await Page.GotoAsync($"/application-submitted/{_application.ApplicationReference}");
+        await applicationPage.ExpectHeading("Orange app submitted");
+        await applicationPage.ExpectHeading("Next steps for your orange application");
+        await applicationPage.ExpectParagraph(
+            "Thank you for submitting your orange application. We will review it and get back to you shortly.");
+    }
+
+    [TestCase(TestName = "Admin can customise application submitted page for a specific template")]
+    [CiRetry]
+    public async Task AdminCanCustomiseApplicationSubmittedPageForSpecificTemplateAsync()
+    {
+        var organisationSettings = new OrganisationSettings(Page, Terminology);
+        var applicationPage = new ApplicationPage(Page, Terminology);
+
+        await organisationSettings.ApplicationSubmittedSettings.ForTemplate(ApiConfig.TemplateId.ToLower())
+            .WithConfirmationTitle("Pear app submitted")
+            .WithPageBody(
+                "## Next steps for your pear application\n\nThank you for submitting your pear application. We will review it and get back to you shortly.")
+            .SaveAsync();
+
+        await Page.GotoAsync($"/application-submitted/{_application.ApplicationReference}");
+        await applicationPage.ExpectHeading("Pear app submitted");
+        await applicationPage.ExpectHeading("Next steps for your pear application");
+        await applicationPage.ExpectParagraph(
+            "Thank you for submitting your pear application. We will review it and get back to you shortly.");
+
+        // verify other template application still uses the default submitted page
+        await Page.GotoAsync($"/application-submitted/{_otherTemplateApplication.ApplicationReference}");
+        await applicationPage.ExpectHeading("Application submitted");
+        await applicationPage.ExpectHeading("What happens next");
+    }
+
     [TearDown]
     public async Task RestoreDefaultTerminologyAsync()
     {
@@ -141,6 +193,7 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
         await TenantAdmin.ClearNotificationBannerAsync(AdminApiClient, ApiConfig.TenantId);
         await TenantAdmin.RestoreDashboardAsync(AdminApiClient, ApiConfig.TenantId);
         await TenantAdmin.RestoreApplicationPreviewAsync(AdminApiClient, ApiConfig.TenantId);
+        await TenantAdmin.RestoreApplicationSubmittedPageAsync(AdminApiClient, ApiConfig.TenantId);
 
         // Web cache needs to be cleared for the restored settings to show in the UI
         await LoginAsync("admin");

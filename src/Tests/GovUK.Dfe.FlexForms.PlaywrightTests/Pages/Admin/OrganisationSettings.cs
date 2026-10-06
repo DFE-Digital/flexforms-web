@@ -14,11 +14,14 @@ public sealed class OrganisationSettings : BasePage
         NotificationBanner = new NotificationBannerSettings(this);
         Dashboard = new DashboardSettings(this);
         CheckYourAnswersSettings = new CheckYourAnswersSettings(this);
+        ApplicationSubmittedSettings = new ApplicationSubmittedSettings(this);
     }
 
     public ApplicationTerminologySettings ApplicationTerminology { get; }
 
     public NotificationBannerSettings NotificationBanner { get; }
+
+    public ApplicationSubmittedSettings ApplicationSubmittedSettings { get; }
 
     public CheckYourAnswersSettings CheckYourAnswersSettings { get; }
 
@@ -101,15 +104,31 @@ public sealed class CheckYourAnswersSettings(OrganisationSettings settings)
 {
     public CheckYourAnswersSettings WithPageHeading(string heading) =>
         settings.Enqueue(this, "PreviewPageHeading", field => field.FillAsync(heading));
-    
+
     public CheckYourAnswersSettings WithSubmitHeading(string heading) =>
         settings.Enqueue(this, "PreviewSubmitHeading", field => field.FillAsync(heading));
-    
+
     public CheckYourAnswersSettings WithSubmitHint(string hint) =>
         settings.Enqueue(this, "PreviewSubmitHint", field => field.FillAsync(hint));
-    
+
     public CheckYourAnswersSettings WithSubmitButtonText(string buttonText) =>
         settings.Enqueue(this, "PreviewSubmitButtonText", field => field.FillAsync(buttonText));
+
+    public Task SaveAsync() => settings.SaveAsync();
+}
+
+public sealed class ApplicationSubmittedSettings(OrganisationSettings settings)
+{
+    public ApplicationSubmittedSettings ForAllTemplates() => this.ForTemplate("_default");
+
+    public ApplicationSubmittedSettings ForTemplate(string templateId) =>
+        settings.Enqueue(this, "SubmittedTemplateId", field => field.SelectOptionAsync(templateId));
+
+    public ApplicationSubmittedSettings WithConfirmationTitle(string title) =>
+        settings.Enqueue(this, "SubmittedPanelTitle", field => field.FillAsync(title));
+
+    public ApplicationSubmittedSettings WithPageBody(string body) =>
+        settings.Enqueue(this, "SubmittedBodyMarkdown", field => field.FillAsync(body));
 
     public Task SaveAsync() => settings.SaveAsync();
 }

@@ -77,7 +77,7 @@ public static class TenantAdmin
             }));
         await RefreshTenantSettingsAsync(request);
     }
-    
+
     public static async Task RestoreApplicationPreviewAsync(IAPIRequestContext request, string tenantId)
     {
         await UpsertSafeSettingAsync(
@@ -91,6 +91,23 @@ public static class TenantAdmin
                 SubmitHint = "",
                 SubmitButtonText = "",
                 HideSubmitSection = false
+            }));
+        await RefreshTenantSettingsAsync(request);
+    }
+
+    public static async Task RestoreApplicationSubmittedPageAsync(IAPIRequestContext request, string tenantId)
+    {
+        await UpsertSafeSettingAsync(
+            request,
+            tenantId,
+            "ApplicationSubmittedPage",
+            JsonSerializer.Serialize(new
+            {
+                _default = new
+                {
+                    PanelTitle = "",
+                    BodyMarkdown = ""
+                }
             }));
         await RefreshTenantSettingsAsync(request);
     }
