@@ -280,7 +280,11 @@
                     <textarea class="govuk-textarea @(ViewData.ModelState["NewSchema"]?.Errors.Any() == true ? "govuk-textarea--error" : "")" 
                               asp-for="NewSchema" 
                               rows="20" 
-                              aria-describedby="schema-hint @(ViewData.ModelState["NewSchema"]?.Errors.Any() == true ? "schema-error" : "")"></textarea>
+                              spellcheck="false"
+                              data-json-format
+                              aria-describedby="schema-hint @(ViewData.ModelState["NewSchema"]?.Errors.Any() == true ? "schema-error" : "") NewSchema-format-status"></textarea>
+                    <button class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" type="button" data-json-format-button="NewSchema" id="format-json-button" hidden>Format JSON</button>
+                    <p id="NewSchema-format-status" class="govuk-body" role="status" aria-live="polite"></p>
                 </div>
 
                 <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.AcknowledgeReportingImpact)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
@@ -320,4 +324,8 @@
             <a asp-page="/Admin/CreateTemplate" class="govuk-button">Create a new template</a>
         }
     </div>
-</div> 
+</div>
+
+@section Scripts {
+    <script src="~/js/json-format.js" asp-append-version="true"></script>
+}

@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
@@ -83,11 +84,13 @@ public sealed class TemplateManagerAdminService(
                 return;
             }
 
-            var options = new JsonSerializerOptions { WriteIndented = true, PropertyNameCaseInsensitive = true };
-            state.CurrentTemplate = JsonSerializer.Deserialize<FormTemplate>(schemaJson, options);
-            state.CurrentTemplateJson = state.CurrentTemplate != null
-                ? JsonSerializer.Serialize(state.CurrentTemplate, options)
-                : PrettyPrintJson(schemaJson);
+            state.CurrentTemplate = JsonSerializer.Deserialize<FormTemplate>(
+                schemaJson,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            // Shown and prefilled from the stored JSON, not the FormTemplate model, which would drop properties it
+            // doesn't model, such as semanticKey and retiredFields.
+            state.CurrentTemplateJson = PrettyPrintJson(schemaJson);
 
             logger.LogDebug(
                 "Loaded template {TemplateId} version {VersionNumber} with {TaskGroupCount} task groups",
@@ -226,12 +229,25 @@ public sealed class TemplateManagerAdminService(
         }
     }
 
+    private static readonly JsonDocumentOptions PrettyPrintReadOptions = new()
+    {
+        AllowTrailingCommas = true,
+        CommentHandling = JsonCommentHandling.Skip,
+    };
+
+    // The JSON is edited in a textarea and Razor HTML-encodes it, so characters such as ' and < stay readable.
+    private static readonly JsonSerializerOptions PrettyPrintWriteOptions = new()
+    {
+        WriteIndented = true,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
     private static string PrettyPrintJson(string json)
     {
         try
         {
-            using var document = JsonDocument.Parse(json);
-            return JsonSerializer.Serialize(document.RootElement, new JsonSerializerOptions { WriteIndented = true });
+            using var document = JsonDocument.Parse(json, PrettyPrintReadOptions);
+            return JsonSerializer.Serialize(document.RootElement, PrettyPrintWriteOptions);
         }
         catch (JsonException)
         {

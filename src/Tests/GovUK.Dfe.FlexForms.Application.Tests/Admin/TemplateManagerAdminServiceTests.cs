@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Text.Json.Nodes;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
@@ -181,6 +182,45 @@ public class TemplateManagerAdminServiceTests
         Assert.NotNull(state.CurrentTemplate);
         Assert.Equal("Transfers", state.CurrentTemplate.TemplateName);
         Assert.False(state.HasError);
+    }
+
+    private static string AuthoredSchema(Guid templateId)
+    {
+        var schema = JsonNode.Parse(StarterFormTemplateSchema.CreateJson(templateId.ToString(), "Trust's <form>"))!.AsObject();
+        schema["retiredFields"] = JsonNode.Parse("""[{ "fieldId": "name", "replacedBy": ["fullName"] }]""");
+        var firstField = schema["taskGroups"]![0]!["tasks"]![0]!["pages"]![0]!["fields"]![0]!.AsObject();
+        firstField["semanticKey"] = "name";
+        return schema.ToJsonString();
+    }
+
+    [Fact]
+    public async Task LoadTemplateDataAsync_ShouldPrefillTheStoredJsonIndented_KeepingPropertiesTheModelDoesNotHave()
+    {
+        var templateId = Guid.NewGuid();
+        var template = new TemplateDto { TemplateId = templateId, Name = "Transfers", CreatedOn = DateTime.UtcNow };
+        _templates.GetTemplateVersionsAsync(templateId, Arg.Any<CancellationToken>())
+            .Returns(new ObservableCollection<TemplateVersionSummaryDto>
+            {
+                new() { TemplateId = templateId, TemplateVersionId = Guid.NewGuid(), VersionNumber = "2.0", CreatedOn = DateTime.UtcNow }
+            });
+        _templates.GetTemplateSchemaByVersionAsync(templateId, "2.0", Arg.Any<CancellationToken>())
+            .Returns(new TemplateSchemaDto
+            {
+                TemplateId = templateId,
+                TemplateVersionId = Guid.NewGuid(),
+                VersionNumber = "2.0",
+                JsonSchema = AuthoredSchema(templateId)
+            });
+
+        var state = new TemplateManagerWorkState { TenantTemplates = [template], ShowAddVersionForm = true };
+        await _service.LoadTemplateDataAsync(state, templateId);
+        _service.PrefillNewSchemaIfEmpty(state, templateId);
+
+        Assert.False(state.HasError);
+        Assert.Contains("\"retiredFields\"", state.NewSchema);
+        Assert.Contains("\"semanticKey\": \"name\"", state.NewSchema);
+        Assert.Contains("\"templateName\": \"Trust's <form>\"", state.NewSchema);
+        Assert.Contains("\n  \"taskGroups\"", state.NewSchema.ReplaceLineEndings("\n"));
     }
 
     [Fact]
