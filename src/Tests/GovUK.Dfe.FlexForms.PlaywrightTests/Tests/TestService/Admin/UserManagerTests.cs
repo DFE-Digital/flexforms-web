@@ -57,7 +57,7 @@ public sealed class UserManagerTests : PlaywrightTestBase
         await SignInAsync("user2");
         await Page.GotoAsync("/");
 
-        await new AuthenticationErrorPage(Page, Terminology).ExpectInvalidOrExpiredTokensAsync();
+        await new ErrorPage(Page, Terminology).ExpectInvalidOrExpiredTokensAsync();
     }
 
     [OneTimeTearDown]

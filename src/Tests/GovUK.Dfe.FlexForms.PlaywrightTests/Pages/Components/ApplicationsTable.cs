@@ -56,6 +56,16 @@ public sealed class ApplicationsTable
         return this;
     }
 
+    public ApplicationsTable ColumnContainsValue(string tableColumn, string expectedValue)
+    {
+        Enqueue(async () =>
+        {
+            var cell = await CellForColumnAsync(tableColumn);
+            await Assertions.Expect(cell).ToContainTextAsync(expectedValue);
+        });
+        return this;
+    }
+
     public ApplicationsTable ColumnHasValueWithLink(string tableColumn, string expectedValue, string href)
     {
         Enqueue(async () =>
@@ -83,7 +93,8 @@ public sealed class ApplicationsTable
 
     private ILocator HeaderCells() => _table.GetByRole(AriaRole.Columnheader);
 
-    private ILocator BodyRows() => _table.GetByRole(AriaRole.Row).Filter(new LocatorFilterOptions { Has = _page.GetByRole(AriaRole.Cell) });
+    private ILocator BodyRows() => _table.GetByRole(AriaRole.Row)
+        .Filter(new LocatorFilterOptions { Has = _page.GetByRole(AriaRole.Cell) });
 
     private ILocator CellLink(ILocator cell) => cell.GetByRole(AriaRole.Link);
 
@@ -91,11 +102,13 @@ public sealed class ApplicationsTable
     {
         if (string.IsNullOrEmpty(_reference))
         {
-            throw new InvalidOperationException("Reference is not set. Call WithReference() before asserting a table cell value.");
+            throw new InvalidOperationException(
+                "Reference is not set. Call WithReference() before asserting a table cell value.");
         }
 
         var headerCells = HeaderCells();
-        await Assertions.Expect(headerCells.Filter(new LocatorFilterOptions { HasText = tableColumn })).ToHaveCountAsync(1);
+        await Assertions.Expect(headerCells.Filter(new LocatorFilterOptions { HasText = tableColumn }))
+            .ToHaveCountAsync(1);
 
         var columnIndex = await headerCells.EvaluateAllAsync<int>(
             "(headers, column) => headers.findIndex((header) => header.textContent?.trim() === column)",

@@ -50,6 +50,12 @@ public sealed class AdminPage(IPage page, Terminology terminology) : BasePage(pa
         await Page.WaitForURLAsync("/admin/role-manager");
     }
 
+    public async Task OpenViewApplicationsAsync()
+    {
+        await ById("go-to-admin-applications-button").ClickAsync();
+        await Page.WaitForURLAsync("/admin/applications");
+    }
+
     public async Task OpenOrganisationSettingsAsync()
     {
         await ById("go-to-organisation-settings-button").ClickAsync();
