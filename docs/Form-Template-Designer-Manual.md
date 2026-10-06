@@ -365,6 +365,7 @@ Every field shares this shape:
 | Property | Notes |
 |----------|--------|
 | `fieldId` | **Answer key**. Must be unique in the template. Never reuse casually; changing it breaks existing answers. |
+| `semanticKey` | Optional reporting key. Only needed when you rename a field: set it to the old field's reporting key so reports carry on as one column (see 15.1). |
 | `type` | Control type (next section). |
 | `label.value` | Label text. |
 | `label.isVisible` | Show label (`true`) or hide it (`false`) when the page title is enough. |
@@ -1025,21 +1026,37 @@ Keep **pageId** and **fieldId** distinct: conditional logic targets both.
 
 ### 15.1 Changing fields once a template is in use
 
-Reports line answers up across template versions by `fieldId`. Once any application uses the template, Template
-Manager refuses a new version that would break that, and lists each problem with the fix:
+Reports line answers up across template versions by each field's **reporting key**. You own that mapping: when you
+change a field, the template says how the old answers relate to the new ones, and reporting reads it as written. The
+data team doesn't have to work it out.
+
+A field's reporting key is its `semanticKey` if it has one, otherwise its `fieldId`. A field inside a collection is
+reported as `collectionKey/fieldKey`, where the collection's key is the `semanticKey` on its flow (or the flow's
+`fieldId`). Most fields never need a `semanticKey`; you add one when you rename a field.
+
+Once any application uses the template, Template Manager refuses a new version that would break reporting, and
+lists each problem with the fix:
 
 | Change | Allowed? |
 |---|---|
 | Change a label, hint, validation message, page or order | Yes |
 | Add a field | Yes |
 | Switch between types that store the same answer (`text` ↔ `text-area` ↔ `email` ↔ `character-count`, `radios` ↔ `select`, `date` ↔ `datetime`) | Yes |
-| Remove or rename a `fieldId` (including a collection's `fieldId`) | Only if you retire it (below) |
+| Remove a `fieldId` (including a collection's `fieldId`) | Only if you retire it (below) |
+| Rename a `fieldId` | Only if you retire the old ID, name the new one in `replacedBy`, and give the new field the old reporting key as its `semanticKey` |
+| Split or merge fields (for example `name` into `firstName` and `lastName`) | Retire the old field with `replacedBy` naming the new ones. The new fields get new reporting keys |
 | Change what a field stores (text to number, one choice to many, a lookup of trusts to a lookup of academies, a field to a collection) | No: give the new field a new `fieldId` and retire the old one |
-| Reuse a `fieldId` that an earlier version used and later dropped | No: pick a new `fieldId` |
+| Change a field's `semanticKey` | No: a field keeps its reporting key |
+| Reuse a `fieldId` or reporting key that an earlier version used and later dropped | No: pick a new one |
+| Give two fields the same reporting key | No |
 
-To remove or rename a field, list it in `retiredFields` at the top level of the template. Name the fields that
-replace it in `replacedBy`, so the data team knows how the old answers map to the new ones. For a field inside a
-collection, add its collection's `fieldId` as `parentFieldId`. Retiring a collection retires every field in it.
+`semanticKey` can't contain `/`.
+
+#### Retiring and replacing fields
+
+List removed fields in `retiredFields` at the top level of the template. Name the fields that replace each one in
+`replacedBy`. For a field inside a collection, add its collection's `fieldId` as `parentFieldId`. Retiring a
+collection retires every field in it.
 
 ```json
 "retiredFields": [
@@ -1047,6 +1064,23 @@ collection, add its collection's `fieldId` as `parentFieldId`. Retiring a collec
   { "fieldId": "attendeeRole", "parentFieldId": "attendees" }
 ]
 ```
+
+#### Renaming a field
+
+Version 1 has `{ "fieldId": "trustName", ... }`. To rename it to `incomingTrustName` in version 2 and keep the
+reports as one column:
+
+```json
+"retiredFields": [
+  { "fieldId": "trustName", "replacedBy": ["incomingTrustName"] }
+],
+...
+{ "fieldId": "incomingTrustName", "semanticKey": "trustName", "type": "text", ... }
+```
+
+The new field must store the same kind of answer as the old one. Keep the `semanticKey` on the field in every later
+version. Renaming a collection works the same way, with the `semanticKey` on the flow; its fields keep their
+reporting keys automatically as long as their own `fieldId`s don't change.
 
 You can leave `retiredFields` entries in later versions. Until a template has its first application, you can
 change fields freely.
@@ -1058,7 +1092,7 @@ change fields freely.
 1. Sketch the **task list** (groups → tasks) before JSON.
 2. Decide per task: **linear pages** vs **collection** vs **derived**.
 3. One clear **question per page** where possible.
-4. Give every field a stable **`fieldId`**. Once applications exist, IDs can't be renamed or reused (see 15.1).
+4. Give every field a stable **`fieldId`**. Once applications exist, renaming a field needs `retiredFields` and a `semanticKey`, and IDs can't be reused (see 15.1).
 5. Add **required** messages that sound like GOV.UK (“Enter…”, “Select…”).
 6. For Yes/No follow-ups, add **paired** show/hide rules.
 7. For collections, set **min/max**, **columns**, and **itemTitleBinding**.
