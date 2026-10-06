@@ -3,24 +3,93 @@ using Microsoft.Playwright;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Admin;
 
-public sealed class OrganisationSettings(IPage page, Terminology terminology) : BasePage(page, terminology)
+public sealed class OrganisationSettings : BasePage
 {
-    public async Task SetApplicationTerminologyAsync(string singular, string plural)
+    private readonly List<Func<Task>> _changes = [];
+
+    public OrganisationSettings(IPage page, Terminology terminology)
+        : base(page, terminology)
     {
-        await ById("TerminologySingular").FillAsync(singular);
-        await ById("TerminologyPlural").FillAsync(plural);
-    }
-    
-    public async Task SetNotificationBannerAsync(string heading, string message)
-    {
-        await ById("BannerEnabled").CheckAsync();
-        await ById("BannerHeading").FillAsync(heading);
-        await ById("BannerMessage").FillAsync(message);
+        ApplicationTerminology = new ApplicationTerminologySettings(this);
+        NotificationBanner = new NotificationBannerSettings(this);
+        Dashboard = new DashboardSettings(this);
     }
 
-    public async Task SaveSettingsAsync()
+    public ApplicationTerminologySettings ApplicationTerminology { get; }
+
+    public NotificationBannerSettings NotificationBanner { get; }
+
+    public DashboardSettings Dashboard { get; }
+
+    public async Task SaveAsync()
     {
+        foreach (var change in _changes)
+        {
+            await change();
+        }
+
+        _changes.Clear();
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save settings" }).ClickAsync();
         await Assertions.Expect(Page.GetByRole(AriaRole.Alert)).ToContainTextAsync("Organisation settings saved.");
     }
+
+    internal TSection Enqueue<TSection>(TSection section, string fieldId, Func<ILocator, Task> change)
+    {
+        _changes.Add(() => change(ById(fieldId)));
+        return section;
+    }
+}
+
+public sealed class ApplicationTerminologySettings(OrganisationSettings settings)
+{
+    public ApplicationTerminologySettings WithSingular(string singular) =>
+        settings.Enqueue(this, "TerminologySingular", field => field.FillAsync(singular));
+
+    public ApplicationTerminologySettings WithPlural(string plural) =>
+        settings.Enqueue(this, "TerminologyPlural", field => field.FillAsync(plural));
+
+    public Task SaveAsync() => settings.SaveAsync();
+}
+
+public sealed class NotificationBannerSettings(OrganisationSettings settings)
+{
+    public NotificationBannerSettings Enabled() =>
+        settings.Enqueue(this, "BannerEnabled", field => field.CheckAsync());
+
+    public NotificationBannerSettings WithHeading(string heading) =>
+        settings.Enqueue(this, "BannerHeading", field => field.FillAsync(heading));
+
+    public NotificationBannerSettings WithMessage(string message) =>
+        settings.Enqueue(this, "BannerMessage", field => field.FillAsync(message));
+
+    public Task SaveAsync() => settings.SaveAsync();
+}
+
+public sealed class DashboardSettings(OrganisationSettings settings)
+{
+    public DashboardSettings WithPageSize(int pageSize) =>
+        settings.Enqueue(this, "DashboardPageSize", field => field.FillAsync(pageSize.ToString()));
+
+    public DashboardSettings WithFiltersEnabled() =>
+        settings.Enqueue(this, "DashboardEnableFilters", field => field.CheckAsync());
+
+    public DashboardSettings WithFiltersDisabled() =>
+        settings.Enqueue(this, "DashboardEnableFilters", field => field.UncheckAsync());
+
+    public DashboardSettings WithMainHeading(string heading) =>
+        settings.Enqueue(this, "DashboardMainHeading", field => field.FillAsync(heading));
+
+    public DashboardSettings WithInProgressHeading(string heading) =>
+        settings.Enqueue(this, "DashboardInProgressHeading", field => field.FillAsync(heading));
+
+    public DashboardSettings WithStartNewHeading(string heading) =>
+        settings.Enqueue(this, "DashboardStartNewHeading", field => field.FillAsync(heading));
+
+    public DashboardSettings WithStartNewHint(string hint) =>
+        settings.Enqueue(this, "DashboardStartNewHint", field => field.FillAsync(hint));
+
+    public DashboardSettings WithStartNewButtonText(string buttonText) =>
+        settings.Enqueue(this, "DashboardStartNewButtonText", field => field.FillAsync(buttonText));
+
+    public Task SaveAsync() => settings.SaveAsync();
 }

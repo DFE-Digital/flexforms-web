@@ -35,8 +35,10 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
         var organisationSettings = new OrganisationSettings(Page, Terminology);
         var dashboardPage = new DashboardPage(Page, Terminology);
 
-        await organisationSettings.SetApplicationTerminologyAsync(singular, plural);
-        await organisationSettings.SaveSettingsAsync();
+        await organisationSettings.ApplicationTerminology
+            .WithSingular(singular)
+            .WithPlural(plural)
+            .SaveAsync();
 
         await Page.GotoAsync("/");
         await dashboardPage.ExpectHeading($"Your {plural}");
@@ -58,8 +60,11 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
         const string message = "Test Banner Message";
         var organisationSettings = new OrganisationSettings(Page, Terminology);
 
-        await organisationSettings.SetNotificationBannerAsync(heading, message);
-        await organisationSettings.SaveSettingsAsync();
+        await organisationSettings.NotificationBanner
+            .Enabled()
+            .WithHeading(heading)
+            .WithMessage(message)
+            .SaveAsync();
 
         await Page.GotoAsync("/");
         await organisationSettings.ExpectNotificationBanner(heading, message);
@@ -71,6 +76,39 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
         await organisationSettings.ExpectNotificationBanner(heading, message);
     }
 
+    [TestCase(TestName = "Admin can customise the dashboard config")]
+    [CiRetry]
+    public async Task AdminCanCustomiseTheDashboardConfigAsync()
+    {
+        var organisationSettings = new OrganisationSettings(Page, Terminology);
+        var dashboardPage = new DashboardPage(Page, Terminology);
+
+        await organisationSettings.Dashboard
+            .WithPageSize(5)
+            .WithFiltersDisabled()
+            .WithMainHeading("Your Bananas")
+            .WithInProgressHeading("Bananas in progress")
+            .WithStartNewHeading("Start a new Banana")
+            .WithStartNewHint("Here is a hint for starting a new Banana")
+            .WithStartNewButtonText("Create banana")
+            .SaveAsync();
+
+        await Page.GotoAsync("/");
+        await dashboardPage.ApplicationsTable.HasNumberOfRows(5).VerifyAsync();
+        await dashboardPage.ExpectFilterApplicationsButtonHiddenAsync();
+        await dashboardPage.ExpectHeading("Your Bananas");
+        await dashboardPage.ExpectHeading("Bananas in progress");
+        await dashboardPage.ExpectHeading("Start a new Banana");
+        await dashboardPage.ExpectParagraph("Here is a hint for starting a new Banana");
+        await dashboardPage.ExpectStartNewButtonAsync("Create banana");
+
+        // application still uses the default terminology
+        await Page.GotoAsync($"/applications/{_application.ApplicationReference}");
+        await dashboardPage.ExpectHeading($"Your {Terminology.Singular}");
+        await dashboardPage.ExpectParagraph($"{Terminology.Singular} reference:");
+        await dashboardPage.ExpectParagraph($"{Terminology.Singular} version:");
+    }
+
     [TearDown]
     public async Task RestoreDefaultTerminologyAsync()
     {
@@ -80,6 +118,7 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
             Terminology.Singular,
             Terminology.Plural);
         await TenantAdmin.ClearNotificationBannerAsync(AdminApiClient, ApiConfig.TenantId);
+        await TenantAdmin.RestoreDashboardAsync(AdminApiClient, ApiConfig.TenantId);
 
         // Web cache needs to be cleared for the restored settings to show in the UI
         await LoginAsync("admin");

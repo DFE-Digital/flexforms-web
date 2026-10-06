@@ -32,6 +32,12 @@ public sealed class DashboardPage : BasePage
     public async Task ExpectFilterApplicationsButtonAsync(string buttonText) =>
         await Assertions.Expect(FilterApplicationsButton()).ToHaveTextAsync(buttonText.Trim());
 
+    public Task ExpectFilterApplicationsButtonHiddenAsync() =>
+        Assertions.Expect(FilterApplicationsButton()).ToHaveCountAsync(0);
+
+    public Task ExpectStartNewButtonAsync(string buttonText) =>
+        Assertions.Expect(StartNewApplicationButton()).ToHaveTextAsync(buttonText);
+
     public async Task ExpectApplicationPresentAsync(string reference) =>
         await Assertions.Expect(ApplicationLink(reference)).ToBeVisibleAsync();
 
