@@ -109,6 +109,27 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
         await dashboardPage.ExpectParagraph($"{Terminology.Singular} version:");
     }
 
+    [TestCase(TestName = "Admin can customise check your answers config")]
+    [CiRetry]
+    public async Task AdminCanCustomiseCheckYourAnswersConfigAsync()
+    {
+        var organisationSettings = new OrganisationSettings(Page, Terminology);
+        var applicationPage = new ApplicationPage(Page, Terminology);
+
+        await organisationSettings.CheckYourAnswersSettings
+            .WithPageHeading("Check your apple answers")
+            .WithSubmitHeading("Submit your apple answers")
+            .WithSubmitHint("Here is a hint for submitting your apple answers")
+            .WithSubmitButtonText("Submit your apple answers")
+            .SaveAsync();
+
+        await Page.GotoAsync($"/applications/{_application.ApplicationReference}?preview=true");
+        await applicationPage.ExpectHeading("Check your apple answers");
+        await applicationPage.ExpectHeading("Submit your apple answers");
+        await applicationPage.ExpectParagraph("Here is a hint for submitting your apple answers");
+        await applicationPage.ExpectButton("Submit your apple answers");
+    }
+
     [TearDown]
     public async Task RestoreDefaultTerminologyAsync()
     {
@@ -119,6 +140,7 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
             Terminology.Plural);
         await TenantAdmin.ClearNotificationBannerAsync(AdminApiClient, ApiConfig.TenantId);
         await TenantAdmin.RestoreDashboardAsync(AdminApiClient, ApiConfig.TenantId);
+        await TenantAdmin.RestoreApplicationPreviewAsync(AdminApiClient, ApiConfig.TenantId);
 
         // Web cache needs to be cleared for the restored settings to show in the UI
         await LoginAsync("admin");

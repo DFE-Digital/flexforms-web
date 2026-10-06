@@ -10,8 +10,9 @@ public static class TenantAdmin
     private const string ApplicationTerminologyCategory = "ApplicationTerminology";
     private const string NotificationBannerCategory = "NotificationBanner";
     private const string DashboardCategory = "Dashboard";
+    private const string ApplicationPreviewCategory = "ApplicationPreview";
 
-    public static Task UpsertSafeSettingAsync(
+    private static Task UpsertSafeSettingAsync(
         IAPIRequestContext request,
         string tenantId,
         string category,
@@ -73,6 +74,23 @@ public static class TenantAdmin
                 StartNewHeading = "",
                 StartNewHint = "",
                 StartNewButtonText = ""
+            }));
+        await RefreshTenantSettingsAsync(request);
+    }
+    
+    public static async Task RestoreApplicationPreviewAsync(IAPIRequestContext request, string tenantId)
+    {
+        await UpsertSafeSettingAsync(
+            request,
+            tenantId,
+            ApplicationPreviewCategory,
+            JsonSerializer.Serialize(new
+            {
+                PageHeading = "",
+                SubmitHeading = "",
+                SubmitHint = "",
+                SubmitButtonText = "",
+                HideSubmitSection = false
             }));
         await RefreshTenantSettingsAsync(request);
     }

@@ -43,6 +43,9 @@ public abstract class BasePage(IPage page, Terminology terminology)
     public Task ExpectLink(string linkText) => Assertions
         .Expect(Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = linkText }).First).ToBeVisibleAsync();
 
+    public Task ExpectButton(string buttonText) => Assertions
+        .Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = buttonText }).First).ToBeVisibleAsync();
+
     public async Task ExpectNotificationBanner(string heading, string message)
     {
         var banner = Page.Locator(".app-notification-banner");

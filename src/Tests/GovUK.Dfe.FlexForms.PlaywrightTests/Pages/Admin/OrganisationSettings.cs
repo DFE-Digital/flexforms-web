@@ -13,11 +13,14 @@ public sealed class OrganisationSettings : BasePage
         ApplicationTerminology = new ApplicationTerminologySettings(this);
         NotificationBanner = new NotificationBannerSettings(this);
         Dashboard = new DashboardSettings(this);
+        CheckYourAnswersSettings = new CheckYourAnswersSettings(this);
     }
 
     public ApplicationTerminologySettings ApplicationTerminology { get; }
 
     public NotificationBannerSettings NotificationBanner { get; }
+
+    public CheckYourAnswersSettings CheckYourAnswersSettings { get; }
 
     public DashboardSettings Dashboard { get; }
 
@@ -90,6 +93,23 @@ public sealed class DashboardSettings(OrganisationSettings settings)
 
     public DashboardSettings WithStartNewButtonText(string buttonText) =>
         settings.Enqueue(this, "DashboardStartNewButtonText", field => field.FillAsync(buttonText));
+
+    public Task SaveAsync() => settings.SaveAsync();
+}
+
+public sealed class CheckYourAnswersSettings(OrganisationSettings settings)
+{
+    public CheckYourAnswersSettings WithPageHeading(string heading) =>
+        settings.Enqueue(this, "PreviewPageHeading", field => field.FillAsync(heading));
+    
+    public CheckYourAnswersSettings WithSubmitHeading(string heading) =>
+        settings.Enqueue(this, "PreviewSubmitHeading", field => field.FillAsync(heading));
+    
+    public CheckYourAnswersSettings WithSubmitHint(string hint) =>
+        settings.Enqueue(this, "PreviewSubmitHint", field => field.FillAsync(hint));
+    
+    public CheckYourAnswersSettings WithSubmitButtonText(string buttonText) =>
+        settings.Enqueue(this, "PreviewSubmitButtonText", field => field.FillAsync(buttonText));
 
     public Task SaveAsync() => settings.SaveAsync();
 }
