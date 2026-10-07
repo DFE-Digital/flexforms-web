@@ -16,7 +16,7 @@ public static class Templates
 
         return await UpdateTemplateAsync(request, templateId, live);
     }
-    
+
     public static async Task<string> GetTemplateIdByNameAsync(IAPIRequestContext request, string name)
     {
         var templates = await GetTemplatesAsync(request);

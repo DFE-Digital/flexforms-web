@@ -20,7 +20,7 @@ public sealed class UserManagerTests : PlaywrightTestBase
     {
         _userToAddEmail = TestEnvironment.RequireEnvironmentVariable("USER2_EMAIL");
         await Users.RemoveUserFromTenantAsync(AdminApiClient, _userToAddEmail);
-        
+
         var adminPage = new AdminPage(Page, Terminology);
         var userManager = new UserManager(Page, Terminology);
         var dashboardPage = new DashboardPage(Page, Terminology);

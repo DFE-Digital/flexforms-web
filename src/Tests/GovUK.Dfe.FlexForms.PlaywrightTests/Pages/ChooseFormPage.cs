@@ -13,7 +13,7 @@ public sealed class ChooseFormPage(IPage page, Terminology terminology) : BasePa
             .GetByRole(AriaRole.Radio, new PageGetByRoleOptions { Name = formName })
             .CheckAsync();
     }
-    
+
     public async Task GoToDashboardAsync()
     {
         await Page

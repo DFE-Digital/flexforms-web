@@ -68,10 +68,10 @@ public sealed class RoleManagerTests : PlaywrightTestBase
     public async Task RemoveUserFromTenantAsync()
     {
         var userEmail = TestEnvironment.RequireEnvironmentVariable("USER2_EMAIL");
-        
+
         // workaround for bug 306990
         await Users.AddUserToRoleAsync(AdminApiClient, userEmail, NewUserDisplayName, "User", DefaultFormName);
-        
+
         await Users.RemoveUserFromTenantAsync(AdminApiClient, userEmail);
         await Roles.RemoveRoleAsync(AdminApiClient, CustomRoleName);
     }

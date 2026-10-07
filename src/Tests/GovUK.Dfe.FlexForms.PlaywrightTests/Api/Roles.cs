@@ -6,7 +6,7 @@ public static class Roles
 {
     public static Task<TenantRoleDto> CreateRoleAsync(IAPIRequestContext request, string roleName) =>
         ApiBase.ApiRequestAsync<TenantRoleDto>(request, "/v1/roles", method: "POST", data: new { Name = roleName });
-    
+
     public static Task<IReadOnlyList<TenantRoleDto>> GetRolesAsync(IAPIRequestContext request) =>
         ApiBase.ApiRequestAsync<IReadOnlyList<TenantRoleDto>>(request, "/v1/roles");
 

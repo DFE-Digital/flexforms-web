@@ -15,7 +15,7 @@ public sealed class TenantTemplateTests : PlaywrightTestBase
         var adminPage = new AdminPage(Page, Terminology);
         var chooseFormPage = new ChooseFormPage(Page, Terminology);
         var dashboardPage = new DashboardPage(Page, Terminology);
-        
+
         await LoginAsync("admin");
         await Page.GotoAsync("/admin");
 
@@ -37,10 +37,10 @@ public sealed class TenantTemplateTests : PlaywrightTestBase
         var adminPage = new AdminPage(Page, Terminology);
         var chooseFormPage = new ChooseFormPage(Page, Terminology);
         var dashboardPage = new DashboardPage(Page, Terminology);
-        
+
         await LoginAsync("admin");
         await Page.GotoAsync("/admin");
-        
+
         await adminPage.MakeTemplateNotLiveAsync(TemplateName);
         await adminPage.ExpectTemplateNotLiveAsync(TemplateName);
 
