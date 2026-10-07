@@ -1,10 +1,9 @@
 using GovUK.Dfe.FlexForms.PlaywrightTests.Api;
-using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 using Microsoft.Playwright;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Admin;
 
-public sealed class CustomStatusLabelOverridesPage(IPage page, Terminology terminology) : BasePage(page, terminology)
+public sealed class CustomStatusLabelOverridesPage(IPage page) : BasePage(page)
 {
     public async Task GoToAsync(string templateId) =>
         await Page.GotoAsync($"/admin/custom-status-label-overrides?selectedTemplateId={templateId}");

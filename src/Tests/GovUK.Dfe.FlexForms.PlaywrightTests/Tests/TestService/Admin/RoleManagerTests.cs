@@ -18,7 +18,7 @@ public sealed class RoleManagerTests : PlaywrightTestBase
     public async Task AdminLoginAndNavigateToRoleManagerAsync()
     {
         await LoginAsync("admin");
-        var adminPage = new AdminPage(Page, Terminology);
+        var adminPage = new AdminPage(Page);
         await adminPage.GoToAsync();
         await adminPage.OpenRoleManagerAsync();
     }
@@ -29,11 +29,11 @@ public sealed class RoleManagerTests : PlaywrightTestBase
     {
         await Users.AddUserToRoleAsync(AdminApiClient, _user2Email, NewUserDisplayName, "User", DefaultFormName);
 
-        var adminPage = new AdminPage(Page, Terminology);
-        var roleManager = new RoleManager(Page, Terminology);
-        var managePermissions = new ManagePermissions(Page, Terminology);
-        var userManager = new UserManager(Page, Terminology);
-        var dashboardPage = new DashboardPage(Page, Terminology);
+        var adminPage = new AdminPage(Page);
+        var roleManager = new RoleManager(Page);
+        var managePermissions = new ManagePermissions(Page);
+        var userManager = new UserManager(Page);
+        var dashboardPage = new DashboardPage(Page);
 
         await roleManager.CreateRoleAsync(CustomRoleName);
         await roleManager.ManageRolePermissionsAsync(CustomRoleName);
@@ -57,8 +57,8 @@ public sealed class RoleManagerTests : PlaywrightTestBase
         await Users.AddUserToRoleAsync(AdminApiClient, _user2Email, NewUserDisplayName, CustomRoleName,
             DefaultFormName);
 
-        var userManager = new UserManager(Page, Terminology);
-        var roleManager = new RoleManager(Page, Terminology);
+        var userManager = new UserManager(Page);
+        var roleManager = new RoleManager(Page);
 
         await userManager.GoToAsync();
         await userManager.EditUserAsync(_user2Email, newRole: "User");

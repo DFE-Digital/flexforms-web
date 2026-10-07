@@ -26,7 +26,7 @@ public sealed class ViewApplicationsTests : PlaywrightTestBase
     public async Task AdminLoginAndNavigateToViewApplicationsAsync()
     {
         await LoginAsync("admin");
-        var adminPage = new AdminPage(Page, Terminology);
+        var adminPage = new AdminPage(Page);
         await adminPage.GoToAsync();
         await adminPage.OpenViewApplicationsAsync();
     }
@@ -35,7 +35,7 @@ public sealed class ViewApplicationsTests : PlaywrightTestBase
     [CiRetry]
     public async Task AdminCanViewApplicationsAsync()
     {
-        var viewApplications = new ViewApplications(Page, Terminology);
+        var viewApplications = new ViewApplications(Page);
 
         await viewApplications.SelectATemplateAsync(TemplateName);
         await viewApplications.ApplicationsTable
@@ -56,8 +56,8 @@ public sealed class ViewApplicationsTests : PlaywrightTestBase
     [CiRetry]
     public async Task AdminCanDeleteApplicationAndItIsRemovedFromUsersDashboardAsync()
     {
-        var viewApplications = new ViewApplications(Page, Terminology);
-        var dashboardPage = new DashboardPage(Page, Terminology);
+        var viewApplications = new ViewApplications(Page);
+        var dashboardPage = new DashboardPage(Page);
 
         await viewApplications.SelectATemplateAsync(TemplateName);
         await viewApplications.DeleteApplicationAsync(_applicationToDelete.ApplicationReference);
@@ -76,8 +76,8 @@ public sealed class ViewApplicationsTests : PlaywrightTestBase
         await LoginAsync("default");
         await dashboardPage.ExpectApplicationNotPresentAsync(_applicationToDelete.ApplicationReference);
 
-        var applicationPage = new ApplicationPage(Page, Terminology);
+        var applicationPage = new ApplicationPage(Page);
         await applicationPage.GoToAsync(_applicationToDelete.ApplicationReference);
-        await new ErrorPage(Page, Terminology).ExpectPageNotFoundAsync();
+        await new ErrorPage(Page).ExpectPageNotFoundAsync();
     }
 }

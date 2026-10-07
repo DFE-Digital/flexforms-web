@@ -6,8 +6,8 @@ namespace GovUK.Dfe.FlexForms.PlaywrightTests.Pages;
 
 public sealed class DashboardPage : BasePage
 {
-    public DashboardPage(IPage page, Terminology terminology)
-        : base(page, terminology)
+    public DashboardPage(IPage page)
+        : base(page)
     {
         ApplicationsTable = new ApplicationsTable(page);
     }

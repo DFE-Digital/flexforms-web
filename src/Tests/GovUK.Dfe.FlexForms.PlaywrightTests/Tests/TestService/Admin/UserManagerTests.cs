@@ -22,10 +22,10 @@ public sealed class UserManagerTests : PlaywrightTestBase
         _userToAddEmail = TestEnvironment.RequireEnvironmentVariable("USER2_EMAIL");
         await Users.RemoveUserFromTenantAsync(AdminApiClient, _userToAddEmail);
 
-        var adminPage = new AdminPage(Page, Terminology);
-        var userManager = new UserManager(Page, Terminology);
-        var dashboardPage = new DashboardPage(Page, Terminology);
-        var contributorsPage = new ContributorsPage(Page, Terminology);
+        var adminPage = new AdminPage(Page);
+        var userManager = new UserManager(Page);
+        var dashboardPage = new DashboardPage(Page);
+        var contributorsPage = new ContributorsPage(Page);
         var standardFieldsTask = new StandardFieldsTask(Page);
 
         await LoginAsync("admin");
@@ -51,8 +51,8 @@ public sealed class UserManagerTests : PlaywrightTestBase
         await Users.AddUserToRoleAsync(AdminApiClient, _userToAddEmail, NewUserDisplayName, NewUserRole,
             DefaultFormName);
 
-        var userManager = new UserManager(Page, Terminology);
-        var dashboardPage = new DashboardPage(Page, Terminology);
+        var userManager = new UserManager(Page);
+        var dashboardPage = new DashboardPage(Page);
 
         await LoginAsync("admin");
         await userManager.GoToAsync();
@@ -62,7 +62,7 @@ public sealed class UserManagerTests : PlaywrightTestBase
         await SignInAsync("user2");
         await dashboardPage.GoToAsync();
 
-        await new ErrorPage(Page, Terminology).ExpectInvalidOrExpiredTokensAsync();
+        await new ErrorPage(Page).ExpectInvalidOrExpiredTokensAsync();
     }
 
     [OneTimeTearDown]

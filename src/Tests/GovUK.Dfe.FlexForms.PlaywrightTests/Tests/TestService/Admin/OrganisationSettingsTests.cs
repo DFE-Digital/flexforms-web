@@ -36,7 +36,7 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
     public async Task AdminLoginAndNavigateToOrganisationSettingsAsync()
     {
         await LoginAsync("admin");
-        var adminPage = new AdminPage(Page, Terminology);
+        var adminPage = new AdminPage(Page);
         await adminPage.GoToAsync();
         await adminPage.OpenOrganisationSettingsAsync();
     }
@@ -48,9 +48,9 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
         const string singular = "ApplicationTest";
         const string plural = "ApplicationsTest";
 
-        var organisationSettings = new OrganisationSettings(Page, Terminology);
-        var dashboardPage = new DashboardPage(Page, Terminology);
-        var applicationPage = new ApplicationPage(Page, Terminology);
+        var organisationSettings = new OrganisationSettings(Page);
+        var dashboardPage = new DashboardPage(Page);
+        var applicationPage = new ApplicationPage(Page);
 
         await organisationSettings.ApplicationTerminology
             .WithSingular(singular)
@@ -75,10 +75,10 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
     {
         const string heading = "Test Banner Heading";
         const string message = "Test Banner Message";
-        var organisationSettings = new OrganisationSettings(Page, Terminology);
-        var dashboardPage = new DashboardPage(Page, Terminology);
-        var applicationPage = new ApplicationPage(Page, Terminology);
-        var adminPage = new AdminPage(Page, Terminology);
+        var organisationSettings = new OrganisationSettings(Page);
+        var dashboardPage = new DashboardPage(Page);
+        var applicationPage = new ApplicationPage(Page);
+        var adminPage = new AdminPage(Page);
 
         await organisationSettings.NotificationBanner
             .Enabled()
@@ -100,9 +100,9 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
     [CiRetry]
     public async Task AdminCanCustomiseTheDashboardConfigAsync()
     {
-        var organisationSettings = new OrganisationSettings(Page, Terminology);
-        var dashboardPage = new DashboardPage(Page, Terminology);
-        var applicationPage = new ApplicationPage(Page, Terminology);
+        var organisationSettings = new OrganisationSettings(Page);
+        var dashboardPage = new DashboardPage(Page);
+        var applicationPage = new ApplicationPage(Page);
 
         await organisationSettings.Dashboard
             .WithPageSize(5)
@@ -134,8 +134,8 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
     [CiRetry]
     public async Task AdminCanCustomiseCheckYourAnswersConfigAsync()
     {
-        var organisationSettings = new OrganisationSettings(Page, Terminology);
-        var applicationPreviewPage = new ApplicationPreviewPage(Page, Terminology);
+        var organisationSettings = new OrganisationSettings(Page);
+        var applicationPreviewPage = new ApplicationPreviewPage(Page);
 
         await organisationSettings.CheckYourAnswersSettings
             .WithPageHeading("Check your apple answers")
@@ -155,8 +155,8 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
     [CiRetry]
     public async Task AdminCanCustomiseApplicationSubmittedPageAsync()
     {
-        var organisationSettings = new OrganisationSettings(Page, Terminology);
-        var applicationSubmittedPage = new ApplicationSubmittedPage(Page, Terminology);
+        var organisationSettings = new OrganisationSettings(Page);
+        var applicationSubmittedPage = new ApplicationSubmittedPage(Page);
 
         await organisationSettings.ApplicationSubmittedSettings.ForAllTemplates()
             .WithConfirmationTitle("Orange app submitted")
@@ -174,8 +174,8 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
     [CiRetry]
     public async Task AdminCanCustomiseApplicationSubmittedPageForSpecificTemplateAsync()
     {
-        var organisationSettings = new OrganisationSettings(Page, Terminology);
-        var applicationSubmittedPage = new ApplicationSubmittedPage(Page, Terminology);
+        var organisationSettings = new OrganisationSettings(Page);
+        var applicationSubmittedPage = new ApplicationSubmittedPage(Page);
 
         await organisationSettings.ApplicationSubmittedSettings.ForTemplate(ApiConfig.TemplateId)
             .WithConfirmationTitle("Pear app submitted")
@@ -209,6 +209,6 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
 
         // Web cache needs to be cleared for the restored settings to show in the UI
         await LoginAsync("admin");
-        await new TenantSettings(Page, Terminology).RefreshSettingsAsync();
+        await new TenantSettings(Page).RefreshSettingsAsync();
     }
 }

@@ -1,10 +1,9 @@
 using System.Text.RegularExpressions;
-using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 using Microsoft.Playwright;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Admin;
 
-public sealed class UserManager(IPage page, Terminology terminology) : BasePage(page, terminology)
+public sealed class UserManager(IPage page) : BasePage(page)
 {
     public async Task GoToAsync() => await Page.GotoAsync("/admin/user-manager");
 

@@ -64,9 +64,9 @@ public sealed class CustomStatusLabelsTests : PlaywrightTestBase
     [CiRetry]
     public async Task CustomStatusLabelsAppearOnTemplateDashboardAsync()
     {
-        var statusOverridesPage = new CustomStatusLabelOverridesPage(Page, Terminology);
-        var chooseFormPage = new ChooseFormPage(Page, Terminology);
-        var dashboardPage = new DashboardPage(Page, Terminology);
+        var statusOverridesPage = new CustomStatusLabelOverridesPage(Page);
+        var chooseFormPage = new ChooseFormPage(Page);
+        var dashboardPage = new DashboardPage(Page);
 
         await LoginAsync("admin");
         await statusOverridesPage.OpenFromAdminHubAsync();

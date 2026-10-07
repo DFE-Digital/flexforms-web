@@ -1,4 +1,3 @@
-using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 using Microsoft.Playwright;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Admin;
@@ -7,8 +6,8 @@ public sealed class OrganisationSettings : BasePage
 {
     private readonly List<Func<Task>> _changes = [];
 
-    public OrganisationSettings(IPage page, Terminology terminology)
-        : base(page, terminology)
+    public OrganisationSettings(IPage page)
+        : base(page)
     {
         ApplicationTerminology = new ApplicationTerminologySettings(this);
         NotificationBanner = new NotificationBannerSettings(this);

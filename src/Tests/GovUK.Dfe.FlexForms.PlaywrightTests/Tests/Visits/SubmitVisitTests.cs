@@ -17,7 +17,7 @@ public sealed class SubmitVisitTests : PlaywrightTestBase
     [CiRetry]
     public async Task CreateAndSubmitAVisitAsync()
     {
-        var dashboardPage = new DashboardPage(Page, Terminology);
+        var dashboardPage = new DashboardPage(Page);
         await dashboardPage.StartNewApplicationAsync();
 
         var taskList = new TaskListPage(Page);
@@ -52,7 +52,7 @@ public sealed class SubmitVisitTests : PlaywrightTestBase
         await conversationDetailsTask.CompleteAsync();
         await conversationDetailsTask.ExpectCompletedAsync();
 
-        var preview = new ApplicationPreviewPage(Page, Terminology);
+        var preview = new ApplicationPreviewPage(Page);
         await taskList.ReviewApplicationAsync();
         await preview.SubmitAsync();
         await preview.ExpectSubmittedAsync("Visit record completed");

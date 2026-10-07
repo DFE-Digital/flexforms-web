@@ -1,10 +1,9 @@
 using System.Text.RegularExpressions;
-using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 using Microsoft.Playwright;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Pages;
 
-public sealed class ApplicationPreviewPage(IPage page, Terminology terminology) : BasePage(page, terminology)
+public sealed class ApplicationPreviewPage(IPage page) : BasePage(page)
 {
     public async Task GoToAsync(string applicationReference) =>
         await Page.GotoAsync($"/applications/{applicationReference}?preview=true");

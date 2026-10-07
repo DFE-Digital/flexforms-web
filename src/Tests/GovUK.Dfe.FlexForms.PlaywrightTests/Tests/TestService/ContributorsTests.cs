@@ -61,7 +61,7 @@ public sealed class ContributorsTests : PlaywrightTestBase
 
         await taskList.ReviewApplicationAsync();
 
-        var preview = new ApplicationPreviewPage(Page, Terminology);
+        var preview = new ApplicationPreviewPage(Page);
         await preview.ExpectNonLeadApplicantCannotSubmitAsync(Terminology.Singular);
     }
 
@@ -70,8 +70,8 @@ public sealed class ContributorsTests : PlaywrightTestBase
     public async Task UserCannotViewUnsharedApplicationAsync()
     {
         var application = await CreateApplicationForTemplateAsync(AdminApiClient, ApiConfig.TemplateId);
-        var dashboardPage = new DashboardPage(Page, Terminology);
-        var applicationPage = new ApplicationPage(Page, Terminology);
+        var dashboardPage = new DashboardPage(Page);
+        var applicationPage = new ApplicationPage(Page);
 
         await LoginAsync();
         await dashboardPage.GoToAsync();
@@ -87,10 +87,10 @@ public sealed class ContributorsTests : PlaywrightTestBase
     public async Task AddContributorAndContributorCanEditAsync()
     {
         var application = await CreateApplicationForTemplateAsync(AdminApiClient, ApiConfig.TemplateId);
-        var applicationPage = new ApplicationPage(Page, Terminology);
-        var dashboardPage = new DashboardPage(Page, Terminology);
-        var contributorsPage = new ContributorsPage(Page, Terminology);
-        var contributorsInvitePage = new ContributorsInvitePage(Page, Terminology);
+        var applicationPage = new ApplicationPage(Page);
+        var dashboardPage = new DashboardPage(Page);
+        var contributorsPage = new ContributorsPage(Page);
+        var contributorsInvitePage = new ContributorsInvitePage(Page);
 
         await LoginAsync("admin");
         await applicationPage.GoToAsync(application.ApplicationReference);

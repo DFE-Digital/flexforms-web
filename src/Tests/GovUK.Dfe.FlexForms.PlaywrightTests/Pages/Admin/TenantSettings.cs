@@ -1,9 +1,8 @@
-using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 using Microsoft.Playwright;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Admin;
 
-public sealed class TenantSettings(IPage page, Terminology terminology) : BasePage(page, terminology)
+public sealed class TenantSettings(IPage page) : BasePage(page)
 {
     public async Task GoToAsync() => await Page.GotoAsync("/admin/tenant-settings");
 

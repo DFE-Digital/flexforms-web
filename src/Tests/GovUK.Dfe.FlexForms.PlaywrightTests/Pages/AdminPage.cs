@@ -1,9 +1,8 @@
-using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 using Microsoft.Playwright;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Pages;
 
-public sealed class AdminPage(IPage page, Terminology terminology) : BasePage(page, terminology)
+public sealed class AdminPage(IPage page) : BasePage(page)
 {
     public async Task GoToAsync() => await Page.GotoAsync("/admin");
 

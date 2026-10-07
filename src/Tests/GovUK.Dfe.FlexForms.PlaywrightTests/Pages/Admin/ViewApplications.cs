@@ -1,6 +1,5 @@
 using System.Text.RegularExpressions;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Components;
-using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 using Microsoft.Playwright;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Admin;
@@ -9,8 +8,8 @@ public sealed class ViewApplications : BasePage
 {
     public ApplicationsTable ApplicationsTable { get; }
 
-    public ViewApplications(IPage page, Terminology terminology)
-        : base(page, terminology)
+    public ViewApplications(IPage page)
+        : base(page)
     {
         ApplicationsTable = new ApplicationsTable(page);
     }

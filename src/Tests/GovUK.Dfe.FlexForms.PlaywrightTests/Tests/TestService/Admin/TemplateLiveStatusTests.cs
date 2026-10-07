@@ -13,9 +13,9 @@ public sealed class TemplateLiveStatusTests : PlaywrightTestBase
     [CiRetry]
     public async Task AdminCanMakeFormLiveAsync()
     {
-        var adminPage = new AdminPage(Page, Terminology);
-        var chooseFormPage = new ChooseFormPage(Page, Terminology);
-        var dashboardPage = new DashboardPage(Page, Terminology);
+        var adminPage = new AdminPage(Page);
+        var chooseFormPage = new ChooseFormPage(Page);
+        var dashboardPage = new DashboardPage(Page);
 
         await LoginAsync("admin");
         await adminPage.GoToAsync();
@@ -35,9 +35,9 @@ public sealed class TemplateLiveStatusTests : PlaywrightTestBase
     public async Task AdminCanMakeFormNotLiveAsync()
     {
         await Templates.UpdateTemplateLiveAsync(AdminApiClient, TemplateName, true);
-        var adminPage = new AdminPage(Page, Terminology);
-        var chooseFormPage = new ChooseFormPage(Page, Terminology);
-        var dashboardPage = new DashboardPage(Page, Terminology);
+        var adminPage = new AdminPage(Page);
+        var chooseFormPage = new ChooseFormPage(Page);
+        var dashboardPage = new DashboardPage(Page);
 
         await LoginAsync("admin");
         await adminPage.GoToAsync();

@@ -1,9 +1,8 @@
-using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 using Microsoft.Playwright;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Admin;
 
-public sealed class ManagePermissions(IPage page, Terminology terminology) : BasePage(page, terminology)
+public sealed class ManagePermissions(IPage page) : BasePage(page)
 {
     public async Task GoToAsync(Guid roleId) =>
         await Page.GotoAsync($"/admin/role-manager/permissions?roleId={roleId}");

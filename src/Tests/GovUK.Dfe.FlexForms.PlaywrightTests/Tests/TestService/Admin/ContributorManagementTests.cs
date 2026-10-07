@@ -27,7 +27,7 @@ public sealed class ContributorManagementTests : PlaywrightTestBase
     public async Task AdminLoginAndNavigateToContributorManagementAsync()
     {
         await LoginAsync("admin");
-        var adminPage = new AdminPage(Page, Terminology);
+        var adminPage = new AdminPage(Page);
         await adminPage.GoToAsync();
         await adminPage.OpenContributorManagementAsync();
     }
@@ -36,7 +36,7 @@ public sealed class ContributorManagementTests : PlaywrightTestBase
     [CiRetry]
     public async Task AdminCanFindWhoHasAccessToAnApplicationByReferenceNumberAsync()
     {
-        var contributorManagement = new ContributorManagement(Page, Terminology);
+        var contributorManagement = new ContributorManagement(Page);
 
         await contributorManagement.LookupAnApplicationByReferenceNumberAsync(_application.ApplicationReference);
         await contributorManagement.ExpectHasContributorAsync(_application.ApplicationReference, _contributorEmail);
@@ -46,7 +46,7 @@ public sealed class ContributorManagementTests : PlaywrightTestBase
     [CiRetry]
     public async Task AdminCanLookupApplicationAndInviteesByUserEmailAddressAsync()
     {
-        var contributorManagement = new ContributorManagement(Page, Terminology);
+        var contributorManagement = new ContributorManagement(Page);
 
         await contributorManagement.LookupApplicationsByUserAsync(_leadApplicantEmail);
         await contributorManagement.CreatedApplications

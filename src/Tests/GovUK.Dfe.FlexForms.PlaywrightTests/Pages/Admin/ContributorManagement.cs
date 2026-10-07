@@ -1,10 +1,9 @@
 using System.Text.RegularExpressions;
-using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 using Microsoft.Playwright;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Admin;
 
-public sealed class ContributorManagement(IPage page, Terminology terminology) : BasePage(page, terminology)
+public sealed class ContributorManagement(IPage page) : BasePage(page)
 {
     public CreatedApplications CreatedApplications { get; } = new(page);
 

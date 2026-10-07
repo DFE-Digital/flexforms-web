@@ -16,8 +16,8 @@ public sealed class SubmitApplicationTests : PlaywrightTestBase
     [CiRetry]
     public async Task CreateAndSubmitAnApplicationAsync()
     {
-        var dashboardPage = new DashboardPage(Page, Terminology);
-        var contributorsPage = new ContributorsPage(Page, Terminology);
+        var dashboardPage = new DashboardPage(Page);
+        var contributorsPage = new ContributorsPage(Page);
 
         await dashboardPage.StartNewApplicationAsync();
         await contributorsPage.ProceedToFormAsync();
@@ -37,7 +37,7 @@ public sealed class SubmitApplicationTests : PlaywrightTestBase
 
         await Files.ValidateValidFileForApplicationAsync(ApiClient, Page);
 
-        var preview = new ApplicationPreviewPage(Page, Terminology);
+        var preview = new ApplicationPreviewPage(Page);
         await taskList.ReviewApplicationAsync();
         await preview.SubmitAsync();
         await preview.ExpectSubmittedAsync();
