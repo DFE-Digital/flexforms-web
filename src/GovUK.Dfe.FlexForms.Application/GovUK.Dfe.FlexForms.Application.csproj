@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="GovUK.Dfe.CoreLibs.Http" Version="1.0.12" />
+    <PackageReference Include="GovUK.Dfe.FlexForms.Api.Client" Version="0.0.44-prerelease.39" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.11" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
@@ -15,7 +16,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\GovUK.Dfe.FlexForms.Domain\GovUK.Dfe.FlexForms.Domain.csproj" />
-    <ProjectReference Include="$(LocalFlexFormsApiSrc)GovUK.Dfe.FlexForms.Api.Client\GovUK.Dfe.FlexForms.Api.Client.csproj" />
   </ItemGroup>
 
   <ItemGroup>

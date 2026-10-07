@@ -64,6 +64,7 @@ You do not need to be a developer to use this manual. Where a change is made in 
     - [14.6 Audit log](#146-audit-log)
     - [14.7 File validation (tenant function)](#147-file-validation-tenant-function)
     - [14.8 Autocomplete search (FormEngine complex fields)](#148-autocomplete-search-formengine-complex-fields)
+    - [14.9 Reporting export (what is sent to reporting)](#149-reporting-export-what-is-sent-to-reporting)
 15. [Applications (admin list)](#15-applications-admin-list)
 16. [What end users see](#16-what-end-users-see)
 17. [System tools and caches](#17-system-tools-and-caches)
@@ -1150,7 +1151,7 @@ API logs (Application Insights) search for `Published schema event`, `Published 
 
 ### 12.19 Delivery guarantees (transactional outbox)
 
-This section explains **how reliably** FlexForms delivers your events, and what that means for the team that consumes them. You do not configure this on the Event mappings page. It is a **platform setting** managed by the FlexForms platform team. You need to know about it so you can agree the right option with your receiving team.
+This section explains **how reliably** FlexForms delivers your events, and what that means for the team that consumes them. You do not configure this on the Event mappings page. The platform team sets the default, and you can override it for your tenant (see [Overriding the list for your tenant](#overriding-the-list-for-your-tenant)). Agree the right option with your receiving team.
 
 #### The two ways an event can be delivered
 
@@ -1182,7 +1183,24 @@ Events are listed by name:
 - **Typed events**: the event type name, for example `TransferApplicationSubmittedEvent`.
 - **Schema events**: either your schema event type name **or** its `topicName`.
 
-The list applies to the **whole platform**. If several tenants publish the same typed event, adding it to the list changes delivery for all of them.
+The platform list applies to the **whole platform**. If several tenants publish the same typed event, adding it to that list changes delivery for all of them.
+
+#### Overriding the list for your tenant
+
+You can set your own list in the `MassTransit` settings category (Target `Shared`). It applies only to your tenant's events:
+
+```json
+{
+  "Outbox": {
+    "Events": [ "TransferApplicationSubmittedEvent", "transfer-application-submitted-schema" ]
+  }
+}
+```
+
+- Your `Events` list **replaces** the platform list for your tenant. It is not added to it.
+- You can also set `Mode` (`Allowlist` or `All`), or `Enabled: false` to deliver all your events directly.
+- You cannot switch the outbox on if the platform team has turned it off for the whole platform.
+- Changes apply within about a minute, when tenant settings next refresh. No restart is needed.
 
 #### Should my event use the outbox?
 
@@ -2045,6 +2063,48 @@ If both the template and this config set `DropdownDisplay` / `ConfirmationDispla
 | Summary ignores confirmation text | Set `SummaryDisplay` separately — `ConfirmationDisplay` is not used on summary pages |
 | Old trust search still works, new search does not | You replaced the whole `ComplexFields` array instead of appending; restore the previous ids |
 | Changes not visible | **Refresh settings**, then hard-refresh the form (or clear sessions/caches) |
+
+### 14.9 Reporting export (what is sent to reporting)
+
+**Admin → Tenant Admin → Reporting export** decides which answers leave FlexForms for reporting (Prism). Answers that are not exported stay in FlexForms; reporting only sees the fields you allow.
+
+**How a field's status is worked out**
+
+1. **A decision on the field always wins.** *Exported* or *Not exported* applies whatever the defaults say.
+2. **Fields nobody has decided about follow the default.** The template's own default if it has one, otherwise the tenant default. If neither is set, the built-in default is **Hold until approved**.
+
+| Status on the page | Meaning |
+|--------------------|---------|
+| **Exported** | An admin allowed this field |
+| **Not exported** | An admin denied this field |
+| **Exported by default** | No decision; exported because the default is *Export automatically* |
+| **Waiting for approval** | No decision; held back because the default is *Hold until approved* |
+
+**Defaults**
+
+| Default | Use it when |
+|---------|-------------|
+| **Hold until approved** (recommended) | You want to review every new field — including ones added in a new template version — before it reaches reporting |
+| **Export automatically** | Your data protection agreement covers every answer in the form, including personal data. A reason is required and recorded |
+| **Use the tenant default** (templates only) | The template should follow the tenant setting |
+
+**Step by step**
+
+1. Choose the **tenant default** and give a reason, then **Save tenant default**.
+2. Pick a **template**. If the page says its fields are not known to reporting yet, publish the template or save an application against it, then come back.
+3. Optionally set a **default for this template**.
+4. Tick the fields to change, write a reason, then choose **Export selected fields** or **Do not export selected fields**.
+
+Every change is recorded against your name with the reason, and starts a **refresh** of this tenant's reporting data. The banner shows progress; use **Check progress** to update it. Until the refresh finishes, reporting can still show the previous setting for some applications.
+
+**Who can change this:** anyone who can open **Tenant Settings** (tenant Admin or SuperAdmin), for their own tenant only.
+
+| What you see | Likely cause |
+|--------------|----------------|
+| “Reporting export is not set up in this environment” | The API has no Prism connection configured — ask the platform team |
+| “FlexForms is not allowed to manage reporting export” | The API's identity is missing its Prism roles — ask the platform team |
+| “These fields are not in the template” | The template changed since the page loaded; reload and try again |
+| Refresh “did not finish” | Your change is saved; ask the platform team to run the reporting refresh again |
 
 ---
 
