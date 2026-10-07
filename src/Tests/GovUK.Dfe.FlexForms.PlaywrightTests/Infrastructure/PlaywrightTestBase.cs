@@ -152,7 +152,7 @@ public abstract class PlaywrightTestBase : PageTest
             try
             {
                 await Page.ScreenshotAsync(new PageScreenshotOptions
-                    { Path = Path.Combine(_artifactsDirectory, "screenshot.png") });
+                { Path = Path.Combine(_artifactsDirectory, "screenshot.png") });
             }
             catch
             {
