@@ -6,6 +6,7 @@ using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService.Admin;
 
+[NonParallelizable]
 [TestFixture(Description = "Role management")]
 public sealed class RoleManagerTests : PlaywrightTestBase
 {
@@ -43,7 +44,7 @@ public sealed class RoleManagerTests : PlaywrightTestBase
         await userManager.EditUserAsync(_user2Email, newRole: CustomRoleName);
 
         await LoginAsync("user2");
-        await dashboardPage.GoToAsync(NavigationSection.Admin);
+        await dashboardPage.NavigateToAsync(NavigationSection.Admin);
         await adminPage.OpenUserManagerAsync();
         await userManager.ExpectHeading("Access audit trail");
     }

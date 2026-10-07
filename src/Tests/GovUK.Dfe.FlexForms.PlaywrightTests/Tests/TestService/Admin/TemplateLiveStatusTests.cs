@@ -5,6 +5,7 @@ using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService.Admin;
 
+[NonParallelizable]
 [TestFixture(Description = "Template live status")]
 public sealed class TemplateLiveStatusTests : PlaywrightTestBase
 {
@@ -22,7 +23,7 @@ public sealed class TemplateLiveStatusTests : PlaywrightTestBase
         await adminPage.MakeTemplateLiveAsync(TestData.LiveSwitchOnlyTemplateName);
         await adminPage.ExpectTemplateLiveAsync(TestData.LiveSwitchOnlyTemplateName);
 
-        await chooseFormPage.GoToAsync(NavigationSection.Forms);
+        await chooseFormPage.NavigateToAsync(NavigationSection.Forms);
         await chooseFormPage.SelectFormAsync(TestData.LiveSwitchOnlyTemplateName, "Live");
         await chooseFormPage.GoToDashboardAsync();
 
@@ -44,7 +45,7 @@ public sealed class TemplateLiveStatusTests : PlaywrightTestBase
         await adminPage.MakeTemplateNotLiveAsync(TestData.LiveSwitchOnlyTemplateName);
         await adminPage.ExpectTemplateNotLiveAsync(TestData.LiveSwitchOnlyTemplateName);
 
-        await chooseFormPage.GoToAsync(NavigationSection.Forms);
+        await chooseFormPage.NavigateToAsync(NavigationSection.Forms);
         await chooseFormPage.SelectFormAsync(TestData.LiveSwitchOnlyTemplateName, "Not live");
         await chooseFormPage.GoToDashboardAsync();
 

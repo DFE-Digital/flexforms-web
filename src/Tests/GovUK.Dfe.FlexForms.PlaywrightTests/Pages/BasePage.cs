@@ -47,7 +47,7 @@ public abstract class BasePage(IPage page)
         }
     }
 
-    public async Task GoToAsync(NavigationSection section)
+    public async Task NavigateToAsync(NavigationSection section)
     {
         var sectionName = section switch
         {
@@ -67,8 +67,8 @@ public abstract class BasePage(IPage page)
     public async Task ExpectText(string paragraph) =>
         await Assertions.Expect(Page.GetByText(paragraph)).ToBeVisibleAsync();
 
-    public async Task ExpectLink(string linkText) => await Assertions
-        .Expect(Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = linkText })).ToBeVisibleAsync();
+    public async Task ExpectLinkExists(string linkText) => await Assertions
+        .Expect(Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = linkText }).First).ToBeVisibleAsync();
 
     public async Task ExpectButton(string buttonText) => await Assertions
         .Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = buttonText }))

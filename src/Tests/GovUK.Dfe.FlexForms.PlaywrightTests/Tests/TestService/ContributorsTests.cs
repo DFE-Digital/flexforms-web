@@ -18,17 +18,16 @@ public sealed class ContributorsTests : PlaywrightTestBase
     public async Task CaseworkerCanViewButNotEditAsync()
     {
         var application = await CreateApplicationForTemplateAsync(ApiClient, ApiConfig.TemplateId);
-        var applicationUrl = $"/applications/{application.ApplicationReference}";
         var taskList = new TaskListPage(Page);
         var standardFieldsTask = new StandardFieldsTask(Page);
 
         await LoginAsync("caseworker");
         await taskList.GoToAsync(application.ApplicationReference);
-        await Assertions.Expect(Page).ToHaveURLAsync(applicationUrl);
+        await taskList.ExpectLoadedAsync();
 
         await standardFieldsTask.UnableToOpenAsync();
         await standardFieldsTask.GoToAsync(application.ApplicationReference, "full-name-page");
-        await Assertions.Expect(Page).ToHaveURLAsync(applicationUrl);
+        await taskList.ExpectLoadedAsync();
     }
 
     [TestCase(TestName = "admin can edit any application")]
@@ -36,13 +35,12 @@ public sealed class ContributorsTests : PlaywrightTestBase
     public async Task AdminCanEditAnyApplicationAsync()
     {
         var application = await CreateApplicationForTemplateAsync(ApiClient, ApiConfig.TemplateId);
-        var applicationUrl = $"/applications/{application.ApplicationReference}";
         var taskList = new TaskListPage(Page);
         var standardFieldsTask = new StandardFieldsTask(Page);
 
         await LoginAsync("admin");
         await taskList.GoToAsync(application.ApplicationReference);
-        await Assertions.Expect(Page).ToHaveURLAsync(applicationUrl);
+        await taskList.ExpectLoadedAsync();
 
         await standardFieldsTask.OpenAsync();
         await standardFieldsTask.CompleteAsync();
@@ -71,14 +69,15 @@ public sealed class ContributorsTests : PlaywrightTestBase
     {
         var application = await CreateApplicationForTemplateAsync(AdminApiClient, ApiConfig.TemplateId);
         var dashboardPage = new DashboardPage(Page);
-        var applicationPage = new ApplicationPage(Page);
+        var taskList = new TaskListPage(Page);
+        var errorPage = new ErrorPage(Page);
 
         await LoginAsync();
         await dashboardPage.GoToAsync();
         await dashboardPage.ExpectApplicationNotPresentAsync(application.ApplicationReference);
 
-        await applicationPage.GoToAsync(application.ApplicationReference);
-        await Assertions.Expect(Page).ToHaveURLAsync("Error/NotFound");
+        await taskList.GoToAsync(application.ApplicationReference);
+        await errorPage.ExpectPageNotFoundAsync();
     }
 
     [TestCase(TestName =
@@ -87,15 +86,15 @@ public sealed class ContributorsTests : PlaywrightTestBase
     public async Task AddContributorAndContributorCanEditAsync()
     {
         var application = await CreateApplicationForTemplateAsync(AdminApiClient, ApiConfig.TemplateId);
-        var applicationPage = new ApplicationPage(Page);
+        var taskList = new TaskListPage(Page);
         var dashboardPage = new DashboardPage(Page);
         var contributorsPage = new ContributorsPage(Page);
         var contributorsInvitePage = new ContributorsInvitePage(Page);
 
         await LoginAsync("admin");
-        await applicationPage.GoToAsync(application.ApplicationReference);
+        await taskList.GoToAsync(application.ApplicationReference);
 
-        await applicationPage.InviteContributorsAsync();
+        await taskList.InviteContributorsAsync();
 
         await contributorsPage.AddContributorAsync();
 

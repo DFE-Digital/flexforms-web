@@ -63,12 +63,15 @@ public sealed class CustomStatusLabelsTests : PlaywrightTestBase
     [CiRetry]
     public async Task CustomStatusLabelsAppearOnTemplateDashboardAsync()
     {
+        var adminPage = new AdminPage(Page);
         var statusOverridesPage = new CustomStatusLabelOverridesPage(Page);
         var chooseFormPage = new ChooseFormPage(Page);
         var dashboardPage = new DashboardPage(Page);
 
         await LoginAsync("admin");
-        await statusOverridesPage.OpenFromAdminHubAsync();
+        await adminPage.GoToAsync();
+        await adminPage.OpenCustomStatusLabelsAsync();
+        
         await statusOverridesPage.SelectTemplateAsync(ApiConfig.TemplateId);
 
         foreach (var (status, label) in CustomStatusLabels)
@@ -76,7 +79,7 @@ public sealed class CustomStatusLabelsTests : PlaywrightTestBase
             await statusOverridesPage.SaveCustomStatusLabelAsync(status, label);
         }
 
-        await chooseFormPage.GoToAsync(NavigationSection.Forms);
+        await chooseFormPage.NavigateToAsync(NavigationSection.Forms);
         await chooseFormPage.SelectFormAsync(TestData.DefaultTemplateName, "Live");
         await chooseFormPage.GoToDashboardAsync();
         await dashboardPage.FilterApplicationsAsync();

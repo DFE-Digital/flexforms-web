@@ -76,8 +76,8 @@ public sealed class ViewApplicationsTests : PlaywrightTestBase
         await LoginAsync("default");
         await dashboardPage.ExpectApplicationNotPresentAsync(_applicationToDelete.ApplicationReference);
 
-        var applicationPage = new ApplicationPage(Page);
-        await applicationPage.GoToAsync(_applicationToDelete.ApplicationReference);
+        var taskList = new TaskListPage(Page);
+        await taskList.GoToAsync(_applicationToDelete.ApplicationReference);
         await new ErrorPage(Page).ExpectPageNotFoundAsync();
     }
 }

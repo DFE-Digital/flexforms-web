@@ -8,11 +8,6 @@ public sealed class CustomStatusLabelOverridesPage(IPage page) : BasePage(page)
     public async Task GoToAsync(string templateId) =>
         await Page.GotoAsync($"/admin/custom-status-label-overrides?selectedTemplateId={templateId}");
 
-    public async Task OpenFromAdminHubAsync()
-    {
-        await Page.GotoAsync("/admin");
-        await ById("go-to-custom-status-button").ClickAsync();
-    }
 
     public async Task SelectTemplateAsync(string templateId) =>
         await ById("template-selector").SelectOptionAsync(templateId);
@@ -22,6 +17,7 @@ public sealed class CustomStatusLabelOverridesPage(IPage page) : BasePage(page)
         await ById("base-status").SelectOptionAsync(status.ToString());
         await ById("BaseStatusOverrideValue").FillAsync(label);
         await ById("save-new-version-button").ClickAsync();
-        await Assertions.Expect(Page.GetByText("The custom application statuses have been updated successfully")).ToBeVisibleAsync();
+        await Assertions.Expect(Page.GetByText("The custom application statuses have been updated successfully"))
+            .ToBeVisibleAsync();
     }
 }

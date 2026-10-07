@@ -15,7 +15,7 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
     private CreateApplicationResponse _otherTemplateApplication = null!;
 
     [OneTimeSetUp]
-    public async Task CreateApplicationWithContributorAsync()
+    public async Task CreateApplications()
     {
         var createRequest = ApplicationBuilder.CreateApplicationRequest(ApiConfig.TemplateId);
         _application = await ApplicationApi.CreateApplicationAsync(AdminApiClient, createRequest);
@@ -51,7 +51,7 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
 
         var organisationSettings = new OrganisationSettings(Page);
         var dashboardPage = new DashboardPage(Page);
-        var applicationPage = new ApplicationPage(Page);
+        var taskList = new TaskListPage(Page);
 
         await organisationSettings.ApplicationTerminology
             .WithSingular(singular)
@@ -64,7 +64,7 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
         await dashboardPage.ExpectFilterApplicationsButtonAsync($"Filter {plural}");
         await dashboardPage.ExpectLinkExists($"Continue {singular}");
         await dashboardPage.ExpectHeading($"Start a new {singular}");
-        await applicationPage.GoToAsync(_application.ApplicationReference);
+        await taskList.GoToAsync(_application.ApplicationReference);
         await dashboardPage.ExpectHeading($"Your {singular}");
         await dashboardPage.ExpectText($"{singular} reference:");
         await dashboardPage.ExpectText($"{singular} version:");
@@ -78,7 +78,7 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
         const string message = "Test Banner Message";
         var organisationSettings = new OrganisationSettings(Page);
         var dashboardPage = new DashboardPage(Page);
-        var applicationPage = new ApplicationPage(Page);
+        var taskList = new TaskListPage(Page);
         var adminPage = new AdminPage(Page);
 
         await organisationSettings.NotificationBanner
@@ -88,13 +88,13 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
             .SaveAsync();
 
         await dashboardPage.GoToAsync();
-        await organisationSettings.ExpectNotificationBanner(heading, message);
+        await dashboardPage.ExpectNotificationBanner(heading, message);
 
-        await applicationPage.GoToAsync(_application.ApplicationReference);
-        await organisationSettings.ExpectNotificationBanner(heading, message);
+        await taskList.GoToAsync(_application.ApplicationReference);
+        await taskList.ExpectNotificationBanner(heading, message);
 
         await adminPage.GoToAsync();
-        await organisationSettings.ExpectNotificationBanner(heading, message);
+        await adminPage.ExpectNotificationBanner(heading, message);
     }
 
     [TestCase(TestName = "Admin can customise the dashboard config")]
@@ -103,7 +103,7 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
     {
         var organisationSettings = new OrganisationSettings(Page);
         var dashboardPage = new DashboardPage(Page);
-        var applicationPage = new ApplicationPage(Page);
+        var taskList = new TaskListPage(Page);
 
         await organisationSettings.Dashboard
             .WithPageSize(5)
@@ -125,7 +125,7 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
         await dashboardPage.ExpectStartNewButtonAsync("Create banana");
 
         // application still uses the default terminology
-        await applicationPage.GoToAsync(_application.ApplicationReference);
+        await taskList.GoToAsync(_application.ApplicationReference);
         await dashboardPage.ExpectHeading($"Your {Terminology.Singular}");
         await dashboardPage.ExpectText($"{Terminology.Singular} reference:");
         await dashboardPage.ExpectText($"{Terminology.Singular} version:");
@@ -196,7 +196,7 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
     }
 
     [TearDown]
-    public async Task RestoreDefaultTerminologyAsync()
+    public async Task RestoreTenantSettings()
     {
         await TenantAdmin.RestoreApplicationTerminologyAsync(
             AdminApiClient,

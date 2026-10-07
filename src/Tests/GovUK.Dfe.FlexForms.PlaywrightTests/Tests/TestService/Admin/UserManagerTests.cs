@@ -7,16 +7,16 @@ using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService.Admin;
 
+[NonParallelizable]
 [TestFixture(Description = "User management")]
 public sealed class UserManagerTests : PlaywrightTestBase
 {
-    private string _userToAddEmail = null!;
+    private string _userToAddEmail = AuthUsers.ResolveAuthUser("user2").Email;
 
     [TestCase(TestName = "Admin can create user and give access to a form")]
     [CiRetry]
     public async Task AdminCanCreateUserAndGiveAccessToFormAsync()
     {
-        _userToAddEmail = TestEnvironment.RequireEnvironmentVariable("USER2_EMAIL");
         await Users.RemoveUserFromTenantAsync(AdminApiClient, _userToAddEmail);
 
         var adminPage = new AdminPage(Page);
@@ -45,7 +45,6 @@ public sealed class UserManagerTests : PlaywrightTestBase
     [CiRetry]
     public async Task AdminCanRemoveUserFromTenantAsync()
     {
-        _userToAddEmail = TestEnvironment.RequireEnvironmentVariable("USER2_EMAIL");
         await Users.AddUserToRoleAsync(AdminApiClient, _userToAddEmail, TestData.User2DisplayName,
             TestData.UserRoleName, TestData.DefaultTemplateName);
 
