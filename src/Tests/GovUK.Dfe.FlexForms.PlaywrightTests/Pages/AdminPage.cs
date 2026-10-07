@@ -5,6 +5,8 @@ namespace GovUK.Dfe.FlexForms.PlaywrightTests.Pages;
 
 public sealed class AdminPage(IPage page, Terminology terminology) : BasePage(page, terminology)
 {
+    public async Task GoToAsync() => await Page.GotoAsync("/admin");
+
     public async Task MakeTemplateLiveAsync(string templateName) =>
         await ClickTemplateActionAsync(templateName, "MakeLive");
 
@@ -35,30 +37,30 @@ public sealed class AdminPage(IPage page, Terminology terminology) : BasePage(pa
     public async Task OpenUserManagerAsync()
     {
         await ById("go-to-user-manager-button").ClickAsync();
-        await Page.WaitForURLAsync("/admin/user-manager");
+        await Assertions.Expect(Page).ToHaveURLAsync("/admin/user-manager");
     }
 
     public async Task OpenContributorManagementAsync()
     {
         await ById("go-to-contributor-management-button").ClickAsync();
-        await Page.WaitForURLAsync("/admin/contributor-management");
+        await Assertions.Expect(Page).ToHaveURLAsync("/admin/contributor-management");
     }
 
     public async Task OpenRoleManagerAsync()
     {
         await ById("go-to-role-manager-button").ClickAsync();
-        await Page.WaitForURLAsync("/admin/role-manager");
+        await Assertions.Expect(Page).ToHaveURLAsync("/admin/role-manager");
     }
 
     public async Task OpenViewApplicationsAsync()
     {
         await ById("go-to-admin-applications-button").ClickAsync();
-        await Page.WaitForURLAsync("/admin/applications");
+        await Assertions.Expect(Page).ToHaveURLAsync("/admin/applications");
     }
 
     public async Task OpenOrganisationSettingsAsync()
     {
         await ById("go-to-organisation-settings-button").ClickAsync();
-        await Page.WaitForURLAsync("/admin/organisation-settings");
+        await Assertions.Expect(Page).ToHaveURLAsync("/admin/organisation-settings");
     }
 }

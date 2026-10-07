@@ -14,6 +14,10 @@ public sealed class DashboardPage : BasePage
 
     public ApplicationsTable ApplicationsTable { get; }
 
+    public async Task GoToAsync() => await Page.GotoAsync("/applications/dashboard");
+
+    public async Task GoToAllApplicationsAsync() => await Page.GotoAsync("/applications");
+
     public async Task ChooseDefaultFormAsync()
     {
         await ById($"form-{TestEnvironment.RequireEnvironmentVariable("TEMPLATE_ID")}").ClickAsync();

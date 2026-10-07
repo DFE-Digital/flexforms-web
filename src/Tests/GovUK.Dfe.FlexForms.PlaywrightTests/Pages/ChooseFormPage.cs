@@ -5,6 +5,8 @@ namespace GovUK.Dfe.FlexForms.PlaywrightTests.Pages;
 
 public sealed class ChooseFormPage(IPage page, Terminology terminology) : BasePage(page, terminology)
 {
+    public async Task GoToAsync() => await Page.GotoAsync("/templates");
+
     public async Task SelectFormAsync(string name, string liveStatus)
     {
         var formName = $"{name.Trim()} ({liveStatus.Trim()})";
@@ -19,6 +21,6 @@ public sealed class ChooseFormPage(IPage page, Terminology terminology) : BasePa
         await Page
             .GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Go to dashboard" })
             .ClickAsync();
-        await Page.WaitForURLAsync("/applications/dashboard");
+        await Assertions.Expect(Page).ToHaveURLAsync("/applications/dashboard");
     }
 }

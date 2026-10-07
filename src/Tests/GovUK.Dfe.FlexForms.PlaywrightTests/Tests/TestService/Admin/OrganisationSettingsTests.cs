@@ -35,8 +35,9 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
     public async Task AdminLoginAndNavigateToOrganisationSettingsAsync()
     {
         await LoginAsync("admin");
-        await Page.GotoAsync("/admin");
-        await new AdminPage(Page, Terminology).OpenOrganisationSettingsAsync();
+        var adminPage = new AdminPage(Page, Terminology);
+        await adminPage.GoToAsync();
+        await adminPage.OpenOrganisationSettingsAsync();
     }
 
     [TestCase(TestName = "Admin can update the application terminology")]
@@ -48,19 +49,20 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
 
         var organisationSettings = new OrganisationSettings(Page, Terminology);
         var dashboardPage = new DashboardPage(Page, Terminology);
+        var applicationPage = new ApplicationPage(Page, Terminology);
 
         await organisationSettings.ApplicationTerminology
             .WithSingular(singular)
             .WithPlural(plural)
             .SaveAsync();
 
-        await Page.GotoAsync("/");
+        await dashboardPage.GoToAsync();
         await dashboardPage.ExpectHeading($"Your {plural}");
         await dashboardPage.ExpectHeading($"{plural} in progress");
         await dashboardPage.ExpectFilterApplicationsButtonAsync($"Filter {plural}");
         await dashboardPage.ExpectLink($"Continue {singular}");
         await dashboardPage.ExpectHeading($"Start a new {singular}");
-        await Page.GotoAsync($"/applications/{_application.ApplicationReference}");
+        await applicationPage.GoToAsync(_application.ApplicationReference);
         await dashboardPage.ExpectHeading($"Your {singular}");
         await dashboardPage.ExpectText($"{singular} reference:");
         await dashboardPage.ExpectText($"{singular} version:");
@@ -73,6 +75,9 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
         const string heading = "Test Banner Heading";
         const string message = "Test Banner Message";
         var organisationSettings = new OrganisationSettings(Page, Terminology);
+        var dashboardPage = new DashboardPage(Page, Terminology);
+        var applicationPage = new ApplicationPage(Page, Terminology);
+        var adminPage = new AdminPage(Page, Terminology);
 
         await organisationSettings.NotificationBanner
             .Enabled()
@@ -80,13 +85,13 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
             .WithMessage(message)
             .SaveAsync();
 
-        await Page.GotoAsync("/");
+        await dashboardPage.GoToAsync();
         await organisationSettings.ExpectNotificationBanner(heading, message);
 
-        await Page.GotoAsync($"/applications/{_application.ApplicationReference}");
+        await applicationPage.GoToAsync(_application.ApplicationReference);
         await organisationSettings.ExpectNotificationBanner(heading, message);
 
-        await Page.GotoAsync("/admin");
+        await adminPage.GoToAsync();
         await organisationSettings.ExpectNotificationBanner(heading, message);
     }
 
@@ -96,6 +101,7 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
     {
         var organisationSettings = new OrganisationSettings(Page, Terminology);
         var dashboardPage = new DashboardPage(Page, Terminology);
+        var applicationPage = new ApplicationPage(Page, Terminology);
 
         await organisationSettings.Dashboard
             .WithPageSize(5)
@@ -107,7 +113,7 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
             .WithStartNewButtonText("Create banana")
             .SaveAsync();
 
-        await Page.GotoAsync("/");
+        await dashboardPage.GoToAsync();
         await dashboardPage.ApplicationsTable.HasNumberOfRows(5).VerifyAsync();
         await dashboardPage.ExpectFilterApplicationsButtonHiddenAsync();
         await dashboardPage.ExpectHeading("Your Bananas");
@@ -117,7 +123,7 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
         await dashboardPage.ExpectStartNewButtonAsync("Create banana");
 
         // application still uses the default terminology
-        await Page.GotoAsync($"/applications/{_application.ApplicationReference}");
+        await applicationPage.GoToAsync(_application.ApplicationReference);
         await dashboardPage.ExpectHeading($"Your {Terminology.Singular}");
         await dashboardPage.ExpectText($"{Terminology.Singular} reference:");
         await dashboardPage.ExpectText($"{Terminology.Singular} version:");
@@ -137,7 +143,7 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
             .WithSubmitButtonText("Submit your apple answers")
             .SaveAsync();
 
-        await Page.GotoAsync($"/applications/{_application.ApplicationReference}?preview=true");
+        await applicationPreviewPage.GoToAsync(_application.ApplicationReference);
         await applicationPreviewPage.ExpectHeading("Check your apple answers");
         await applicationPreviewPage.ExpectHeading("Submit your apple answers");
         await applicationPreviewPage.ExpectText("Here is a hint for submitting your apple answers");
@@ -157,7 +163,7 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
                 "## Next steps for your orange application\n\nThank you for submitting your orange application. We will review it and get back to you shortly.")
             .SaveAsync();
 
-        await Page.GotoAsync($"/application-submitted/{_application.ApplicationReference}");
+        await applicationSubmittedPage.GoToAsync(_application.ApplicationReference);
         await applicationSubmittedPage.ExpectContentAsync("Orange app submitted",
             "Next steps for your orange application",
             "Thank you for submitting your orange application. We will review it and get back to you shortly.");
@@ -176,13 +182,13 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
                 "## Next steps for your pear application\n\nThank you for submitting your pear application. We will review it and get back to you shortly.")
             .SaveAsync();
 
-        await Page.GotoAsync($"/application-submitted/{_application.ApplicationReference}");
+        await applicationSubmittedPage.GoToAsync(_application.ApplicationReference);
         await applicationSubmittedPage.ExpectContentAsync("Pear app submitted",
             "Next steps for your pear application",
             "Thank you for submitting your pear application. We will review it and get back to you shortly.");
 
         // verify other template application still uses the default submitted page
-        await Page.GotoAsync($"/application-submitted/{_otherTemplateApplication.ApplicationReference}");
+        await applicationSubmittedPage.GoToAsync(_otherTemplateApplication.ApplicationReference);
         await applicationSubmittedPage.ExpectHeading("Application submitted");
         await applicationSubmittedPage.ExpectHeading("What happens next");
     }

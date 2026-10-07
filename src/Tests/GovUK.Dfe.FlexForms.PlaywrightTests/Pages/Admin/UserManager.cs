@@ -6,10 +6,12 @@ namespace GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Admin;
 
 public sealed class UserManager(IPage page, Terminology terminology) : BasePage(page, terminology)
 {
+    public async Task GoToAsync() => await Page.GotoAsync("/admin/user-manager");
+
     public async Task OpenAddUserAsync()
     {
         await Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = "Add new user" }).ClickAsync();
-        await Page.WaitForURLAsync("**/admin/user-manager/add");
+        await Assertions.Expect(Page).ToHaveURLAsync("/admin/user-manager/add");
     }
 
     public async Task AddUserAsync(string name, string email, string role, IEnumerable<string> formNames)
@@ -24,7 +26,7 @@ public sealed class UserManager(IPage page, Terminology terminology) : BasePage(
         }
 
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Add user" }).ClickAsync();
-        await Page.WaitForURLAsync("**/admin/user-manager");
+        await Assertions.Expect(Page).ToHaveURLAsync("/admin/user-manager");
         await ExpectUserAddedAsync(email, role);
     }
 
@@ -51,7 +53,8 @@ public sealed class UserManager(IPage page, Terminology terminology) : BasePage(
         await UserSummaryCard(email)
             .GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = "Edit" })
             .ClickAsync();
-        await Page.WaitForURLAsync("**/admin/user-manager/edit**");
+        await Assertions.Expect(Page).ToHaveURLAsync(
+            new Regex(@"/admin/user-manager/edit(?:\?.*)?$"));
 
         if (!string.IsNullOrWhiteSpace(newRole))
         {
@@ -69,7 +72,7 @@ public sealed class UserManager(IPage page, Terminology terminology) : BasePage(
         }
 
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save" }).ClickAsync();
-        await Page.WaitForURLAsync(new Regex(@"/admin/user-manager(\?|$)"));
+        await Assertions.Expect(Page).ToHaveURLAsync(new Regex(@"/admin/user-manager(?:\?|$)"));
         await Assertions.Expect(Page.GetByRole(AriaRole.Alert))
             .ToContainTextAsync("User role and form access updated.");
     }
@@ -86,15 +89,7 @@ public sealed class UserManager(IPage page, Terminology terminology) : BasePage(
         var removeButton = UserSummaryCard(email)
             .GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Remove from tenant" });
 
-        Page.Dialog += AcceptRemoveConfirmDialogAsync;
-        try
-        {
-            await removeButton.ClickAsync();
-        }
-        finally
-        {
-            Page.Dialog -= AcceptRemoveConfirmDialogAsync;
-        }
+        await AcceptDialogAsync(() => removeButton.ClickAsync());
 
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         await Assertions.Expect(Page.GetByRole(AriaRole.Alert)).ToContainTextAsync("User removed from this tenant.");
@@ -119,12 +114,6 @@ public sealed class UserManager(IPage page, Terminology terminology) : BasePage(
 
     private ILocator UserSummaryCard(string email) =>
         Page.Locator(".govuk-summary-card").Filter(new LocatorFilterOptions { HasText = email });
-
-    private async void AcceptRemoveConfirmDialogAsync(object? _, IDialog dialog)
-    {
-        Page.Dialog -= AcceptRemoveConfirmDialogAsync;
-        await dialog.AcceptAsync();
-    }
 
     private async Task ExpectUserAddedAsync(string email, string role)
     {

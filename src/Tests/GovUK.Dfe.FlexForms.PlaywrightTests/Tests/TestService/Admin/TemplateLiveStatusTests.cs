@@ -17,7 +17,7 @@ public sealed class TemplateLiveStatusTests : PlaywrightTestBase
         var dashboardPage = new DashboardPage(Page, Terminology);
 
         await LoginAsync("admin");
-        await Page.GotoAsync("/admin");
+        await adminPage.GoToAsync();
 
         await adminPage.MakeTemplateLiveAsync(TemplateName);
         await adminPage.ExpectTemplateLiveAsync(TemplateName);
@@ -39,7 +39,7 @@ public sealed class TemplateLiveStatusTests : PlaywrightTestBase
         var dashboardPage = new DashboardPage(Page, Terminology);
 
         await LoginAsync("admin");
-        await Page.GotoAsync("/admin");
+        await adminPage.GoToAsync();
 
         await adminPage.MakeTemplateNotLiveAsync(TemplateName);
         await adminPage.ExpectTemplateNotLiveAsync(TemplateName);

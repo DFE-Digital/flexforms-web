@@ -28,7 +28,7 @@ public sealed class UserManagerTests : PlaywrightTestBase
         var standardFieldsTask = new StandardFieldsTask(Page);
 
         await LoginAsync("admin");
-        await Page.GotoAsync("/admin");
+        await adminPage.GoToAsync();
         await adminPage.OpenUserManagerAsync();
 
         await userManager.OpenAddUserAsync();
@@ -51,14 +51,15 @@ public sealed class UserManagerTests : PlaywrightTestBase
             DefaultFormName);
 
         var userManager = new UserManager(Page, Terminology);
+        var dashboardPage = new DashboardPage(Page, Terminology);
 
         await LoginAsync("admin");
-        await Page.GotoAsync("/admin/user-manager");
+        await userManager.GoToAsync();
 
         await userManager.RemoveUserFromTenantAsync(_userToAddEmail);
 
         await SignInAsync("user2");
-        await Page.GotoAsync("/");
+        await dashboardPage.GoToAsync();
 
         await new ErrorPage(Page, Terminology).ExpectInvalidOrExpiredTokensAsync();
     }

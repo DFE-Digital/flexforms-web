@@ -19,14 +19,15 @@ public sealed class ContributorsTests : PlaywrightTestBase
     {
         var application = await CreateApplicationForTemplateAsync(ApiClient, ApiConfig.TemplateId);
         var applicationUrl = $"/applications/{application.ApplicationReference}";
+        var taskList = new TaskListPage(Page);
+        var standardFieldsTask = new StandardFieldsTask(Page);
 
         await LoginAsync("caseworker");
-        await Page.GotoAsync(applicationUrl);
+        await taskList.GoToAsync(application.ApplicationReference);
         await Assertions.Expect(Page).ToHaveURLAsync(applicationUrl);
 
-        var standardFieldsTask = new StandardFieldsTask(Page);
         await standardFieldsTask.UnableToOpenAsync();
-        await Page.GotoAsync($"{applicationUrl}/standard-fields/full-name-page");
+        await standardFieldsTask.GoToAsync(application.ApplicationReference, "full-name-page");
         await Assertions.Expect(Page).ToHaveURLAsync(applicationUrl);
     }
 
@@ -36,12 +37,13 @@ public sealed class ContributorsTests : PlaywrightTestBase
     {
         var application = await CreateApplicationForTemplateAsync(ApiClient, ApiConfig.TemplateId);
         var applicationUrl = $"/applications/{application.ApplicationReference}";
+        var taskList = new TaskListPage(Page);
+        var standardFieldsTask = new StandardFieldsTask(Page);
 
         await LoginAsync("admin");
-        await Page.GotoAsync(applicationUrl);
+        await taskList.GoToAsync(application.ApplicationReference);
         await Assertions.Expect(Page).ToHaveURLAsync(applicationUrl);
 
-        var standardFieldsTask = new StandardFieldsTask(Page);
         await standardFieldsTask.OpenAsync();
         await standardFieldsTask.CompleteAsync();
         await standardFieldsTask.ExpectCompletedAsync();
@@ -52,11 +54,11 @@ public sealed class ContributorsTests : PlaywrightTestBase
     public async Task AdminCannotSubmitAnotherUsersApplicationAsync()
     {
         var application = await CreateApplicationForTemplateAsync(ApiClient, ApiConfig.TemplateId);
+        var taskList = new TaskListPage(Page);
 
         await LoginAsync("admin");
-        await Page.GotoAsync($"/applications/{application.ApplicationReference}");
+        await taskList.GoToAsync(application.ApplicationReference);
 
-        var taskList = new TaskListPage(Page);
         await taskList.ReviewApplicationAsync();
 
         var preview = new ApplicationPreviewPage(Page, Terminology);
@@ -69,12 +71,13 @@ public sealed class ContributorsTests : PlaywrightTestBase
     {
         var application = await CreateApplicationForTemplateAsync(AdminApiClient, ApiConfig.TemplateId);
         var dashboardPage = new DashboardPage(Page, Terminology);
+        var applicationPage = new ApplicationPage(Page, Terminology);
 
         await LoginAsync();
-        await Page.GotoAsync("/");
+        await dashboardPage.GoToAsync();
         await dashboardPage.ExpectApplicationNotPresentAsync(application.ApplicationReference);
 
-        await Page.GotoAsync($"/applications/{application.ApplicationReference}");
+        await applicationPage.GoToAsync(application.ApplicationReference);
         await Assertions.Expect(Page).ToHaveURLAsync("Error/NotFound");
     }
 
@@ -90,7 +93,7 @@ public sealed class ContributorsTests : PlaywrightTestBase
         var contributorsInvitePage = new ContributorsInvitePage(Page, Terminology);
 
         await LoginAsync("admin");
-        await Page.GotoAsync($"/applications/{application.ApplicationReference}");
+        await applicationPage.GoToAsync(application.ApplicationReference);
 
         await applicationPage.InviteContributorsAsync();
 

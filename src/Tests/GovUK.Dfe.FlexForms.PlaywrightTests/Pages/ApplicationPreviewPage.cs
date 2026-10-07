@@ -6,6 +6,9 @@ namespace GovUK.Dfe.FlexForms.PlaywrightTests.Pages;
 
 public sealed class ApplicationPreviewPage(IPage page, Terminology terminology) : BasePage(page, terminology)
 {
+    public async Task GoToAsync(string applicationReference) =>
+        await Page.GotoAsync($"/applications/{applicationReference}?preview=true");
+
     public async Task SubmitAsync() => await SubmitApplicationButton().ClickAsync();
 
     public async Task SubmitButtonNotVisibleAsync()

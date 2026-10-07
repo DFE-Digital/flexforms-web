@@ -26,8 +26,9 @@ public sealed class ContributorManagementTests : PlaywrightTestBase
     public async Task AdminLoginAndNavigateToContributorManagementAsync()
     {
         await LoginAsync("admin");
-        await Page.GotoAsync("/admin");
-        await new AdminPage(Page, Terminology).OpenContributorManagementAsync();
+        var adminPage = new AdminPage(Page, Terminology);
+        await adminPage.GoToAsync();
+        await adminPage.OpenContributorManagementAsync();
     }
 
     [TestCase(TestName = "Admin can find who has access to an application by reference number")]

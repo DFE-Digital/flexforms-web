@@ -15,10 +15,13 @@ public sealed class ViewApplications : BasePage
         ApplicationsTable = new ApplicationsTable(page);
     }
 
+    public async Task GoToAsync() => await Page.GotoAsync("/admin/applications");
+
     public async Task SelectATemplateAsync(string templateName)
     {
         await ById("template-selector").SelectOptionAsync(new SelectOptionValue { Label = templateName });
-        await Page.WaitForURLAsync("/admin/applications?selectedTemplateId=**");
+        await Assertions.Expect(Page).ToHaveURLAsync(
+            new Regex(@"/admin/applications\?selectedTemplateId=.+"));
     }
 
     public async Task DeleteApplicationAsync(string reference)
@@ -26,16 +29,9 @@ public sealed class ViewApplications : BasePage
         var deleteButton = ApplicationRow(reference)
             .GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Delete" });
 
-        Page.Dialog += AcceptDeleteConfirmDialogAsync;
-        try
-        {
-            await deleteButton.ClickAsync();
-            await Page.WaitForURLAsync(new Regex(@"/admin/applications\?.*CurrentPage=1"));
-        }
-        finally
-        {
-            Page.Dialog -= AcceptDeleteConfirmDialogAsync;
-        }
+        await AcceptDialogAsync(() => deleteButton.ClickAsync());
+        await Assertions.Expect(Page).ToHaveURLAsync(
+            new Regex(@"/admin/applications\?.*CurrentPage=1"));
     }
 
     private ILocator ApplicationRow(string reference) =>
@@ -44,10 +40,4 @@ public sealed class ViewApplications : BasePage
             {
                 Has = Page.GetByRole(AriaRole.Cell, new PageGetByRoleOptions { Name = reference, Exact = true }),
             });
-
-    private async void AcceptDeleteConfirmDialogAsync(object? _, IDialog dialog)
-    {
-        Page.Dialog -= AcceptDeleteConfirmDialogAsync;
-        await dialog.AcceptAsync();
-    }
 }

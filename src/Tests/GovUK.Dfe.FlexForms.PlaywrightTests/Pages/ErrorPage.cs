@@ -5,6 +5,8 @@ namespace GovUK.Dfe.FlexForms.PlaywrightTests.Pages;
 
 public sealed class ErrorPage(IPage page, Terminology terminology) : BasePage(page, terminology)
 {
+    public async Task GoToAsync() => await Page.GotoAsync("/Error/NotFound");
+
     public async Task ExpectInvalidOrExpiredTokensAsync()
     {
         await Assertions

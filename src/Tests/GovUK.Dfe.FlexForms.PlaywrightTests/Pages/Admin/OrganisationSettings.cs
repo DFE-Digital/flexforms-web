@@ -27,6 +27,8 @@ public sealed class OrganisationSettings : BasePage
 
     public DashboardSettings Dashboard { get; }
 
+    public async Task GoToAsync() => await Page.GotoAsync("/admin/organisation-settings");
+
     public async Task SaveAsync()
     {
         foreach (var change in _changes)

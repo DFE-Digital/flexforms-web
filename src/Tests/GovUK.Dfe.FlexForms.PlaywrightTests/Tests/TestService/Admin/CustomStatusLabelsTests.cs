@@ -68,7 +68,8 @@ public sealed class CustomStatusLabelsTests : PlaywrightTestBase
         var dashboardPage = new DashboardPage(Page, Terminology);
 
         await LoginAsync("admin");
-        await statusOverridesPage.OpenForTemplateAsync(ApiConfig.TemplateId);
+        await statusOverridesPage.OpenFromAdminHubAsync();
+        await statusOverridesPage.SelectTemplateAsync(ApiConfig.TemplateId);
 
         foreach (var (status, label) in CustomStatusLabels)
         {

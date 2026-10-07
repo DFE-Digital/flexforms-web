@@ -9,7 +9,8 @@ public static class Login
     {
         await SignInAsync(page, userName);
         await page.GotoAsync("/");
-        await page.WaitForURLAsync(new Regex(@"(/applications/dashboard|/templates)"));
+        await Assertions.Expect(page).ToHaveURLAsync(
+            new Regex(@"(/applications/dashboard|/templates)$"));
     }
 
     public static async Task SignInAsync(IPage page, string? userName = null)

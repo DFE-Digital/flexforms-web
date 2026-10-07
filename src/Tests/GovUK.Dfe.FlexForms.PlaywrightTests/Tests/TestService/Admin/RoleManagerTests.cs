@@ -17,8 +17,9 @@ public sealed class RoleManagerTests : PlaywrightTestBase
     public async Task AdminLoginAndNavigateToRoleManagerAsync()
     {
         await LoginAsync("admin");
-        await Page.GotoAsync("/admin");
-        await new AdminPage(Page, Terminology).OpenRoleManagerAsync();
+        var adminPage = new AdminPage(Page, Terminology);
+        await adminPage.GoToAsync();
+        await adminPage.OpenRoleManagerAsync();
     }
 
     [TestCase(TestName = "Admin can create a custom role and assign to a user")]
@@ -38,7 +39,7 @@ public sealed class RoleManagerTests : PlaywrightTestBase
 
         await managePermissions.AddPermissionAsync("User", "Any", "Manage");
 
-        await Page.GotoAsync("/admin/user-manager");
+        await userManager.GoToAsync();
         await userManager.EditUserAsync(_user2Email, newRole: CustomRoleName);
 
         await LoginAsync("user2");
@@ -58,10 +59,10 @@ public sealed class RoleManagerTests : PlaywrightTestBase
         var userManager = new UserManager(Page, Terminology);
         var roleManager = new RoleManager(Page, Terminology);
 
-        await Page.GotoAsync("/admin/user-manager");
+        await userManager.GoToAsync();
         await userManager.EditUserAsync(_user2Email, newRole: "User");
 
-        await Page.GotoAsync("/admin/role-manager");
+        await roleManager.GoToAsync();
         await roleManager.DeleteRoleAsync(CustomRoleName);
     }
 

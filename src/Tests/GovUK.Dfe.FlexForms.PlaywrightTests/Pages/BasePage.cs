@@ -21,6 +21,35 @@ public abstract class BasePage(IPage page, Terminology terminology)
 
     protected ILocator ById(string id) => Page.Locator($"[id=\"{id}\"]");
 
+    protected async Task AcceptDialogAsync(Func<Task> action)
+    {
+        var dialogAccepted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        async void AcceptDialog(object? _, IDialog dialog)
+        {
+            try
+            {
+                await dialog.AcceptAsync();
+                dialogAccepted.SetResult();
+            }
+            catch (Exception exception)
+            {
+                dialogAccepted.SetException(exception);
+            }
+        }
+
+        Page.Dialog += AcceptDialog;
+        try
+        {
+            await action();
+            await dialogAccepted.Task;
+        }
+        finally
+        {
+            Page.Dialog -= AcceptDialog;
+        }
+    }
+
     public async Task GoToAsync(NavigationSection section)
     {
         var sectionName = section switch

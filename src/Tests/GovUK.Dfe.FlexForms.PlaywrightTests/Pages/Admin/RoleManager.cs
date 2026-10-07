@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 using Microsoft.Playwright;
 
@@ -5,6 +6,8 @@ namespace GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Admin;
 
 public sealed class RoleManager(IPage page, Terminology terminology) : BasePage(page, terminology)
 {
+    public async Task GoToAsync() => await Page.GotoAsync("/admin/role-manager");
+
     public async Task CreateRoleAsync(string roleName)
     {
         await ById("NewRoleName").FillAsync(roleName);
@@ -18,15 +21,7 @@ public sealed class RoleManager(IPage page, Terminology terminology) : BasePage(
         var deleteButton = RoleRow(roleName)
             .GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Delete" });
 
-        Page.Dialog += AcceptDeleteConfirmDialogAsync;
-        try
-        {
-            await deleteButton.ClickAsync();
-        }
-        finally
-        {
-            Page.Dialog -= AcceptDeleteConfirmDialogAsync;
-        }
+        await AcceptDialogAsync(() => deleteButton.ClickAsync());
 
         await Assertions.Expect(Page.GetByRole(AriaRole.Alert)).ToContainTextAsync("Role deleted.");
     }
@@ -35,7 +30,8 @@ public sealed class RoleManager(IPage page, Terminology terminology) : BasePage(
     {
         await RoleRow(roleName)
             .GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = "Manage permissions" }).ClickAsync();
-        await Page.WaitForURLAsync("**/admin/role-manager/permissions**");
+        await Assertions.Expect(Page).ToHaveURLAsync(
+            new Regex(@"/admin/role-manager/permissions(?:\?.*)?$"));
     }
 
     private ILocator RoleRow(string roleName) =>
@@ -44,10 +40,4 @@ public sealed class RoleManager(IPage page, Terminology terminology) : BasePage(
             {
                 Has = Page.GetByRole(AriaRole.Textbox, new PageGetByRoleOptions { Name = $"Rename {roleName}" }),
             });
-
-    private async void AcceptDeleteConfirmDialogAsync(object? _, IDialog dialog)
-    {
-        Page.Dialog -= AcceptDeleteConfirmDialogAsync;
-        await dialog.AcceptAsync();
-    }
 }

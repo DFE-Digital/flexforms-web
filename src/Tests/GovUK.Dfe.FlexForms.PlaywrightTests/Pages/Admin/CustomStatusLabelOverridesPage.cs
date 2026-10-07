@@ -6,7 +6,7 @@ namespace GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Admin;
 
 public sealed class CustomStatusLabelOverridesPage(IPage page, Terminology terminology) : BasePage(page, terminology)
 {
-    public async Task OpenForTemplateAsync(string templateId) =>
+    public async Task GoToAsync(string templateId) =>
         await Page.GotoAsync($"/admin/custom-status-label-overrides?selectedTemplateId={templateId}");
 
     public async Task OpenFromAdminHubAsync()

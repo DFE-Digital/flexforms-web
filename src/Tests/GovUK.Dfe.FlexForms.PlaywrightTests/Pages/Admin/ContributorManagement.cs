@@ -8,6 +8,8 @@ public sealed class ContributorManagement(IPage page, Terminology terminology) :
 {
     public CreatedApplications CreatedApplications { get; } = new(page);
 
+    public async Task GoToAsync() => await Page.GotoAsync("/admin/contributor-management");
+
     public async Task LookupAnApplicationByReferenceNumberAsync(string referenceNumber)
     {
         await ById("ReferenceNumber").FillAsync(referenceNumber);
@@ -19,7 +21,8 @@ public sealed class ContributorManagement(IPage page, Terminology terminology) :
         await ById("Email").FillAsync(email);
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Look up applications and invites" })
             .ClickAsync();
-        await Page.WaitForURLAsync("**/admin/contributor-management?email=*");
+        await Assertions.Expect(Page).ToHaveURLAsync(
+            new Regex(@"/admin/contributor-management\?email=.+"));
     }
 
     public async Task ExpectHasContributorAsync(string reference, string email)

@@ -25,8 +25,9 @@ public sealed class ViewApplicationsTests : PlaywrightTestBase
     public async Task AdminLoginAndNavigateToViewApplicationsAsync()
     {
         await LoginAsync("admin");
-        await Page.GotoAsync("/admin");
-        await new AdminPage(Page, Terminology).OpenViewApplicationsAsync();
+        var adminPage = new AdminPage(Page, Terminology);
+        await adminPage.GoToAsync();
+        await adminPage.OpenViewApplicationsAsync();
     }
 
     [TestCase(TestName = "Admin can view applications for a template")]
@@ -64,7 +65,7 @@ public sealed class ViewApplicationsTests : PlaywrightTestBase
             .ColumnHasValue("Action", "Deleted")
             .VerifyAsync();
 
-        await Page.GotoAsync("/applications");
+        await dashboardPage.GoToAllApplicationsAsync();
         await dashboardPage.ApplicationsTable
             .WithReference(_applicationToDelete.ApplicationReference)
             .ColumnHasValue("Status", "Deleted")
@@ -74,7 +75,8 @@ public sealed class ViewApplicationsTests : PlaywrightTestBase
         await LoginAsync("default");
         await dashboardPage.ExpectApplicationNotPresentAsync(_applicationToDelete.ApplicationReference);
 
-        await Page.GotoAsync($"/applications/{_applicationToDelete.ApplicationReference}");
+        var applicationPage = new ApplicationPage(Page, Terminology);
+        await applicationPage.GoToAsync(_applicationToDelete.ApplicationReference);
         await new ErrorPage(Page, Terminology).ExpectPageNotFoundAsync();
     }
 }
