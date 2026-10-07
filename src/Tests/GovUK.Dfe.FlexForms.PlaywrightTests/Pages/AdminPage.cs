@@ -7,10 +7,10 @@ public sealed class AdminPage(IPage page) : BasePage(page)
     public async Task GoToAsync() => await Page.GotoAsync("/admin");
 
     public async Task MakeTemplateLiveAsync(string templateName) =>
-        await ClickTemplateActionAsync(templateName, "MakeLive");
+        await ClickTemplateActionAsync(templateName, "Make live");
 
     public async Task MakeTemplateNotLiveAsync(string templateName) =>
-        await ClickTemplateActionAsync(templateName, "MakeNotLive");
+        await ClickTemplateActionAsync(templateName, "Make not live");
 
     public async Task ExpectTemplateLiveAsync(string templateName) =>
         await ExpectTemplateStatusAsync(templateName, "Live");
@@ -21,17 +21,51 @@ public sealed class AdminPage(IPage page) : BasePage(page)
     private async Task ClickTemplateActionAsync(string templateName, string action)
     {
         var row = TemplateRow(templateName);
-        await row.Locator($"form[action*='{action}'] button[type='submit']").ClickAsync();
+        await row.GetByRole(AriaRole.Button, new LocatorGetByRoleOptions
+        {
+            Name = action,
+            Exact = true,
+        }).ClickAsync();
     }
 
     private async Task ExpectTemplateStatusAsync(string templateName, string expectedStatus)
     {
-        var statusTag = TemplateRow(templateName).Locator("td.govuk-table__cell").Nth(1).Locator("strong.govuk-tag");
-        await Assertions.Expect(statusTag).ToContainTextAsync(expectedStatus);
+        var statusCell = await TemplateCellAsync(templateName, "Status");
+        await Assertions.Expect(statusCell).ToHaveTextAsync(expectedStatus);
     }
 
     private ILocator TemplateRow(string templateName) =>
-        Page.Locator("tr.govuk-table__row").Filter(new LocatorFilterOptions { HasText = templateName }).First;
+        TemplateTable().GetByRole(AriaRole.Row).Filter(new LocatorFilterOptions
+        {
+            Has = Page.GetByRole(AriaRole.Cell, new PageGetByRoleOptions { Name = templateName }),
+        });
+
+    private ILocator TemplateTable() =>
+        Page.GetByRole(AriaRole.Table).Filter(new LocatorFilterOptions
+        {
+            Has = Page.GetByRole(AriaRole.Columnheader, new PageGetByRoleOptions
+            {
+                Name = "Status",
+                Exact = true,
+            }),
+        });
+
+    private async Task<ILocator> TemplateCellAsync(string templateName, string columnName)
+    {
+        var headers = TemplateTable().GetByRole(AriaRole.Columnheader);
+        await Assertions.Expect(headers.Filter(new LocatorFilterOptions { HasText = columnName })).ToHaveCountAsync(1);
+
+        var columnIndex = await headers.EvaluateAllAsync<int>(
+            "(headers, column) => headers.findIndex((header) => header.textContent?.trim() === column)",
+            columnName);
+
+        if (columnIndex < 0)
+        {
+            throw new InvalidOperationException($"Template table column \"{columnName}\" was not found.");
+        }
+
+        return TemplateRow(templateName).GetByRole(AriaRole.Cell).Nth(columnIndex);
+    }
 
     public async Task OpenUserManagerAsync()
     {

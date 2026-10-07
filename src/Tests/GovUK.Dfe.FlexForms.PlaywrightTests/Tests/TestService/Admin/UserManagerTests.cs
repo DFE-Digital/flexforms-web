@@ -10,9 +10,6 @@ namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService.Admin;
 [TestFixture(Description = "User management")]
 public sealed class UserManagerTests : PlaywrightTestBase
 {
-    private const string DefaultFormName = "default";
-    private const string NewUserDisplayName = "Test Automation User 2";
-    private const string NewUserRole = "User";
     private string _userToAddEmail = null!;
 
     [TestCase(TestName = "Admin can create user and give access to a form")]
@@ -33,7 +30,8 @@ public sealed class UserManagerTests : PlaywrightTestBase
         await adminPage.OpenUserManagerAsync();
 
         await userManager.OpenAddUserAsync();
-        await userManager.AddUserAsync(NewUserDisplayName, _userToAddEmail, NewUserRole, [DefaultFormName]);
+        await userManager.AddUserAsync(TestData.User2DisplayName, _userToAddEmail, TestData.UserRoleName,
+            [TestData.DefaultTemplateName]);
 
         await LoginAsync("user2");
         await dashboardPage.StartNewApplicationAsync();
@@ -48,8 +46,8 @@ public sealed class UserManagerTests : PlaywrightTestBase
     public async Task AdminCanRemoveUserFromTenantAsync()
     {
         _userToAddEmail = TestEnvironment.RequireEnvironmentVariable("USER2_EMAIL");
-        await Users.AddUserToRoleAsync(AdminApiClient, _userToAddEmail, NewUserDisplayName, NewUserRole,
-            DefaultFormName);
+        await Users.AddUserToRoleAsync(AdminApiClient, _userToAddEmail, TestData.User2DisplayName,
+            TestData.UserRoleName, TestData.DefaultTemplateName);
 
         var userManager = new UserManager(Page);
         var dashboardPage = new DashboardPage(Page);
@@ -59,7 +57,7 @@ public sealed class UserManagerTests : PlaywrightTestBase
 
         await userManager.RemoveUserFromTenantAsync(_userToAddEmail);
 
-        await SignInAsync("user2");
+        await AuthenticateAsync("user2");
         await dashboardPage.GoToAsync();
 
         await new ErrorPage(Page).ExpectInvalidOrExpiredTokensAsync();

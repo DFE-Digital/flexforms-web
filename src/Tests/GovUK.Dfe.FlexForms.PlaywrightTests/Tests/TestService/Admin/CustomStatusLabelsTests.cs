@@ -3,6 +3,7 @@ using GovUK.Dfe.FlexForms.PlaywrightTests.Api.Builders;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Infrastructure;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Pages;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Admin;
+using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService.Admin;
 
@@ -10,8 +11,6 @@ namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService.Admin;
 [NonParallelizable] // Modifies 'Deleted' status label
 public sealed class CustomStatusLabelsTests : PlaywrightTestBase
 {
-    private const string TemplateName = "default";
-
     private static readonly IReadOnlyDictionary<ApplicationStatus, string> BaseStatusLabels =
         new Dictionary<ApplicationStatus, string>
         {
@@ -78,7 +77,7 @@ public sealed class CustomStatusLabelsTests : PlaywrightTestBase
         }
 
         await chooseFormPage.GoToAsync(NavigationSection.Forms);
-        await chooseFormPage.SelectFormAsync(TemplateName, "Live");
+        await chooseFormPage.SelectFormAsync(TestData.DefaultTemplateName, "Live");
         await chooseFormPage.GoToDashboardAsync();
         await dashboardPage.FilterApplicationsAsync();
 

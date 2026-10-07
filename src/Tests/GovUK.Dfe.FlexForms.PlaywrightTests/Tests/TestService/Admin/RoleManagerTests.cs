@@ -9,8 +9,6 @@ namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService.Admin;
 [TestFixture(Description = "Role management")]
 public sealed class RoleManagerTests : PlaywrightTestBase
 {
-    private const string DefaultFormName = "default";
-    private const string NewUserDisplayName = "Test Automation User 2";
     private const string CustomRoleName = "User Manager";
     private readonly string _user2Email = AuthUsers.ResolveAuthUser("user2").Email;
 
@@ -27,7 +25,8 @@ public sealed class RoleManagerTests : PlaywrightTestBase
     [CiRetry]
     public async Task AdminCanCreateCustomRoleAndAssignToUserAsync()
     {
-        await Users.AddUserToRoleAsync(AdminApiClient, _user2Email, NewUserDisplayName, "User", DefaultFormName);
+        await Users.AddUserToRoleAsync(AdminApiClient, _user2Email, TestData.User2DisplayName,
+            TestData.UserRoleName, TestData.DefaultTemplateName);
 
         var adminPage = new AdminPage(Page);
         var roleManager = new RoleManager(Page);
@@ -54,14 +53,14 @@ public sealed class RoleManagerTests : PlaywrightTestBase
     public async Task AdminCanRemoveCustomRoleFromUserAndDeleteRoleAsync()
     {
         await Roles.CreateRoleAsync(AdminApiClient, CustomRoleName);
-        await Users.AddUserToRoleAsync(AdminApiClient, _user2Email, NewUserDisplayName, CustomRoleName,
-            DefaultFormName);
+        await Users.AddUserToRoleAsync(AdminApiClient, _user2Email, TestData.User2DisplayName, CustomRoleName,
+            TestData.DefaultTemplateName);
 
         var userManager = new UserManager(Page);
         var roleManager = new RoleManager(Page);
 
         await userManager.GoToAsync();
-        await userManager.EditUserAsync(_user2Email, newRole: "User");
+        await userManager.EditUserAsync(_user2Email, newRole: TestData.UserRoleName);
 
         await roleManager.GoToAsync();
         await roleManager.DeleteRoleAsync(CustomRoleName);
@@ -71,7 +70,8 @@ public sealed class RoleManagerTests : PlaywrightTestBase
     public async Task RemoveUserFromTenantAsync()
     {
         // workaround for bug 306990
-        await Users.AddUserToRoleAsync(AdminApiClient, _user2Email, NewUserDisplayName, "User", DefaultFormName);
+        await Users.AddUserToRoleAsync(AdminApiClient, _user2Email, TestData.User2DisplayName,
+            TestData.UserRoleName, TestData.DefaultTemplateName);
 
         await Users.RemoveUserFromTenantAsync(AdminApiClient, _user2Email);
         await Roles.RemoveRoleAsync(AdminApiClient, CustomRoleName);

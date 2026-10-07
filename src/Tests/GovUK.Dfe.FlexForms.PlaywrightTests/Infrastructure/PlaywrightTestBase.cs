@@ -151,7 +151,8 @@ public abstract class PlaywrightTestBase : PageTest
         {
             try
             {
-                await Page.ScreenshotAsync(new PageScreenshotOptions { Path = Path.Combine(_artifactsDirectory, "screenshot.png") });
+                await Page.ScreenshotAsync(new PageScreenshotOptions
+                    { Path = Path.Combine(_artifactsDirectory, "screenshot.png") });
             }
             catch
             {
@@ -183,7 +184,7 @@ public abstract class PlaywrightTestBase : PageTest
 
     protected Task LoginAsync(string? userName = null) => Login.LoginAsync(Page, userName);
 
-    protected Task SignInAsync(string? userName = null) => Login.SignInAsync(Page, userName);
+    protected Task AuthenticateAsync(string? userName = null) => Login.AuthenticateAsync(Page, userName);
 
     private static bool IsHeadedModeEnabled()
     {

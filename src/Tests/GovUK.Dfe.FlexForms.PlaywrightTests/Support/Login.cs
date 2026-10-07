@@ -7,12 +7,12 @@ public static class Login
 {
     public static async Task LoginAsync(IPage page, string? userName = null)
     {
-        await SignInAsync(page, userName);
+        await AuthenticateAsync(page, userName);
         await page.GotoAsync("/");
         await Assertions.Expect(page).ToHaveURLAsync(new Regex(@"(/applications/dashboard|/templates)"));
     }
 
-    public static async Task SignInAsync(IPage page, string? userName = null)
+    public static async Task AuthenticateAsync(IPage page, string? userName = null)
     {
         var user = AuthUsers.ResolveAuthUser(userName);
         AuthenticationInterceptor.SetContextAuthUser(page.Context, user);

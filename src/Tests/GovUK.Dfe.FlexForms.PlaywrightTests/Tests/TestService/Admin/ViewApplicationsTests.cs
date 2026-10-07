@@ -4,6 +4,7 @@ using GovUK.Dfe.FlexForms.PlaywrightTests.Infrastructure;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Pages;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Admin;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Components;
+using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService.Admin;
 
@@ -12,7 +13,6 @@ public sealed class ViewApplicationsTests : PlaywrightTestBase
 {
     private CreateApplicationResponse _application = null!;
     private CreateApplicationResponse _applicationToDelete = null!;
-    private const string TemplateName = "default";
 
     [OneTimeSetUp]
     public async Task CreateApplicationAsync()
@@ -37,7 +37,7 @@ public sealed class ViewApplicationsTests : PlaywrightTestBase
     {
         var viewApplications = new ViewApplications(Page);
 
-        await viewApplications.SelectATemplateAsync(TemplateName);
+        await viewApplications.SelectATemplateAsync(TestData.DefaultTemplateName);
         await viewApplications.ApplicationsTable
             .HasTableHeaders(["Reference", "Application ID", "Date created", "Action"])
             .WithReference(_application.ApplicationReference)
@@ -59,7 +59,7 @@ public sealed class ViewApplicationsTests : PlaywrightTestBase
         var viewApplications = new ViewApplications(Page);
         var dashboardPage = new DashboardPage(Page);
 
-        await viewApplications.SelectATemplateAsync(TemplateName);
+        await viewApplications.SelectATemplateAsync(TestData.DefaultTemplateName);
         await viewApplications.DeleteApplicationAsync(_applicationToDelete.ApplicationReference);
         await viewApplications.ApplicationsTable
             .WithReference(_applicationToDelete.ApplicationReference)

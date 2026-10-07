@@ -68,10 +68,10 @@ public abstract class BasePage(IPage page)
         await Assertions.Expect(Page.GetByText(paragraph)).ToBeVisibleAsync();
 
     public async Task ExpectLink(string linkText) => await Assertions
-        .Expect(Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = linkText }).First).ToBeVisibleAsync();
+        .Expect(Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = linkText })).ToBeVisibleAsync();
 
     public async Task ExpectButton(string buttonText) => await Assertions
-        .Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = buttonText }).First)
+        .Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = buttonText }))
         .ToBeVisibleAsync();
 
     public async Task ExpectNotificationBanner(string heading, string message)

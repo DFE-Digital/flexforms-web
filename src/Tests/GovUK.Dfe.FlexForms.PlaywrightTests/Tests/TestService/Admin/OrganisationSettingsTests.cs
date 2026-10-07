@@ -3,6 +3,7 @@ using GovUK.Dfe.FlexForms.PlaywrightTests.Api.Builders;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Infrastructure;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Pages;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Admin;
+using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService.Admin;
 
@@ -12,7 +13,6 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
 {
     private CreateApplicationResponse _application = null!;
     private CreateApplicationResponse _otherTemplateApplication = null!;
-    private const string OtherTemplateName = "live switch only";
 
     [OneTimeSetUp]
     public async Task CreateApplicationWithContributorAsync()
@@ -20,7 +20,8 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
         var createRequest = ApplicationBuilder.CreateApplicationRequest(ApiConfig.TemplateId);
         _application = await ApplicationApi.CreateApplicationAsync(AdminApiClient, createRequest);
 
-        var otherTemplateId = await Templates.GetTemplateIdByNameAsync(AdminApiClient, OtherTemplateName);
+        var otherTemplateId =
+            await Templates.GetTemplateIdByNameAsync(AdminApiClient, TestData.LiveSwitchOnlyTemplateName);
         var otherTemplateApplicationRequest = ApplicationBuilder.CreateApplicationRequest(otherTemplateId);
         _otherTemplateApplication =
             await ApplicationApi.CreateApplicationAsync(AdminApiClient, otherTemplateApplicationRequest);

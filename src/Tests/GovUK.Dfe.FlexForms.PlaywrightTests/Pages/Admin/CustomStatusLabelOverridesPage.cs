@@ -20,10 +20,8 @@ public sealed class CustomStatusLabelOverridesPage(IPage page) : BasePage(page)
     public async Task SaveCustomStatusLabelAsync(ApplicationStatus status, string label)
     {
         await ById("base-status").SelectOptionAsync(status.ToString());
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         await ById("BaseStatusOverrideValue").FillAsync(label);
         await ById("save-new-version-button").ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         await Assertions.Expect(Page.GetByText("The custom application statuses have been updated successfully")).ToBeVisibleAsync();
     }
 }

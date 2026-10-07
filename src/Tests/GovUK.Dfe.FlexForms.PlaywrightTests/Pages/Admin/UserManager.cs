@@ -90,7 +90,6 @@ public sealed class UserManager(IPage page) : BasePage(page)
 
         await AcceptDialogAsync(() => removeButton.ClickAsync());
 
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         await Assertions.Expect(Page.GetByRole(AriaRole.Alert)).ToContainTextAsync("User removed from this tenant.");
     }
 
@@ -99,7 +98,6 @@ public sealed class UserManager(IPage page) : BasePage(page)
         await EnsureUserFiltersPanelOpenAsync();
         await Page.GetByTestId("search-term").FillAsync(searchTerm);
         await Page.GetByTestId("apply-filters").ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
     }
 
     private async Task EnsureUserFiltersPanelOpenAsync()
