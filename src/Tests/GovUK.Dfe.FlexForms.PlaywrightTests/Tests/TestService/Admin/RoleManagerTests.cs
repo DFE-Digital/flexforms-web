@@ -6,6 +6,7 @@ using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService.Admin;
 
+[TestFixture(Description = "Role management")]
 public sealed class RoleManagerTests : PlaywrightTestBase
 {
     private const string DefaultFormName = "default";

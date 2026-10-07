@@ -7,6 +7,7 @@ using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService.Admin;
 
+[TestFixture(Description = "User management")]
 public sealed class UserManagerTests : PlaywrightTestBase
 {
     private const string DefaultFormName = "default";

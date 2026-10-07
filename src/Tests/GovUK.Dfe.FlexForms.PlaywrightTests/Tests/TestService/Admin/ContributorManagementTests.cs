@@ -7,6 +7,7 @@ using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService.Admin;
 
+[TestFixture(Description = "Contributor management")]
 public sealed class ContributorManagementTests : PlaywrightTestBase
 {
     private CreateApplicationResponse _application = null!;

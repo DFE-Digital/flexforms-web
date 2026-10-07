@@ -6,6 +6,7 @@ using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Admin;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService.Admin;
 
+[TestFixture(Description = "Organisation settings")]
 [NonParallelizable] // modifies tenant config
 public sealed class OrganisationSettingsTests : PlaywrightTestBase
 {

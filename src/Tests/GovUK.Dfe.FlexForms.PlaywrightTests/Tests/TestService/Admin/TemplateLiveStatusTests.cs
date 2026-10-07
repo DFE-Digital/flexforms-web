@@ -4,6 +4,7 @@ using GovUK.Dfe.FlexForms.PlaywrightTests.Pages;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService.Admin;
 
+[TestFixture(Description = "Template live status")]
 public sealed class TemplateLiveStatusTests : PlaywrightTestBase
 {
     private const string TemplateName = "live switch only";

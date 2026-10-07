@@ -7,6 +7,7 @@ using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Components;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService.Admin;
 
+[TestFixture(Description = "Admin application management")]
 public sealed class ViewApplicationsTests : PlaywrightTestBase
 {
     private CreateApplicationResponse _application = null!;

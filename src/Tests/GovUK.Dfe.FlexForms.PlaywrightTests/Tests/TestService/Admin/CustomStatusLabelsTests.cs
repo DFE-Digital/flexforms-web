@@ -6,6 +6,7 @@ using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Admin;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService.Admin;
 
+[TestFixture(Description = "Custom application status labels")]
 [NonParallelizable] // Modifies 'Deleted' status label
 public sealed class CustomStatusLabelsTests : PlaywrightTestBase
 {
