@@ -58,7 +58,7 @@ public static class ApplicationApi
             request,
             $"/v1/applications/{applicationId}/responses",
             method: "POST",
-            data: new AddApplicationResponseRequest(EncodeResponseBody(responseBodyJson)));
+            data: new AddApplicationResponseRequest(ApiBase.EncodeJson(responseBodyJson)));
 
     public static Task<CreateApplicationResponse> SubmitApplicationAsync(IAPIRequestContext request,
         string applicationId) =>
@@ -72,9 +72,6 @@ public static class ApplicationApi
             request,
             $"/v1/applications/{applicationId}",
             method: "DELETE");
-
-    private static string EncodeResponseBody(string responseBodyJson) =>
-        Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(responseBodyJson));
 
     public static Task<UserDto> AddContributorToApplicationAsync(IAPIRequestContext request, string applicationId,
         string email) =>

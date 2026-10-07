@@ -29,17 +29,10 @@ public static class Roles
         await DeleteRoleAsync(request, roleId);
     }
 
-    public static async Task DeleteRoleAsync(IAPIRequestContext request, string roleId)
-    {
-        var response = await request.FetchAsync(
+    public static Task DeleteRoleAsync(IAPIRequestContext request, string roleId) =>
+        ApiBase.ApiRequestAsync(
+            request,
             $"/v1/roles/{roleId}",
-            new APIRequestContextOptions { Method = "DELETE" });
-
-        if (response.Ok || response.Status == 404)
-        {
-            return;
-        }
-
-        throw new ApiRequestException($"API request failed ({response.Status}): {await response.TextAsync()}");
-    }
+            method: "DELETE",
+            allowNotFound: true);
 }

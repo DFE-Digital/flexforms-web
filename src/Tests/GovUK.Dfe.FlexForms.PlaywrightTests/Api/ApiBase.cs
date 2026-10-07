@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Api.Auth;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
@@ -36,6 +37,33 @@ public static class ApiBase
         object? data = null,
         Dictionary<string, string>? headers = null)
     {
+        var response = await SendRequestAsync(request, path, method, data, headers);
+
+        return (await response.JsonAsync<TResponse>(ResponseSerializerOptions))!;
+    }
+
+    public static async Task ApiRequestAsync(
+        IAPIRequestContext request,
+        string path,
+        string method = "GET",
+        object? data = null,
+        Dictionary<string, string>? headers = null,
+        bool allowNotFound = false)
+    {
+        await SendRequestAsync(request, path, method, data, headers, allowNotFound);
+    }
+
+    public static string EncodeJson(string json) =>
+        Convert.ToBase64String(Encoding.UTF8.GetBytes(json));
+
+    private static async Task<IAPIResponse> SendRequestAsync(
+        IAPIRequestContext request,
+        string path,
+        string method,
+        object? data,
+        Dictionary<string, string>? headers,
+        bool allowNotFound = false)
+    {
         var response = await request.FetchAsync(path, new APIRequestContextOptions
         {
             Method = method,
@@ -43,11 +71,11 @@ public static class ApiBase
             Headers = headers,
         });
 
-        if (!response.Ok)
+        if (!response.Ok && !(allowNotFound && response.Status == 404))
         {
             throw new ApiRequestException($"API request failed ({response.Status}): {await response.TextAsync()}");
         }
 
-        return (await response.JsonAsync<TResponse>(ResponseSerializerOptions))!;
+        return response;
     }
 }

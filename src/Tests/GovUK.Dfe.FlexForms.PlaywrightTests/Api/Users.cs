@@ -38,17 +38,10 @@ public static class Users
         await DeleteUserAsync(request, userId);
     }
 
-    public static async Task DeleteUserAsync(IAPIRequestContext request, string userId)
-    {
-        var response = await request.FetchAsync(
+    public static Task DeleteUserAsync(IAPIRequestContext request, string userId) =>
+        ApiBase.ApiRequestAsync(
+            request,
             $"/v1/users/{userId}/tenant",
-            new APIRequestContextOptions { Method = "DELETE" });
-
-        if (response.Ok || response.Status == 404)
-        {
-            return;
-        }
-
-        throw new ApiRequestException($"API request failed ({response.Status}): {await response.TextAsync()}");
-    }
+            method: "DELETE",
+            allowNotFound: true);
 }

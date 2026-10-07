@@ -206,6 +206,7 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
         await TenantAdmin.RestoreDashboardAsync(AdminApiClient, ApiConfig.TenantId);
         await TenantAdmin.RestoreApplicationPreviewAsync(AdminApiClient, ApiConfig.TenantId);
         await TenantAdmin.RestoreApplicationSubmittedPageAsync(AdminApiClient, ApiConfig.TenantId);
+        await TenantAdmin.RefreshTenantSettingsAsync(AdminApiClient);
 
         // Web cache needs to be cleared for the restored settings to show in the UI
         await LoginAsync("admin");

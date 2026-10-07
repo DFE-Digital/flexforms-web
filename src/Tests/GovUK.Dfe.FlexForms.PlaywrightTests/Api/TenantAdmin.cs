@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 using Microsoft.Playwright;
 
@@ -25,43 +24,36 @@ public static class TenantAdmin
             {
                 Category = category,
                 Target = WebTarget,
-                SettingsJson = Convert.ToBase64String(Encoding.UTF8.GetBytes(settingsJson)),
+                SettingsJson = ApiBase.EncodeJson(settingsJson),
                 IsSecret = false,
             });
 
-    private static Task RefreshTenantSettingsAsync(IAPIRequestContext request) =>
+    public static Task RefreshTenantSettingsAsync(IAPIRequestContext request) =>
         ApiBase.ApiRequestAsync<object>(
             request,
             $"/v1/admin/tenants/refresh",
             method: "POST");
 
-    public static async Task RestoreApplicationTerminologyAsync(
+    public static Task RestoreApplicationTerminologyAsync(
         IAPIRequestContext request,
         string tenantId,
         string singular,
-        string plural)
-    {
-        await UpsertSafeSettingAsync(
+        string plural) =>
+        UpsertSafeSettingAsync(
             request,
             tenantId,
             ApplicationTerminologyCategory,
             JsonSerializer.Serialize(new { Singular = singular, Plural = plural }));
-        await RefreshTenantSettingsAsync(request);
-    }
 
-    public static async Task ClearNotificationBannerAsync(IAPIRequestContext request, string tenantId)
-    {
-        await UpsertSafeSettingAsync(
+    public static Task ClearNotificationBannerAsync(IAPIRequestContext request, string tenantId) =>
+        UpsertSafeSettingAsync(
             request,
             tenantId,
             NotificationBannerCategory,
             JsonSerializer.Serialize(new { Enabled = false, Heading = "Important", Message = "" }));
-        await RefreshTenantSettingsAsync(request);
-    }
 
-    public static async Task RestoreDashboardAsync(IAPIRequestContext request, string tenantId)
-    {
-        await UpsertSafeSettingAsync(
+    public static Task RestoreDashboardAsync(IAPIRequestContext request, string tenantId) =>
+        UpsertSafeSettingAsync(
             request,
             tenantId,
             DashboardCategory,
@@ -75,12 +67,9 @@ public static class TenantAdmin
                 StartNewHint = "",
                 StartNewButtonText = ""
             }));
-        await RefreshTenantSettingsAsync(request);
-    }
 
-    public static async Task RestoreApplicationPreviewAsync(IAPIRequestContext request, string tenantId)
-    {
-        await UpsertSafeSettingAsync(
+    public static Task RestoreApplicationPreviewAsync(IAPIRequestContext request, string tenantId) =>
+        UpsertSafeSettingAsync(
             request,
             tenantId,
             ApplicationPreviewCategory,
@@ -92,12 +81,9 @@ public static class TenantAdmin
                 SubmitButtonText = "",
                 HideSubmitSection = false
             }));
-        await RefreshTenantSettingsAsync(request);
-    }
 
-    public static async Task RestoreApplicationSubmittedPageAsync(IAPIRequestContext request, string tenantId)
-    {
-        await UpsertSafeSettingAsync(
+    public static Task RestoreApplicationSubmittedPageAsync(IAPIRequestContext request, string tenantId) =>
+        UpsertSafeSettingAsync(
             request,
             tenantId,
             "ApplicationSubmittedPage",
@@ -109,6 +95,4 @@ public static class TenantAdmin
                     BodyMarkdown = ""
                 }
             }));
-        await RefreshTenantSettingsAsync(request);
-    }
 }
