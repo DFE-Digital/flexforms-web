@@ -76,7 +76,7 @@ jobs:
           --filter "FullyQualifiedName~.Tests.${{ env.SERVICE }}."
           --logger "trx;LogFileName=report.trx"
           --results-directory reports
-          -- NUnit.NumberOfTestWorkers=4
+          -- NUnit.NumberOfTestWorkers=6
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
