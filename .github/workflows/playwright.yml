@@ -46,6 +46,8 @@ jobs:
       ADMIN_API_KEY: ${{ secrets.PL_ADMIN_API_KEY }}
       CASEWORKER_EMAIL: ${{ secrets.PL_CASEWORKER_EMAIL }}
       CASEWORKER_API_KEY: ${{ secrets.PL_CASEWORKER_API_KEY }}
+      USER2_EMAIL: ${{ secrets.PL_USER2_EMAIL }}
+      USER2_API_KEY: ${{ secrets.PL_USER2_API_KEY }}
       JWT_SIGNING_KEY: ${{ secrets.PL_JWT_SIGNING_KEY }}
       INTERNAL_AUTH_ISSUER: ${{ secrets.PL_INTERNAL_AUTH_ISSUER }}
       INTERNAL_AUTH_AUDIENCE: ${{ secrets.PL_INTERNAL_AUTH_AUDIENCE }}
