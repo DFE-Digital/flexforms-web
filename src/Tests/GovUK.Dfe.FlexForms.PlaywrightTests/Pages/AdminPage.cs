@@ -66,7 +66,7 @@ public sealed class AdminPage(IPage page) : BasePage(page)
 
         return TemplateRow(templateName).GetByRole(AriaRole.Cell).Nth(columnIndex);
     }
-    
+
     public async Task OpenCustomStatusLabelsAsync()
     {
         await ById("go-to-custom-status-button").ClickAsync();

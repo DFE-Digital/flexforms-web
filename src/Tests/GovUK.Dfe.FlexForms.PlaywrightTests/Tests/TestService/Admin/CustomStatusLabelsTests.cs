@@ -71,7 +71,7 @@ public sealed class CustomStatusLabelsTests : PlaywrightTestBase
         await LoginAsync("admin");
         await adminPage.GoToAsync();
         await adminPage.OpenCustomStatusLabelsAsync();
-        
+
         await statusOverridesPage.SelectTemplateAsync(ApiConfig.TemplateId);
 
         foreach (var (status, label) in CustomStatusLabels)

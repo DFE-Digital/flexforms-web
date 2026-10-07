@@ -1,6 +1,6 @@
 using Microsoft.Playwright;
 
-namespace GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Admin;
+namespace GovUK.Dfe.FlexForms.PlaywrightTests.Pages;
 
 public sealed class ApplicationSubmittedPage(IPage page) : BasePage(page)
 {
