@@ -32,7 +32,7 @@ public sealed class OutgoingTrustPage(IPage page) : TaskPage(page)
         await MarkCompleteAndSaveAsync();
     }
 
-    private async Task ExpectSummaryAsync()
+    private new async Task ExpectSummaryAsync()
     {
         await Assertions.Expect(Page).ToHaveURLAsync(new Regex(@"/details-of-outgoing-trusts$"));
         await Assertions.Expect(ById("IsTaskCompleted")).ToBeVisibleAsync();

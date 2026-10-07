@@ -67,7 +67,7 @@ public abstract class PlaywrightTestBase : PageTest
     /// Headed UI when <c>PW_HEADED=1</c> (or <c>true</c>) is set in the environment / .env.
     /// Optional <c>PW_SLOW_MO</c> milliseconds slows actions for debugging.
     /// </summary>
-    public override Task<BrowserTypeLaunchOptions> LaunchOptionsAsync()
+    public override Task<BrowserTypeLaunchOptions?> LaunchOptionsAsync()
     {
         var options = new BrowserTypeLaunchOptions
         {
@@ -79,7 +79,7 @@ public abstract class PlaywrightTestBase : PageTest
             options.SlowMo = slowMo;
         }
 
-        return Task.FromResult(options);
+        return Task.FromResult<BrowserTypeLaunchOptions?>(options);
     }
 
     public override BrowserNewContextOptions ContextOptions()

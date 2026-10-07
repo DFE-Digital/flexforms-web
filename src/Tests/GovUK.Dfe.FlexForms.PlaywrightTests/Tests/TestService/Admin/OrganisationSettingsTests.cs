@@ -62,7 +62,7 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
         await dashboardPage.ExpectHeading($"Your {plural}");
         await dashboardPage.ExpectHeading($"{plural} in progress");
         await dashboardPage.ExpectFilterApplicationsButtonAsync($"Filter {plural}");
-        await dashboardPage.ExpectLink($"Continue {singular}");
+        await dashboardPage.ExpectLinkExists($"Continue {singular}");
         await dashboardPage.ExpectHeading($"Start a new {singular}");
         await applicationPage.GoToAsync(_application.ApplicationReference);
         await dashboardPage.ExpectHeading($"Your {singular}");

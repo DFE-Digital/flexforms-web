@@ -67,4 +67,7 @@ public sealed class DashboardPage : BasePage
 
     private ILocator ApplicationLink(string reference) =>
         Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = reference });
+    
+    public async Task ExpectLinkExists(string linkText) => await Assertions
+        .Expect(Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = linkText }).First).ToBeVisibleAsync();
 }
