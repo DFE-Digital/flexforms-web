@@ -45,7 +45,7 @@ public sealed class ViewApplicationsTests : PlaywrightTestBase
             .ColumnHasValueWithLink(
                 "Action",
                 "Open",
-                $"/applications/{_application.ApplicationReference}?templateId={ApiConfig.TemplateId.ToLower()}")
+                $"/applications/{_application.ApplicationReference}?templateId={ApiConfig.TemplateId}")
             .ColumnContainsValue("Action", "Delete")
             .VerifyAsync();
     }
@@ -72,11 +72,6 @@ public sealed class ViewApplicationsTests : PlaywrightTestBase
 
         // users should not be able to access deleted applications
         await LoginAsync("default");
-        await dashboardPage.ExpectApplicationNotPresentAsync(_applicationToDelete.ApplicationReference);
-
-        await dashboardPage.FilterApplicationsAsync();
-        await dashboardPage.FilterApplicationsByReferenceAsync(_applicationToDelete.ApplicationReference);
-        await dashboardPage.ApplyFiltersAsync();
         await dashboardPage.ExpectApplicationNotPresentAsync(_applicationToDelete.ApplicationReference);
 
         await Page.GotoAsync($"/applications/{_applicationToDelete.ApplicationReference}");

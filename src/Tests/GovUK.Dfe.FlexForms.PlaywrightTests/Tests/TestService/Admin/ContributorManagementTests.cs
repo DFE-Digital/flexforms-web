@@ -10,8 +10,8 @@ namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService.Admin;
 public sealed class ContributorManagementTests : PlaywrightTestBase
 {
     private CreateApplicationResponse _application = null!;
-    private readonly string _contributorEmail = TestEnvironment.RequireEnvironmentVariable("DEFAULT_USER_EMAIL");
-    private readonly string _leadApplicantEmail = TestEnvironment.RequireEnvironmentVariable("ADMIN_EMAIL");
+    private readonly string _contributorEmail = AuthUsers.ResolveAuthUser("default").Email;
+    private readonly string _leadApplicantEmail = AuthUsers.ResolveAuthUser("admin").Email;
 
     [OneTimeSetUp]
     public async Task CreateApplicationWithContributorAsync()
@@ -22,16 +22,19 @@ public sealed class ContributorManagementTests : PlaywrightTestBase
             _contributorEmail);
     }
 
+    [SetUp]
+    public async Task AdminLoginAndNavigateToContributorManagementAsync()
+    {
+        await LoginAsync("admin");
+        await Page.GotoAsync("/admin");
+        await new AdminPage(Page, Terminology).OpenContributorManagementAsync();
+    }
+
     [TestCase(TestName = "Admin can find who has access to an application by reference number")]
     [CiRetry]
     public async Task AdminCanFindWhoHasAccessToAnApplicationByReferenceNumberAsync()
     {
-        var adminPage = new AdminPage(Page, Terminology);
         var contributorManagement = new ContributorManagement(Page, Terminology);
-
-        await LoginAsync("admin");
-        await Page.GotoAsync("/admin");
-        await adminPage.OpenContributorManagementAsync();
 
         await contributorManagement.LookupAnApplicationByReferenceNumberAsync(_application.ApplicationReference);
         await contributorManagement.ExpectHasContributorAsync(_application.ApplicationReference, _contributorEmail);
@@ -42,9 +45,6 @@ public sealed class ContributorManagementTests : PlaywrightTestBase
     public async Task AdminCanLookupApplicationAndInviteesByUserEmailAddressAsync()
     {
         var contributorManagement = new ContributorManagement(Page, Terminology);
-
-        await LoginAsync("admin");
-        await Page.GotoAsync("/admin/contributor-management");
 
         await contributorManagement.LookupApplicationsByUserAsync(_leadApplicantEmail);
         await contributorManagement.CreatedApplications

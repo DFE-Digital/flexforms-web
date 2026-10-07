@@ -19,5 +19,6 @@ public sealed class ChooseFormPage(IPage page, Terminology terminology) : BasePa
         await Page
             .GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Go to dashboard" })
             .ClickAsync();
+        await Page.WaitForURLAsync("/applications/dashboard");
     }
 }

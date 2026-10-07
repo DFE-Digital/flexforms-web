@@ -11,7 +11,7 @@ public static class ApiConfigFactory
             TenantId: TestEnvironment.RequireEnvironmentVariable("TENANT_ID"),
             ServiceEmail: defaultUser.Email,
             ServiceApiKey: defaultUser.ApiKey,
-            TemplateId: TestEnvironment.RequireEnvironmentVariable("TEMPLATE_ID"),
+            TemplateId: TestEnvironment.RequireEnvironmentVariable("TEMPLATE_ID").ToLowerInvariant(),
             InternalServiceAuth: new InternalServiceAuthSettings(
                 SecretKey: TestEnvironment.RequireEnvironmentVariable("JWT_SIGNING_KEY"),
                 Issuer: TestEnvironment.RequireEnvironmentVariable("INTERNAL_AUTH_ISSUER"),

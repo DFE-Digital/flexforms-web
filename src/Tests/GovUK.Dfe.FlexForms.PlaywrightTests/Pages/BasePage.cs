@@ -35,15 +35,16 @@ public abstract class BasePage(IPage page, Terminology terminology)
             .ClickAsync();
     }
 
-    public Task ExpectHeading(string heading) => Assertions
+    public async Task ExpectHeading(string heading) => await Assertions
         .Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = heading })).ToBeVisibleAsync();
 
-    public Task ExpectParagraph(string paragraph) => Assertions.Expect(Page.GetByText(paragraph)).ToBeVisibleAsync();
+    public async Task ExpectText(string paragraph) =>
+        await Assertions.Expect(Page.GetByText(paragraph)).ToBeVisibleAsync();
 
-    public Task ExpectLink(string linkText) => Assertions
+    public async Task ExpectLink(string linkText) => await Assertions
         .Expect(Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = linkText }).First).ToBeVisibleAsync();
 
-    public Task ExpectButton(string buttonText) => Assertions
+    public async Task ExpectButton(string buttonText) => await Assertions
         .Expect(Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = buttonText }).First)
         .ToBeVisibleAsync();
 

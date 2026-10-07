@@ -38,6 +38,8 @@ public sealed class UserManagerTests : PlaywrightTestBase
         await dashboardPage.StartNewApplicationAsync();
         await contributorsPage.ProceedToFormAsync();
         await standardFieldsTask.OpenAsync();
+        await standardFieldsTask.CompleteAsync();
+        await standardFieldsTask.ExpectCompletedAsync();
     }
 
     [TestCase(TestName = "Admin can remove user from tenant")]
@@ -45,7 +47,8 @@ public sealed class UserManagerTests : PlaywrightTestBase
     public async Task AdminCanRemoveUserFromTenantAsync()
     {
         _userToAddEmail = TestEnvironment.RequireEnvironmentVariable("USER2_EMAIL");
-        await Users.AddUserToRoleAsync(AdminApiClient, _userToAddEmail, NewUserDisplayName, NewUserRole, DefaultFormName);
+        await Users.AddUserToRoleAsync(AdminApiClient, _userToAddEmail, NewUserDisplayName, NewUserRole,
+            DefaultFormName);
 
         var userManager = new UserManager(Page, Terminology);
 

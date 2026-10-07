@@ -67,7 +67,7 @@ public sealed class ApplicationsTests : PlaywrightTestBase
         var taskList = new TaskListPage(Page);
         await taskList.ReviewApplicationAsync();
 
-        var preview = new ApplicationPreviewPage(Page);
+        var preview = new ApplicationPreviewPage(Page, Terminology);
         await preview.SubmitAsync();
         await preview.ExpectSubmittedAsync();
     }

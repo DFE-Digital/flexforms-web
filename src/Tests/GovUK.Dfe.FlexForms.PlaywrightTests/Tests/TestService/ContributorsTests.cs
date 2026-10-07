@@ -59,7 +59,7 @@ public sealed class ContributorsTests : PlaywrightTestBase
         var taskList = new TaskListPage(Page);
         await taskList.ReviewApplicationAsync();
 
-        var preview = new ApplicationPreviewPage(Page);
+        var preview = new ApplicationPreviewPage(Page, Terminology);
         await preview.ExpectNonLeadApplicantCannotSubmitAsync(Terminology.Singular);
     }
 

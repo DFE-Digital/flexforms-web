@@ -8,6 +8,40 @@ public static class ApplicationApi
         CreateApplicationRequest body) =>
         ApiBase.ApiRequestAsync<CreateApplicationResponse>(request, "/v1/applications", method: "POST", data: body);
 
+    public static async Task<CreateApplicationResponse> CreateApplicationInStatusAsync(
+        IAPIRequestContext request,
+        CreateApplicationRequest body,
+        ApplicationStatus status)
+    {
+        var application = await CreateApplicationAsync(request, body);
+
+        switch (status)
+        {
+            case ApplicationStatus.Created:
+                break;
+            case ApplicationStatus.InProgress:
+                await AddApplicationResponseAsync(
+                    request,
+                    application.ApplicationId,
+                    """{"schoolName":"Playwright status test"}""");
+                break;
+            case ApplicationStatus.Submitted:
+                await AddApplicationResponseAsync(
+                    request,
+                    application.ApplicationId,
+                    """{"schoolName":"Playwright status test"}""");
+                await SubmitApplicationAsync(request, application.ApplicationId);
+                break;
+            case ApplicationStatus.Deleted:
+                await DeleteApplicationAsync(request, application.ApplicationId);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(status), status, null);
+        }
+
+        return application;
+    }
+
     public static Task<CreateApplicationResponse> GetApplicationByRefAsync(IAPIRequestContext request,
         string applicationReference) =>
         ApiBase.ApiRequestAsync<CreateApplicationResponse>(request,

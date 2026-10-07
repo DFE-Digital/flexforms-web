@@ -37,7 +37,7 @@ public sealed class SubmitApplicationTests : PlaywrightTestBase
 
         await Files.ValidateValidFileForApplicationAsync(ApiClient, Page);
 
-        var preview = new ApplicationPreviewPage(Page);
+        var preview = new ApplicationPreviewPage(Page, Terminology);
         await taskList.ReviewApplicationAsync();
         await preview.SubmitAsync();
         await preview.ExpectSubmittedAsync();

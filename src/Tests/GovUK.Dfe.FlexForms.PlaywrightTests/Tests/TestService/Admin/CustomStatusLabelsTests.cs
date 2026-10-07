@@ -6,7 +6,8 @@ using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Admin;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService.Admin;
 
-public sealed class TemplateManagementTests : PlaywrightTestBase
+[NonParallelizable] // Modifies 'Deleted' status label
+public sealed class CustomStatusLabelsTests : PlaywrightTestBase
 {
     private const string TemplateName = "default";
 
@@ -37,23 +38,15 @@ public sealed class TemplateManagementTests : PlaywrightTestBase
     public async Task CreateApplicationsForStatusVerificationAsync()
     {
         var createRequest = ApplicationBuilder.CreateApplicationRequest(ApiConfig.TemplateId);
-        _createdApplication = await ApplicationApi.CreateApplicationAsync(AdminApiClient, createRequest);
 
-        _inProgressApplication = await ApplicationApi.CreateApplicationAsync(AdminApiClient, createRequest);
-        await ApplicationApi.AddApplicationResponseAsync(
-            AdminApiClient,
-            _inProgressApplication.ApplicationId,
-            """{"schoolName":"Playwright status test"}""");
-
-        _submittedApplication = await ApplicationApi.CreateApplicationAsync(AdminApiClient, createRequest);
-        await ApplicationApi.AddApplicationResponseAsync(
-            AdminApiClient,
-            _submittedApplication.ApplicationId,
-            """{"schoolName":"Playwright status test"}""");
-        await ApplicationApi.SubmitApplicationAsync(AdminApiClient, _submittedApplication.ApplicationId);
-
-        _deletedApplication = await ApplicationApi.CreateApplicationAsync(AdminApiClient, createRequest);
-        await ApplicationApi.DeleteApplicationAsync(AdminApiClient, _deletedApplication.ApplicationId);
+        _createdApplication = await ApplicationApi.CreateApplicationInStatusAsync(
+            AdminApiClient, createRequest, ApplicationStatus.Created);
+        _inProgressApplication = await ApplicationApi.CreateApplicationInStatusAsync(
+            AdminApiClient, createRequest, ApplicationStatus.InProgress);
+        _submittedApplication = await ApplicationApi.CreateApplicationInStatusAsync(
+            AdminApiClient, createRequest, ApplicationStatus.Submitted);
+        _deletedApplication = await ApplicationApi.CreateApplicationInStatusAsync(
+            AdminApiClient, createRequest, ApplicationStatus.Deleted);
     }
 
     [OneTimeTearDown]

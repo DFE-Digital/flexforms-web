@@ -117,7 +117,7 @@ public sealed class CreateAndSubmitTests : PlaywrightTestBase
         await declaration.ExpectCompletedAsync();
 
         // Review and submit
-        var preview = new ApplicationPreviewPage(Page);
+        var preview = new ApplicationPreviewPage(Page, Terminology);
         await taskList.ReviewApplicationAsync();
         await preview.SubmitAsync();
         await preview.ExpectSubmittedAsync();

@@ -6,6 +6,7 @@ using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Admin;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService.Admin;
 
+[NonParallelizable] // modifies tenant config
 public sealed class OrganisationSettingsTests : PlaywrightTestBase
 {
     private CreateApplicationResponse _application = null!;
@@ -22,6 +23,12 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
         var otherTemplateApplicationRequest = ApplicationBuilder.CreateApplicationRequest(otherTemplateId);
         _otherTemplateApplication =
             await ApplicationApi.CreateApplicationAsync(AdminApiClient, otherTemplateApplicationRequest);
+
+        // ensure at least 6 applications exist so that the dashboard page size can be tested
+        for (var i = 0; i < 5; i++)
+        {
+            await ApplicationApi.CreateApplicationAsync(AdminApiClient, createRequest);
+        }
     }
 
     [SetUp]
@@ -55,8 +62,8 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
         await dashboardPage.ExpectHeading($"Start a new {singular}");
         await Page.GotoAsync($"/applications/{_application.ApplicationReference}");
         await dashboardPage.ExpectHeading($"Your {singular}");
-        await dashboardPage.ExpectParagraph($"{singular} reference:");
-        await dashboardPage.ExpectParagraph($"{singular} version:");
+        await dashboardPage.ExpectText($"{singular} reference:");
+        await dashboardPage.ExpectText($"{singular} version:");
     }
 
     [TestCase(TestName = "Admin can set the notification banner")]
@@ -106,14 +113,14 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
         await dashboardPage.ExpectHeading("Your Bananas");
         await dashboardPage.ExpectHeading("Bananas in progress");
         await dashboardPage.ExpectHeading("Start a new Banana");
-        await dashboardPage.ExpectParagraph("Here is a hint for starting a new Banana");
+        await dashboardPage.ExpectText("Here is a hint for starting a new Banana");
         await dashboardPage.ExpectStartNewButtonAsync("Create banana");
 
         // application still uses the default terminology
         await Page.GotoAsync($"/applications/{_application.ApplicationReference}");
         await dashboardPage.ExpectHeading($"Your {Terminology.Singular}");
-        await dashboardPage.ExpectParagraph($"{Terminology.Singular} reference:");
-        await dashboardPage.ExpectParagraph($"{Terminology.Singular} version:");
+        await dashboardPage.ExpectText($"{Terminology.Singular} reference:");
+        await dashboardPage.ExpectText($"{Terminology.Singular} version:");
     }
 
     [TestCase(TestName = "Admin can customise check your answers config")]
@@ -121,7 +128,7 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
     public async Task AdminCanCustomiseCheckYourAnswersConfigAsync()
     {
         var organisationSettings = new OrganisationSettings(Page, Terminology);
-        var applicationPage = new ApplicationPage(Page, Terminology);
+        var applicationPreviewPage = new ApplicationPreviewPage(Page, Terminology);
 
         await organisationSettings.CheckYourAnswersSettings
             .WithPageHeading("Check your apple answers")
@@ -131,10 +138,10 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
             .SaveAsync();
 
         await Page.GotoAsync($"/applications/{_application.ApplicationReference}?preview=true");
-        await applicationPage.ExpectHeading("Check your apple answers");
-        await applicationPage.ExpectHeading("Submit your apple answers");
-        await applicationPage.ExpectParagraph("Here is a hint for submitting your apple answers");
-        await applicationPage.ExpectButton("Submit your apple answers");
+        await applicationPreviewPage.ExpectHeading("Check your apple answers");
+        await applicationPreviewPage.ExpectHeading("Submit your apple answers");
+        await applicationPreviewPage.ExpectText("Here is a hint for submitting your apple answers");
+        await applicationPreviewPage.ExpectButton("Submit your apple answers");
     }
 
     [TestCase(TestName = "Admin can customise application submitted page for all templates")]
@@ -142,7 +149,7 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
     public async Task AdminCanCustomiseApplicationSubmittedPageAsync()
     {
         var organisationSettings = new OrganisationSettings(Page, Terminology);
-        var applicationPage = new ApplicationPage(Page, Terminology);
+        var applicationSubmittedPage = new ApplicationSubmittedPage(Page, Terminology);
 
         await organisationSettings.ApplicationSubmittedSettings.ForAllTemplates()
             .WithConfirmationTitle("Orange app submitted")
@@ -151,9 +158,8 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
             .SaveAsync();
 
         await Page.GotoAsync($"/application-submitted/{_application.ApplicationReference}");
-        await applicationPage.ExpectHeading("Orange app submitted");
-        await applicationPage.ExpectHeading("Next steps for your orange application");
-        await applicationPage.ExpectParagraph(
+        await applicationSubmittedPage.ExpectContentAsync("Orange app submitted",
+            "Next steps for your orange application",
             "Thank you for submitting your orange application. We will review it and get back to you shortly.");
     }
 
@@ -162,24 +168,23 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
     public async Task AdminCanCustomiseApplicationSubmittedPageForSpecificTemplateAsync()
     {
         var organisationSettings = new OrganisationSettings(Page, Terminology);
-        var applicationPage = new ApplicationPage(Page, Terminology);
+        var applicationSubmittedPage = new ApplicationSubmittedPage(Page, Terminology);
 
-        await organisationSettings.ApplicationSubmittedSettings.ForTemplate(ApiConfig.TemplateId.ToLower())
+        await organisationSettings.ApplicationSubmittedSettings.ForTemplate(ApiConfig.TemplateId)
             .WithConfirmationTitle("Pear app submitted")
             .WithPageBody(
                 "## Next steps for your pear application\n\nThank you for submitting your pear application. We will review it and get back to you shortly.")
             .SaveAsync();
 
         await Page.GotoAsync($"/application-submitted/{_application.ApplicationReference}");
-        await applicationPage.ExpectHeading("Pear app submitted");
-        await applicationPage.ExpectHeading("Next steps for your pear application");
-        await applicationPage.ExpectParagraph(
+        await applicationSubmittedPage.ExpectContentAsync("Pear app submitted",
+            "Next steps for your pear application",
             "Thank you for submitting your pear application. We will review it and get back to you shortly.");
 
         // verify other template application still uses the default submitted page
         await Page.GotoAsync($"/application-submitted/{_otherTemplateApplication.ApplicationReference}");
-        await applicationPage.ExpectHeading("Application submitted");
-        await applicationPage.ExpectHeading("What happens next");
+        await applicationSubmittedPage.ExpectHeading("Application submitted");
+        await applicationSubmittedPage.ExpectHeading("What happens next");
     }
 
     [TearDown]

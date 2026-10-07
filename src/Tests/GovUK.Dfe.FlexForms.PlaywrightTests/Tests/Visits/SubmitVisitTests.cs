@@ -52,7 +52,7 @@ public sealed class SubmitVisitTests : PlaywrightTestBase
         await conversationDetailsTask.CompleteAsync();
         await conversationDetailsTask.ExpectCompletedAsync();
 
-        var preview = new ApplicationPreviewPage(Page);
+        var preview = new ApplicationPreviewPage(Page, Terminology);
         await taskList.ReviewApplicationAsync();
         await preview.SubmitAsync();
         await preview.ExpectSubmittedAsync("Visit record completed");

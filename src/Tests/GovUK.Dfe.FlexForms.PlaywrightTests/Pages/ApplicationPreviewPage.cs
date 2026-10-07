@@ -1,9 +1,10 @@
 using System.Text.RegularExpressions;
+using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 using Microsoft.Playwright;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Pages;
 
-public sealed class ApplicationPreviewPage(IPage page) : FormPage(page)
+public sealed class ApplicationPreviewPage(IPage page, Terminology terminology) : BasePage(page, terminology)
 {
     public async Task SubmitAsync() => await SubmitApplicationButton().ClickAsync();
 
@@ -30,7 +31,9 @@ public sealed class ApplicationPreviewPage(IPage page) : FormPage(page)
     private ILocator SubmitApplicationButton() => ById("submit-application-button");
 
     private ILocator LeadApplicantSubmitMessage(string singular) =>
-        Page.GetByText($"Only the lead applicant can submit this {singular}.", new PageGetByTextOptions { Exact = true });
+        Page.GetByText($"Only the lead applicant can submit this {singular}.",
+            new PageGetByTextOptions { Exact = true });
 
-    private ILocator SubmittedHeading(string submitMessage) => Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = submitMessage });
+    private ILocator SubmittedHeading(string submitMessage) =>
+        Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = submitMessage });
 }

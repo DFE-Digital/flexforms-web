@@ -33,7 +33,7 @@ public sealed class RoleManager(IPage page, Terminology terminology) : BasePage(
 
     public async Task ManageRolePermissionsAsync(string roleName)
     {
-        RoleRow(roleName)
+        await RoleRow(roleName)
             .GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = "Manage permissions" }).ClickAsync();
         await Page.WaitForURLAsync("**/admin/role-manager/permissions**");
     }
