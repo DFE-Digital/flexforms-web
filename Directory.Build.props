@@ -1,0 +1,7 @@
+<Project>
+	<!-- Local development: GovUK.Dfe.FlexForms.Api.Client is referenced from a sibling flexforms-api checkout instead of
+	     the NuGet package. -->
+	<PropertyGroup>
+		<LocalFlexFormsApiSrc>$(MSBuildThisFileDirectory)..\flexforms-api\src\</LocalFlexFormsApiSrc>
+	</PropertyGroup>
+</Project>

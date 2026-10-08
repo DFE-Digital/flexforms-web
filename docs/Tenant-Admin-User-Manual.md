@@ -41,6 +41,7 @@ You do not need to be a developer to use this manual. Where a change is made in 
     - [12.16 Who can change this](#1216-who-can-change-this)
     - [12.17 Event mappings checklist](#1217-event-mappings-checklist)
     - [12.18 Troubleshooting event mappings](#1218-troubleshooting-event-mappings)
+    - [12.19 Delivery guarantees (transactional outbox)](#1219-delivery-guarantees-transactional-outbox)
 13. [Email placeholder mappings](#13-email-placeholder-mappings)
     - [13.1 What this is for](#131-what-this-is-for)
     - [13.2 How confirmation emails work](#132-how-confirmation-emails-work)
@@ -63,6 +64,7 @@ You do not need to be a developer to use this manual. Where a change is made in 
     - [14.6 Audit log](#146-audit-log)
     - [14.7 File validation (tenant function)](#147-file-validation-tenant-function)
     - [14.8 Autocomplete search (FormEngine complex fields)](#148-autocomplete-search-formengine-complex-fields)
+    - [14.9 Reporting export (what is sent to reporting)](#149-reporting-export-what-is-sent-to-reporting)
 15. [Applications (admin list)](#15-applications-admin-list)
 16. [What end users see](#16-what-end-users-see)
 17. [System tools and caches](#17-system-tools-and-caches)
@@ -1098,7 +1100,7 @@ Typical pattern:
 2. Connection to the **same namespace**.
 3. If **schema**: deserialize `SchemaEventEnvelope`, read `payload`, optionally ignore messages whose `messageType` is unknown.
 4. If **typed**: use CoreLibs `Messaging.Contracts` (or equivalent JSON) for that event class.
-5. Be **idempotent** — retries can deliver the same message more than once.
+5. Be **idempotent** — retries can deliver the same message more than once. Use the message's `MessageId` to recognise a repeat. This matters even more if your event is delivered through the transactional outbox ([12.19](#1219-delivery-guarantees-transactional-outbox)).
 6. Do not block the FlexForms user; this is asynchronous.
 
 FlexForms Web does **not** subscribe to your reporting topics. It only consumes **scan results** (`file-scanner-results`) for malware notifications.
@@ -1126,6 +1128,7 @@ After save, the page refreshes tenant configuration so the API picks up changes 
 - [ ] Trigger kind is `Typed` or `Schema` correctly
 - [ ] Test submit/upload in non-prod; message peeked on the subscription
 - [ ] Consumer handles empty omitted properties and duplicate delivery
+- [ ] Agreed with the receiving team whether the event should use the transactional outbox ([12.19](#1219-delivery-guarantees-transactional-outbox)); for new schema topics, decided whether to enable Service Bus duplicate detection
 
 ### 12.18 Troubleshooting event mappings
 
@@ -1141,8 +1144,93 @@ After save, the page refreshes tenant configuration so the API picks up changes 
 | Warning about unknown properties | Typed mapping keys that are not on the C# contract |
 | Cannot save schema name | Name collides with a typed event |
 | Still using old mapping | Refresh tenant config; clear that you saved under this tenant’s hostname |
+| Messages missing after a Service Bus outage | The event is delivered directly (not through the outbox), so messages raised during the outage were not sent. See [12.19](#1219-delivery-guarantees-transactional-outbox) |
+| Consumer received the same message twice | Service Bus redelivery or outbox delivery. Make the consumer ignore a repeated `MessageId`, or see [12.19](#1219-delivery-guarantees-transactional-outbox) for duplicate detection |
 
 API logs (Application Insights) search for `Published schema event`, `Published typed`, `No EventTriggers configured`, `Schema event ... is not defined`, `Event type ... is not a known platform event`.
+
+### 12.19 Delivery guarantees (transactional outbox)
+
+This section explains **how reliably** FlexForms delivers your events, and what that means for the team that consumes them. You do not configure this on the Event mappings page. The platform team sets the default, and you can override it for your tenant (see [Overriding the list for your tenant](#overriding-the-list-for-your-tenant)). Agree the right option with your receiving team.
+
+#### The two ways an event can be delivered
+
+| | Direct (default) | Through the outbox |
+|---|---|---|
+| **How it works** | The API sends the message straight to Azure Service Bus when the trigger fires. | The API first stores the message in its own database, then a background process sends it to Service Bus and keeps retrying until it succeeds. |
+| **If Service Bus is briefly unavailable** | The message is **lost** (the failure is only logged). | The message **waits** and is sent automatically when Service Bus is back. |
+| **Duplicates** | Very rare (only Service Bus's own redelivery, see [12.14](#1214-how-a-downstream-system-should-consume-it)). | Occasionally possible: in a rare failure the same message can be sent twice. |
+| **Delay** | Immediate. | Usually immediate (milliseconds); at worst a few seconds. |
+| **Guarantee** | At most once | At least once |
+
+Think of the outbox as an office out-tray: the letter is dropped in the tray at the same moment the paperwork is filed, and a clerk keeps taking letters to the post office until each one has been posted. Nothing is lost, but if the clerk is interrupted at exactly the wrong moment, a letter might be posted twice.
+
+#### What stays the same
+
+Whichever way an event is delivered:
+
+- It goes to the **same topic**, with the **same message body**.
+- It carries the **same headers**, including `TenantId`, `TenantName`, `serviceName`, `MessageType` and `EventKind`.
+- The **same `MessageId`** is used if a message is resent, so your consumer can recognise a duplicate.
+- Your triggers, mappings and schema definitions do not change.
+
+#### Which events use the outbox
+
+The platform team keeps a list of events that go through the outbox. Every event **not** on the list is delivered directly, as it always has been. **By default the list is empty**, so all tenant events are delivered directly unless the platform team has added them.
+
+Events are listed by name:
+
+- **Typed events**: the event type name, for example `TransferApplicationSubmittedEvent`.
+- **Schema events**: either your schema event type name **or** its `topicName`.
+
+The platform list applies to the **whole platform**. If several tenants publish the same typed event, adding it to that list changes delivery for all of them.
+
+#### Overriding the list for your tenant
+
+You can set your own list in the `MassTransit` settings category (Target `Shared`). It applies only to your tenant's events:
+
+```json
+{
+  "Outbox": {
+    "Events": [ "TransferApplicationSubmittedEvent", "transfer-application-submitted-schema" ]
+  }
+}
+```
+
+- Your `Events` list **replaces** the platform list for your tenant. It is not added to it.
+- You can also set `Mode` (`Allowlist` or `All`), or `Enabled: false` to deliver all your events directly.
+- You cannot switch the outbox on if the platform team has turned it off for the whole platform.
+- Changes apply within about a minute, when tenant settings next refresh. No restart is needed.
+
+#### Should my event use the outbox?
+
+Ask your receiving team one question: **"If you receive the same message twice, is that safe?"**
+
+| Their answer | Recommendation |
+|---|---|
+| Yes, we ignore a `MessageId` we have already processed, or processing twice does no harm (for example "set status to Received") | Ask the platform team to add your event to the outbox list. You get guaranteed delivery. |
+| No, a duplicate would cause a problem (for example a second email, a duplicate record, a double payment) | Keep direct delivery (the default), **or** ask for **duplicate detection** on your topic (below). |
+| Not sure | Keep direct delivery until they have checked. |
+
+#### Duplicate detection on a topic (for consumers that cannot handle duplicates)
+
+Azure Service Bus can discard a message if it has already seen the same `MessageId` within a time window (for example 10 minutes). With this turned on, an event can use the outbox and your consumer still never sees a duplicate from it.
+
+Things to know:
+
+- It must be set **when the topic is created**. An existing topic has to be recreated or replaced, so plan it with whoever manages your Service Bus infrastructure.
+- It needs the Standard or Premium Service Bus tier.
+- For **schema events**, you create the topic yourself ([12.8](#128-create-the-service-bus-topic-and-subscription)), so tick **Enable duplicate detection** at creation time if you might want the outbox later.
+
+#### How to request a change
+
+1. Confirm with your receiving team that duplicates are safe, or that duplicate detection is enabled on the topic.
+2. Ask the FlexForms platform team (or a SuperAdmin) to add the event type name or topic name to the outbox list for the environment you need (dev first, then staging and production).
+3. Test in non-production: fire the trigger and check your subscription receives the message as before.
+
+#### Who can change this
+
+Only the **platform team**. It is a host setting (`MassTransit:Outbox` in the API configuration), not a Tenant Settings category, so tenant Admins and SuperAdmins cannot change it from the Admin UI. Technical reference for the platform team: [flexforms-api `docs/transactional-outbox.md`](https://github.com/DFE-Digital/flexforms-api/blob/main/docs/transactional-outbox.md).
 
 ---
 
@@ -1976,6 +2064,48 @@ If both the template and this config set `DropdownDisplay` / `ConfirmationDispla
 | Old trust search still works, new search does not | You replaced the whole `ComplexFields` array instead of appending; restore the previous ids |
 | Changes not visible | **Refresh settings**, then hard-refresh the form (or clear sessions/caches) |
 
+### 14.9 Reporting export (what is sent to reporting)
+
+**Admin → Tenant Admin → Reporting export** decides which answers leave FlexForms for reporting (Prism). Answers that are not exported stay in FlexForms; reporting only sees the fields you allow.
+
+**How a field's status is worked out**
+
+1. **A decision on the field always wins.** *Exported* or *Not exported* applies whatever the defaults say.
+2. **Fields nobody has decided about follow the default.** The template's own default if it has one, otherwise the tenant default. If neither is set, the built-in default is **Hold until approved**.
+
+| Status on the page | Meaning |
+|--------------------|---------|
+| **Exported** | An admin allowed this field |
+| **Not exported** | An admin denied this field |
+| **Exported by default** | No decision; exported because the default is *Export automatically* |
+| **Waiting for approval** | No decision; held back because the default is *Hold until approved* |
+
+**Defaults**
+
+| Default | Use it when |
+|---------|-------------|
+| **Hold until approved** (recommended) | You want to review every new field — including ones added in a new template version — before it reaches reporting |
+| **Export automatically** | Your data protection agreement covers every answer in the form, including personal data. A reason is required and recorded |
+| **Use the tenant default** (templates only) | The template should follow the tenant setting |
+
+**Step by step**
+
+1. Choose the **tenant default** and give a reason, then **Save tenant default**.
+2. Pick a **template**. If the page says its fields are not known to reporting yet, publish the template or save an application against it, then come back.
+3. Optionally set a **default for this template**.
+4. Tick the fields to change, write a reason, then choose **Export selected fields** or **Do not export selected fields**.
+
+Every change is recorded against your name with the reason, and starts a **refresh** of this tenant's reporting data. The banner shows progress; use **Check progress** to update it. Until the refresh finishes, reporting can still show the previous setting for some applications.
+
+**Who can change this:** anyone who can open **Tenant Settings** (tenant Admin or SuperAdmin), for their own tenant only.
+
+| What you see | Likely cause |
+|--------------|----------------|
+| “Reporting export is not set up in this environment” | The API has no Prism connection configured — ask the platform team |
+| “FlexForms is not allowed to manage reporting export” | The API's identity is missing its Prism roles — ask the platform team |
+| “These fields are not in the template” | The template changed since the page loaded; reload and try again |
+| Refresh “did not finish” | Your change is saved; ask the platform team to run the reporting refresh again |
+
 ---
 
 ## 15. Applications (admin list)
@@ -2042,6 +2172,8 @@ You will **not** see these as a tenant Admin (by design):
 
 If you need a second tenant administrator, ask a SuperAdmin to assign the Admin role.
 
+Some settings are not in the Admin UI at all, even for SuperAdmins, because they are platform host configuration. For example, which events use the **transactional outbox** ([12.19](#1219-delivery-guarantees-transactional-outbox)) is changed by the platform team.
+
 ---
 
 ## 19. Troubleshooting
@@ -2091,6 +2223,9 @@ If you need a second tenant administrator, ask a SuperAdmin to assign the Admin 
 | **Subscription** | Named inbox on a topic. Each consumer app needs its own. |
 | **Topic** | Named pile of messages in Service Bus. Typed names come from CoreLibs; schema names are yours. |
 | **Trigger** | `ApplicationSubmitted` or `FileUploaded` plus event kind, event type, and mapping id. |
+| **Transactional outbox** | Platform option that stores an event in the database before sending it, so it is never lost during a Service Bus outage. It may occasionally deliver a duplicate. See [12.19](#1219-delivery-guarantees-transactional-outbox). |
+| **Duplicate detection** | Service Bus topic option that discards a message with a `MessageId` it has already seen within a time window. Set when the topic is created. |
+| **MessageId** | Unique id on every Service Bus message. Stays the same if a message is resent, so consumers can spot duplicates. |
 | **Typed event** | A platform-defined Service Bus contract. Opposite of a tenant **schema event**. |
 | **GOV.UK Notify** | Government email service. FlexForms sends a template ID plus personalisation; Notify builds the email body. |
 | **Personalisation / placeholder** | A named value Notify inserts into `((Name))` in the template. Baseline keys are always sent; extras come from `EmailPlaceholderMappings`. |
