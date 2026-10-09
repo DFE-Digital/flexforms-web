@@ -17,7 +17,7 @@ public sealed class SubmitVisitTests : PlaywrightTestBase
     [CiRetry]
     public async Task CreateAndSubmitAVisitAsync()
     {
-        var dashboardPage = new DashboardPage(Page, Terminology);
+        var dashboardPage = new DashboardPage(Page);
         await dashboardPage.StartNewApplicationAsync();
 
         var taskList = new TaskListPage(Page);

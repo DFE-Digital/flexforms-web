@@ -34,9 +34,9 @@ public sealed class SmokeTests : PlaywrightTestBase
     [CiRetry]
     public async Task ShouldAddAContributorAsync()
     {
-        var dashboardPage = new DashboardPage(Page, Terminology);
-        var contributorsPage = new ContributorsPage(Page, Terminology);
-        var contributorsInvitePage = new ContributorsInvitePage(Page, Terminology);
+        var dashboardPage = new DashboardPage(Page);
+        var contributorsPage = new ContributorsPage(Page);
+        var contributorsInvitePage = new ContributorsInvitePage(Page);
 
         await dashboardPage.StartNewApplicationAsync();
         await contributorsPage.AddContributorAsync();
@@ -51,7 +51,7 @@ public sealed class SmokeTests : PlaywrightTestBase
     [CiRetry]
     public async Task ShouldFilterApplicationsByReferenceNumberAsync()
     {
-        var dashboardPage = new DashboardPage(Page, Terminology);
+        var dashboardPage = new DashboardPage(Page);
 
         await dashboardPage.FilterApplicationsAsync();
         await dashboardPage.FilterApplicationsByReferenceAsync(_application.ApplicationReference);

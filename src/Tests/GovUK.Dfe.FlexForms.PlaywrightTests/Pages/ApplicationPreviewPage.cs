@@ -3,8 +3,11 @@ using Microsoft.Playwright;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Pages;
 
-public sealed class ApplicationPreviewPage(IPage page) : FormPage(page)
+public sealed class ApplicationPreviewPage(IPage page) : BasePage(page)
 {
+    public async Task GoToAsync(string applicationReference) =>
+        await Page.GotoAsync($"/applications/{applicationReference}?preview=true");
+
     public async Task SubmitAsync() => await SubmitApplicationButton().ClickAsync();
 
     public async Task SubmitButtonNotVisibleAsync()
@@ -30,7 +33,9 @@ public sealed class ApplicationPreviewPage(IPage page) : FormPage(page)
     private ILocator SubmitApplicationButton() => ById("submit-application-button");
 
     private ILocator LeadApplicantSubmitMessage(string singular) =>
-        Page.GetByText($"Only the lead applicant can submit this {singular}.", new PageGetByTextOptions { Exact = true });
+        Page.GetByText($"Only the lead applicant can submit this {singular}.",
+            new PageGetByTextOptions { Exact = true });
 
-    private ILocator SubmittedHeading(string submitMessage) => Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = submitMessage });
+    private ILocator SubmittedHeading(string submitMessage) =>
+        Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = submitMessage });
 }
