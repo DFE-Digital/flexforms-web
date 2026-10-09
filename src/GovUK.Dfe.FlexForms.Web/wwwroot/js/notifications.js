@@ -344,11 +344,11 @@ window.addEventListener('DOMContentLoaded', () => {
         try {
             // Hook into existing handlers by wrapping render/remove/clear
             const origRender = window.renderOrUpdate;
-            window.renderOrUpdate = function(n, options) { origRender(n, options); refreshUnreadCount(); };
+            window.renderOrUpdate = function(n, options) { origRender(n, options); void refreshUnreadCount(); };
             const origRemove = window.removeFromUi;
-            window.removeFromUi = function(id) { origRemove(id); refreshUnreadCount(); };
+            window.removeFromUi = function(id) { origRemove(id); void refreshUnreadCount(); };
             const origClear = window.clearUi;
-            window.clearUi = function() { origClear(); refreshUnreadCount(); };
+            window.clearUi = function() { origClear(); void refreshUnreadCount(); };
         } catch { }
     }, 0);
 });

@@ -30,7 +30,7 @@ public class CookiesController : Controller
                 SetConsentCookie("no");
                 foreach (var aiCookie in Request.Cookies.Keys.Where(key => key.StartsWith("ai_", StringComparison.Ordinal)))
                 {
-                    Response.Cookies.Delete(aiCookie, new CookieOptions { Domain = this.cookieDomain, Path = "/" });
+                    Response.Cookies.Delete(aiCookie, new CookieOptions { Domain = this.cookieDomain, Path = "/", Secure = true, HttpOnly = true });
                 }
                 break;
         }

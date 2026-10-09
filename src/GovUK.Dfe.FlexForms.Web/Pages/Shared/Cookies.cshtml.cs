@@ -50,7 +50,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Shared
                     SetConsentCookie("no");
                     foreach (var appInsightsCookie in Request.Cookies.Keys.Where(key => key.StartsWith("ai_", StringComparison.Ordinal)))
                     {
-                        Response.Cookies.Delete(appInsightsCookie, new CookieOptions { Domain = this.cookieDomain, Path = "/" });
+                        Response.Cookies.Delete(appInsightsCookie, new CookieOptions { Domain = this.cookieDomain, Path = "/", Secure = true, HttpOnly = true });
                     }
                     break;
                     // No default because if we get a value out of range then we can just ignore it
