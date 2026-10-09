@@ -281,7 +281,7 @@
                         <form method="post"
                               asp-page-handler="Remove"
                               class="govuk-!-margin-top-4"
-                              onsubmit="return confirm('Remove this user from the tenant? Their form access for this tenant will be cleared.');">
+                              data-confirm="Remove this user from the tenant? Their form access for this tenant will be cleared.">
                             <input type="hidden" name="userId" value="@user.UserId" />
                             <input type="hidden" name="CurrentPage" value="@Model.CurrentPage" />
                             <input type="hidden" name="SearchTerm" value="@Model.SearchTerm" />

@@ -41,7 +41,7 @@
     <tbody class="govuk-table__body" id="notifications-tbody"></tbody>
 </table>
 
-<script>
+<script nonce="@ViewContext.HttpContext.GetNonce()">
     (function () {
         const tbody = document.getElementById('notifications-tbody');
         const canDelete = @(Model.CanDeleteNotifications ? "true" : "false");
@@ -70,8 +70,21 @@
                 return 'Info';
             };
             const t = normalize(type);
-            const cls = t === 'Success' ? 'govuk-tag' : t === 'Warning' ? 'govuk-tag govuk-tag--yellow' : t === 'Error' ? 'govuk-tag govuk-tag--red' : 'govuk-tag govuk-tag--blue';
-            return `<strong class="${cls}">${t}</strong>`;
+            const tag = document.createElement('strong');
+            tag.className = t === 'Success' ? 'govuk-tag' : t === 'Warning' ? 'govuk-tag govuk-tag--yellow' : t === 'Error' ? 'govuk-tag govuk-tag--red' : 'govuk-tag govuk-tag--blue';
+            tag.textContent = t;
+            return tag;
+        };
+
+        const createCell = (content) => {
+            const td = document.createElement('td');
+            td.className = 'govuk-table__cell';
+            if (content instanceof Node) {
+                td.appendChild(content);
+            } else {
+                td.textContent = content ?? '';
+            }
+            return td;
         };
 
         function renderRow(n) {
@@ -79,16 +92,26 @@
             tr.className = 'govuk-table__row';
             const created = n.createdAt ? new Date(n.createdAt) : null;
             const dateStr = created ? created.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : '';
-            const actionCell = canDelete
-                ? `<a class="govuk-link" data-id="${n.id}" href="#">Dismiss <span class="govuk-visually-hidden">this notification</span></a>`
-                : '';
-            tr.innerHTML = `
-                <td class="govuk-table__cell">${n.message || ''}</td>
-                <td class="govuk-table__cell">${mapTypeTag(n.type)}</td>
-                <td class="govuk-table__cell">${dateStr}</td>
-                <td class="govuk-table__cell">${actionCell}</td>
-            `;
-            const dismissLink = tr.querySelector('a');
+
+            let dismissLink = null;
+            if (canDelete) {
+                dismissLink = document.createElement('a');
+                dismissLink.className = 'govuk-link';
+                dismissLink.href = '#';
+                dismissLink.setAttribute('data-id', String(n.id ?? ''));
+                dismissLink.append('Dismiss ');
+                const hidden = document.createElement('span');
+                hidden.className = 'govuk-visually-hidden';
+                hidden.textContent = 'this notification';
+                dismissLink.appendChild(hidden);
+            }
+
+            tr.append(
+                createCell(n.message || ''),
+                createCell(mapTypeTag(n.type)),
+                createCell(dateStr),
+                createCell(dismissLink));
+
             if (dismissLink) {
                 dismissLink.onclick = async (e) => {
                     e.preventDefault();
@@ -116,7 +139,7 @@
         }
 
         async function loadAll() {
-            tbody.innerHTML = '';
+            tbody.replaceChildren();
             const response = await fetch('/notifications/all', { credentials: 'include', redirect: 'manual' });
             if (!response.ok) {
                 showError('You do not have permission to view notifications.');

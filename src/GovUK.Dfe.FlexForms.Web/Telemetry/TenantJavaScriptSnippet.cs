@@ -2,6 +2,7 @@ using Microsoft.ApplicationInsights.AspNetCore;
 using Microsoft.ApplicationInsights.AspNetCore.Extensions;
 using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.Extensions.Options;
+using NetEscapades.AspNetCore.SecurityHeaders;
 using System.Text.Encodings.Web;
 using GovUK.Dfe.FlexForms.Web.Tenancy;
 
@@ -22,17 +23,32 @@ public sealed class TenantJavaScriptSnippet(
         get
         {
             var connectionString = TenantApplicationInsightsConnection.FromConfiguration(appConfig.Current);
-            if (connectionString is null)
+            if (connectionString is null
+                || !TenantApplicationInsightsConnection.TryGetInstrumentationKey(connectionString, out _))
             {
                 return string.Empty;
             }
 
-            var telemetryConfiguration = new TelemetryConfiguration { ConnectionString = connectionString };
-            return new JavaScriptSnippet(
-                telemetryConfiguration,
-                serviceOptions,
-                httpContextAccessor,
-                encoder).FullScript;
+            string script;
+            try
+            {
+                var telemetryConfiguration = new TelemetryConfiguration { ConnectionString = connectionString };
+                script = new JavaScriptSnippet(
+                    telemetryConfiguration,
+                    serviceOptions,
+                    httpContextAccessor,
+                    encoder).FullScript;
+            }
+            catch (ArgumentException)
+            {
+                // A malformed tenant connection string must not break page rendering.
+                return string.Empty;
+            }
+
+            var nonce = httpContextAccessor.HttpContext?.GetNonce();
+            return string.IsNullOrEmpty(nonce)
+                ? script
+                : script.Replace("<script", $"<script nonce=\"{nonce}\"", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

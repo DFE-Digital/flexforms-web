@@ -143,7 +143,7 @@
         <div class="govuk-form-group">
             <label class="govuk-label govuk-label--s" for="template-selector">Template</label>
             <select class="govuk-select" id="template-selector" name="selectedTemplateId"
-                    onchange="window.location.href='?selectedTemplateId=' + this.value">
+                    data-navigate-param="selectedTemplateId">
                 <option value="">-- Select a template --</option>
                 @foreach (var template in Model.AvailableTemplates)
                 {
