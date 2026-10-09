@@ -100,7 +100,7 @@
                 <button class="govuk-button" type="submit" id="confirmation-continue">Continue</button>
             </div>
         </form>
-        <script>
+        <script nonce="@ViewContext.HttpContext.GetNonce()">
             (function(){
                 const form = document.getElementById('confirmation-form');
                 const no = document.getElementById('confirmed-no');

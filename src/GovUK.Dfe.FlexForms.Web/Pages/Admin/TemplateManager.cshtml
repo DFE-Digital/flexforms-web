@@ -88,7 +88,7 @@
                         <form method="post" asp-page-handler="ClearAll" style="display: inline;">
                             <button type="submit" class="govuk-link govuk-!-font-size-16" 
                                     style="background: none; border: none; padding: 0; color: #1d70b8; text-decoration: underline; cursor: pointer;"
-                                    onclick="return confirm('This will clear all sessions and caches. Are you sure?')">
+                                    data-confirm="This will clear all sessions and caches. Are you sure?">
                                 Clear all caches
                             </button>
                         </form> to ensure the new template version is immediately available across the application.
@@ -196,7 +196,7 @@
                     <button class="govuk-button govuk-button--secondary"
                             type="submit"
                             id="grant-template-to-all-users-button"
-                            onclick="return confirm('Grant read and write access for this template to every active user in this tenant?')">
+                            data-confirm="Grant read and write access for this template to every active user in this tenant?">
                         Grant to all users
                     </button>
                 </form>

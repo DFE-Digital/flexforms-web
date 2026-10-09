@@ -42,7 +42,7 @@
 </div>
 
 @section Scripts {
-<script>
+<script nonce="@ViewContext.HttpContext.GetNonce()">
     (function () {
         function bindLogoutForm() {
             var form = document.getElementById('logout-form');

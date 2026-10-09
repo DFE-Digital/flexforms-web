@@ -41,6 +41,7 @@ using Microsoft.ApplicationInsights.Channel;
 using GovUK.Dfe.FlexForms.Web.Telemetry;
 using GovUK.Dfe.FlexForms.Web.Configuration;
 using GovUK.Dfe.CoreLibs.Http.Extensions;
+using NetEscapades.AspNetCore.SecurityHeaders;
 using Serilog;
 using Serilog.Events;
 using TelemetryConfiguration = Microsoft.ApplicationInsights.Extensibility.TelemetryConfiguration;
@@ -290,6 +291,8 @@ builder.Services.AddSession(options =>
     // so LastActivity timestamps survive until the idle warning / force logout runs.
     options.IdleTimeout = TimeSpan.FromMinutes(45);
     options.Cookie.HttpOnly = true;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.SameSite = SameSiteMode.Lax;
     options.Cookie.IsEssential = true;
     options.IOTimeout = TimeSpan.FromSeconds(5); // Prevent indefinite blocking on session I/O
 });
@@ -297,8 +300,11 @@ builder.Services.AddSession(options =>
 builder.Services.Configure<CookiePolicyOptions>(options =>
 {
     options.CheckConsentNeeded = context => true;
+    // OIDC correlation/nonce cookies must stay SameSite=None for the IdP form_post callback,
+    // so SameSite is set per cookie rather than raised globally here.
     options.MinimumSameSitePolicy = SameSiteMode.None;
     options.Secure = CookieSecurePolicy.Always;
+    options.HttpOnly = Microsoft.AspNetCore.CookiePolicy.HttpOnlyPolicy.Always;
 });
 
 builder.Services.AddResponseCompression(options =>
@@ -507,6 +513,9 @@ builder.Services.PostConfigure<Microsoft.AspNetCore.Authentication.OpenIdConnect
 builder.Services.PostConfigure<CookieAuthenticationOptions>(CookieAuthenticationDefaults.AuthenticationScheme, options =>
 {
     options.AccessDeniedPath = "/Error/Forbidden";
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.SameSite = SameSiteMode.Lax;
 });
 
 builder.Services.AddSingleton<IAuthorizationMiddlewareResultHandler, AdminAreaAuthorizationResultHandler>();
@@ -567,7 +576,10 @@ builder.Services.AddScoped<IAuthenticationSchemeStrategy, CompositeAuthenticatio
 builder.Services.AddScoped<IUserActivityTracker, UserActivityTracker>();
 
 // Rebrand is always on in GovUk.Frontend.AspNetCore 4.x (Rebrand option removed)
-builder.Services.AddGovUkFrontend();
+builder.Services.AddGovUkFrontend(options =>
+{
+    options.GetCspNonceForRequest = context => context.GetNonce();
+});
 builder.Services.AddSingleton<IActionContextAccessor, ActionContextAccessor>();
 builder.Services.AddScoped<IHtmlHelper, HtmlHelper>();
 builder.Services.AddWebLayerServices();
@@ -689,6 +701,8 @@ else
     // In development, still show custom error page but with more details in logs
     app.UseExceptionHandler("/Error/ServerError");
 }
+
+app.UseFlexFormsSecurityHeaders(configuration, app.Environment);
 
 // Health probes (App Gateway / ACA) often use HTTP; do not redirect them to HTTPS.
 app.UseWhen(
