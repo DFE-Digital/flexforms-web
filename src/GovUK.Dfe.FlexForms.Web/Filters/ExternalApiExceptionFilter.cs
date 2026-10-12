@@ -46,6 +46,14 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
                 return;
             }
 
+            if (executedContext.Exception is StaleFormSessionException
+                && !executedContext.ExceptionHandled)
+            {
+                executedContext.Result = new LocalRedirectResult(ResolveStaleSessionRedirectUrl(context));
+                executedContext.ExceptionHandled = true;
+                return;
+            }
+
             if (executedContext.Exception is ExternalApplicationsException apiException
                 && !executedContext.ExceptionHandled)
             {
@@ -178,6 +186,35 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
                 executedContext.ExceptionHandled = true;
             }
         }
+
+        // Redirecting with GET reloads the application into session; the user's change is not saved and must be repeated.
+        private static string ResolveStaleSessionRedirectUrl(PageHandlerExecutingContext context)
+        {
+            var request = context.HttpContext.Request;
+
+            if (context.HandlerInstance is RenderFormModel)
+                return request.Path.HasValue ? request.Path.Value! : "/";
+
+            if (request.HasFormContentType)
+            {
+                var returnUrl = request.Form["ReturnUrl"].ToString();
+                if (IsSafeLocalUrl(returnUrl))
+                    return returnUrl;
+            }
+
+            var reference = context.RouteData.Values["referenceNumber"]?.ToString();
+            if (string.IsNullOrWhiteSpace(reference) && request.HasFormContentType)
+                reference = request.Form["referenceNumber"].ToString();
+
+            return string.IsNullOrWhiteSpace(reference)
+                ? "/"
+                : $"/applications/{Uri.EscapeDataString(reference)}";
+        }
+
+        private static bool IsSafeLocalUrl(string? url) =>
+            !string.IsNullOrEmpty(url)
+            && url[0] == '/'
+            && (url.Length == 1 || (url[1] != '/' && url[1] != '\\'));
 
         private void LogApiException(
             HttpContext httpContext,

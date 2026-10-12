@@ -68,6 +68,47 @@ public class ExternalApiExceptionFilterTests
 
     #endregion
 
+    #region ExternalApiPageExceptionFilter – StaleFormSessionException
+
+    [Fact]
+    public async Task OnPageHandlerExecutionAsync_ShouldRedirectToLocalReturnUrl_WhenStaleFormSessionExceptionThrown()
+    {
+        var page = CreatePageModel();
+        var form = new FormCollection(new Dictionary<string, StringValues>
+        {
+            ["ReturnUrl"] = "/applications/REF-1/task-1/page-1"
+        });
+        var executingContext = CreateExecutingContext(page, path: "/applications/REF-1/task-1/page-1/upload-file", form: form);
+        var executedContext = CreateExecutedContext(executingContext, new StaleFormSessionException(Guid.NewGuid(), null));
+
+        await _pageFilter.OnPageHandlerExecutionAsync(executingContext, () => Task.FromResult(executedContext));
+
+        var redirect = Assert.IsType<LocalRedirectResult>(executedContext.Result);
+        Assert.Equal("/applications/REF-1/task-1/page-1", redirect.Url);
+        Assert.True(executedContext.ExceptionHandled);
+    }
+
+    [Fact]
+    public async Task OnPageHandlerExecutionAsync_ShouldIgnoreExternalReturnUrl_WhenStaleFormSessionExceptionThrown()
+    {
+        var page = CreatePageModel();
+        var form = new FormCollection(new Dictionary<string, StringValues>
+        {
+            ["ReturnUrl"] = "//evil.example.com",
+            ["referenceNumber"] = "REF-1"
+        });
+        var executingContext = CreateExecutingContext(page, form: form);
+        var executedContext = CreateExecutedContext(executingContext, new StaleFormSessionException(Guid.NewGuid(), null));
+
+        await _pageFilter.OnPageHandlerExecutionAsync(executingContext, () => Task.FromResult(executedContext));
+
+        var redirect = Assert.IsType<LocalRedirectResult>(executedContext.Result);
+        Assert.Equal("/applications/REF-1", redirect.Url);
+        Assert.True(executedContext.ExceptionHandled);
+    }
+
+    #endregion
+
     #region ExternalApiPageExceptionFilter – plain ExternalApplicationsException (MapUnhandledApiException)
 
     [Theory]

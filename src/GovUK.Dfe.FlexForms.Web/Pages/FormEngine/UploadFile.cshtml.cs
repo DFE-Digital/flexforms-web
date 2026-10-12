@@ -24,6 +24,7 @@ public class UploadFileModel(
     IFormFileFieldService formFileFieldService,
     IFileUploadService fileUploadService,
     IApplicationResponseService applicationResponseService,
+    IApplicationStateService applicationStateService,
     INotificationsClient notificationsClient,
     IFormErrorStore formErrorStore,
     IRequestAppConfiguration requestConfiguration,
@@ -82,6 +83,8 @@ public class UploadFileModel(
         if (!Guid.TryParse(ApplicationId, out var appId))
             return NotFound();
 
+        await applicationStateService.EnsureApplicationIdAsync(ReferenceNumber);
+
         var file = Request.Form.Files["UploadFile"];
         var hasFile = file is { Length: > 0 };
         await using var stream = hasFile ? file!.OpenReadStream() : Stream.Null;
@@ -117,6 +120,8 @@ public class UploadFileModel(
 
             return string.IsNullOrEmpty(ReturnUrl) ? Page() : Redirect(ReturnUrl);
         }
+
+        await applicationStateService.EnsureApplicationIdAsync(ReferenceNumber);
 
         var outcome = await deleteFormFile.ExecuteAsync(
             CaptureWorkState(),
