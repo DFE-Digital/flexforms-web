@@ -344,15 +344,16 @@
 <form id="__af" method="post" style="display:none">@Html.AntiForgeryToken()</form>
 
 @* SignalR library *@
-<script src="https://cdn.jsdelivr.net/npm/@@microsoft/signalr@@8/dist/browser/signalr.min.js" defer></script>
+<script src="~/lib/microsoft-signalr/8.0.29/signalr.min.js" asp-append-version="true" defer></script>
+<script src="~/js/csp-handlers.js" asp-append-version="true"></script>
 <script src="~/js/hub-auth.js" defer></script>
 <script src="~/js/notifications.js" defer></script>
 
 @RenderSection("Scripts", required: false)
 
 @* Add accessible-autocomplete library *@
-<script src="https://cdn.jsdelivr.net/npm/accessible-autocomplete@2.0.4/dist/accessible-autocomplete.min.js"></script>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/accessible-autocomplete@2.0.4/dist/accessible-autocomplete.min.css" />
+<script src="~/lib/accessible-autocomplete/2.0.4/accessible-autocomplete.min.js" asp-append-version="true"></script>
+<link rel="stylesheet" href="~/lib/accessible-autocomplete/2.0.4/accessible-autocomplete.min.css" asp-append-version="true" />
 
 <style>
     .govuk-hint.hint--default {

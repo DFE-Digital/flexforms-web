@@ -230,7 +230,7 @@
                             <button type="submit"
                                     class="govuk-button"
                                     data-module="govuk-button"
-                                    onclick="return confirm('Apply validated changes to @Model.ValidationCategory (@Model.ValidationTarget)?');">
+                                    data-confirm="Apply validated changes to @Model.ValidationCategory (@Model.ValidationTarget)?">
                                 @(Model.ValidationPreview.SettingExists ? "Apply update" : "Apply add")
                             </button>
                         </form>
@@ -396,7 +396,7 @@
                                         <button type="submit"
                                                 class="govuk-button govuk-!-margin-bottom-0"
                                                 data-module="govuk-button"
-                                                onclick="return confirm('Save changes to @setting.Category (@setting.Target)?');">
+                                                data-confirm="Save changes to @setting.Category (@setting.Target)?">
                                             Update
                                         </button>
                                     </div>
@@ -404,7 +404,7 @@
                                 <form method="post"
                                       asp-page-handler="Delete"
                                       class="govuk-!-margin-top-2"
-                                      onsubmit="return confirm('Delete setting @setting.Category (@setting.Target)? This cannot be undone.');">
+                                      data-confirm="Delete setting @setting.Category (@setting.Target)? This cannot be undone.">
                                     <input type="hidden" name="category" value="@setting.Category" />
                                     <input type="hidden" name="target" value="@setting.Target" />
                                     <button type="submit" class="govuk-button govuk-button--warning govuk-!-margin-bottom-0" data-module="govuk-button">
@@ -481,7 +481,7 @@
                 <button type="submit"
                         class="govuk-button"
                         data-module="govuk-button"
-                        onclick="return confirm('Add this setting?');">
+                        data-confirm="Add this setting?">
                     Add setting
                 </button>
             </div>
@@ -546,7 +546,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="@ViewContext.HttpContext.GetNonce()">
     document.querySelectorAll('.js-use-cookbook-example').forEach(function (button) {
         button.addEventListener('click', function () {
             var category = button.getAttribute('data-category') || '';

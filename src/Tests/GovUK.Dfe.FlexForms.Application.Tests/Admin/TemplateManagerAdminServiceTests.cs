@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Text.Json.Nodes;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
@@ -93,6 +94,34 @@ public class TemplateManagerAdminServiceTests
     }
 
     [Fact]
+    public async Task CreateVersionAsync_ShouldShowEachProblem_WhenApiRejectsFieldChanges()
+    {
+        var templateId = Guid.NewGuid();
+        var apiError = new ExternalApplicationsException<GovUK.Dfe.CoreLibs.Http.Models.ExceptionResponse>(
+            "Validation failed",
+            400,
+            "body",
+            new Dictionary<string, IEnumerable<string>>(),
+            new GovUK.Dfe.CoreLibs.Http.Models.ExceptionResponse
+            {
+                Message = "Validation failed. Please check the following errors:",
+                Details = "This version can't be saved.\nField \"name\" is missing.\nField \"age\" changes kind."
+            },
+            null);
+        _templates.CreateTemplateVersionAsync(templateId, Arg.Any<CreateTemplateVersionRequest>(), Arg.Any<CancellationToken>())
+            .Returns<TemplateSchemaDto>(_ => throw apiError);
+
+        var result = await _service.CreateVersionAsync(
+            new TemplateManagerWorkState { NewVersion = "1.0.2", NewSchema = "{}" },
+            templateId);
+
+        Assert.Equal(
+            new[] { "This version can't be saved.", "Field \"name\" is missing.", "Field \"age\" changes kind." },
+            result.Errors.Select(e => e.Message));
+        Assert.All(result.Errors, e => Assert.Equal(nameof(TemplateManagerWorkState.NewSchema), e.FieldKey));
+    }
+
+    [Fact]
     public void SuggestNextVersion_ShouldPreferLatestVersion()
     {
         Assert.Equal("1.0.3", _service.SuggestNextVersion("1.0.2", "1.0.0"));
@@ -153,6 +182,45 @@ public class TemplateManagerAdminServiceTests
         Assert.NotNull(state.CurrentTemplate);
         Assert.Equal("Transfers", state.CurrentTemplate.TemplateName);
         Assert.False(state.HasError);
+    }
+
+    private static string AuthoredSchema(Guid templateId)
+    {
+        var schema = JsonNode.Parse(StarterFormTemplateSchema.CreateJson(templateId.ToString(), "Trust's <form>"))!.AsObject();
+        schema["retiredFields"] = JsonNode.Parse("""[{ "fieldId": "name", "replacedBy": ["fullName"] }]""");
+        var firstField = schema["taskGroups"]![0]!["tasks"]![0]!["pages"]![0]!["fields"]![0]!.AsObject();
+        firstField["semanticKey"] = "name";
+        return schema.ToJsonString();
+    }
+
+    [Fact]
+    public async Task LoadTemplateDataAsync_ShouldPrefillTheStoredJsonIndented_KeepingPropertiesTheModelDoesNotHave()
+    {
+        var templateId = Guid.NewGuid();
+        var template = new TemplateDto { TemplateId = templateId, Name = "Transfers", CreatedOn = DateTime.UtcNow };
+        _templates.GetTemplateVersionsAsync(templateId, Arg.Any<CancellationToken>())
+            .Returns(new ObservableCollection<TemplateVersionSummaryDto>
+            {
+                new() { TemplateId = templateId, TemplateVersionId = Guid.NewGuid(), VersionNumber = "2.0", CreatedOn = DateTime.UtcNow }
+            });
+        _templates.GetTemplateSchemaByVersionAsync(templateId, "2.0", Arg.Any<CancellationToken>())
+            .Returns(new TemplateSchemaDto
+            {
+                TemplateId = templateId,
+                TemplateVersionId = Guid.NewGuid(),
+                VersionNumber = "2.0",
+                JsonSchema = AuthoredSchema(templateId)
+            });
+
+        var state = new TemplateManagerWorkState { TenantTemplates = [template], ShowAddVersionForm = true };
+        await _service.LoadTemplateDataAsync(state, templateId);
+        _service.PrefillNewSchemaIfEmpty(state, templateId);
+
+        Assert.False(state.HasError);
+        Assert.Contains("\"retiredFields\"", state.NewSchema);
+        Assert.Contains("\"semanticKey\": \"name\"", state.NewSchema);
+        Assert.Contains("\"templateName\": \"Trust's <form>\"", state.NewSchema);
+        Assert.Contains("\n  \"taskGroups\"", state.NewSchema.ReplaceLineEndings("\n"));
     }
 
     [Fact]

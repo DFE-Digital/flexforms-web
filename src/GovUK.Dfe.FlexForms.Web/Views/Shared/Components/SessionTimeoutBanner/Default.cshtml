@@ -45,7 +45,7 @@
         .app-timeout-progress__bar { height: 100%; background: #00703c; width: 100%; transform-origin: left center; }
     </style>
 
-    <script>
+    <script nonce="@ViewContext.HttpContext.GetNonce()">
         (function () {
             var inactivitySeconds = @Model.InactivityThresholdSeconds;
             var warningSeconds = @Model.WarningWindowSeconds;

@@ -48,17 +48,17 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Shared
                 case CookieConsent.Reject:
                     HttpContext.Session.SetInt32("cookiesRejected", 1);
                     SetConsentCookie("no");
-                    Response.Cookies.Delete("ai_", new CookieOptions { Domain = this.cookieDomain, Path = "/" });
-                    var appInsightsCookie = Request.Cookies.Keys.FirstOrDefault(key => key.StartsWith("ai_"));
-                    if (!string.IsNullOrEmpty(appInsightsCookie))
-                        Response.Cookies.Delete(appInsightsCookie, new CookieOptions { Domain = this.cookieDomain, Path = "/" });
+                    foreach (var appInsightsCookie in Request.Cookies.Keys.Where(key => key.StartsWith("ai_", StringComparison.Ordinal)))
+                    {
+                        Response.Cookies.Delete(appInsightsCookie, new CookieOptions { Domain = this.cookieDomain, Path = "/", Secure = true, HttpOnly = true });
+                    }
                     break;
                     // No default because if we get a value out of range then we can just ignore it
             }
 
             TempData["cookiePreferenceSaved"] = true;
             TempData["returnPath"] = returnPath;
-            return Redirect(redirectPath);
+            return LocalRedirect(Url.IsLocalUrl(redirectPath) ? redirectPath : "/");
         }
 
         private void SetConsentCookie(string value) =>

@@ -426,7 +426,7 @@ else
     }
 </style>
 
-<script>
+<script nonce="@ViewContext.HttpContext.GetNonce()">
 // Helper function to update hidden input value based on selected items
 function updateHiddenInputValue(hiddenInput, allowMultiple) {
     const selectedItems = hiddenInput.closest('.complex-field-container').querySelectorAll('.complex-field-selected-inset');
@@ -1336,7 +1336,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 html += '<strong>' + escapeHtml(displayName) + '</strong>';
                 if (ukprnText) {
                     html += '<br />';
-                    html += '<span class="govuk-hint">' + ukprnText + '</span>';
+                    html += '<span class="govuk-hint">' + escapeHtml(ukprnText) + '</span>';
                 }
                 html += '</p>';
                 html += '<button type="button" class="govuk-button govuk-button--secondary govuk-button--small complex-field-remove-item" aria-label="Remove ' + escapeHtml(displayName) + '">';

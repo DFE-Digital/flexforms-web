@@ -111,24 +111,29 @@ function renderSingleNotification(notification, options) {
     wrapper.setAttribute('data-auto-dismiss', (notification.autoDismiss ? 'true' : 'false'));
     wrapper.setAttribute('data-auto-dismiss-seconds', (notification.autoDismissSeconds ?? 0));
 
+    const el = (tag, className, text) => {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text !== undefined) node.textContent = text;
+        return node;
+    };
+    const message = String(notification.message ?? '');
+
     if (map.banner === 'error-summary') {
-        wrapper.innerHTML = `
-            <div role="alert">
-                <h2 class="govuk-error-summary__title">${map.title}</h2>
-                <div class="govuk-error-summary__body">
-                    <p class="govuk-notification-banner__heading"><span class="govuk-visually-hidden">Error: </span>${notification.message ?? ''}</p>
-                </div>
-            </div>
-        `;
+        const alert = el('div');
+        alert.setAttribute('role', 'alert');
+        const body = el('div', 'govuk-error-summary__body');
+        const heading = el('p', 'govuk-notification-banner__heading');
+        heading.append(el('span', 'govuk-visually-hidden', 'Error: '), message);
+        body.appendChild(heading);
+        alert.append(el('h2', 'govuk-error-summary__title', map.title), body);
+        wrapper.replaceChildren(alert);
     } else {
-        wrapper.innerHTML = `
-            <div class="govuk-notification-banner__header">
-                <h2 class="govuk-notification-banner__title">${map.title}</h2>
-            </div>
-            <div class="govuk-notification-banner__content">
-                <p class="govuk-notification-banner__heading">${notification.message ?? ''}</p>
-            </div>
-        `;
+        const header = el('div', 'govuk-notification-banner__header');
+        header.appendChild(el('h2', 'govuk-notification-banner__title', map.title));
+        const content = el('div', 'govuk-notification-banner__content');
+        content.appendChild(el('p', 'govuk-notification-banner__heading', message));
+        wrapper.replaceChildren(header, content);
     }
 
     const closeBtn = wrapper.querySelector('.notification-close-btn');
@@ -158,7 +163,7 @@ window.removeFromUi = function (id) {
 window.clearUi = function () {
     const cont = container();
     if (!cont) return;
-    cont.innerHTML = '';
+    cont.replaceChildren();
 };
 
 async function refreshUnreadCount() {
@@ -339,11 +344,11 @@ window.addEventListener('DOMContentLoaded', () => {
         try {
             // Hook into existing handlers by wrapping render/remove/clear
             const origRender = window.renderOrUpdate;
-            window.renderOrUpdate = function(n, options) { origRender(n, options); refreshUnreadCount(); };
+            window.renderOrUpdate = function(n, options) { origRender(n, options); void refreshUnreadCount(); };
             const origRemove = window.removeFromUi;
-            window.removeFromUi = function(id) { origRemove(id); refreshUnreadCount(); };
+            window.removeFromUi = function(id) { origRemove(id); void refreshUnreadCount(); };
             const origClear = window.clearUi;
-            window.clearUi = function() { origClear(); refreshUnreadCount(); };
+            window.clearUi = function() { origClear(); void refreshUnreadCount(); };
         } catch { }
     }, 0);
 });

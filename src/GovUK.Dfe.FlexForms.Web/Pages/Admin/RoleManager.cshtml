@@ -161,7 +161,7 @@
                                     {
                                         <a asp-page="/Admin/RoleManagerPermissions" asp-route-roleId="@role.RoleId" class="govuk-link">Manage permissions</a>
                                         <form method="post" asp-page-handler="Delete" style="display: inline;"
-                                              onsubmit="return confirm('Delete role @role.Name? Users must be unassigned first.');">
+                                              data-confirm="Delete role @role.Name? Users must be unassigned first.">
                                             <input type="hidden" name="roleId" value="@role.RoleId" />
                                             <button type="submit" class="govuk-button govuk-button--warning govuk-!-margin-bottom-0">Delete</button>
                                         </form>

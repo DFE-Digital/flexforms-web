@@ -32,7 +32,7 @@
             </label>
             <p class="govuk-hint">Select the template whose status labels you want to override</p>
             <select class="govuk-select" id="template-selector" name="selectedTemplateId"
-                    onchange="window.location.href='?selectedTemplateId=' + this.value">
+                    data-navigate-param="selectedTemplateId">
                 <option value="">-- Select a template --</option>
                 @foreach (var template in Model.AvailableTemplates)
                 {
@@ -79,7 +79,7 @@
                     <label class="govuk-label govuk-label--m" for="base-status">
                         Base Status
                     </label>
-                    <select class="govuk-select" id="base-status" asp-for="SelectedBaseStatus" onchange="this.form.submit()">
+                    <select class="govuk-select" id="base-status" asp-for="SelectedBaseStatus" data-submit-on-change>
                         @foreach(var status in Model.BaseStatuses)
                         {
                             <option value="@status.Key">@status.Value</option>
@@ -115,7 +115,7 @@
 
         <!-- Navigation -->
         <div class="govuk-!-margin-top-6">
-            <a href="javascript:history.back()" class="govuk-link">← Go back</a>
+            <a href="/admin" class="govuk-link" data-history-back>← Go back</a>
         </div>
     </div>
 </div>

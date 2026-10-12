@@ -28,17 +28,16 @@ public class CookiesController : Controller
             case CookiesConsent.Reject:
                 HttpContext.Session.SetInt32("cookiesRejected", 1);
                 SetConsentCookie("no");
-                Response.Cookies.Delete("ai_", new CookieOptions { Domain = this.cookieDomain, Path = "/" });
-
-                var aiCookie = Request.Cookies.FirstOrDefault(cookie => cookie.Key.StartsWith("ai_"));
-                if (aiCookie.Key != null)
-                    Response.Cookies.Delete(aiCookie.Key, new CookieOptions { Domain = this.cookieDomain, Path = "/" });
+                foreach (var aiCookie in Request.Cookies.Keys.Where(key => key.StartsWith("ai_", StringComparison.Ordinal)))
+                {
+                    Response.Cookies.Delete(aiCookie, new CookieOptions { Domain = this.cookieDomain, Path = "/", Secure = true, HttpOnly = true });
+                }
                 break;
         }
 
         TempData["cookiePreferenceSaved"] = true;
         TempData["redirectPath"] = redirectPath;
-        return LocalRedirect(redirectPath);
+        return LocalRedirect(Url.IsLocalUrl(redirectPath) ? redirectPath : "/");
     }
 
     private void SetConsentCookie(string value)
