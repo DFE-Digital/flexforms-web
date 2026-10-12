@@ -1,6 +1,7 @@
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.CoreLibs.Http.Models;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
+using GovUK.Dfe.FlexForms.Application.Exceptions;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.Caching;
 using GovUK.Dfe.FlexForms.Domain.Models;
@@ -319,6 +320,7 @@ public class ApplicationResponseServiceTests
 
         var service = CreateService(session, applications);
         var applicationId = Guid.NewGuid();
+        service.SetCurrentAccumulatedApplicationId(applicationId);
 
         await service.SaveApplicationResponseAsync(
             applicationId,
@@ -470,6 +472,7 @@ public class ApplicationResponseServiceTests
             NullLogger<ApplicationResponseService>.Instance);
 
         var applicationId = Guid.NewGuid();
+        service.SetCurrentAccumulatedApplicationId(applicationId);
         session.SetString($"ApplicationStatus_{applicationId}", "Created");
 
         await service.SaveApplicationResponseAsync(
@@ -494,9 +497,11 @@ public class ApplicationResponseServiceTests
                 Arg.Any<CancellationToken>())
             .Throws(new ExternalApplicationsException("saved", 200, "ok", null!, null!));
         var service = CreateService(session, applications);
+        var applicationId = Guid.NewGuid();
+        service.SetCurrentAccumulatedApplicationId(applicationId);
 
         await service.SaveApplicationResponseAsync(
-            Guid.NewGuid(),
+            applicationId,
             new Dictionary<string, object> { ["fieldOne"] = "value" });
     }
 
@@ -511,11 +516,55 @@ public class ApplicationResponseServiceTests
                 Arg.Any<CancellationToken>())
             .Throws(new InvalidOperationException("save failed"));
         var service = CreateService(session, applications);
+        var applicationId = Guid.NewGuid();
+        service.SetCurrentAccumulatedApplicationId(applicationId);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             service.SaveApplicationResponseAsync(
+                applicationId,
+                new Dictionary<string, object> { ["fieldOne"] = "value" }));
+    }
+
+    [Fact]
+    public async Task SaveApplicationResponseAsync_ShouldRefuseSave_WhenSessionBelongsToAnotherApplication()
+    {
+        var session = CreateSessionStore(store =>
+            store.SetString(FormSessionKeys.AccumulatedFormData, "{\"otherAppField\":\"other\"}"));
+        var applications = Substitute.For<IApplicationsClient>();
+        var service = CreateService(session, applications);
+        var otherApplicationId = Guid.NewGuid();
+        service.SetCurrentAccumulatedApplicationId(otherApplicationId);
+        var applicationId = Guid.NewGuid();
+
+        var ex = await Assert.ThrowsAsync<StaleFormSessionException>(() =>
+            service.SaveApplicationResponseAsync(
+                applicationId,
+                new Dictionary<string, object> { ["fieldOne"] = "value" }));
+
+        Assert.Equal(applicationId, ex.ApplicationId);
+        Assert.Equal(otherApplicationId.ToString(), ex.SessionApplicationId);
+        await applications.DidNotReceive().AddApplicationResponseAsync(
+            Arg.Any<Guid>(),
+            Arg.Any<AddApplicationResponseRequest>(),
+            Arg.Any<CancellationToken>());
+        Assert.Equal("{\"otherAppField\":\"other\"}", session.GetString(FormSessionKeys.AccumulatedFormData));
+    }
+
+    [Fact]
+    public async Task SaveApplicationResponseAsync_ShouldRefuseSave_WhenSessionHasNoOwner()
+    {
+        var applications = Substitute.For<IApplicationsClient>();
+        var service = CreateService(CreateSessionStore(), applications);
+
+        await Assert.ThrowsAsync<StaleFormSessionException>(() =>
+            service.SaveApplicationResponseAsync(
                 Guid.NewGuid(),
                 new Dictionary<string, object> { ["fieldOne"] = "value" }));
+
+        await applications.DidNotReceive().AddApplicationResponseAsync(
+            Arg.Any<Guid>(),
+            Arg.Any<AddApplicationResponseRequest>(),
+            Arg.Any<CancellationToken>());
     }
 
     private static string ReadStoredFieldValue(string responseJson, string fieldId)

@@ -1,4 +1,5 @@
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
+using GovUK.Dfe.FlexForms.Application.Exceptions;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.Caching;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
@@ -21,6 +22,9 @@ public class ApplicationResponseService(
 
     public async Task SaveApplicationResponseAsync(Guid applicationId, Dictionary<string, object> formData, CancellationToken cancellationToken = default)
     {
+        // Every save sends the full response body built from session, so the session must hold this application's data.
+        EnsureSessionBelongsToApplication(applicationId);
+
         try
         {            
             // Accumulate the new data with existing data (infected files filtered by blacklist)
@@ -56,6 +60,19 @@ public class ApplicationResponseService(
             logger.LogError(ex, "Failed to save application response for {ApplicationId}", applicationId);
             throw;
         }
+    }
+
+    private void EnsureSessionBelongsToApplication(Guid applicationId)
+    {
+        var sessionApplicationId = sessionStore.GetString(FormSessionKeys.CurrentAccumulatedApplicationId);
+        if (Guid.TryParse(sessionApplicationId, out var ownerId) && ownerId == applicationId)
+            return;
+
+        logger.LogError(
+            "Refusing to save application response for {ApplicationId}: session form data belongs to {SessionApplicationId}",
+            applicationId,
+            sessionApplicationId ?? "<none>");
+        throw new StaleFormSessionException(applicationId, sessionApplicationId);
     }
 
     private async Task EnsureApplicationStatusIsInProgress(Guid applicationId, Dictionary<string, object> allFormData, CancellationToken cancellationToken)
