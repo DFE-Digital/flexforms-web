@@ -25,6 +25,7 @@ jobs:
   playwright-tests:
     name: Playwright
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     environment: ${{ inputs.environment }}
     defaults:
       run:
