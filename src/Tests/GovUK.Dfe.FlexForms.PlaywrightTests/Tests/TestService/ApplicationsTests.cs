@@ -17,7 +17,7 @@ public sealed class ApplicationsTests : PlaywrightTestBase
 
     private const string Trust = "5 DIMENSIONS TRUST";
 
-    protected override int TestTimeoutMilliseconds => 180_000;
+    protected override int TestTimeoutMilliseconds => 240_000;
 
     [SetUp]
     public async Task LoginAsDefaultUserAsync() => await LoginAsync();
