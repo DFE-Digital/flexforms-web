@@ -7,10 +7,12 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
 {
     public class RemoveFieldItemModel(
         IApplicationResponseService applicationResponseService,
+        IApplicationStateService applicationStateService,
         ILogger<RemoveFieldItemModel> logger)
         : PageModel
     {
         private readonly IApplicationResponseService _applicationResponseService = applicationResponseService;
+        private readonly IApplicationStateService _applicationStateService = applicationStateService;
         private readonly ILogger<RemoveFieldItemModel> _logger = logger;
 
         public async Task<IActionResult> OnPostRemoveFieldItemAsync(string referenceNumber, string taskId, string fieldId, int index)
@@ -19,6 +21,8 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             {
                 return BadRequest("Field ID and valid index are required");
             }
+
+            await _applicationStateService.EnsureApplicationIdAsync(referenceNumber);
 
             var acc = _applicationResponseService.GetAccumulatedFormData();
             if (acc.TryGetValue(fieldId, out var existing))

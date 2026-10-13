@@ -334,6 +334,9 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             }
 
             var confirmed = Request.Query.ContainsKey("confirmed") && Request.Query["confirmed"] == "true";
+            if (confirmed)
+                await CommonFormEngineInitializationAsync();
+
             var state = CaptureWorkState();
             var outcome = await _deleteFormFile.ExecuteAsync(
                 state,

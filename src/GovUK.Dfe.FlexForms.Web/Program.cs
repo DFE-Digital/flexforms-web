@@ -1,3 +1,4 @@
+using GovUK.Dfe.CoreLibs.Caching.Services;
 using GovUK.Dfe.CoreLibs.Security;
 using GovUK.Dfe.CoreLibs.Security.Authorization;
 using GovUK.Dfe.CoreLibs.Security.Configurations;
@@ -21,6 +22,8 @@ using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.AspNetCore.ResponseCompression;
+using Microsoft.AspNetCore.Session;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Diagnostics.CodeAnalysis;
 using GovUK.Dfe.CoreLibs.Security.EntraSso;
 using GovUK.Dfe.CoreLibs.Security.TokenRefresh.Extensions;
@@ -296,6 +299,12 @@ builder.Services.AddSession(options =>
     options.Cookie.IsEssential = true;
     options.IOTimeout = TimeSpan.FromSeconds(5); // Prevent indefinite blocking on session I/O
 });
+
+// Session reads must fail on Redis errors: the default adapter reports them as a cache miss, which ASP.NET
+// treats as an empty session and writes back over the user's real session at the end of the request.
+builder.Services.Replace(ServiceDescriptor.Singleton<ISessionStore>(sp => new DistributedSessionStore(
+    sp.GetRequiredService<SessionDistributedCacheAdapter>(),
+    sp.GetRequiredService<ILoggerFactory>())));
 
 builder.Services.Configure<CookiePolicyOptions>(options =>
 {
