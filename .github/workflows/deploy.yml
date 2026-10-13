@@ -132,7 +132,7 @@ jobs:
   playwright-tests:
     name: Playwright tests → ${{ needs.set-env.outputs.environment }}
     needs: [deploy, set-env]
-    if: needs.set-env.outputs.environment-lower == 'development'
+    if: needs.set-env.outputs.environment-lower == 'development' || needs.set-env.outputs.environment-lower == 'test'
     uses: ./.github/workflows/playwright.yml
     with:
       environment: ${{ needs.set-env.outputs.environment }}
