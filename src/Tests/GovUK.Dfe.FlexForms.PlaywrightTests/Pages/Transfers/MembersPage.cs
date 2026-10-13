@@ -46,5 +46,5 @@ public sealed class MembersPage(IPage page) : TaskPage(page)
 
     public async Task CompleteAsync() => await MarkCompleteAndSaveAsync();
 
-    private async Task ExpectSummaryAsync() => await Assertions.Expect(Page).ToHaveURLAsync(new Regex(@"/members$"));
+    private new async Task ExpectSummaryAsync() => await Assertions.Expect(Page).ToHaveURLAsync(new Regex(@"/members$"));
 }

@@ -1,10 +1,12 @@
-using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 using Microsoft.Playwright;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Pages;
 
-public sealed class ContributorsPage(IPage page, Terminology terminology) : BasePage(page, terminology)
+public sealed class ContributorsPage(IPage page) : BasePage(page)
 {
+    public async Task GoToAsync(string applicationReference) =>
+        await Page.GotoAsync($"/applications/{applicationReference}/contributors");
+
     public async Task AddContributorAsync() => await AddContributorButton().ClickAsync();
 
     public async Task ProceedToFormAsync() => await ProceedToFormButton().ClickAsync();

@@ -26,8 +26,8 @@ public sealed class ApplicationsTests : PlaywrightTestBase
     [CiRetry]
     public async Task CompleteApplicationAsync()
     {
-        var dashboardPage = new DashboardPage(Page, Terminology);
-        var contributorsPage = new ContributorsPage(Page, Terminology);
+        var dashboardPage = new DashboardPage(Page);
+        var contributorsPage = new ContributorsPage(Page);
 
         await dashboardPage.StartNewApplicationAsync();
         await contributorsPage.ProceedToFormAsync();
