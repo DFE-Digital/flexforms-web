@@ -21,8 +21,8 @@ public sealed class CreateAndSubmitTests : PlaywrightTestBase
     [CiRetry]
     public async Task CreateAndSubmitAnApplicationAsync()
     {
-        var dashboardPage = new DashboardPage(Page, Terminology);
-        var contributorsPage = new ContributorsPage(Page, Terminology);
+        var dashboardPage = new DashboardPage(Page);
+        var contributorsPage = new ContributorsPage(Page);
 
         await dashboardPage.StartNewApplicationAsync();
         await contributorsPage.ProceedToFormAsync();

@@ -25,6 +25,7 @@ jobs:
   playwright-tests:
     name: Playwright
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     environment: ${{ inputs.environment }}
     defaults:
       run:
@@ -36,7 +37,7 @@ jobs:
       API_BASE_URL: ${{ vars.PL_API_BASE_URL }}
       SERVICE: TestService
       TENANT_ID: 99999999-9999-1999-2999-999999999999
-      TEMPLATE_ID: 22BC3831-734E-4F17-87AE-7993520039CE
+      TEMPLATE_ID: ${{ vars.PL_TEMPLATE_ID }}
       TERMINOLOGY_SINGULAR: Application
       TERMINOLOGY_PLURAL: Applications
       INTERNAL_AUTH_TOKEN_LIFETIME_MINUTES: 60
@@ -46,6 +47,8 @@ jobs:
       ADMIN_API_KEY: ${{ secrets.PL_ADMIN_API_KEY }}
       CASEWORKER_EMAIL: ${{ secrets.PL_CASEWORKER_EMAIL }}
       CASEWORKER_API_KEY: ${{ secrets.PL_CASEWORKER_API_KEY }}
+      USER2_EMAIL: ${{ secrets.PL_USER2_EMAIL }}
+      USER2_API_KEY: ${{ secrets.PL_USER2_API_KEY }}
       JWT_SIGNING_KEY: ${{ secrets.PL_JWT_SIGNING_KEY }}
       INTERNAL_AUTH_ISSUER: ${{ secrets.PL_INTERNAL_AUTH_ISSUER }}
       INTERNAL_AUTH_AUDIENCE: ${{ secrets.PL_INTERNAL_AUTH_AUDIENCE }}
@@ -74,7 +77,7 @@ jobs:
           --filter "FullyQualifiedName~.Tests.${{ env.SERVICE }}."
           --logger "trx;LogFileName=report.trx"
           --results-directory reports
-          -- NUnit.NumberOfTestWorkers=4
+          -- NUnit.NumberOfTestWorkers=6
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}

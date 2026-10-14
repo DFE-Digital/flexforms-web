@@ -1,0 +1,70 @@
+using GovUK.Dfe.FlexForms.PlaywrightTests.Api;
+using GovUK.Dfe.FlexForms.PlaywrightTests.Infrastructure;
+using GovUK.Dfe.FlexForms.PlaywrightTests.Pages;
+using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Admin;
+using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Tasks;
+using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
+
+namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService.Admin;
+
+[NonParallelizable]
+[TestFixture(Description = "User management")]
+public sealed class UserManagerTests : PlaywrightTestBase
+{
+    private string _userToAddEmail = AuthUsers.ResolveAuthUser("user2").Email;
+
+    [TestCase(TestName = "Admin can create user and give access to a form")]
+    [CiRetry]
+    public async Task AdminCanCreateUserAndGiveAccessToFormAsync()
+    {
+        await Users.RemoveUserFromTenantAsync(AdminApiClient, _userToAddEmail);
+
+        var adminPage = new AdminPage(Page);
+        var userManager = new UserManager(Page);
+        var dashboardPage = new DashboardPage(Page);
+        var contributorsPage = new ContributorsPage(Page);
+        var standardFieldsTask = new StandardFieldsTask(Page);
+
+        await LoginAsync("admin");
+        await adminPage.GoToAsync();
+        await adminPage.OpenUserManagerAsync();
+
+        await userManager.OpenAddUserAsync();
+        await userManager.AddUserAsync(TestData.User2DisplayName, _userToAddEmail, TestData.UserRoleName,
+            [TestData.DefaultTemplateName]);
+
+        await LoginAsync("user2");
+        await dashboardPage.StartNewApplicationAsync();
+        await contributorsPage.ProceedToFormAsync();
+        await standardFieldsTask.OpenAsync();
+        await standardFieldsTask.CompleteAsync();
+        await standardFieldsTask.ExpectCompletedAsync();
+    }
+
+    [TestCase(TestName = "Admin can remove user from tenant")]
+    [CiRetry]
+    public async Task AdminCanRemoveUserFromTenantAsync()
+    {
+        await Users.AddUserToRoleAsync(AdminApiClient, _userToAddEmail, TestData.User2DisplayName,
+            TestData.UserRoleName, TestData.DefaultTemplateName);
+
+        var userManager = new UserManager(Page);
+        var dashboardPage = new DashboardPage(Page);
+
+        await LoginAsync("admin");
+        await userManager.GoToAsync();
+
+        await userManager.RemoveUserFromTenantAsync(_userToAddEmail);
+
+        await AuthenticateAsync("user2");
+        await dashboardPage.GoToAsync();
+
+        await new ErrorPage(Page).ExpectInvalidOrExpiredTokensAsync();
+    }
+
+    [OneTimeTearDown]
+    public async Task RemoveUserFromTenantAsync()
+    {
+        await Users.RemoveUserFromTenantAsync(AdminApiClient, _userToAddEmail);
+    }
+}

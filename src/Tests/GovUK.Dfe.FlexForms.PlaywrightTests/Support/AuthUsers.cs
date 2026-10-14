@@ -2,7 +2,7 @@ namespace GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 
 public static class AuthUsers
 {
-    public static readonly IReadOnlyList<string> Names = ["default", "admin", "caseworker"];
+    public static readonly IReadOnlyList<string> Names = ["default", "admin", "caseworker", "user2"];
 
     private static readonly IReadOnlyDictionary<string, (string EmailVariable, string ApiKeyVariable)> EnvironmentVariables =
         new Dictionary<string, (string, string)>
@@ -10,6 +10,7 @@ public static class AuthUsers
             ["default"] = ("DEFAULT_USER_EMAIL", "DEFAULT_USER_API_KEY"),
             ["admin"] = ("ADMIN_EMAIL", "ADMIN_API_KEY"),
             ["caseworker"] = ("CASEWORKER_EMAIL", "CASEWORKER_API_KEY"),
+            ["user2"] = ("USER2_EMAIL", "USER2_API_KEY"),
         };
 
     public static AuthUser GetDefaultAuthUser() => LoadAuthUser("default");

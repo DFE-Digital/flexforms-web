@@ -63,6 +63,25 @@ public abstract class PlaywrightTestBase : PageTest
         await AdminApiClient.DisposeAsync();
     }
 
+    /// <summary>
+    /// Headed UI when <c>PW_HEADED=1</c> (or <c>true</c>) is set in the environment / .env.
+    /// Optional <c>PW_SLOW_MO</c> milliseconds slows actions for debugging.
+    /// </summary>
+    public override Task<BrowserTypeLaunchOptions?> LaunchOptionsAsync()
+    {
+        var options = new BrowserTypeLaunchOptions
+        {
+            Headless = !IsHeadedModeEnabled(),
+        };
+
+        if (int.TryParse(TestEnvironment.OptionalEnvironmentVariable("PW_SLOW_MO"), out var slowMo) && slowMo > 0)
+        {
+            options.SlowMo = slowMo;
+        }
+
+        return Task.FromResult<BrowserTypeLaunchOptions?>(options);
+    }
+
     public override BrowserNewContextOptions ContextOptions()
     {
         _artifactsDirectory = CurrentTestArtifactsDirectory();
@@ -132,7 +151,8 @@ public abstract class PlaywrightTestBase : PageTest
         {
             try
             {
-                await Page.ScreenshotAsync(new PageScreenshotOptions { Path = Path.Combine(_artifactsDirectory, "screenshot.png") });
+                await Page.ScreenshotAsync(new PageScreenshotOptions
+                { Path = Path.Combine(_artifactsDirectory, "screenshot.png") });
             }
             catch
             {
@@ -163,6 +183,14 @@ public abstract class PlaywrightTestBase : PageTest
     }
 
     protected Task LoginAsync(string? userName = null) => Login.LoginAsync(Page, userName);
+
+    protected Task AuthenticateAsync(string? userName = null) => Login.AuthenticateAsync(Page, userName);
+
+    private static bool IsHeadedModeEnabled()
+    {
+        var headed = TestEnvironment.OptionalEnvironmentVariable("PW_HEADED");
+        return headed is "1" or "true" or "TRUE";
+    }
 
     private static string CurrentTestArtifactsDirectory()
     {

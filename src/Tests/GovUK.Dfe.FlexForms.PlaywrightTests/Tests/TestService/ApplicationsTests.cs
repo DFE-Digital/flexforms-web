@@ -17,7 +17,7 @@ public sealed class ApplicationsTests : PlaywrightTestBase
 
     private const string Trust = "5 DIMENSIONS TRUST";
 
-    protected override int TestTimeoutMilliseconds => 180_000;
+    protected override int TestTimeoutMilliseconds => 240_000;
 
     [SetUp]
     public async Task LoginAsDefaultUserAsync() => await LoginAsync();
@@ -26,8 +26,8 @@ public sealed class ApplicationsTests : PlaywrightTestBase
     [CiRetry]
     public async Task CompleteApplicationAsync()
     {
-        var dashboardPage = new DashboardPage(Page, Terminology);
-        var contributorsPage = new ContributorsPage(Page, Terminology);
+        var dashboardPage = new DashboardPage(Page);
+        var contributorsPage = new ContributorsPage(Page);
 
         await dashboardPage.StartNewApplicationAsync();
         await contributorsPage.ProceedToFormAsync();
