@@ -25,6 +25,7 @@ jobs:
   playwright-tests:
     name: Playwright
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     environment: ${{ inputs.environment }}
     defaults:
       run:
@@ -36,7 +37,7 @@ jobs:
       API_BASE_URL: ${{ vars.PL_API_BASE_URL }}
       SERVICE: TestService
       TENANT_ID: 99999999-9999-1999-2999-999999999999
-      TEMPLATE_ID: 22BC3831-734E-4F17-87AE-7993520039CE
+      TEMPLATE_ID: ${{ vars.PL_TEMPLATE_ID }}
       TERMINOLOGY_SINGULAR: Application
       TERMINOLOGY_PLURAL: Applications
       INTERNAL_AUTH_TOKEN_LIFETIME_MINUTES: 60
