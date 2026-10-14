@@ -196,18 +196,40 @@
                         <div class="govuk-grid-column-one-half">
                             <h3 class="govuk-heading-s">Current</h3>
                             <label class="govuk-visually-hidden" for="validation-current">Current setting value</label>
-                            <textarea class="govuk-textarea"
+                            <textarea class="govuk-textarea @(Model.ValidationIsSecret ? "tenant-setting-value--masked" : "")"
                                       id="validation-current"
                                       rows="8"
                                       readonly>@(Model.ValidationPreview.CurrentSettingsJson ?? "(none — new setting)")</textarea>
+                            @if (Model.ValidationIsSecret)
+                            {
+                                <button type="button"
+                                        class="govuk-button govuk-button--secondary govuk-!-margin-top-1 govuk-!-margin-bottom-0 js-toggle-setting-value"
+                                        data-target="validation-current"
+                                        aria-controls="validation-current"
+                                        aria-pressed="false"
+                                        data-module="govuk-button">
+                                    Show value
+                                </button>
+                            }
                         </div>
                         <div class="govuk-grid-column-one-half">
                             <h3 class="govuk-heading-s">Proposed</h3>
                             <label class="govuk-visually-hidden" for="validation-proposed">Proposed setting value</label>
-                            <textarea class="govuk-textarea"
+                            <textarea class="govuk-textarea @(Model.ValidationIsSecret ? "tenant-setting-value--masked" : "")"
                                       id="validation-proposed"
                                       rows="8"
                                       readonly>@Model.ValidationPreview.ProposedSettingsJson</textarea>
+                            @if (Model.ValidationIsSecret)
+                            {
+                                <button type="button"
+                                        class="govuk-button govuk-button--secondary govuk-!-margin-top-1 govuk-!-margin-bottom-0 js-toggle-setting-value"
+                                        data-target="validation-proposed"
+                                        aria-controls="validation-proposed"
+                                        aria-pressed="false"
+                                        data-module="govuk-button">
+                                    Show value
+                                </button>
+                            }
                         </div>
                     </div>
                     @if (Model.ValidationPreview.IsValid)
@@ -263,18 +285,21 @@
                         <p class="govuk-body">@entry.Description</p>
                         <p class="govuk-body">Targets: @string.Join(", ", entry.TypicalTargets)</p>
                         <label class="govuk-visually-hidden" for="cookbook-@entry.Category.Replace(" ", "-")">Example JSON for @entry.Category</label>
-                        <textarea class="govuk-textarea tenant-setting-value"
+                        <textarea class="govuk-textarea tenant-setting-value @(entry.IsSecretCategory ? "tenant-setting-value--masked" : "")"
                                   id="cookbook-@entry.Category.Replace(" ", "-")"
                                   rows="4"
-                                  readonly
-                                  data-secret-masked="true"
-                                  style="-webkit-text-security: disc; text-security: disc;">@entry.ExampleJson</textarea>
-                        <button type="button"
-                                class="govuk-button govuk-button--secondary govuk-!-margin-top-1 govuk-!-margin-bottom-2 js-toggle-setting-value"
-                                data-target="cookbook-@entry.Category.Replace(" ", "-")"
-                                data-module="govuk-button">
-                            Show value
-                        </button>
+                                  readonly>@entry.ExampleJson</textarea>
+                        @if (entry.IsSecretCategory)
+                        {
+                            <button type="button"
+                                    class="govuk-button govuk-button--secondary govuk-!-margin-top-1 govuk-!-margin-bottom-2 js-toggle-setting-value"
+                                    data-target="cookbook-@entry.Category.Replace(" ", "-")"
+                                    aria-controls="cookbook-@entry.Category.Replace(" ", "-")"
+                                    aria-pressed="false"
+                                    data-module="govuk-button">
+                                Show value
+                            </button>
+                        }
                         <p class="govuk-body">
                             <button type="button"
                                     class="govuk-button govuk-button--secondary govuk-!-margin-bottom-2 js-use-cookbook-example"
@@ -338,10 +363,23 @@
 
                                     <div class="govuk-form-group govuk-!-margin-bottom-2">
                                         <label class="govuk-visually-hidden" for="value-@rowId">Value for @setting.Category</label>
-                                        <textarea class="govuk-textarea"
+                                        <textarea class="govuk-textarea @(setting.IsSecret ? "tenant-setting-value--masked" : "")"
                                                   id="value-@rowId"
                                                   name="settingsJson"
-                                                  rows="4">@setting.SettingsJson</textarea>
+                                                  rows="4"
+                                                  spellcheck="false"
+                                                  autocomplete="off">@setting.SettingsJson</textarea>
+                                        @if (setting.IsSecret)
+                                        {
+                                            <button type="button"
+                                                    class="govuk-button govuk-button--secondary govuk-!-margin-top-1 govuk-!-margin-bottom-0 js-toggle-setting-value"
+                                                    data-target="value-@rowId"
+                                                    aria-controls="value-@rowId"
+                                                    aria-pressed="false"
+                                                    data-module="govuk-button">
+                                                Show value
+                                            </button>
+                                        }
                                         @if (setting.IsSecret && !Model.CanViewPlaintextSecrets)
                                         {
                                             <p class="govuk-hint govuk-!-margin-top-1">
@@ -416,10 +454,21 @@
                                 {
                                     <p class="govuk-hint">SuperAdmin only — this category cannot be edited by tenant Admin.</p>
                                     <label class="govuk-visually-hidden" for="readonly-@rowId">Value for @setting.Category</label>
-                                    <textarea class="govuk-textarea"
+                                    <textarea class="govuk-textarea @(setting.IsSecret ? "tenant-setting-value--masked" : "")"
                                               id="readonly-@rowId"
                                               rows="4"
                                               readonly>@setting.SettingsJson</textarea>
+                                    @if (setting.IsSecret)
+                                    {
+                                        <button type="button"
+                                                class="govuk-button govuk-button--secondary govuk-!-margin-top-1 govuk-!-margin-bottom-0 js-toggle-setting-value"
+                                                data-target="readonly-@rowId"
+                                                aria-controls="readonly-@rowId"
+                                                aria-pressed="false"
+                                                data-module="govuk-button">
+                                            Show value
+                                        </button>
+                                    }
                                     @if (setting.IsSecret && !Model.CanViewPlaintextSecrets)
                                     {
                                         <p class="govuk-hint govuk-!-margin-top-1">
@@ -454,10 +503,21 @@
 
             <div class="govuk-form-group">
                 <label class="govuk-label" asp-for="NewSettingsJson">Settings JSON</label>
-                <textarea class="govuk-textarea tenant-setting-value"
+                <textarea class="govuk-textarea tenant-setting-value @(Model.NewIsSecret ? "tenant-setting-value--masked" : "")"
                           asp-for="NewSettingsJson"
                           id="NewSettingsJson"
-                          rows="6"></textarea>
+                          rows="6"
+                          spellcheck="false"
+                          autocomplete="off"></textarea>
+                <button type="button"
+                        class="govuk-button govuk-button--secondary govuk-!-margin-top-1 govuk-!-margin-bottom-0 js-toggle-setting-value"
+                        data-target="NewSettingsJson"
+                        aria-controls="NewSettingsJson"
+                        aria-pressed="false"
+                        data-module="govuk-button"
+                        @(Model.NewIsSecret ? null : "hidden")>
+                    Show value
+                </button>
             </div>
 
             <div class="govuk-form-group">
@@ -546,7 +606,53 @@
     </div>
 </div>
 
+<style>
+    .tenant-setting-value--masked {
+        -webkit-text-security: disc;
+        text-security: disc;
+    }
+
+    @@supports not (-webkit-text-security: disc) {
+        .tenant-setting-value--masked {
+            filter: blur(5px);
+        }
+    }
+</style>
+
 <script nonce="@ViewContext.HttpContext.GetNonce()">
+    var MASKED_CLASS = 'tenant-setting-value--masked';
+
+    function setMasked(textarea, button, masked) {
+        textarea.classList.toggle(MASKED_CLASS, masked);
+        if (button) {
+            button.textContent = masked ? 'Show value' : 'Hide value';
+            button.setAttribute('aria-pressed', masked ? 'false' : 'true');
+        }
+    }
+
+    document.querySelectorAll('.js-toggle-setting-value').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var textarea = document.getElementById(button.getAttribute('data-target'));
+            if (!textarea) return;
+            setMasked(textarea, button, !textarea.classList.contains(MASKED_CLASS));
+        });
+    });
+
+    var newIsSecretInput = document.getElementById('NewIsSecret');
+    var newSettingsJsonInput = document.getElementById('NewSettingsJson');
+    var newSettingsJsonToggle = document.querySelector('.js-toggle-setting-value[data-target="NewSettingsJson"]');
+
+    function syncNewSettingMask() {
+        if (!newIsSecretInput || !newSettingsJsonInput) return;
+        var secret = newIsSecretInput.checked;
+        setMasked(newSettingsJsonInput, newSettingsJsonToggle, secret);
+        if (newSettingsJsonToggle) newSettingsJsonToggle.hidden = !secret;
+    }
+
+    if (newIsSecretInput) {
+        newIsSecretInput.addEventListener('change', syncNewSettingMask);
+    }
+
     document.querySelectorAll('.js-use-cookbook-example').forEach(function (button) {
         button.addEventListener('click', function () {
             var category = button.getAttribute('data-category') || '';
@@ -563,6 +669,7 @@
             if (targetInput) targetInput.value = target;
             if (jsonInput) jsonInput.value = json;
             if (secretInput) secretInput.checked = secret;
+            syncNewSettingMask();
 
             document.getElementById('add-setting-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
