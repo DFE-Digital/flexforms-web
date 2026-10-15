@@ -1928,6 +1928,7 @@ Use this when the third-party API expects a static key in an `ApiKey` HTTP heade
 | `ApiEndpoint` | Yes | HTTP GET URL. Put `{0}` where the user’s search text should go. If there is no `{0}`, FlexForms appends `?q=` (or `&q=` if a query string already exists). |
 | `ApiKey` | For this auth type | Sent as header `ApiKey`. |
 | `MinLength` | No | Characters before search runs (default `3`). |
+| `SearchDelayMs` | No | Pause in milliseconds after the user stops typing before the search request is sent (default `400`). See [How the search box behaves](#how-the-search-box-behaves). |
 | `Placeholder` | No | Grey text in the search box. |
 | `AllowMultiple` | No | `true` to let the user pick more than one result. |
 | `MaxSelections` | No | `0` means no limit when multiple is allowed. |
@@ -1981,6 +1982,40 @@ Certificate / managed-identity login for the search API is not supported here. I
 | Extra query flags | You may add them on the URL. `IncludeOnlyAcademies` is stripped before the HTTP call and used only for establishment filtering. |
 
 The search response must be a JSON **array**, or an object with `data`, `results`, `items`, or `values` as an array.
+
+#### How the search box behaves
+
+FlexForms does not call the API on every keystroke. While the user types:
+
+1. Nothing is sent until the box holds at least `MinLength` characters.
+2. Each keystroke restarts a short timer (`SearchDelayMs`, default `400` ms). The request is sent only once the user pauses for that long, so typing `academy` quickly sends one search for `academy`, not separate searches for `aca`, `acad`, `acade`, and so on.
+3. If the user types again while a search is still running, that search is cancelled and a new one starts after the pause.
+4. Only the most recent search can fill the dropdown. A slow response for an older, shorter query is ignored, so it can never replace the results for what is currently in the box.
+5. A small spinner appears inside the right edge of the search box while a request is in flight. Screen readers hear “Searching”.
+6. Choosing a result, or deleting text below `MinLength`, cancels any pending search and hides the spinner.
+
+Tuning `SearchDelayMs`:
+
+| Value | Effect |
+|-------|--------|
+| `400` (default) | Good balance for most APIs |
+| Higher (`600`–`1000`) | Fewer API calls; use for slow or rate-limited APIs. Results appear a little later after the user stops typing |
+| Lower (`150`–`300`) | Feels more instant; more calls to the API |
+| `0` | No pause. Searches still cancel each other, so results stay correct, but the API is called for nearly every keystroke |
+
+```json
+{
+  "Id": "TrustComplexField",
+  "FieldType": "autocomplete",
+  "ApiEndpoint": "https://example.test/v4/trusts?search={0}",
+  "ApiKey": "your-api-key",
+  "MinLength": 3,
+  "SearchDelayMs": 600,
+  "Label": "Trust"
+}
+```
+
+`SearchDelayMs` is set here only. It cannot be overridden in the template.
 
 FlexForms copies string, number, and boolean properties from each result (and a nested `name` where present). Arrays such as `roles` are ignored. A display `name` is still set from the first of: `name`, `title`, `label`, `value`, `displayName`, `groupName`, `text`.
 
@@ -2063,6 +2098,9 @@ If both the template and this config set `DropdownDisplay` / `ConfirmationDispla
 | Summary ignores confirmation text | Set `SummaryDisplay` separately — `ConfirmationDisplay` is not used on summary pages |
 | Old trust search still works, new search does not | You replaced the whole `ComplexFields` array instead of appending; restore the previous ids |
 | Changes not visible | **Refresh settings**, then hard-refresh the form (or clear sessions/caches) |
+| Results feel slow to appear after typing stops | `SearchDelayMs` is high, or the API itself is slow (spinner stays visible). Lower `SearchDelayMs` or check API response times |
+| API rate-limited / too many calls | Raise `SearchDelayMs` (for example `800`) |
+| Spinner never disappears | The API is not responding; check Web logs for timeouts on the `complexField` handler |
 
 ### 14.9 Reporting export (what is sent to reporting)
 

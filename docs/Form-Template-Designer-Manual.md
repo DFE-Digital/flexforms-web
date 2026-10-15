@@ -619,6 +619,17 @@ If you omit `dropdownDisplay` / `confirmationDisplay` / `summaryDisplay` here, F
 
 `confirmationDisplay` only affects the “Is this the right …?” page. Use `summaryDisplay` for check-your-answers and collection summaries — they are independent.
 
+#### How the search box behaves
+
+You don't configure any of this in the template; it is the same for every search question.
+
+- No search runs until the user has typed the FormEngine `MinLength` (usually 3 characters).
+- The search waits for a short pause in typing (FormEngine `SearchDelayMs`, default 400 ms), so typing quickly sends one request for the whole text rather than one per character.
+- If the user keeps typing, any search already running is cancelled. Only the latest search can fill the dropdown, so a slow response for an earlier, shorter query never replaces the current results.
+- A spinner shows inside the search box while results load (announced as “Searching” to screen readers).
+
+To change the pause for a particular search, ask a tenant Admin to set `SearchDelayMs` on its FormEngine entry ([Tenant Admin User Manual — How the search box behaves](Tenant-Admin-User-Manual.md#how-the-search-box-behaves)).
+
 #### Display expression syntax
 
 Two equivalent styles. Property names must match the JSON from the search API (case-insensitive).
