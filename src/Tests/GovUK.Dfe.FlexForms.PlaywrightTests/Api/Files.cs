@@ -37,6 +37,11 @@ public static class Files
     public static async Task ValidateValidFileForApplicationAsync(IAPIRequestContext request, IPage page)
     {
         var applicationRef = ApplicationReferenceFromUrl(page.Url);
+        await ValidateValidFile(request, applicationRef);
+    }
+
+    public static async Task ValidateValidFile(IAPIRequestContext request, string applicationRef)
+    {
         var application = await ApplicationApi.GetApplicationByRefAsync(request, applicationRef);
         var files = await ApplicationApi.GetFilesAsync(request, application.ApplicationId);
         var fileId = files.FirstOrDefault()?.Id;
@@ -46,6 +51,7 @@ public static class Files
             throw new InvalidOperationException($"No files found for application {applicationRef}");
         }
 
-        await ValidationResultAsync(request, new FileValidationRequest(true, "File is valid", null, "test-source"), fileId);
+        await ValidationResultAsync(request, new FileValidationRequest(true, "File is valid", null, "test-source"),
+            fileId);
     }
 }

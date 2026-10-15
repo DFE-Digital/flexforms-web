@@ -70,14 +70,13 @@ public abstract class FormPage(IPage page)
         await AutocompleteConfirmButton().ClickAsync();
     }
 
-    protected async Task UploadFileAsync(string fieldId, string? filePath = null)
+    protected async Task<string> UploadFileAsync(string fieldId, string? filePath = null)
     {
         filePath ??= UploadFixture;
 
-        // each upload needs a unique name
         var extension = Path.GetExtension(filePath);
         var baseName = Path.GetFileNameWithoutExtension(filePath);
-        var fileName = $"{baseName}-{fieldId}{extension}";
+        var fileName = $"{baseName}-{fieldId}-{Guid.NewGuid():N}{extension}";
 
         await UploadFileInput(fieldId).SetInputFilesAsync(new FilePayload
         {
@@ -89,6 +88,7 @@ public abstract class FormPage(IPage page)
         await Assertions.Expect(DownloadLink(fileName))
             .ToContainTextAsync(fileName, new LocatorAssertionsToContainTextOptions { Timeout = 15_000 });
         await SubmitFieldButton(fieldId).ClickAsync();
+        return fileName;
     }
 
     protected async Task EnterDateAsync(string prefix, string day, string month, string year)

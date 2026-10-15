@@ -6,7 +6,10 @@ public sealed record ConfiguredFieldsData(string Academy, string LocalAuthority,
 
 public sealed class ConfiguredFieldsTask(IPage page) : TaskPage(page)
 {
+    public const string UploadPage = "document-upload-page";
     protected override string TaskItem => "group-configured-fields-task-complete-configured-fields";
+
+    protected override string TaskId => "configured-fields";
 
     public async Task CompleteAsync(ConfiguredFieldsData data)
     {
@@ -25,4 +28,7 @@ public sealed class ConfiguredFieldsTask(IPage page) : TaskPage(page)
         await UploadFileAsync("supportingDocuments");
         await MarkCompleteAndSaveAsync();
     }
+
+    public async Task<string> UploadSupportingDocumentAsync() =>
+        await UploadFileAsync("supportingDocuments");
 }
