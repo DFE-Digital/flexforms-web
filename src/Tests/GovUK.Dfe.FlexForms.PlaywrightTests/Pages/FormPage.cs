@@ -57,15 +57,7 @@ public abstract class FormPage(IPage page)
         await Assertions.Expect(input).ToHaveClassAsync(new Regex("govuk-input"));
         await input.ClickAsync();
 
-        // The field fires one request per input event with no debounce and no stale-response
-        // guard, so typing character by character lets an earlier reply repopulate the menu
-        // last. Filling in one go issues a single request for the complete query.
-        var resultsTask = Page.WaitForResponseAsync(response =>
-            response.Url.Contains("handler=complexField") &&
-            response.Url.Contains($"query={Uri.EscapeDataString(searchText)}"));
-        await input.FillAsync(searchText);
-        await resultsTask;
-
+        await input.PressSequentiallyAsync(searchText);
         await AutocompleteOption(inputId, optionText).ClickAsync();
         await AutocompleteConfirmButton().ClickAsync();
     }
