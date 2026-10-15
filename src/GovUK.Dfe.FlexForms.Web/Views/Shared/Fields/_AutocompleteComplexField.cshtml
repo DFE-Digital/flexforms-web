@@ -230,6 +230,7 @@ else
                  class="complex-field-search-container govuk-!-margin-bottom-15"
                  data-complex-field-id="@complexFieldId"
                  data-min-length="@configuration.MinLength"
+                 data-search-delay="@configuration.SearchDelayMs"
                  data-allow-multiple="@configuration.AllowMultiple.ToString().ToLower()"
                  data-max-selections="@configuration.MaxSelections"
                  data-target-input="@Model.Id"
@@ -239,6 +240,10 @@ else
                  data-input-id="@inputId"
                  data-label-id="@labelId"
                  data-describedby="@describedBy">
+            </div>
+            <div class="complex-field-loader" role="status" aria-live="polite" hidden>
+                <span class="complex-field-loader-spinner" aria-hidden="true"></span>
+                <span class="govuk-visually-hidden">Searching</span>
             </div>
             
             <div id="@hintId" class="govuk-visually-hidden">
@@ -273,6 +278,33 @@ else
 <style>
     .complex-field-container {
         position: relative;
+    }
+
+    .complex-field-loader {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        z-index: 101;
+    }
+
+    .complex-field-loader[hidden] {
+        display: none;
+    }
+
+    .complex-field-loader-spinner {
+        display: block;
+        box-sizing: border-box;
+        width: 24px;
+        height: 24px;
+        border: 4px solid #dee0e2;
+        border-top-color: #1d70b8;
+        border-radius: 50%;
+        animation: complex-field-spin 1s linear infinite;
+    }
+
+    @@keyframes complex-field-spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
     }
     
     /* Selected items styling - GovUK Inset Text */
@@ -488,8 +520,29 @@ document.addEventListener('DOMContentLoaded', function() {
         const placeholder = complexFieldContainer.dataset.placeholder;
         const dropdownDisplay = (complexFieldContainer.dataset.dropdownDisplay || '').trim();
         const maxSelections = parseInt(complexFieldContainer.dataset.maxSelections) || 0;
+        const parsedSearchDelay = parseInt(complexFieldContainer.dataset.searchDelay);
+        const searchDelay = isNaN(parsedSearchDelay) ? 400 : Math.max(0, parsedSearchDelay);
+        const loaderEl = container.querySelector('.complex-field-loader');
         let lastConfirmedText = '';
         let suppressMenuUntilUserInput = false;
+        let searchTimeout = undefined;
+        let searchController = undefined;
+        // Responses can arrive out of order; only the latest request may populate results.
+        let searchSequence = 0;
+
+        function showLoader() { if (loaderEl) loaderEl.hidden = false; }
+        function hideLoader() { if (loaderEl) loaderEl.hidden = true; }
+
+        function cancelPendingSearch() {
+            clearTimeout(searchTimeout);
+            searchTimeout = undefined;
+            if (searchController) {
+                searchController.abort();
+                searchController = undefined;
+            }
+            searchSequence++;
+            hideLoader();
+        }
         
         console.log('Initializing autocomplete complex field for container element:', complexFieldContainer);
         console.log('Complex Field ID:', complexFieldId);
@@ -684,6 +737,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         console.log('Source called with query:', query);
                         console.log('Query length:', query.length, 'Min length:', minLength);
                         
+                        cancelPendingSearch();
+
                         // If query is empty or too short, don't show any results
                         if (!query || query.length < minLength) {
                             console.log('Query too short, returning empty results');
@@ -726,43 +781,58 @@ document.addEventListener('DOMContentLoaded', function() {
 
                         // Use the complex field ID for the API call
                         var requestUrl = window.location.pathname + '?handler=complexField&complexFieldId=' + encodeURIComponent(complexFieldId) + '&query=' + encodeURIComponent(query);
-                        console.log('Making API call to:', requestUrl);
-                        
-                        // Make API call to the endpoint
-                        fetch(requestUrl)
-                            .then(response => {
-                                console.log('API response status:', response.status);
-                                console.log('API response ok:', response.ok);
-                                return response.json();
-                            })
-                            .then(data => {
-                                console.log('Raw API response:', data);
-                                // The service now returns a simple array of objects or strings
-                                var results = Array.isArray(data) ? data : [];
-                                console.log('Results before filtering:', results);
-                                // Filter out empty values
-                                results = results.filter(function(item) {
-                                    if (typeof item === 'object' && item !== null) {
-                                        var label = getResultLabel(item);
-                                        return label && label.trim() !== '';
-                                    }
-                                    return item && item.toString().trim() !== '';
+                        const requestId = searchSequence;
+
+                        searchTimeout = setTimeout(function() {
+                            if (requestId !== searchSequence) return;
+                            console.log('Making API call to:', requestUrl);
+                            searchController = new AbortController();
+                            showLoader();
+
+                            fetch(requestUrl, { signal: searchController.signal })
+                                .then(response => {
+                                    console.log('API response status:', response.status);
+                                    console.log('API response ok:', response.ok);
+                                    return response.json();
+                                })
+                                .then(data => {
+                                    if (requestId !== searchSequence) return;
+                                    console.log('Raw API response:', data);
+                                    // The service now returns a simple array of objects or strings
+                                    var results = Array.isArray(data) ? data : [];
+                                    console.log('Results before filtering:', results);
+                                    // Filter out empty values
+                                    results = results.filter(function(item) {
+                                        if (typeof item === 'object' && item !== null) {
+                                            var label = getResultLabel(item);
+                                            return label && label.trim() !== '';
+                                        }
+                                        return item && item.toString().trim() !== '';
+                                    });
+                                    console.log('Final filtered results:', results);
+
+                                    // Cache the full results with all properties
+                                    cachedResults = results;
+                                    console.log('Cached', cachedResults.length, 'full result objects');
+
+                                    populateResults(results);
+                                })
+                                .catch(error => {
+                                    if (error && error.name === 'AbortError') return;
+                                    if (requestId !== searchSequence) return;
+                                    console.error('Complex field API error:', error);
+                                    populateResults([]);
+                                })
+                                .finally(() => {
+                                    if (requestId !== searchSequence) return;
+                                    searchController = undefined;
+                                    hideLoader();
                                 });
-                                console.log('Final filtered results:', results);
-                                
-                                // Cache the full results with all properties
-                                cachedResults = results;
-                                console.log('Cached', cachedResults.length, 'full result objects');
-                                
-                                populateResults(results);
-                            })
-                            .catch(error => {
-                                console.error('Complex field API error:', error);
-                                populateResults([]);
-                            });
+                        }, searchDelay);
                     },
                     minLength: minLength,
                     onConfirm: function(option) {
+                        cancelPendingSearch();
                         console.log('OnConfirm function triggered!');
                         console.log('Option confirmed:', option);
                         console.log('Option type:', typeof option);

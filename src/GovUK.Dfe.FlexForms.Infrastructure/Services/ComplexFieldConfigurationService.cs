@@ -15,7 +15,7 @@ public sealed class ComplexFieldConfigurationService(
     private static readonly string[] KnownConfigurationKeys =
     [
         "ApiEndpoint", "ApiKey", "AuthType", "TokenEndpoint", "ClientId", "ClientSecret", "Scope",
-        "FieldType", "AllowMultiple", "MinLength", "Placeholder", "MaxSelections", "Label",
+        "FieldType", "AllowMultiple", "MinLength", "SearchDelayMs", "Placeholder", "MaxSelections", "Label",
         "DropdownDisplay", "ConfirmationDisplay", "SummaryDisplay"
     ];
 
@@ -71,6 +71,7 @@ public sealed class ComplexFieldConfigurationService(
             FieldType = configSection["FieldType"] ?? string.Empty,
             AllowMultiple = bool.TryParse(configSection["AllowMultiple"], out var allowMultiple) && allowMultiple,
             MinLength = int.TryParse(configSection["MinLength"], out var minLength) ? minLength : 3,
+            SearchDelayMs = int.TryParse(configSection["SearchDelayMs"], out var searchDelayMs) ? searchDelayMs : 400,
             Placeholder = configSection["Placeholder"] ?? "Start typing to search...",
             MaxSelections = int.TryParse(configSection["MaxSelections"], out var maxSelections) ? maxSelections : 0,
             Label = configSection["Label"] ?? "Item"

@@ -18,6 +18,10 @@ namespace GovUK.Dfe.FlexForms.Domain.Models
         public string FieldType { get; set; } = "autocomplete"; // autocomplete, composite, etc.
         public bool AllowMultiple { get; set; } = false;
         public int MinLength { get; set; } = 3;
+        /// <summary>
+        /// Pause (ms) after the user stops typing before the search request is sent.
+        /// </summary>
+        public int SearchDelayMs { get; set; } = 400;
         public string Placeholder { get; set; } = "Start typing to search...";
         public int MaxSelections { get; set; } = 0; // 0 means no limit
         public string Label { get; set; } = "Item"; // Default label for the field
