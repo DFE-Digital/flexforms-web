@@ -16,17 +16,17 @@
             .GetConfiguration(f.ComplexField.Id)
             .FieldType.Equals("upload", StringComparison.OrdinalIgnoreCase));
 
-    string typeOfFirstField = Model.CurrentPage.Fields[0].Type;
-    bool hideFieldLabel = Model.Template.HideFieldLabelWhenOnlyOneField
-                            && Model.CurrentPage.Fields.Count == 1
-                            && typeOfFirstField != "complexField";
-
     bool hasAutocompleteField = Model.CurrentPage.Fields.Any(f =>
         f.Type == "complexField" &&
         f.ComplexField != null &&
         ComplexFieldConfigurationService
             .GetConfiguration(f.ComplexField.Id)
             .FieldType.Equals("autocomplete", StringComparison.OrdinalIgnoreCase));
+
+    string typeOfFirstField = Model.CurrentPage.Fields[0].Type;
+    bool hideFieldLabel = Model.Template.HideFieldLabelWhenOnlyOneField
+                            && Model.CurrentPage.Fields.Count == 1
+                            && (typeOfFirstField != "complexField" || hasAutocompleteField);
 }
 
 <form method="post" id="form_@Model.CurrentPageId"

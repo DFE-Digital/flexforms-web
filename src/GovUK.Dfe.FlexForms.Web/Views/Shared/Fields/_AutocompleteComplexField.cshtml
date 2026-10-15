@@ -32,6 +32,9 @@
         ? label
         : (!string.IsNullOrWhiteSpace(configuration.Label) ? configuration.Label : "Search");
     var effectiveLabelClasses = string.IsNullOrWhiteSpace(label) ? "govuk-visually-hidden" : labelClasses;
+    const string pageTitleElementId = "page-title";
+    var labelIsVisuallyHidden = effectiveLabelClasses.Contains("govuk-visually-hidden", StringComparison.Ordinal);
+    var ariaLabelledById = labelIsVisuallyHidden ? pageTitleElementId : labelId;
     
     // Helper function to format display value
     string FormatDisplayValue(object value)
@@ -238,7 +241,8 @@ else
                  data-placeholder="@configuration.Placeholder"
                  data-dropdown-display="@dropdownDisplay"
                  data-input-id="@inputId"
-                 data-label-id="@labelId"
+                 data-label-id="@ariaLabelledById"
+                 data-fallback-label-id="@labelId"
                  data-describedby="@describedBy">
             </div>
             <div class="complex-field-loader" role="status" aria-live="polite" hidden>
@@ -651,7 +655,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     const autocompleteInput = container.querySelector('.autocomplete__input');
                     const hintInput = container.querySelector('.autocomplete__hint');
                     const listbox = container.querySelector('.autocomplete__menu');
-                    const labelId = complexFieldContainer.dataset.labelId;
+                    const labelledById = complexFieldContainer.dataset.labelId;
+                    const fallbackLabelId = complexFieldContainer.dataset.fallbackLabelId;
                     const describedBy = complexFieldContainer.dataset.describedby || '';
 
                     // The library's predictive hint is a second <input> (tabindex=-1) with no label.
@@ -672,8 +677,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     autocompleteInput.id = inputId;
 
-                    if (labelId && document.getElementById(labelId)) {
-                        autocompleteInput.setAttribute('aria-labelledby', labelId);
+                    const accessibleNameId = (labelledById && document.getElementById(labelledById))
+                        ? labelledById
+                        : (fallbackLabelId && document.getElementById(fallbackLabelId) ? fallbackLabelId : null);
+                    if (accessibleNameId) {
+                        autocompleteInput.setAttribute('aria-labelledby', accessibleNameId);
+                        autocompleteInput.removeAttribute('aria-label');
                     }
 
                     const describedByIds = describedBy.split(/\s+/).filter(Boolean);
