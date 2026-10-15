@@ -16,7 +16,7 @@
 <govuk-input id="@Model.Id"
                 name="Data[@Model.Field.FieldId]"
                 value="@Model.CurrentValue"
-                type="inputType"
+                type="@inputType"
                 data-field-id="@Model.Field.FieldId" aria-describedby="@describedBy">
         <govuk-input-label class="@labelClasses">
                 @Model.Field.Label.Value
