@@ -447,18 +447,60 @@ People who **auto-register** (first sign-in) do **not** get every live form:
 | Live templates on the tenant | What the new user can open |
 |------------------------------|----------------------------|
 | None | Nothing — they stay signed in and see a message to ask an admin for form access |
-| Exactly one | That form, automatically |
-| More than one | Nothing (same message), unless a default template is configured (see below) |
+| Exactly one | That form, automatically (any default list is ignored) |
+| More than one | Every form in the tenant's **default templates list** that is live. If no list is set, or none of the listed forms are live: nothing (same message) |
 
 They must still be able to sign in without a form. After you grant forms in User Manager, they should get access on the next page load (or after signing out and back in).
 
-To auto-assign one form when several are live, a SuperAdmin sets Tenant Settings category **SelfRegistration** (Target **Shared**):
+#### Set the default templates for new users
+
+Use this when several forms are live and you want new users to start with some of them automatically, for example "everyone gets the main application form and the enquiry form, but not the pilot form".
+
+You can do this as a tenant **Admin** or **SuperAdmin**.
+
+1. Find the **Template ID** of each form you want new users to get. Open **Admin → Template Management → Template Manager**, choose the template and select **Open template**. The ID is shown in the summary (see [5.3 Template Manager](#53-template-manager)). It looks like `3f2b8c1e-5a4d-4e7b-9c0a-1d2e3f4a5b6c`.
+2. Check each form is **live** (`(Live)` in the template picker). Forms that are not live are skipped, even if they are on the list.
+3. Open **Admin → Tenant settings**.
+4. If a **SelfRegistration** setting with Target **Shared** already exists, edit it in **Existing settings**. Otherwise use **Add a setting** with:
+   - **Category:** `SelfRegistration`
+   - **Target:** `Shared`
+   - **Secret:** leave unticked
+   - **Settings JSON:** the list of template IDs, in quotes, separated by commas:
+
+   ```json
+   {
+     "DefaultTemplateIds": [
+       "3f2b8c1e-5a4d-4e7b-9c0a-1d2e3f4a5b6c",
+       "8a7d6c5b-4e3f-4a2b-9c1d-0e9f8a7b6c5d"
+     ]
+   }
+   ```
+
+5. Select **Validate / diff**. If an ID is mistyped you see an error naming its position, for example `DefaultTemplateIds[1] must be a non-empty GUID` (positions start at 0, so `[1]` is the second ID).
+6. Select **Apply add** or **Apply update**. The config cache refreshes automatically.
+
+The list applies to people who **sign in for the first time after you save it**. Existing users are not changed. Use User Manager or **Grant to all users** for them. The one exception is an existing user with the **User** role and no forms at all, who picks up the defaults the next time they sign in.
+
+**Things to know**
+
+- Order does not matter, and listing the same ID twice is harmless.
+- Making a listed form **not live** stops it being granted to new users. Making it live again starts granting it again. You do not need to edit the list.
+- To stop auto-granting forms, delete the `SelfRegistration` setting or set `"DefaultTemplateIds": []`.
+- The list only grants **read and write** access to those forms. It does not change the user's role.
+
+**Older single-form setting**
+
+Tenants set up before the list existed may have:
 
 ```json
-{ "DefaultTemplateId": "the-live-template-guid" }
+{ "DefaultTemplateId": "3f2b8c1e-5a4d-4e7b-9c0a-1d2e3f4a5b6c" }
 ```
 
-Web `ExternalApplicationsApiClient:DefaultTemplateId` is also used if present. The default must itself be **live**. Otherwise the user is created with no form access and you pick templates in User Manager.
+This still works and is combined with `DefaultTemplateIds` if you set both. For a new setup, use `DefaultTemplateIds`, even for a single form.
+
+A legacy `ExternalApplicationsApiClient:DefaultTemplateId` tenant setting is only used when neither `DefaultTemplateIds` nor `DefaultTemplateId` is set.
+
+> **Platform note:** if the web app's own configuration sets `ExternalApplicationsApiClient:DefaultTemplateId` (in app settings rather than in Tenant settings), it overrides this list. New users then get only that one form, and registration fails if it is not live. Ask the platform team to clear it if your list seems to be ignored.
 
 | Need | Use |
 |------|-----|
@@ -1654,6 +1696,7 @@ Prefer the dedicated screens first. If you must use this page, these categories 
 | **Layout** | Web | Service name in the header, phase banner text and links | This page (JSON) — there is no separate form |
 | **FileValidation** | Shared | Whether submit is blocked until a tenant function validates eligible files | This page (JSON) — see [14.7](#147-file-validation-tenant-function) |
 | **FormEngine** | Web | Search APIs behind autocomplete questions (endpoint, API key or client credentials, dropdown/confirmation labels) | This page (JSON) — see [14.8](#148-autocomplete-search-formengine-complex-fields) |
+| **SelfRegistration** | Shared | Which live forms new users get automatically when several forms are live (`DefaultTemplateIds`) | This page (JSON) — see [8.6](#86-grant-to-all-vs-user-manager) |
 
 **Layout** example (illustrative):
 
