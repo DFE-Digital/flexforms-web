@@ -107,7 +107,7 @@ public abstract class FormPage(IPage page)
 
     private ILocator AutocompleteConfirmButton() => ById("autocomplete-confirm-button");
 
-    private ILocator UploadFileInput(string fieldId) => ById($"upload-file-{fieldId}");
+    private ILocator UploadFileInput(string fieldId) => ById($"choose-file-{fieldId}");
 
     private ILocator SubmitUploadButton(string fieldId) => ById($"submit-upload-file-{fieldId}");
 
