@@ -188,12 +188,12 @@
                         @string.Join(", ", ViewData.ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage))
                     </govuk-error-message>
                 }
-                <label class="govuk-label" for="upload-file-@fieldId">
+                <label class="govuk-label" for="choose-file-@fieldId">
                     Choose a file
                 </label>
                 <input class="govuk-file-upload @(ViewData.ModelState.Any(x => x.Value.Errors.Count > 0) ? "govuk-file-upload--error" : "")"
-                       id="upload-file-@fieldId"
-                       name="UploadFile"
+                       id="choose-file-@fieldId"
+                       name="ChooseFile"
                        type="file"
                        required />
             </div>
