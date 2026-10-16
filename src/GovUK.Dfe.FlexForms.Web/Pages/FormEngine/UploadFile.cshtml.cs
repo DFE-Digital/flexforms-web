@@ -85,7 +85,7 @@ public class UploadFileModel(
 
         await applicationStateService.EnsureApplicationIdAsync(ReferenceNumber);
 
-        var file = Request.Form.Files["UploadFile"];
+        var file = Request.Form.Files["ChooseFile"];
         var hasFile = file is { Length: > 0 };
         await using var stream = hasFile ? file!.OpenReadStream() : Stream.Null;
 

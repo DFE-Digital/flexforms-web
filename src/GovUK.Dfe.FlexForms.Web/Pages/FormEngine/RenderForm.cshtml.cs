@@ -281,7 +281,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             if (!Guid.TryParse(applicationId, out var appId))
                 return NotFound();
 
-            var file = Request.Form.Files["UploadFile"];
+            var file = Request.Form.Files["ChooseFile"];
             var hasFile = file is { Length: > 0 };
             await using var stream = hasFile ? file!.OpenReadStream() : Stream.Null;
 

@@ -600,7 +600,7 @@ public class RenderFormModelCharacterizationTests
     private void SetUploadForm(string fileName)
     {
         var content = new MemoryStream([1, 2, 3]);
-        IFormFile file = new FormFile(content, 0, content.Length, "UploadFile", fileName)
+        IFormFile file = new FormFile(content, 0, content.Length, "ChooseFile", fileName)
         {
             Headers = new HeaderDictionary(),
             ContentType = "application/pdf"
