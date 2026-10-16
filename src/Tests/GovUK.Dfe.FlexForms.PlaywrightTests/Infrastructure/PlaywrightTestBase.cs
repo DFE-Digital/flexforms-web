@@ -1,9 +1,7 @@
-using System.Threading;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Api;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 using Microsoft.Playwright;
 using Microsoft.Playwright.NUnit;
-using NUnit.Framework;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Infrastructure;
 
@@ -43,6 +41,8 @@ public abstract class PlaywrightTestBase : PageTest
     /// a prompt PlaywrightException instead of a hang.
     /// </summary>
     protected virtual int TestTimeoutMilliseconds => 60_000;
+
+    protected virtual bool EnableSignalR => false;
 
     [OneTimeSetUp]
     public async Task PlaywrightTestBaseOneTimeSetUpAsync()
@@ -105,8 +105,12 @@ public abstract class PlaywrightTestBase : PageTest
     [SetUp]
     public async Task PlaywrightTestBaseSetUpAsync()
     {
-        // Skip SignalR when running under Cypress to avoid WebSocket proxy issues.
-        await Page.AddInitScriptAsync("window.Cypress = true");
+        if (!EnableSignalR)
+        {
+            // The application's Cypress flag skips SignalR to avoid WebSocket proxy issues.
+            await Page.AddInitScriptAsync("window.Cypress = true");
+        }
+
         await AuthenticationInterceptor.RegisterAuthenticationAsync(Context, ServiceConfig);
 
         Page.SetDefaultTimeout(10_000);
