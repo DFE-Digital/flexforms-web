@@ -11,6 +11,24 @@ public enum ApplicationStatus
     Deleted,
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter<NotificationType>))]
+public enum NotificationType
+{
+    Success,
+    Error,
+    Info,
+    Warning,
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter<NotificationPriority>))]
+public enum NotificationPriority
+{
+    Low,
+    Normal,
+    High,
+    Critical,
+}
+
 public sealed record CreateApplicationRequest(string TemplateId, string? InitialResponseBody);
 
 public sealed record CreateApplicationResponse(string ApplicationId, string ApplicationReference, string? Status);
@@ -74,3 +92,31 @@ public sealed record CreateUserRolePermission(
     string ResourceKey,
     string ResourceType,
     string AccessType);
+
+public sealed record AddNotificationRequest(
+    string Message,
+    NotificationType Type,
+    string? Category = null,
+    string? Context = null,
+    bool? AutoDismiss = null,
+    int? AutoDismissSeconds = null,
+    string? ActionUrl = null,
+    Dictionary<string, string>? Metadata = null,
+    NotificationPriority? Priority = null,
+    bool? ReplaceExistingContext = null,
+    Guid? UserId = null);
+
+public sealed record NotificationDto(
+    string Id,
+    string Message,
+    NotificationType Type,
+    string? Category,
+    string? Context,
+    bool IsRead,
+    DateTimeOffset CreatedAt,
+    bool AutoDismiss,
+    int? AutoDismissSeconds,
+    string? UserId,
+    string? ActionUrl,
+    Dictionary<string, string>? Metadata,
+    NotificationPriority Priority);

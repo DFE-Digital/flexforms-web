@@ -57,27 +57,18 @@ public abstract class FormPage(IPage page)
         await Assertions.Expect(input).ToHaveClassAsync(new Regex("govuk-input"));
         await input.ClickAsync();
 
-        // The field fires one request per input event with no debounce and no stale-response
-        // guard, so typing character by character lets an earlier reply repopulate the menu
-        // last. Filling in one go issues a single request for the complete query.
-        var resultsTask = Page.WaitForResponseAsync(response =>
-            response.Url.Contains("handler=complexField") &&
-            response.Url.Contains($"query={Uri.EscapeDataString(searchText)}"));
-        await input.FillAsync(searchText);
-        await resultsTask;
-
+        await input.PressSequentiallyAsync(searchText);
         await AutocompleteOption(inputId, optionText).ClickAsync();
         await AutocompleteConfirmButton().ClickAsync();
     }
 
-    protected async Task UploadFileAsync(string fieldId, string? filePath = null)
+    protected async Task<string> UploadFileAsync(string fieldId, string? filePath = null)
     {
         filePath ??= UploadFixture;
 
-        // each upload needs a unique name
         var extension = Path.GetExtension(filePath);
         var baseName = Path.GetFileNameWithoutExtension(filePath);
-        var fileName = $"{baseName}-{fieldId}{extension}";
+        var fileName = $"{baseName}-{fieldId}-{Guid.NewGuid():N}{extension}";
 
         await UploadFileInput(fieldId).SetInputFilesAsync(new FilePayload
         {
@@ -89,6 +80,7 @@ public abstract class FormPage(IPage page)
         await Assertions.Expect(DownloadLink(fileName))
             .ToContainTextAsync(fileName, new LocatorAssertionsToContainTextOptions { Timeout = 15_000 });
         await SubmitFieldButton(fieldId).ClickAsync();
+        return fileName;
     }
 
     protected async Task EnterDateAsync(string prefix, string day, string month, string year)
@@ -115,7 +107,7 @@ public abstract class FormPage(IPage page)
 
     private ILocator AutocompleteConfirmButton() => ById("autocomplete-confirm-button");
 
-    private ILocator UploadFileInput(string fieldId) => ById($"upload-file-{fieldId}");
+    private ILocator UploadFileInput(string fieldId) => ById($"choose-file-{fieldId}");
 
     private ILocator SubmitUploadButton(string fieldId) => ById($"submit-upload-file-{fieldId}");
 
