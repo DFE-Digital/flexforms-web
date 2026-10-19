@@ -1,9 +1,10 @@
 @model GovUK.Dfe.FlexForms.Web.ViewModels.FormEngine.SummaryFileLinkViewModel
+@using GovUK.Dfe.FlexForms.Web.Constants
 @if (Model.PageId != null)
 {
     <form method="post" asp-page="/FormEngine/RenderForm" asp-route-referenceNumber="@Model.ReferenceNumber" asp-route-taskId="@Model.TaskId" asp-route-pageId="@Model.PageId" asp-page-handler="DownloadFile" style="display:inline">
-        <input type="hidden" name="FileId" value="@Model.FileId" />
-        <input type="hidden" name="ApplicationId" value="@Model.ApplicationId" />
+        <input type="hidden" name="@FormFieldNames.FileId" value="@Model.FileId" />
+        <input type="hidden" name="@FormFieldNames.ApplicationId" value="@Model.ApplicationId" />
         <button type="submit" class="govuk-link" style="border: none; background: none; padding: 0; color: #1d70b8; text-decoration: underline; cursor: pointer;">
             @Model.FileName
         </button>
@@ -12,8 +13,8 @@
 else
 {
     <form method="post" asp-page="/FormEngine/RenderForm" asp-route-referenceNumber="@Model.ReferenceNumber" asp-route-taskId="@Model.TaskId" asp-page-handler="DownloadFile" style="display:inline">
-        <input type="hidden" name="FileId" value="@Model.FileId" />
-        <input type="hidden" name="ApplicationId" value="@Model.ApplicationId" />
+        <input type="hidden" name="@FormFieldNames.FileId" value="@Model.FileId" />
+        <input type="hidden" name="@FormFieldNames.ApplicationId" value="@Model.ApplicationId" />
         <button type="submit" class="govuk-link" style="border: none; background: none; padding: 0; color: #1d70b8; text-decoration: underline; cursor: pointer;">
             @Model.FileName
         </button>

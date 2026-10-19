@@ -6,6 +6,7 @@ using GovUK.Dfe.FlexForms.Application.Validation;
 using GovUK.Dfe.FlexForms.Domain.Caching;
 using GovUK.Dfe.FlexForms.Domain.FormEngine;
 using GovUK.Dfe.FlexForms.Domain.Models;
+using GovUK.Dfe.FlexForms.Web.Constants;
 using GovUK.Dfe.FlexForms.Web.Extensions;
 using GovUK.Dfe.FlexForms.Web.Interfaces;
 using GovUK.Dfe.FlexForms.Web.Security;
@@ -199,7 +200,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             var outcome = await _saveFormPage.ExecuteAsync(
                 state,
                 Request.Form.ToPostedFields(),
-                Request.Form["IsTaskCompleted"].ToString());
+                Request.Form[FormFieldNames.IsTaskCompleted].ToString());
             ApplyWorkState(state);
             return MapOutcome(outcome);
         }
@@ -267,10 +268,10 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                 _logger.LogWarning(ex, "Upload initialization failed; continuing with posted file context");
             }
 
-            var applicationId = Request.Form["ApplicationId"].ToString();
-            var fieldId = Request.Form["FieldId"].ToString();
-            var returnUrl = Request.Form["ReturnUrl"].ToString();
-            var uploadDescription = Request.Form["UploadDescription"].ToString();
+            var applicationId = Request.Form[FormFieldNames.ApplicationId].ToString();
+            var fieldId = Request.Form[FormFieldNames.FieldId].ToString();
+            var returnUrl = Request.Form[FormFieldNames.ReturnUrl].ToString();
+            var uploadDescription = Request.Form[FormFieldNames.UploadDescription].ToString();
 
             if (!IsCollectionFlow)
             {
@@ -281,7 +282,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             if (!Guid.TryParse(applicationId, out var appId))
                 return NotFound();
 
-            var file = Request.Form.Files["ChooseFile"];
+            var file = Request.Form.Files[FormFieldNames.ChooseFile];
             var hasFile = file is { Length: > 0 };
             await using var stream = hasFile ? file!.OpenReadStream() : Stream.Null;
 
@@ -303,8 +304,8 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
 
         public async Task<IActionResult> OnPostDownloadFileAsync()
         {
-            var applicationId = Request.Form["ApplicationId"].ToString();
-            var fileIdStr = Request.Form["FileId"].ToString();
+            var applicationId = Request.Form[FormFieldNames.ApplicationId].ToString();
+            var fileIdStr = Request.Form[FormFieldNames.FileId].ToString();
 
             if (!Guid.TryParse(applicationId, out var appId) || !Guid.TryParse(fileIdStr, out var fileId))
                 return NotFound();
@@ -319,17 +320,17 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
         {
             ModelState.Clear();
 
-            var applicationId = Request.Form["ApplicationId"].ToString();
-            var returnUrl = Request.Form["ReturnUrl"].ToString();
-            var fileIdStr = Request.Form["FileId"].ToString();
-            var fieldId = Request.Form["FieldId"].ToString();
+            var applicationId = Request.Form[FormFieldNames.ApplicationId].ToString();
+            var returnUrl = Request.Form[FormFieldNames.ReturnUrl].ToString();
+            var fileIdStr = Request.Form[FormFieldNames.FileId].ToString();
+            var fieldId = Request.Form[FormFieldNames.FieldId].ToString();
 
             if (!Guid.TryParse(applicationId, out var appId))
                 return NotFound();
 
             if (!Guid.TryParse(fileIdStr, out var fileId))
             {
-                ModelState.AddModelError("FileId", FormEngineMessages.InvalidFileId);
+                ModelState.AddModelError(FormFieldNames.FileId, FormEngineMessages.InvalidFileId);
                 return string.IsNullOrEmpty(returnUrl) ? Page() : Redirect(returnUrl);
             }
 

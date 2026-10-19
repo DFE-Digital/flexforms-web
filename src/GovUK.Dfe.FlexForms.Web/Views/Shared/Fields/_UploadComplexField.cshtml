@@ -1,5 +1,6 @@
 @using GovUK.Dfe.FlexForms.Web.Services
 @using GovUK.Dfe.FlexForms.Web.Extensions
+@using GovUK.Dfe.FlexForms.Web.Constants
 @using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response
 @inject IHttpContextAccessor httpContext;
 @inject GovUK.Dfe.FlexForms.Web.Interfaces.IFormErrorStore FormErrorStore
@@ -163,11 +164,11 @@
         <p class="govuk-body">Give the file a clear, descriptive name. Files up to 10MB are accepted.</p>
 
         <form method="post" asp-page="/FormEngine/RenderForm" asp-route-referenceNumber="@referenceNumber" asp-route-taskId="@taskId" asp-route-pageId="@actualPageId" asp-page-handler="UploadFile" enctype="multipart/form-data">
-            <input type="hidden" name="ApplicationId" value="@applicationId" />
-            <input type="hidden" name="FieldId" value="@fieldId" />
-            <input type="hidden" name="ReturnUrl" value="@actualReturnUrl" />
+            <input type="hidden" name="@FormFieldNames.ApplicationId" value="@applicationId" />
+            <input type="hidden" name="@FormFieldNames.FieldId" value="@fieldId" />
+            <input type="hidden" name="@FormFieldNames.ReturnUrl" value="@actualReturnUrl" />
             <input type="hidden" name="UploadName" value="FileName" />
-            <input type="hidden" name="UploadDescription" value="FileDescription" />
+            <input type="hidden" name="@FormFieldNames.UploadDescription" value="FileDescription" />
             @* Preserve existing files across upload by sending their IDs *@
             @foreach (var f in files)
             {
@@ -193,7 +194,7 @@
                 </label>
                 <input class="govuk-file-upload @(ViewData.ModelState.Any(x => x.Value.Errors.Count > 0) ? "govuk-file-upload--error" : "")"
                        id="choose-file-@fieldId"
-                       name="ChooseFile"
+                       name="@FormFieldNames.ChooseFile"
                        type="file"
                        required />
             </div>
@@ -224,8 +225,8 @@
                         <tr class="govuk-table__row">
                             <td class="govuk-table__cell">
                                 <form method="post" asp-page="/FormEngine/RenderForm" asp-route-referenceNumber="@referenceNumber" asp-route-taskId="@taskId" asp-route-pageId="@actualPageId" asp-page-handler="DownloadFile" style="display:inline">
-                                    <input type="hidden" name="FileId" value="@file.Id" />
-                                    <input type="hidden" name="ApplicationId" value="@applicationId" />
+                                    <input type="hidden" name="@FormFieldNames.FileId" value="@file.Id" />
+                                    <input type="hidden" name="@FormFieldNames.ApplicationId" value="@applicationId" />
                                     @if (isCollectionFlow)
                                     {
                                         <input type="hidden" name="FlowId" value="@flowId" />
@@ -257,10 +258,10 @@
                             </td>
                             <td class="govuk-table__cell">
                                 <form method="post" asp-page="/FormEngine/RenderForm" asp-route-referenceNumber="@referenceNumber" asp-route-taskId="@taskId" asp-route-pageId="@actualPageId" asp-page-handler="DeleteFile" style="display:inline">
-                                    <input type="hidden" name="FileId" value="@file.Id" />
-                                    <input type="hidden" name="FieldId" value="@fieldId" />
-                                    <input type="hidden" name="ApplicationId" value="@applicationId" />
-                                    <input type="hidden" name="ReturnUrl" value="@actualReturnUrl" />
+                                    <input type="hidden" name="@FormFieldNames.FileId" value="@file.Id" />
+                                    <input type="hidden" name="@FormFieldNames.FieldId" value="@fieldId" />
+                                    <input type="hidden" name="@FormFieldNames.ApplicationId" value="@applicationId" />
+                                    <input type="hidden" name="@FormFieldNames.ReturnUrl" value="@actualReturnUrl" />
                                     @if (isCollectionFlow)
                                     {
                                         <input type="hidden" name="FlowId" value="@flowId" />

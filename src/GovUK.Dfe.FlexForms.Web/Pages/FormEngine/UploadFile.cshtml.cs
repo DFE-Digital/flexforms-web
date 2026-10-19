@@ -2,6 +2,7 @@ using GovUK.Dfe.FlexForms.Application.FormEngine;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Application.Notifications;
 using GovUK.Dfe.FlexForms.Application.Validation;
+using GovUK.Dfe.FlexForms.Web.Constants;
 using GovUK.Dfe.FlexForms.Web.Extensions;
 using GovUK.Dfe.FlexForms.Web.Interfaces;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums;
@@ -85,7 +86,7 @@ public class UploadFileModel(
 
         await applicationStateService.EnsureApplicationIdAsync(ReferenceNumber);
 
-        var file = Request.Form.Files["ChooseFile"];
+        var file = Request.Form.Files[FormFieldNames.ChooseFile];
         var hasFile = file is { Length: > 0 };
         await using var stream = hasFile ? file!.OpenReadStream() : Stream.Null;
 
@@ -94,7 +95,7 @@ public class UploadFileModel(
             appId,
             FieldId,
             ReturnUrl,
-            Request.Form["UploadDescription"].ToString(),
+            Request.Form[FormFieldNames.UploadDescription].ToString(),
             stream,
             file?.FileName ?? string.Empty,
             file?.ContentType,
@@ -111,7 +112,7 @@ public class UploadFileModel(
         if (!Guid.TryParse(ApplicationId, out var appId))
             return NotFound();
 
-        var fileIdStr = Request.Form["FileId"].ToString();
+        var fileIdStr = Request.Form[FormFieldNames.FileId].ToString();
         if (!Guid.TryParse(fileIdStr, out var fileId))
         {
             ErrorMessage = FormEngineMessages.InvalidFileId;
@@ -134,7 +135,7 @@ public class UploadFileModel(
     {
         if (!Guid.TryParse(ApplicationId, out var appId))
             return NotFound();
-        var fileIdStr = Request.Form["FileId"].ToString();
+        var fileIdStr = Request.Form[FormFieldNames.FileId].ToString();
         if (!Guid.TryParse(fileIdStr, out var fileId))
             return NotFound();
 

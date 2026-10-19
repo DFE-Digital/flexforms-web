@@ -2,6 +2,7 @@
 @model GovUK.Dfe.FlexForms.Web.Pages.Confirmation.IndexModel
 @using System.Linq
 @using GovUK.Dfe.FlexForms.Web.Utilities
+@using GovUK.Dfe.FlexForms.Web.Constants
 @{
     ViewData["Title"] = Model.DisplayModel.Title;
     ViewData["RequiredMessage"] = Model.DisplayModel.RequiredMessage;
@@ -13,10 +14,10 @@
 @section BeforeContent {
     <govuk-back-link href="@Model.DisplayModel.ReturnUrl">Back</govuk-back-link>
 }
-@if (ViewData.ModelState.ContainsKey("Confirmed"))
+@if (ViewData.ModelState.ContainsKey(FormFieldNames.Confirmed))
 {
     <govuk-error-summary>
-        <govuk-error-summary-item href="#confirmation-radios"><span class="govuk-visually-hidden">Error: </span>@ViewData.ModelState["Confirmed"].Errors.FirstOrDefault()?.ErrorMessage</govuk-error-summary-item>
+        <govuk-error-summary-item href="#confirmation-radios"><span class="govuk-visually-hidden">Error: </span>@ViewData.ModelState[FormFieldNames.Confirmed].Errors.FirstOrDefault()?.ErrorMessage</govuk-error-summary-item>
     </govuk-error-summary>
 }
 <div class="govuk-grid-row">
@@ -72,22 +73,22 @@
                 }
             }
             
-            <div id="confirmation-radios" class="govuk-form-group @(ViewData.ModelState.ContainsKey("Confirmed") ? "govuk-form-group--error" : string.Empty)">
+            <div id="confirmation-radios" class="govuk-form-group @(ViewData.ModelState.ContainsKey(FormFieldNames.Confirmed) ? "govuk-form-group--error" : string.Empty)">
                 <fieldset class="govuk-fieldset">
                     <legend class="govuk-visually-hidden">Choose Yes or No</legend>
-                    @if (ViewData.ModelState.ContainsKey("Confirmed"))
+                    @if (ViewData.ModelState.ContainsKey(FormFieldNames.Confirmed))
                     {
-                        <govuk-error-message><span class="govuk-visually-hidden">Error: </span>@ViewData.ModelState["Confirmed"].Errors.FirstOrDefault()?.ErrorMessage </govuk-error-message>
+                        <govuk-error-message><span class="govuk-visually-hidden">Error: </span>@ViewData.ModelState[FormFieldNames.Confirmed].Errors.FirstOrDefault()?.ErrorMessage </govuk-error-message>
                     }
                     <div class="govuk-radios" data-module="govuk-radios">
                         <div class="govuk-radios__item">
-                            <input class="govuk-radios__input" id="confirmed-yes" name="Confirmed" type="radio" value="true">
+                            <input class="govuk-radios__input" id="confirmed-yes" name="@FormFieldNames.Confirmed" type="radio" value="true">
                             <label class="govuk-label govuk-radios__label" for="confirmed-yes">
                                 Yes
                             </label>
                         </div>
                         <div class="govuk-radios__item">
-                            <input class="govuk-radios__input" id="confirmed-no" name="Confirmed" type="radio" value="false">
+                            <input class="govuk-radios__input" id="confirmed-no" name="@FormFieldNames.Confirmed" type="radio" value="false">
                             <label class="govuk-label govuk-radios__label" for="confirmed-no">
                                 No
                             </label>

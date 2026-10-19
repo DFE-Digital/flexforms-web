@@ -1,5 +1,6 @@
 @using GovUK.Dfe.FlexForms.Domain.Models
 @using GovUK.Dfe.FlexForms.Web.Utilities
+@using GovUK.Dfe.FlexForms.Web.Constants
 @using GovUk.Frontend.AspNetCore.TagHelpers
 @using Microsoft.AspNetCore.Mvc.TagHelpers
 @model RenderFormModel
@@ -74,7 +75,7 @@
                 <div class="govuk-checkboxes__item">
                     <input class="govuk-checkboxes__input" 
                            id="IsTaskCompleted" 
-                           name="IsTaskCompleted" 
+                           name="@FormFieldNames.IsTaskCompleted" 
                            type="checkbox" 
                            value="true"
                            @(Model.IsTaskCompleted ? "checked" : "")>

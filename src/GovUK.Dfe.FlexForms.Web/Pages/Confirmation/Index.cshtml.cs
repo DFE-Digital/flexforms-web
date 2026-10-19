@@ -1,5 +1,6 @@
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.Models;
+using GovUK.Dfe.FlexForms.Web.Constants;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.Text.Json;
@@ -79,14 +80,14 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Confirmation
             }
 
             // Determine outcome from radio - require explicit selection
-            var confirmedValue = Request.Form["Confirmed"].ToString();
+            var confirmedValue = Request.Form[FormFieldNames.Confirmed].ToString();
             if (string.IsNullOrEmpty(confirmedValue))
             {
                 // Rebuild display model and show server-side validation error
                 DisplayModel = _confirmationService.PrepareDisplayModel(token) ?? new ConfirmationDisplayModel();
                 ConfirmationToken = token;
 
-                ModelState.AddModelError("Confirmed", DisplayModel.RequiredMessage!);
+                ModelState.AddModelError(FormFieldNames.Confirmed, DisplayModel.RequiredMessage!);
                 return Page();
             }
 
