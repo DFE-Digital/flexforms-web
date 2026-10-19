@@ -1,0 +1,38 @@
+name: Backport
+
+# Label a pull request "backport release/X.Y" (fix on main that must ship in the current release)
+# or "backport main" (hotfix made on a release branch) and a cherry-pick PR is opened once it merges.
+
+on:
+  pull_request_target:
+    types: [ closed, labeled ]
+
+permissions:
+  contents: read
+
+jobs:
+  backport:
+    name: Open backport pull request
+    if: github.event.pull_request.merged == true && contains(join(github.event.pull_request.labels.*.name, ','), 'backport ')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          token: ${{ secrets.BACKPORT_TOKEN || github.token }}
+
+      # PRs opened with the default GITHUB_TOKEN don't run CI; set BACKPORT_TOKEN (GitHub App or fine-grained PAT) so they do.
+      - name: Backport
+        uses: korthout/backport-action@8560fb503c275d433c56f05a2f64850093baa9f7 # v4.7.0
+        with:
+          github_token: ${{ secrets.BACKPORT_TOKEN || github.token }}
+          label_pattern: '^backport (main|release/\d+\.\d+)$'
+          merge_commits: skip
+          add_author_as_assignee: true
+          experimental: >
+            {
+              "conflict_resolution": "draft_commit_conflicts"
+            }

@@ -1,18 +1,26 @@
 name: Deploy to environment
 
+# main       -> build, deploy to development
+# release/*  -> build, deploy to test, create release candidate vX.Y.Z-rc.N
+# tag vX.Y.Z-rc.N / vX.Y.Z (manual run, "Use workflow from: <tag>")
+#            -> no rebuild: deploy the image already built for that commit.
+#               Deploying to production creates/marks release vX.Y.Z as latest.
+
 on:
   push:
     branches:
       - main
+      - 'release/**'
   workflow_dispatch:
     inputs:
       environment:
         type: environment
-        description: "Choose an environment to deploy to"
+        description: "Environment to deploy to. Production only accepts a release tag picked under 'Use workflow from'."
         required: true
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.inputs.environment }}-${{ github.run_number }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.inputs.environment }}
+  cancel-in-progress: false
 
 env:
   IMAGE_NAME: flexformsweb
@@ -31,22 +39,86 @@ jobs:
       branch: ${{ steps.var.outputs.branch }}
       checked-out-sha: ${{ steps.var.outputs.checked-out-sha }}
       image-name: ${{ steps.var.outputs.image-name }}
+      mode: ${{ steps.var.outputs.mode }}
+      release-candidate: ${{ steps.var.outputs.release-candidate }}
+      release-version: ${{ steps.var.outputs.release-version }}
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          fetch-depth: 0
 
       - id: var
+        env:
+          INPUT_ENVIRONMENT: ${{ github.event.inputs.environment }}
         run: |
-          GIT_REF=${{ github.ref_name }}
-          GIT_BRANCH=${GIT_REF##*/}
-          INPUT="${{ github.event.inputs.environment }}"
-          ENVIRONMENT=${INPUT:-"development"}
+          set -euo pipefail
+          GIT_REF=${{ github.ref }}
+          GIT_REF_NAME=${{ github.ref_name }}
+          GIT_BRANCH=${GIT_REF_NAME##*/}
           CHECKED_OUT_SHA="$(git log -1 '--format=format:%H')"
+          RELEASE_VERSION=""
+
+          case "$GIT_REF" in
+            refs/tags/*)
+              if [[ ! "$GIT_REF_NAME" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)(-rc\.[0-9]+)?$ ]]; then
+                echo "::error ::Only release tags (vX.Y.Z-rc.N or vX.Y.Z) can be deployed; '$GIT_REF_NAME' is not one."
+                exit 1
+              fi
+              MODE=promote
+              RELEASE_VERSION=${BASH_REMATCH[1]}
+              DEFAULT_ENVIRONMENT=""
+              ;;
+            refs/heads/release/*)
+              MODE=build
+              DEFAULT_ENVIRONMENT=test
+              ;;
+            *)
+              MODE=build
+              DEFAULT_ENVIRONMENT=development
+              ;;
+          esac
+
+          ENVIRONMENT=${INPUT_ENVIRONMENT:-$DEFAULT_ENVIRONMENT}
+          ENVIRONMENT_LOWER=${ENVIRONMENT,,}
+
+          if [[ "$ENVIRONMENT_LOWER" == *prod* && "$MODE" != "promote" ]]; then
+            echo "::error ::'$ENVIRONMENT' can only be deployed from a release tag. Run this workflow again and choose the release candidate tag (e.g. v2.3.0-rc.2) under 'Use workflow from'."
+            exit 1
+          fi
+
+          if [[ "$ENVIRONMENT_LOWER" == "production" ]]; then
+            FINAL_TAG="v$RELEASE_VERSION"
+            if git rev-parse -q --verify "refs/tags/$FINAL_TAG" >/dev/null; then
+              FINAL_SHA=$(git rev-parse "$FINAL_TAG^{commit}")
+              if [[ "$FINAL_SHA" != "$CHECKED_OUT_SHA" ]]; then
+                echo "::error ::$FINAL_TAG has already been released from $FINAL_SHA. Promote a release candidate of a newer version instead."
+                exit 1
+              fi
+            fi
+          fi
+
+          RELEASE_CANDIDATE=false
+          if [[ "$GIT_REF" == refs/heads/release/* && "$ENVIRONMENT_LOWER" == "test" ]]; then
+            RELEASE_CANDIDATE=true
+          fi
+
           echo "environment=${ENVIRONMENT}" >> $GITHUB_OUTPUT
-          echo "environment-lower=${ENVIRONMENT,,}" >> $GITHUB_OUTPUT
+          echo "environment-lower=${ENVIRONMENT_LOWER}" >> $GITHUB_OUTPUT
           echo "branch=$GIT_BRANCH" >> $GITHUB_OUTPUT
           echo "checked-out-sha=${CHECKED_OUT_SHA}" >> $GITHUB_OUTPUT
           echo "image-name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
+          echo "mode=${MODE}" >> $GITHUB_OUTPUT
+          echo "release-candidate=${RELEASE_CANDIDATE}" >> $GITHUB_OUTPUT
+          echo "release-version=${RELEASE_VERSION}" >> $GITHUB_OUTPUT
+
+          {
+            echo "### Deployment plan"
+            echo "- Ref: \`$GIT_REF_NAME\` (\`$CHECKED_OUT_SHA\`)"
+            echo "- Environment: \`$ENVIRONMENT\`"
+            echo "- Mode: \`$MODE\`"
+            echo "- Release candidate: \`$RELEASE_CANDIDATE\`"
+          } >> $GITHUB_STEP_SUMMARY
 
   validate-packages:
     runs-on: windows-latest
@@ -62,12 +134,15 @@ jobs:
           environment: ${{ needs.set-env.outputs.environment }}
 
   gitversion:
+    needs: [ set-env ]
+    if: needs.set-env.outputs.mode == 'build'
     uses: ./.github/workflows/gitversion.yml
 
   build-import-deploy:
     name: Build & import → ${{ needs.set-env.outputs.environment }}
     runs-on: ubuntu-24.04
     needs: [ set-env, gitversion ]
+    if: needs.set-env.outputs.mode == 'build'
     environment: ${{ needs.set-env.outputs.environment }}
     permissions:
       attestations: write
@@ -101,14 +176,70 @@ jobs:
           AZURE_SUBSCRIPTION: ${{ secrets.AZURE_SUBSCRIPTION_ID || '' }}
           AZURE_ACR_CLIENT_ID: ${{ secrets.ACR_CLIENT_ID || '' }}
 
-  deploy:
-    name: Release → ${{ needs.set-env.outputs.environment }}
+  promote-import:
+    name: Import existing image → ${{ needs.set-env.outputs.environment }}
     runs-on: ubuntu-24.04
-    needs: [ build-import-deploy, set-env ]
+    needs: [ set-env, validate-packages ]
     if: |
       always() &&
       needs.set-env.result == 'success' &&
-      needs.build-import-deploy.result == 'success'
+      needs.set-env.outputs.mode == 'promote' &&
+      (needs.validate-packages.result == 'success' || needs.validate-packages.result == 'skipped')
+    environment: ${{ needs.set-env.outputs.environment }}
+    permissions:
+      packages: read
+      id-token: write
+    steps:
+      - name: Check image exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ needs.set-env.outputs.checked-out-sha }}
+        run: |
+          set -euo pipefail
+          SOURCE="ghcr.io/${GITHUB_REPOSITORY,,}:sha-$SHA"
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          if ! docker buildx imagetools inspect "$SOURCE" >/dev/null; then
+            echo "::error ::No image has been built for $SHA ($SOURCE). Only commits built from main or a release branch can be promoted."
+            exit 1
+          fi
+
+      - name: Azure login
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2.3.1
+        with:
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ secrets.ACR_CLIENT_ID }}
+
+      - name: Import to ACR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACR_NAME: ${{ secrets.ACR_NAME }}
+          IMAGE: ${{ needs.set-env.outputs.image-name }}
+          SHA: ${{ needs.set-env.outputs.checked-out-sha }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          SOURCE="ghcr.io/${GITHUB_REPOSITORY,,}:sha-$SHA"
+          echo "### Imported (no rebuild)" >> $GITHUB_STEP_SUMMARY
+          for TAG in "sha-$SHA" "$RELEASE_TAG" latest; do
+            az acr import \
+              --name "$ACR_NAME" \
+              --source "$SOURCE" \
+              --image "$IMAGE:$TAG" \
+              --username "$GITHUB_ACTOR" \
+              --password "$GH_TOKEN" \
+              --force
+            echo "- $ACR_NAME.azurecr.io/$IMAGE:$TAG ← $SOURCE" >> $GITHUB_STEP_SUMMARY
+          done
+
+  deploy:
+    name: Release → ${{ needs.set-env.outputs.environment }}
+    runs-on: ubuntu-24.04
+    needs: [ build-import-deploy, promote-import, set-env ]
+    if: |
+      always() &&
+      needs.set-env.result == 'success' &&
+      (needs.build-import-deploy.result == 'success' || needs.promote-import.result == 'success')
     environment: ${{ needs.set-env.outputs.environment }}
     permissions:
       id-token: write
@@ -129,6 +260,21 @@ jobs:
           AZURE_SUBSCRIPTION: ${{ secrets.AZURE_SUBSCRIPTION_ID || '' }}
           AZURE_ACA_CLIENT_ID: ${{ secrets.ACA_CLIENT_ID || '' }}
 
+  release:
+    name: Record release
+    needs: [ set-env, gitversion, deploy ]
+    if: |
+      always() &&
+      needs.deploy.result == 'success' &&
+      (needs.set-env.outputs.release-candidate == 'true' || needs.set-env.outputs.environment-lower == 'production')
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release.yml
+    with:
+      version: ${{ needs.set-env.outputs.mode == 'promote' && needs.set-env.outputs.release-version || needs.gitversion.outputs.version }}
+      target-sha: ${{ needs.set-env.outputs.checked-out-sha }}
+      production: ${{ needs.set-env.outputs.environment-lower == 'production' }}
+
   playwright-tests:
     name: Playwright tests → ${{ needs.set-env.outputs.environment }}
     needs: [deploy, set-env]
@@ -139,4 +285,3 @@ jobs:
     secrets: inherit
     permissions:
       contents: read
-
