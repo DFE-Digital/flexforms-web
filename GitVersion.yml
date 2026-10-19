@@ -1,16 +1,24 @@
 mode: ContinuousDelivery
 semantic-version-format: Loose
-tag-prefix: 'v'
+# Optional so the version can be read from release branch names (release/2.3) as well as tags (v2.3.0).
+tag-prefix: '[vV]?'
 major-version-bump-message: '(?i)\+semver:\s?(breaking|major)'
 minor-version-bump-message: '(?i)\+semver:\s?(feature|minor)'
 patch-version-bump-message: '(?i)\+semver:\s?(fix|patch)'
 
 branches:
   main:
+    increment: Minor
+    label: alpha
+    tracks-release-branches: true
+
+  release:
+    regex: ^release/(?<BranchName>\d+\.\d+)$
     increment: Patch
-    label: ''
+    label: rc
+    is-release-branch: true
+    source-branches: ['main']
 
   pull-request:
-    increment: Patch
-    source-branches: ['main']
+    increment: Inherit
     label: prerelease

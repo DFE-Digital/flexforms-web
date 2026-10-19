@@ -1,85 +1,106 @@
 name: Release
 
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - CHANGELOG.md
+  workflow_call:
+    inputs:
+      version:
+        description: MajorMinorPatch version being released (e.g. 2.3.0)
+        required: true
+        type: string
+      target-sha:
+        description: Commit that was deployed
+        required: true
+        type: string
+      production:
+        description: true when target-sha has just gone live in production; false for a release candidate deployed to test
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
-  gitversion:
-    uses: ./.github/workflows/gitversion.yml
-
   release:
     name: Tag and GitHub release
-    needs: gitversion
     runs-on: ubuntu-24.04
     permissions:
       contents: write
-      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
           fetch-depth: 0
 
-      - name: Extract release notes
-        id: notes
+      - name: Work out tag
+        id: tag
         env:
-          VERSION: ${{ needs.gitversion.outputs.version }}
+          VERSION: ${{ inputs.version }}
+          TARGET_SHA: ${{ inputs.target-sha }}
+          PRODUCTION: ${{ inputs.production }}
         run: |
-          COMMIT_SUBJECT=$(git log -1 --pretty=format:"%s")
-          COMMIT_BODY=$(git log -1 --pretty=format:"%b")
-          if echo "$COMMIT_BODY" | tr '\n' '~' | grep -q '%release-note:'; then
-            NOTES=$(echo "$COMMIT_BODY" |
-              tr '\n' '~' |
-              grep -Eo '\(%release-note:.*%\)' |
-              sed 's/.*%release-note:\(.*\)%/\1/' |
-              sed 's/~/\n/g')
-          else
-            NOTES="$COMMIT_BODY"
-          fi
-          if [ -z "$(echo "$NOTES" | tr -d '[:space:]')" ]; then
-            NOTES="No release notes provided."
-          fi
-          TITLE="${VERSION} - ${COMMIT_SUBJECT}"
-          printf '%s\n' "$NOTES" > /tmp/release-notes.txt
-          {
-            echo "title<<EOF"
-            echo "$TITLE"
-            echo "EOF"
-            echo "notes<<EOF"
-            echo "$NOTES"
-            echo "EOF"
-            echo "subject<<EOF"
-            echo "$COMMIT_SUBJECT"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          set -euo pipefail
 
-      - name: Check if release needed
-        id: check
-        env:
-          TAG: ${{ needs.gitversion.outputs.tag }}
-        run: |
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "skip=true" >> $GITHUB_OUTPUT
-            echo "Tag $TAG already exists — skipping release."
+          if [ "$PRODUCTION" = "true" ]; then
+            TAG="v$VERSION"
+            if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+              EXISTING_SHA=$(git rev-parse "$TAG^{commit}")
+              if [ "$EXISTING_SHA" != "$TARGET_SHA" ]; then
+                echo "::error ::$TAG already points at $EXISTING_SHA, not $TARGET_SHA."
+                exit 1
+              fi
+            fi
           else
-            echo "skip=false" >> $GITHUB_OUTPUT
+            if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+              echo "::error ::v$VERSION has already been released, so no more release candidates can be created for it."
+              exit 1
+            fi
+            TAG=$(git tag -l "v$VERSION-rc.*" --points-at "$TARGET_SHA" | sort -V | tail -n1)
+            if [ -z "$TAG" ]; then
+              LAST=$(git tag -l "v$VERSION-rc.*" | sed "s/^v$VERSION-rc\.//" | sort -n | tail -n1)
+              TAG="v$VERSION-rc.$(( ${LAST:-0} + 1 ))"
+            fi
           fi
 
-      - name: Create tag and release
-        if: steps.check.outputs.skip == 'false'
+          PREVIOUS=$( { git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -vxF "v$VERSION" || true; echo "v$VERSION"; } \
+            | sort -V | grep -B1 -xF "v$VERSION" | head -n1)
+          if [ "$PREVIOUS" = "v$VERSION" ]; then
+            PREVIOUS=""
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "previous=$PREVIOUS" >> "$GITHUB_OUTPUT"
+          echo "Tag: $TAG (changes since: ${PREVIOUS:-the beginning})"
+
+      - name: Create or update GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ needs.gitversion.outputs.tag }}
+          TAG: ${{ steps.tag.outputs.tag }}
+          PREVIOUS: ${{ steps.tag.outputs.previous }}
+          TARGET_SHA: ${{ inputs.target-sha }}
+          PRODUCTION: ${{ inputs.production }}
         run: |
-          RELEASE_SHA=$(git rev-parse HEAD)
-          gh release create "$TAG" \
-            --target "$RELEASE_SHA" \
-            --title "${{ steps.notes.outputs.title }}" \
-            --notes "${{ steps.notes.outputs.notes }}" \
-            --prerelease
+          set -euo pipefail
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            if [ "$PRODUCTION" = "true" ]; then
+              gh release edit "$TAG" --prerelease=false --latest
+              echo "### Marked $TAG as the latest (live) release" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "### $TAG already exists for this commit" >> "$GITHUB_STEP_SUMMARY"
+            fi
+            exit 0
+          fi
+
+          ARGS=(--target "$TARGET_SHA" --title "$TAG" --generate-notes)
+          if [ -n "$PREVIOUS" ]; then
+            ARGS+=(--notes-start-tag "$PREVIOUS")
+          fi
+          if [ "$PRODUCTION" = "true" ]; then
+            ARGS+=(--latest)
+          else
+            ARGS+=(--prerelease)
+          fi
+
+          gh release create "$TAG" "${ARGS[@]}"
+          echo "### Released $TAG" >> "$GITHUB_STEP_SUMMARY"

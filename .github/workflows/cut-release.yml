@@ -1,0 +1,100 @@
+name: Cut release
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: "Commit on main to cut the release from. Leave blank for the latest main."
+        required: false
+        type: string
+      version:
+        description: "Release version as MAJOR.MINOR (e.g. 2.4). Leave blank to use the next version calculated by GitVersion."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  gitversion:
+    uses: ./.github/workflows/gitversion.yml
+
+  cut:
+    name: Create release branch
+    needs: gitversion
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      actions: write
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Create branch
+        id: branch
+        env:
+          INPUT_COMMIT: ${{ inputs.commit }}
+          INPUT_VERSION: ${{ inputs.version }}
+          CALCULATED_VERSION: ${{ needs.gitversion.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "::error ::Run this workflow from main."
+            exit 1
+          fi
+
+          COMMIT=${INPUT_COMMIT:-$(git rev-parse HEAD)}
+          if ! COMMIT=$(git rev-parse -q --verify "$COMMIT^{commit}"); then
+            echo "::error ::'$INPUT_COMMIT' is not a commit in this repository."
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$COMMIT" origin/main; then
+            echo "::error ::$COMMIT is not on main."
+            exit 1
+          fi
+
+          VERSION=${INPUT_VERSION:-$(echo "$CALCULATED_VERSION" | cut -d. -f1,2)}
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+$ ]]; then
+            echo "::error ::Version must be MAJOR.MINOR (e.g. 2.4), got '$VERSION'."
+            exit 1
+          fi
+
+          BRANCH="release/$VERSION"
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null; then
+            echo "::error ::$BRANCH already exists."
+            exit 1
+          fi
+          if git tag -l "v$VERSION.*" | grep -q .; then
+            echo "::error ::Version $VERSION has already been used ($(git tag -l "v$VERSION.*" | sort -V | tail -n1)). Choose a higher version."
+            exit 1
+          fi
+
+          git push origin "$COMMIT:refs/heads/$BRANCH"
+
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Cut \`$BRANCH\`"
+            echo "- From: \`$COMMIT\`"
+            echo "- Changes since the last release: ${{ github.server_url }}/${{ github.repository }}/compare/$(git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)...$COMMIT"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create backport labels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ steps.branch.outputs.branch }}
+        run: |
+          gh label create "backport $BRANCH" --color FBCA04 --description "Cherry-pick into $BRANCH once merged" --force
+          gh label create "backport main" --color FBCA04 --description "Cherry-pick into main once merged" --force
+
+      # Branches pushed with GITHUB_TOKEN don't trigger push workflows, so start the Test deployment explicitly.
+      - name: Deploy release candidate to test
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ steps.branch.outputs.branch }}
+        run: |
+          gh workflow run deploy.yml --ref "$BRANCH" -f environment=test
+          echo "- Started deployment of \`$BRANCH\` to test: ${{ github.server_url }}/${{ github.repository }}/actions/workflows/deploy.yml" >> "$GITHUB_STEP_SUMMARY"

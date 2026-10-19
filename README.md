@@ -891,6 +891,7 @@ sequenceDiagram
 
 ## Related documentation
 
+- [`docs/release-process.md`](docs/release-process.md) — branching, release candidates, promoting to production, hotfixes
 - [`docs/Form-Template-Designer-Manual.md`](docs/Form-Template-Designer-Manual.md) — JSON template authoring
 - [`docs/Tenant-Admin-User-Manual.md`](docs/Tenant-Admin-User-Manual.md) — tenant Admin UI, including [event mappings §12](docs/Tenant-Admin-User-Manual.md#12-event-mappings) and [email placeholders §13](docs/Tenant-Admin-User-Manual.md#13-email-placeholder-mappings)
 - [Event mapping (HLD)](#event-mapping-high-level-design) — Web vs API vs Azure Service Bus
