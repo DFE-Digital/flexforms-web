@@ -15,7 +15,7 @@ namespace GovUK.Dfe.FlexForms.PlaywrightTests.Infrastructure;
 public sealed class CiRetryAttribute : RetryAttribute
 {
     public CiRetryAttribute()
-        : base(IsCi ? 3 : 1)
+        : base(IsCi ? 2 : 1)
     {
         RetryExceptions = [typeof(PlaywrightException), typeof(TimeoutException), typeof(ApiRequestException)];
     }
