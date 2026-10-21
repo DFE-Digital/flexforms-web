@@ -63,6 +63,34 @@ function Get-ReportData {
     return [pscustomobject]@{ Stats = $stats; FailedTests = $failedTests }
 }
 
+function Get-AccessibilityData {
+    $reportPath = $env:PW_ARTIFACTS_DIR
+    if ($reportPath) {
+        $reportPath = Join-Path $reportPath 'accessibility-report.json'
+    }
+    else {
+        $reportPath = Join-Path (Get-Location) 'test-results/accessibility-report.json'
+    }
+
+    $summary = [ordered]@{ PagesScanned = 0; PagesWithViolations = 0; TotalViolations = 0 }
+
+    if (-not (Test-Path $reportPath)) {
+        return [pscustomobject]@{ Found = $false; Summary = $summary }
+    }
+
+    $results = Get-Content $reportPath -Raw | ConvertFrom-Json
+
+    if (-not $results) {
+        return [pscustomobject]@{ Found = $false; Summary = $summary }
+    }
+
+    $summary.PagesScanned = @($results).Count
+    $summary.PagesWithViolations = @($results | Where-Object { $_.violations -and $_.violations.Count -gt 0 }).Count
+    $summary.TotalViolations = (@($results) | ForEach-Object { if ($_.violations) { $_.violations.Count } else { 0 } } | Measure-Object -Sum).Sum
+
+    return [pscustomobject]@{ Found = $true; Summary = $summary }
+}
+
 function Format-ErrorMessage {
     param([string]$ErrorMessage)
 
@@ -100,7 +128,7 @@ function Limit-Text {
 }
 
 function New-CardBody {
-    param($Stats, $FailedTests)
+    param($Stats, $FailedTests, $Accessibility)
 
     $hasFailures = $Stats.Failures -gt 0
     $statusText = if ($hasFailures) { '**Playwright Test Run Failed**' } else { '**Playwright Test Run Passed**' }
@@ -121,6 +149,10 @@ function New-CardBody {
 
     if ($hasFailures -and $FailedTests.Count -gt 0) {
         Add-FailedTestDetails -CardBody $cardBody -FailedTests $FailedTests
+    }
+
+    if ($Accessibility.Found) {
+        Add-AccessibilitySummary -CardBody $cardBody -Summary $Accessibility.Summary
     }
 
     $informationLink = $env:INFORMATION_LINK
@@ -161,6 +193,30 @@ function Add-FailedTestDetails {
     }
 }
 
+function Add-AccessibilitySummary {
+    param($CardBody, $Summary)
+
+    $CardBody.Add([ordered]@{ type = 'TextBlock'; wrap = $true; text = '**Accessibility (WCAG 2.2 AA):**'; weight = 'bolder'; spacing = 'medium' })
+    $CardBody.Add([ordered]@{
+        type  = 'FactSet'
+        facts = @(
+            [ordered]@{ title = 'Pages scanned:'; value = "$($Summary.PagesScanned)" }
+            [ordered]@{ title = 'Pages with violations:'; value = "$($Summary.PagesWithViolations)" }
+            [ordered]@{ title = 'Total violations:'; value = "$($Summary.TotalViolations)" }
+        )
+    })
+
+    if ($Summary.PagesWithViolations -gt 0) {
+        $CardBody.Add([ordered]@{
+            type     = 'TextBlock'
+            wrap     = $true
+            text     = 'See the accessibility-report artifact for full violation details.'
+            isSubtle = $true
+            spacing  = 'none'
+        })
+    }
+}
+
 function New-TeamsMessage {
     param($CardBody, [bool]$HasFailures)
 
@@ -191,7 +247,8 @@ function New-TeamsMessage {
 
 try {
     $report = Get-ReportData
-    $cardBody = New-CardBody -Stats $report.Stats -FailedTests $report.FailedTests
+    $accessibility = Get-AccessibilityData
+    $cardBody = New-CardBody -Stats $report.Stats -FailedTests $report.FailedTests -Accessibility $accessibility
     $message = New-TeamsMessage -CardBody $cardBody -HasFailures ($report.Stats.Failures -gt 0)
 
     $json = $message | ConvertTo-Json -Depth 20

@@ -95,6 +95,17 @@ jobs:
           path: src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/test-results
           retention-days: 14
 
+      - name: Upload accessibility report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: accessibility-report-${{ inputs.environment }}
+          path: |
+            src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/test-results/accessibility-report.md
+            src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/test-results/accessibility-report.json
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Report results to Teams
         if: always()
         run: pwsh scripts/Send-TeamsNotification.ps1
