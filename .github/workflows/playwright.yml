@@ -7,12 +7,22 @@ on:
       environment:
         required: true
         type: string
+      enable-accessibility-checks:
+        description: 'Whether to run the automatic WCAG 2.2 AA accessibility scan on every page visit'
+        required: false
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       environment:
         description: 'Environment to run tests against'
         required: true
         type: environment
+      enable-accessibility-checks:
+        description: 'Run the automatic WCAG 2.2 AA accessibility scan on every page visit'
+        required: false
+        type: boolean
+        default: true
 
 concurrency:
   group: playwright-${{ inputs.environment }}
@@ -33,6 +43,7 @@ jobs:
     env:
       CI: true
       PW_ARTIFACTS_DIR: ${{ github.workspace }}/src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/test-results
+      ENABLE_ACCESSIBILITY_CHECKS: ${{ inputs.enable-accessibility-checks }}
       BASE_URL: ${{ vars.PL_BASE_URL}}
       API_BASE_URL: ${{ vars.PL_API_BASE_URL }}
       SERVICE: TestService

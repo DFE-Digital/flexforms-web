@@ -121,7 +121,12 @@ public abstract class PlaywrightTestBase : PageTest
         // Automatic WCAG 2.2 AA accessibility reporting: every full page navigation this test
         // triggers is scanned, with no per-visit code required. Findings are reported (see
         // AssemblySetup's one-time teardown), never enforced - a violation never fails a test.
-        Page.Load += OnPageLoadForAccessibilityCheck;
+        // Opt-in via ENABLE_ACCESSIBILITY_CHECKS (the extra axe-core scans add noticeable time
+        // to the run).
+        if (AccessibilityChecksEnabled)
+        {
+            Page.Load += OnPageLoadForAccessibilityCheck;
+        }
 
         await Context.Tracing.StartAsync(new TracingStartOptions
         {
@@ -266,6 +271,18 @@ public abstract class PlaywrightTestBase : PageTest
     {
         var headed = TestEnvironment.OptionalEnvironmentVariable("PW_HEADED");
         return headed is "1" or "true" or "TRUE";
+    }
+
+    /// <summary>
+    /// Defaults to enabled
+    /// </summary>
+    private static bool AccessibilityChecksEnabled
+    {
+        get
+        {
+            var flag = TestEnvironment.OptionalEnvironmentVariable("ENABLE_ACCESSIBILITY_CHECKS");
+            return flag is null || flag is "1" or "true" or "TRUE";
+        }
     }
 
     private static string CurrentTestArtifactsDirectory()

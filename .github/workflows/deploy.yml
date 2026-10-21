@@ -282,6 +282,7 @@ jobs:
     uses: ./.github/workflows/playwright.yml
     with:
       environment: ${{ needs.set-env.outputs.environment }}
+      enable-accessibility-checks: ${{ needs.set-env.outputs.environment-lower == 'test' }}
     secrets: inherit
     permissions:
       contents: read
