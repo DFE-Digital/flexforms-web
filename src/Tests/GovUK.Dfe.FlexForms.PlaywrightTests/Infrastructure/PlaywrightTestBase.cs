@@ -1,3 +1,4 @@
+using Deque.AxeCore.Commons;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Api;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 using Microsoft.Playwright;
@@ -22,6 +23,7 @@ public abstract class PlaywrightTestBase : PageTest
 {
     private string _artifactsDirectory = null!;
     private Timer? _timeoutWatchdog;
+    private readonly List<Task> _accessibilityChecks = [];
 
     protected ApiConfig ApiConfig { get; private set; } = null!;
 
@@ -116,6 +118,11 @@ public abstract class PlaywrightTestBase : PageTest
         Page.SetDefaultTimeout(10_000);
         Page.SetDefaultNavigationTimeout(15_000);
 
+        // Automatic WCAG 2.2 AA accessibility reporting: every full page navigation this test
+        // triggers is scanned, with no per-visit code required. Findings are reported (see
+        // AssemblySetup's one-time teardown), never enforced - a violation never fails a test.
+        Page.Load += OnPageLoadForAccessibilityCheck;
+
         await Context.Tracing.StartAsync(new TracingStartOptions
         {
             Screenshots = true,
@@ -137,6 +144,9 @@ public abstract class PlaywrightTestBase : PageTest
         {
             await _timeoutWatchdog.DisposeAsync();
         }
+
+        Page.Load -= OnPageLoadForAccessibilityCheck;
+        await AwaitPendingAccessibilityChecksAsync();
 
         var passed = TestOk();
 
@@ -189,6 +199,68 @@ public abstract class PlaywrightTestBase : PageTest
     protected Task LoginAsync(string? userName = null) => Login.LoginAsync(Page, userName);
 
     protected Task AuthenticateAsync(string? userName = null) => Login.AuthenticateAsync(Page, userName);
+
+    /// <summary>
+    /// Fired for every full page navigation. Kicks off (without awaiting inline, so navigation
+    /// isn't blocked) an accessibility scan of the just-loaded page; the task is tracked so
+    /// <see cref="AwaitPendingAccessibilityChecksAsync"/> can wait for it in [TearDown].
+    /// </summary>
+    private void OnPageLoadForAccessibilityCheck(object? sender, IPage page)
+    {
+        var url = page.Url;
+        if (!url.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+        {
+            // Skip about:blank and similar non-content loads.
+            return;
+        }
+
+        lock (_accessibilityChecks)
+        {
+            _accessibilityChecks.Add(ScanPageAccessibilityAsync(page, url));
+        }
+    }
+
+    private async Task ScanPageAccessibilityAsync(IPage page, string url)
+    {
+        AxeResult result;
+
+        try
+        {
+            result = await AccessibilityChecker.ScanAsync(page);
+        }
+        catch (Exception exception)
+        {
+            // Best-effort: the page may have already navigated away or closed (e.g. the
+            // timeout watchdog fired). This must never affect the test outcome.
+            TestContext.Progress.WriteLine($"Accessibility scan skipped for {url}: {exception.Message}");
+            return;
+        }
+
+        var testName = TestContext.CurrentContext.Test.FullName;
+        AccessibilityReportCollector.Record(new AccessibilityPageResult(testName, url, result.Violations));
+
+        if (result.Violations.Length > 0)
+        {
+            TestContext.Progress.WriteLine(
+                $"\u26a0 Accessibility: {result.Violations.Length} violation(s) on {url} (test: {testName})");
+        }
+    }
+
+    private async Task AwaitPendingAccessibilityChecksAsync()
+    {
+        Task[] pending;
+
+        lock (_accessibilityChecks)
+        {
+            pending = [.. _accessibilityChecks];
+            _accessibilityChecks.Clear();
+        }
+
+        if (pending.Length > 0)
+        {
+            await Task.WhenAll(pending);
+        }
+    }
 
     private static bool IsHeadedModeEnabled()
     {

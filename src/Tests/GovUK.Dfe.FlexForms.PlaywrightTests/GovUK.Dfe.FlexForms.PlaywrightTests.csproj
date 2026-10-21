@@ -10,6 +10,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="Deque.AxeCore.Playwright" Version="4.11.0" />
         <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.23.0" />
         <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
         <PackageReference Include="Microsoft.Playwright.NUnit" Version="1.61.0" />

@@ -1,3 +1,4 @@
+using GovUK.Dfe.FlexForms.PlaywrightTests.Infrastructure;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 using Microsoft.Playwright;
 using NUnit.Framework;
@@ -27,6 +28,27 @@ public sealed class AssemblySetup
     [OneTimeTearDown]
     public void OneTimeTearDown()
     {
+        WriteAccessibilityReport();
         Playwright.Dispose();
+    }
+
+    /// <summary>
+    /// Writes the aggregated WCAG 2.2 AA findings gathered across every fixture's Page.Load
+    /// hook (see PlaywrightTestBase) once the whole run has finished. Report-only: this never
+    /// fails the build, regardless of what it finds.
+    /// </summary>
+    private static void WriteAccessibilityReport()
+    {
+        var results = AccessibilityReportCollector.Snapshot();
+        if (results.Count == 0)
+        {
+            return;
+        }
+
+        var root = TestEnvironment.OptionalEnvironmentVariable("PW_ARTIFACTS_DIR") is { Length: > 0 } dir
+            ? dir
+            : Path.Combine(AppContext.BaseDirectory, "test-results");
+
+        AccessibilityReportWriter.Write(results, root);
     }
 }
