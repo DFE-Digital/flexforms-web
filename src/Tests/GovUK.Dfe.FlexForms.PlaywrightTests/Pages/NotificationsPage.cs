@@ -17,8 +17,9 @@ public sealed class NotificationsPage(IPage page) : BasePage(page)
         await Assertions.Expect(ById("notifications-unread-badge")).ToBeHiddenAsync(
             new LocatorAssertionsToBeHiddenOptions { Timeout = 15_000 });
 
-    public async Task ExpectNotificationAsync(string message) =>
-        await Assertions.Expect(NotificationRow(message)).ToBeVisibleAsync();
+    public async Task ExpectNotificationAsync(string message, float? timeout = null) =>
+        await Assertions.Expect(NotificationRow(message))
+            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = timeout });
 
     public async Task ExpectNotificationNotVisibleAsync(string message) =>
         await Assertions.Expect(NotificationRow(message)).Not.ToBeVisibleAsync();
