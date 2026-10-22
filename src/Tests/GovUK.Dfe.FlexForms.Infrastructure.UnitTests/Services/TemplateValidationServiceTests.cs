@@ -286,4 +286,122 @@ public class TemplateValidationServiceTests
         Assert.Null(template);
         Assert.NotEmpty(errors);
     }
+
+    [Fact]
+    public void ValidateTemplateJson_ShouldPass_WhenApplicationMetaDataIsNull()
+    {
+        var template = CreateMinimalValidTemplate();
+        template.ApplicationMetaData = null;
+
+        var (isValid, errors) = _service.ValidateTemplateJson(JsonSerializer.Serialize(template));
+
+        Assert.True(isValid, string.Join("; ", errors));
+    }
+
+    [Fact]
+    public void ValidateTemplateJson_ShouldPass_WhenApplicationMetaDataItemsEmpty()
+    {
+        var template = CreateMinimalValidTemplate();
+        template.ApplicationMetaData = new ApplicationMetadataConfiguration { Items = [] };
+
+        var (isValid, errors) = _service.ValidateTemplateJson(JsonSerializer.Serialize(template));
+
+        Assert.True(isValid, string.Join("; ", errors));
+    }
+
+    [Fact]
+    public void ValidateTemplateJson_ShouldPass_WhenApplicationMetaDataItemsValid()
+    {
+        var template = CreateMinimalValidTemplate();
+        template.ApplicationMetaData = new ApplicationMetadataConfiguration
+        {
+            Items =
+            [
+                new ApplicationMetadataItemDefinition
+                {
+                    Label = "Reference",
+                    FieldId = "application.reference",
+                    Order = 10
+                }
+            ]
+        };
+
+        var (isValid, errors) = _service.ValidateTemplateJson(JsonSerializer.Serialize(template));
+
+        Assert.True(isValid, string.Join("; ", errors));
+    }
+
+    [Fact]
+    public void ValidateTemplateJson_ShouldFail_WhenApplicationMetaDataExceedsMaxItems()
+    {
+        var template = CreateMinimalValidTemplate();
+        template.ApplicationMetaData = new ApplicationMetadataConfiguration
+        {
+            Items = Enumerable.Range(1, ApplicationMetadataConfiguration.MaxItems + 1)
+                .Select(i => new ApplicationMetadataItemDefinition
+                {
+                    Label = $"Row {i}",
+                    FieldId = "application.reference"
+                })
+                .ToList()
+        };
+
+        var (isValid, errors) = _service.ValidateTemplateJson(JsonSerializer.Serialize(template));
+
+        Assert.False(isValid);
+        Assert.Contains(
+            errors,
+            e => e.Contains(
+                $"applicationMetaData.items cannot contain more than {ApplicationMetadataConfiguration.MaxItems}",
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ValidateTemplateJson_ShouldFail_WhenApplicationMetaDataItemMissingLabelOrFieldId()
+    {
+        var template = CreateMinimalValidTemplate();
+        template.ApplicationMetaData = new ApplicationMetadataConfiguration
+        {
+            Items =
+            [
+                new ApplicationMetadataItemDefinition { Label = " ", FieldId = "application.reference" },
+                new ApplicationMetadataItemDefinition { Label = "Version", FieldId = " " }
+            ]
+        };
+
+        var (isValid, errors) = _service.ValidateTemplateJson(JsonSerializer.Serialize(template));
+
+        Assert.False(isValid);
+        Assert.Contains(errors, e => e.Contains("applicationMetaData.items[0]: 'label' is required", StringComparison.Ordinal));
+        Assert.Contains(errors, e => e.Contains("applicationMetaData.items[1]: 'fieldId' is required", StringComparison.Ordinal));
+    }
+
+    private static FormTemplate CreateMinimalValidTemplate() =>
+        new()
+        {
+            TemplateId = "tpl-1",
+            TemplateName = "Name",
+            Description = "desc",
+            TaskGroups =
+            [
+                new TaskGroup
+                {
+                    GroupId = "g1",
+                    GroupName = "Group",
+                    GroupOrder = 1,
+                    GroupStatus = "NotStarted",
+                    Tasks =
+                    [
+                        new TaskModel
+                        {
+                            TaskId = "t1",
+                            TaskName = "Task",
+                            TaskOrder = 1,
+                            TaskStatusString = "NotStarted",
+                            Pages = []
+                        }
+                    ]
+                }
+            ]
+        };
 }
