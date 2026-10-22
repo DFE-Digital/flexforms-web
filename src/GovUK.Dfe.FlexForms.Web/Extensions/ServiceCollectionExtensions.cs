@@ -92,6 +92,7 @@ namespace GovUK.Dfe.FlexForms.Web.Extensions
             services.AddScoped<IRoleManagerAdmin, RoleManagerAdminService>();
             services.AddScoped<IRoleManagerPermissionsAdmin, RoleManagerPermissionsAdminService>();
             services.AddScoped<IFormEnginePresentationComposer, FormEnginePresentationComposer>();
+            services.AddScoped<IApplicationMetadataResolver, ApplicationMetadataResolver>();
 
             return services;
         }

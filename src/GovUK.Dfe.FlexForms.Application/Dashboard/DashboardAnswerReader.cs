@@ -64,40 +64,45 @@ public static class DashboardAnswerReader
             return string.Empty;
 
         // Exact key match (rare, but keep behaviour for odd keys containing dots).
-        if (formData.TryGetValue(fieldPath, out var exact) && exact is not null)
+        if (!fieldPath.Contains('[') && formData.TryGetValue(fieldPath, out var exact) && exact is not null)
             return FormatValue(exact);
 
-        var segments = fieldPath.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (segments.Length == 0)
+        var pathSegments = ParseFieldPath(fieldPath);
+        if (pathSegments.Count == 0)
             return string.Empty;
 
-        var primary = segments[0];
-        var remainder = segments.Skip(1).ToArray();
+        var first = pathSegments[0];
+        var remainder = pathSegments.Skip(1).ToList();
 
-        if (formData.TryGetValue(primary, out var topLevel) && topLevel is not null)
+        if (formData.TryGetValue(first.Name, out var topLevel) && topLevel is not null)
         {
             if (TryGetCollectionItems(topLevel, out var items))
             {
-                // detailsOfIncomingTrust.incomingTrustsSearch-field-flow[.name]
-                if (remainder.Length == 0)
+                items = ApplyItemIndex(items, first.Index);
+
+                // detailsOfIncomingTrust[0].incomingTrustsSearch-field-flow.name
+                if (remainder.Count == 0)
                     return FormatCollectionItems(items);
 
-                var nestedField = remainder[0];
-                var nestedRemainder = remainder.Skip(1).ToArray();
-                return JoinFromItems(items, nestedField, nestedRemainder);
+                var nested = remainder[0];
+                var nestedPropertyPath = remainder.Skip(1).Select(s => s.Name).ToList();
+                return JoinFromItems(items, nested.Name, nestedPropertyPath, nested.Index);
             }
 
-            return FormatValueWithPath(topLevel, remainder);
+            var propertyPath = remainder.Select(s => s.Name).ToList();
+            return FormatValueWithPath(topLevel, propertyPath);
         }
 
-        // Field lives inside a collection item (e.g. incomingTrustsSearch-field-flow[.name]).
-        return JoinFromAllCollections(formData, primary, remainder);
+        // Field lives inside a collection item (e.g. incomingTrustsSearch-field-flow.name).
+        var propertyPathRemainder = remainder.Select(s => s.Name).ToList();
+        return JoinFromAllCollections(formData, first.Name, propertyPathRemainder, first.Index);
     }
 
     private static string JoinFromAllCollections(
         IReadOnlyDictionary<string, object> formData,
         string fieldId,
-        IReadOnlyList<string> propertyPath)
+        IReadOnlyList<string> propertyPath,
+        int? collectionItemIndex = null)
     {
         var values = new List<string>();
 
@@ -105,6 +110,8 @@ public static class DashboardAnswerReader
         {
             if (!TryGetCollectionItems(raw, out var items))
                 continue;
+
+            items = ApplyItemIndex(items, collectionItemIndex);
 
             foreach (var item in items)
             {
@@ -123,7 +130,8 @@ public static class DashboardAnswerReader
     private static string JoinFromItems(
         IReadOnlyList<IReadOnlyDictionary<string, object>> items,
         string fieldId,
-        IReadOnlyList<string> propertyPath)
+        IReadOnlyList<string> propertyPath,
+        int? fieldValueIndex = null)
     {
         var values = new List<string>();
         foreach (var item in items)
@@ -131,12 +139,81 @@ public static class DashboardAnswerReader
             if (!TryGetItemValue(item, fieldId, out var fieldRaw) || fieldRaw is null)
                 continue;
 
+            if (fieldValueIndex is int index)
+            {
+                if (!TrySelectIndexedValue(fieldRaw, index, out fieldRaw) || fieldRaw is null)
+                    continue;
+            }
+
             var formatted = FormatValueWithPath(fieldRaw, propertyPath);
             if (!string.IsNullOrWhiteSpace(formatted))
                 values.Add(formatted);
         }
 
         return string.Join(", ", values);
+    }
+
+    private readonly record struct FieldPathSegment(string Name, int? Index);
+
+    private static List<FieldPathSegment> ParseFieldPath(string fieldPath)
+    {
+        var segments = new List<FieldPathSegment>();
+        foreach (var segment in fieldPath.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (!TryParseIndexedSegment(segment, out var name, out var index))
+                continue;
+
+            if (!string.IsNullOrWhiteSpace(name))
+                segments.Add(new FieldPathSegment(name, index));
+        }
+
+        return segments;
+    }
+
+    private static bool TryParseIndexedSegment(string segment, out string name, out int? index)
+    {
+        index = null;
+        name = segment;
+        var open = segment.IndexOf('[');
+        if (open < 0)
+            return true;
+
+        var close = segment.LastIndexOf(']');
+        if (close <= open)
+            return true;
+
+        name = segment[..open];
+        var indexText = segment[(open + 1)..close].Trim();
+        if (int.TryParse(indexText, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) && parsed >= 0)
+            index = parsed;
+
+        return !string.IsNullOrWhiteSpace(name);
+    }
+
+    private static IReadOnlyList<IReadOnlyDictionary<string, object>> ApplyItemIndex(
+        IReadOnlyList<IReadOnlyDictionary<string, object>> items,
+        int? index)
+    {
+        if (index is null)
+            return items;
+
+        if (index.Value < 0 || index.Value >= items.Count)
+            return Array.Empty<IReadOnlyDictionary<string, object>>();
+
+        return new[] { items[index.Value] };
+    }
+
+    private static bool TrySelectIndexedValue(object raw, int index, out object? selected)
+    {
+        selected = null;
+        if (!TryGetCollectionItems(raw, out var items))
+            return false;
+
+        if (index < 0 || index >= items.Count)
+            return false;
+
+        selected = items[index];
+        return true;
     }
 
     private static string FormatCollectionItems(IReadOnlyList<IReadOnlyDictionary<string, object>> items)

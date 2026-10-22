@@ -148,6 +148,9 @@ In Transfer: “Trust details” uses a collection; “Reason and benefits” us
   "contributorPattern": true,
   "dashboard": {
     "columns": [ ]
+  },
+  "applicationMetaData": {
+    "items": [ ]
   }
 }
 ```
@@ -163,6 +166,7 @@ In Transfer: “Trust details” uses a collection; “Reason and benefits” us
 | `hideFieldLabelWhenOnlyOneField` | When `true` (default), a page with **exactly one** normal field hides that field’s label so the **page title** is the question. Complex fields are excluded from this behaviour. |
 | `contributorPattern` | When `true` (default), invite-contributor features are available. Set `false` to hide them. |
 | `dashboard` | Optional. Configures applications-dashboard columns (see §3.1). |
+| `applicationMetaData` | Optional. Configures the metadata block on the application task list (see §3.2). |
 
 ### 3.1 Dashboard columns (`dashboard`)
 
@@ -224,6 +228,50 @@ Example (trust search inside “Trust details” flow):
   ]
 }
 ```
+
+### 3.2 Application task list metadata (`applicationMetaData`)
+
+The block under **Your application** (grey left border) can list up to **10** label/value rows. When `applicationMetaData` is omitted or `null`, the platform shows the default rows: application reference, application version, and lead applicant. New starter templates include `"applicationMetaData": null` alongside `"dashboard": null`.
+
+```json
+"applicationMetaData": {
+  "items": [
+    { "label": "Application reference", "fieldId": "application.reference", "order": 10 },
+    { "label": "Application version", "fieldId": "application.version", "order": 20 },
+    { "label": "Lead applicant", "fieldId": "application.leadApplicant", "order": 30 }
+  ]
+}
+```
+
+| Property | Purpose |
+|----------|---------|
+| `items` | Ordered list of rows. Maximum **10** entries. |
+| `label` | Text shown before the value (for example `Application reference`). |
+| `fieldId` | Binding path resolved at runtime (see below). |
+| `order` | Lower first. If omitted, array order is used (`10`, `20`, …). |
+
+**Binding paths (`fieldId`)**
+
+| Path | Resolved value |
+|------|----------------|
+| `application.reference` | Application reference number |
+| `application.version` | Template version used by the application |
+| `application.leadApplicant` or `application.leadApplicantName` | Lead applicant display name |
+| `application.leadApplicantEmail` | Lead applicant email |
+| `field.{fieldId}` | Plain-text answer for a top-level form field (same lookup rules as dashboard field columns) |
+| `{fieldId}` | Shorthand for a top-level field answer |
+
+**Collection-flow fields** (same rules as dashboard §3.1): answers inside a `multiCollectionFlow` are stored under the flow `fieldId` as an array of items. Use dotted paths and **`[index]`** (zero-based) to read a specific item instead of joining every item with `, `.
+
+| `fieldId` | Result |
+|-----------|--------|
+| `incomingTrustsSearch-field-flow` | Each collection item; complex values use `.name` (or title/label). Multiple items joined with `, `. |
+| `incomingTrustsSearch-field-flow.name` | Nested property on each item (UKPRN, code, etc.). |
+| `detailsOfIncomingTrust.incomingTrustsSearch-field-flow` | Explicit path: collection → nested field. |
+| `detailsOfIncomingTrust[0].incomingTrustsSearch-field-flow.name` | **Indexed:** only the first collection item (`[1]` is the second, and so on). |
+| `trusts-field-flow[1].name` | Second item’s `name` only. |
+
+Property names are **case-sensitive** in template JSON (`label` and `fieldId`, lowercase).
 
 ---
 

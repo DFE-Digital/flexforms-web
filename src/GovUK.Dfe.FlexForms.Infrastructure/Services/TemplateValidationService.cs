@@ -121,6 +121,32 @@ public class TemplateValidationService(ILogger<TemplateValidationService> logger
             var group = template.TaskGroups[i];
             ValidateTaskGroup(group, i, errors);
         }
+
+        ValidateApplicationMetaData(template.ApplicationMetaData, errors);
+    }
+
+    private static void ValidateApplicationMetaData(ApplicationMetadataConfiguration? configuration, List<string> errors)
+    {
+        if (configuration is null || configuration.Items is null || configuration.Items.Count == 0)
+            return;
+
+        if (configuration.Items.Count > ApplicationMetadataConfiguration.MaxItems)
+        {
+            errors.Add(
+                $"applicationMetaData.items cannot contain more than {ApplicationMetadataConfiguration.MaxItems} entries");
+        }
+
+        for (var i = 0; i < configuration.Items.Count; i++)
+        {
+            var item = configuration.Items[i];
+            var context = $"applicationMetaData.items[{i}]";
+
+            if (string.IsNullOrWhiteSpace(item.Label))
+                errors.Add($"{context}: 'label' is required");
+
+            if (string.IsNullOrWhiteSpace(item.FieldId))
+                errors.Add($"{context}: 'fieldId' is required");
+        }
     }
 
     /// <summary>

@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using GovUK.Dfe.FlexForms.Domain.Models;
 
 namespace GovUK.Dfe.FlexForms.Domain.Templates;
@@ -11,6 +12,11 @@ namespace GovUK.Dfe.FlexForms.Domain.Templates;
 public static class StarterFormTemplateSchema
 {
     public const string DefaultVersionNumber = "1.0.0";
+
+    private static readonly JsonSerializerOptions StarterJsonOptions = new()
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.Never
+    };
 
     /// <summary>
     /// Creates a starter <see cref="FormTemplate"/> for the given template id and display name.
@@ -27,6 +33,8 @@ public static class StarterFormTemplateSchema
             Description = "Starter template. Edit this schema in Template Manager.",
             DefaultFieldRequirementPolicy = "optional",
             ContributorPattern = false,
+            Dashboard = null,
+            ApplicationMetaData = null,
             TaskGroups =
             [
                 new TaskGroup
@@ -83,7 +91,7 @@ public static class StarterFormTemplateSchema
     /// Serializes the starter template to UTF-8 JSON.
     /// </summary>
     public static string CreateJson(string templateId, string templateName) =>
-        JsonSerializer.Serialize(Create(templateId, templateName));
+        JsonSerializer.Serialize(Create(templateId, templateName), StarterJsonOptions);
 
     /// <summary>
     /// Serializes the starter template to Base64 (API schema transport format).
