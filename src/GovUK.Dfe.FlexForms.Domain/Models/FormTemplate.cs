@@ -49,5 +49,12 @@ namespace GovUK.Dfe.FlexForms.Domain.Models
         /// </summary>
         [JsonPropertyName("dashboard")]
         public DashboardConfiguration? Dashboard { get; set; }
+
+        /// <summary>
+        /// Optional rows on the application task list (reference, version, lead applicant, etc.).
+        /// When omitted, the default system rows are shown.
+        /// </summary>
+        [JsonPropertyName("applicationMetaData")]
+        public ApplicationMetadataConfiguration? ApplicationMetaData { get; set; }
     }
 }
