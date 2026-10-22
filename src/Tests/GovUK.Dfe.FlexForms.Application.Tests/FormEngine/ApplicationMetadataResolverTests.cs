@@ -81,6 +81,31 @@ public class ApplicationMetadataResolverTests
     }
 
     [Fact]
+    public void Resolve_orders_items_by_order_then_array_index()
+    {
+        var template = new FormTemplate
+        {
+            TemplateId = "t1",
+            TemplateName = "Test",
+            Description = "d",
+            TaskGroups = [MinimalTaskGroup()],
+            ApplicationMetaData = new ApplicationMetadataConfiguration
+            {
+                Items =
+                [
+                    new ApplicationMetadataItemDefinition { Label = "Third", FieldId = "application.reference", Order = 30 },
+                    new ApplicationMetadataItemDefinition { Label = "First", FieldId = "application.version", Order = 10 },
+                    new ApplicationMetadataItemDefinition { Label = "Second", FieldId = "application.leadApplicant", Order = 20 }
+                ]
+            }
+        };
+
+        var rows = _resolver.Resolve(template, DefaultContext());
+
+        Assert.Equal(["First", "Second", "Third"], rows.Select(r => r.Label).ToArray());
+    }
+
+    [Fact]
     public void Resolve_limits_to_max_items()
     {
         var items = Enumerable.Range(1, 12)

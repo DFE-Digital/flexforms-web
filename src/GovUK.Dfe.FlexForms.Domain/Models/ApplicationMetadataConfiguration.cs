@@ -31,4 +31,10 @@ public class ApplicationMetadataItemDefinition
 
     [JsonPropertyName("fieldId")]
     public string? FieldId { get; set; }
+
+    /// <summary>
+    /// Sort order. Lower first. When omitted, array order is used (<c>10</c>, <c>20</c>, …).
+    /// </summary>
+    [JsonPropertyName("order")]
+    public int? Order { get; set; }
 }

@@ -236,9 +236,9 @@ The block under **Your application** (grey left border) can list up to **10** la
 ```json
 "applicationMetaData": {
   "items": [
-    { "label": "Application reference", "fieldId": "application.reference" },
-    { "label": "Application version", "fieldId": "application.version" },
-    { "label": "Lead applicant", "fieldId": "application.leadApplicant" }
+    { "label": "Application reference", "fieldId": "application.reference", "order": 10 },
+    { "label": "Application version", "fieldId": "application.version", "order": 20 },
+    { "label": "Lead applicant", "fieldId": "application.leadApplicant", "order": 30 }
   ]
 }
 ```
@@ -248,6 +248,7 @@ The block under **Your application** (grey left border) can list up to **10** la
 | `items` | Ordered list of rows. Maximum **10** entries. |
 | `label` | Text shown before the value (for example `Application reference`). |
 | `fieldId` | Binding path resolved at runtime (see below). |
+| `order` | Lower first. If omitted, array order is used (`10`, `20`, …). |
 
 **Binding paths (`fieldId`)**
 

@@ -38,7 +38,14 @@ public sealed class ApplicationMetadataResolver : IApplicationMetadataResolver
         var formData = ToFormDataDictionary(context.FormData);
         var rows = new List<ApplicationMetadataRow>();
 
-        foreach (var item in configured.Take(ApplicationMetadataConfiguration.MaxItems))
+        var orderedItems = configured
+            .Select((item, index) => (Item: item, Index: index))
+            .OrderBy(x => x.Item.Order ?? ((x.Index + 1) * 10))
+            .ThenBy(x => x.Index)
+            .Take(ApplicationMetadataConfiguration.MaxItems)
+            .Select(x => x.Item);
+
+        foreach (var item in orderedItems)
         {
             var label = item.Label?.Trim() ?? string.Empty;
             var binding = item.FieldId?.Trim() ?? string.Empty;
