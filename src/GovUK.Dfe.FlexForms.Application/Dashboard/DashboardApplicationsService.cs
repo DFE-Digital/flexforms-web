@@ -83,7 +83,10 @@ public sealed class DashboardApplicationsService(
         var totalPages = result.TotalPages;
         var currentPage = Math.Clamp(query.CurrentPage, 1, Math.Max(1, totalPages));
         var fieldColumns = query.IncludeCustomColumns
-            ? query.Columns.Where(c => c.Kind == DashboardColumnKind.Field).ToList()
+            ? query.Columns
+                .Where(c => c.Kind == DashboardColumnKind.Field)
+                .DistinctBy(c => c.Key, StringComparer.OrdinalIgnoreCase)
+                .ToList()
             : [];
 
         var applications = result.Items
