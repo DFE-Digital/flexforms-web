@@ -535,6 +535,151 @@ public class DashboardAnswerReaderTests
             "Oak Trust",
             DashboardAnswerReader.GetDisplayValue("trust.", Data(("trust", Element("""{"name":"Oak Trust"}""")))));
 
+    [Fact]
+    public void GetDisplayValue_ShouldReturnFirstIndexedCollectionItemOnly()
+    {
+        var formData = Data(("trusts-field-flow", """[{"name":"Oak Trust"},{"name":"Elm Trust"}]"""));
+
+        Assert.Equal("Oak Trust", DashboardAnswerReader.GetDisplayValue("trusts-field-flow[0].name", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ShouldReturnEmpty_WhenCollectionIndexIsOutOfRange()
+    {
+        var formData = Data(("trusts-field-flow", """[{"name":"Oak Trust"}]"""));
+
+        Assert.Equal(string.Empty, DashboardAnswerReader.GetDisplayValue("trusts-field-flow[3].name", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ShouldSummariseSingleItem_WhenIndexedCollectionHasNoNestedField()
+    {
+        var formData = Data(("trusts-field-flow", """[{"name":"Only Trust"},{"name":"Other"}]"""));
+
+        Assert.Equal("Only Trust", DashboardAnswerReader.GetDisplayValue("trusts-field-flow[0]", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ShouldResolvePropertyPath_OnTopLevelNonCollectionValue()
+    {
+        var formData = Data(("trust", """{"name":"Oak Trust","ukprn":"123"}"""));
+
+        Assert.Equal("Oak Trust", DashboardAnswerReader.GetDisplayValue("trust.name", formData));
+        Assert.Equal("123", DashboardAnswerReader.GetDisplayValue("trust.ukprn", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ShouldSelectIndexedNestedArrayInsideCollectionItem()
+    {
+        var formData = Data(("trusts-field-flow", """
+            [{"tags":[{"name":"Alpha"},{"name":"Beta"}]}]
+            """));
+
+        Assert.Equal("Beta", DashboardAnswerReader.GetDisplayValue("trusts-field-flow.tags[1].name", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ShouldApplyCollectionIndex_WhenFieldIsInsideAnyCollection()
+    {
+        var formData = Data(
+            ("trusts-field-flow", """[{"trustName":"Oak Trust"},{"trustName":"Elm Trust"}]"""),
+            ("academyName", "Oakwood"));
+
+        Assert.Equal("Elm Trust", DashboardAnswerReader.GetDisplayValue("trustName[1]", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ShouldUseExactKeyMatch_WhenPathHasNoIndexBrackets()
+    {
+        var formData = Data(("field.with.dots", "Exact value"));
+
+        Assert.Equal("Exact value", DashboardAnswerReader.GetDisplayValue("field.with.dots", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ShouldIgnoreInvalidIndexText_AndTreatSegmentAsUnindexed()
+    {
+        var formData = Data(("trusts-field-flow", """[{"name":"Oak Trust"},{"name":"Elm Trust"}]"""));
+
+        Assert.Equal(
+            "Oak Trust, Elm Trust",
+            DashboardAnswerReader.GetDisplayValue("trusts-field-flow[not-an-index].name", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ShouldReturnEmpty_WhenPathHasOnlyInvalidIndexedSegment()
+    {
+        Assert.Equal(string.Empty, DashboardAnswerReader.GetDisplayValue("[0]", Data(("a", "b"))));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ShouldSkipItemsMissingField_WhenScanningAllCollections()
+    {
+        var formData = Data(
+            ("trusts-field-flow", """[{"ukprn":"1"},{"trustName":"Oak Trust"}]"""),
+            ("academyName", "Oakwood"));
+
+        Assert.Equal("Oak Trust", DashboardAnswerReader.GetDisplayValue("trustName", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ShouldSkipIndexedNestedValue_WhenIndexIsOutOfRange()
+    {
+        var formData = Data(("trusts-field-flow", """
+            [{"tags":[{"name":"Alpha"},{"name":"Beta"}]}]
+            """));
+
+        Assert.Equal(
+            string.Empty,
+            DashboardAnswerReader.GetDisplayValue("trusts-field-flow.tags[2].name", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ShouldSkipIndexedNestedValue_WhenFieldIsNotACollection()
+    {
+        var formData = Data(("trusts-field-flow", """[{"tags":"not-an-array"}]"""));
+
+        Assert.Equal(
+            string.Empty,
+            DashboardAnswerReader.GetDisplayValue("trusts-field-flow.tags[0].name", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ShouldSummariseCollectionUsingTitle_WhenNameIsMissing()
+    {
+        var formData = Data(("trusts-field-flow", """[{"title":"Elm Trust"}]"""));
+
+        Assert.Equal("Elm Trust", DashboardAnswerReader.GetDisplayValue("trusts-field-flow[0]", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ShouldReadCollectionFromMutableDictionaryList()
+    {
+        var formData = Data(("trusts-field-flow", new List<object>
+        {
+            new Dictionary<string, object> { ["name"] = "Oak Trust" }
+        }));
+
+        Assert.Equal("Oak Trust", DashboardAnswerReader.GetDisplayValue("trusts-field-flow.name", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ShouldIgnoreMalformedJsonArrayString_AsCollection()
+    {
+        var formData = Data(("trusts-field-flow", "[not-valid-json"));
+
+        Assert.Equal(string.Empty, DashboardAnswerReader.GetDisplayValue("trusts-field-flow.name", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ShouldFormatJsonElementUndefinedKind_AsText()
+    {
+        using var doc = JsonDocument.Parse("null");
+        var undefined = doc.RootElement;
+
+        Assert.Equal(string.Empty, DashboardAnswerReader.GetDisplayValue("x", Data(("x", undefined))));
+    }
+
     // ---------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------
