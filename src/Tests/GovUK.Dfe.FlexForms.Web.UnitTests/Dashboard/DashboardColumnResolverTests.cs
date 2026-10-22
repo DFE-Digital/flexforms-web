@@ -97,6 +97,47 @@ public class DashboardColumnResolverTests
             columns.Select(c => c.Key));
     }
 
+    [Fact]
+    public void Resolve_DuplicateFieldColumns_KeepsFirstAndDoesNotCountDuplicateTowardsCap()
+    {
+        var template = CreateTemplate(new DashboardConfiguration
+        {
+            Columns =
+            [
+                new DashboardColumnDefinition { FieldId = "dateVisited", Header = "Date visited", Order = 1 },
+                new DashboardColumnDefinition { FieldId = " DateVisited ", Header = "Visit date", Order = 2 },
+                new DashboardColumnDefinition { FieldId = "b", Header = "B", Order = 3 },
+                new DashboardColumnDefinition { FieldId = "c", Header = "C", Order = 4 }
+            ]
+        });
+
+        var columns = DashboardColumnResolver.Resolve(template);
+        var fieldColumns = columns.Where(c => c.Kind == DashboardColumnKind.Field).ToList();
+
+        Assert.Equal(["field:dateVisited", "field:b", "field:c"], fieldColumns.Select(c => c.Key));
+        Assert.Equal("Date visited", fieldColumns[0].Header);
+    }
+
+    [Fact]
+    public void Resolve_DuplicateSystemColumns_KeepsFirst()
+    {
+        var template = CreateTemplate(new DashboardConfiguration
+        {
+            Columns =
+            [
+                new DashboardColumnDefinition { Type = "system", Id = "reference", Header = "Ref", Order = 10 },
+                new DashboardColumnDefinition { Type = "system", Id = "status", Order = 20 },
+                new DashboardColumnDefinition { Type = "system", Id = "reference", Header = "Reference again", Order = 30 },
+                new DashboardColumnDefinition { Type = "system", Id = "action", Order = 40 }
+            ]
+        });
+
+        var columns = DashboardColumnResolver.Resolve(template);
+
+        Assert.Equal(["reference", "status", "action"], columns.Select(c => c.Key));
+        Assert.Equal("Ref", columns[0].Header);
+    }
+
     private static FormTemplate CreateTemplate(DashboardConfiguration? dashboard) =>
         new()
         {
