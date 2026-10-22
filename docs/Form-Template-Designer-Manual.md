@@ -261,6 +261,16 @@ The block under **Your application** (grey left border) can list up to **10** la
 | `field.{fieldId}` | Plain-text answer for a top-level form field (same lookup rules as dashboard field columns) |
 | `{fieldId}` | Shorthand for a top-level field answer |
 
+**Collection-flow fields** (same rules as dashboard §3.1): answers inside a `multiCollectionFlow` are stored under the flow `fieldId` as an array of items. Use dotted paths and **`[index]`** (zero-based) to read a specific item instead of joining every item with `, `.
+
+| `fieldId` | Result |
+|-----------|--------|
+| `incomingTrustsSearch-field-flow` | Each collection item; complex values use `.name` (or title/label). Multiple items joined with `, `. |
+| `incomingTrustsSearch-field-flow.name` | Nested property on each item (UKPRN, code, etc.). |
+| `detailsOfIncomingTrust.incomingTrustsSearch-field-flow` | Explicit path: collection → nested field. |
+| `detailsOfIncomingTrust[0].incomingTrustsSearch-field-flow.name` | **Indexed:** only the first collection item (`[1]` is the second, and so on). |
+| `trusts-field-flow[1].name` | Second item’s `name` only. |
+
 Property names are **case-sensitive** in template JSON (`label` and `fieldId`, lowercase).
 
 ---

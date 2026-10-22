@@ -55,6 +55,44 @@ public class ApplicationMetadataResolverTests
     }
 
     [Fact]
+    public void Resolve_reads_indexed_collection_flow_field()
+    {
+        var template = new FormTemplate
+        {
+            TemplateId = "t1",
+            TemplateName = "Test",
+            Description = "d",
+            TaskGroups = [MinimalTaskGroup()],
+            ApplicationMetaData = new ApplicationMetadataConfiguration
+            {
+                Items =
+                [
+                    new ApplicationMetadataItemDefinition
+                    {
+                        Label = "Second trust",
+                        FieldId = "detailsOfIncomingTrust[1].incomingTrustsSearch-field-flow.name",
+                        Order = 10
+                    }
+                ]
+            }
+        };
+
+        var context = DefaultContext() with
+        {
+            FormData = new Dictionary<string, object>
+            {
+                ["detailsOfIncomingTrust"] =
+                    """[{"incomingTrustsSearch-field-flow":{"name":"First Trust"}},{"incomingTrustsSearch-field-flow":{"name":"Second Trust"}}]"""
+            }
+        };
+
+        var rows = _resolver.Resolve(template, context);
+
+        Assert.Single(rows);
+        Assert.Equal("Second Trust", rows[0].DisplayValue);
+    }
+
+    [Fact]
     public void Resolve_uses_configured_items_and_application_bindings()
     {
         var template = new FormTemplate

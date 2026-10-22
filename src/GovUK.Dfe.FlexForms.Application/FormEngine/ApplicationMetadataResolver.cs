@@ -1,3 +1,4 @@
+using System.Text.Json;
 using GovUK.Dfe.FlexForms.Application.Dashboard;
 using GovUK.Dfe.FlexForms.Domain.Models;
 
@@ -101,13 +102,9 @@ public sealed class ApplicationMetadataResolver : IApplicationMetadataResolver
         if (formData is null || formData.Count == 0)
             return new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
 
-        var map = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (key, value) in formData)
-        {
-            if (!string.IsNullOrWhiteSpace(key) && value is not null)
-                map[key] = value;
-        }
-
-        return map;
+        // Normalise session/posted data the same way as dashboard response parsing
+        // (unwrap { "value": ... } wrappers, collection-flow JSON arrays, etc.).
+        var json = JsonSerializer.Serialize(formData);
+        return DashboardAnswerReader.ParseFormData(json);
     }
 }

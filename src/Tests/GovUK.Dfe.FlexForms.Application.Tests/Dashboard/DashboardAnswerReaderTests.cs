@@ -334,6 +334,32 @@ public class DashboardAnswerReaderTests
     }
 
     [Fact]
+    public void GetDisplayValue_ShouldReturnSingleIndexedCollectionItem()
+    {
+        var formData = Data(("trusts-field-flow", """[{"name":"Oak Trust"},{"name":"Elm Trust"}]"""));
+
+        Assert.Equal("Elm Trust", DashboardAnswerReader.GetDisplayValue("trusts-field-flow[1].name", formData));
+    }
+
+    [Fact]
+    public void GetDisplayValue_ShouldResolveNestedField_OnIndexedCollectionPath()
+    {
+        var formData = Data(
+            ("detailsOfIncomingTrust", """
+                [
+                  {"incomingTrustsSearch-field-flow":{"name":"First Trust","ukprn":"1"}},
+                  {"incomingTrustsSearch-field-flow":{"name":"Second Trust","ukprn":"2"}}
+                ]
+                """));
+
+        Assert.Equal(
+            "Second Trust",
+            DashboardAnswerReader.GetDisplayValue(
+                "detailsOfIncomingTrust[1].incomingTrustsSearch-field-flow.name",
+                formData));
+    }
+
+    [Fact]
     public void GetDisplayValue_ShouldSkipCollectionItemsWithoutTheField()
     {
         var formData = Data(("trusts-field-flow", """[{"name":"Oak Trust"},{"ukprn":"1"},{"name":"   "}]"""));
