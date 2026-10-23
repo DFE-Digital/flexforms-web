@@ -21,38 +21,6 @@
 }
 <div class="govuk-grid-row">
     <div class="govuk-grid-column-two-thirds">
-        <legend class="govuk-fieldset__legend govuk-fieldset__legend--l">
-            <h1 class="govuk-fieldset__heading">
-                @if (hasTaskName)
-                {
-                    <span class="govuk-caption-l">@taskName</span>
-                }
-                @Model.DisplayModel.Title
-            </h1>
-        </legend>
-        
-        @if (!string.IsNullOrWhiteSpace(Model.DisplayModel.DisplayHtml))
-        {
-            <div class="govuk-inset-text">
-                @Html.Raw(MarkdownSafe.ToSafeGovUkHtml(Model.DisplayModel.DisplayHtml))
-            </div>
-        }
-        else if (Model.DisplayModel.DisplayData.Any())
-        {
-            var first = Model.DisplayModel.DisplayData.First();
-            var rest = Model.DisplayModel.DisplayData.Skip(1);
-            <div class="govuk-inset-text">
-                <h2 class="govuk-heading-m">@first.Value</h2>
-                @foreach (var item in rest)
-                {
-                    var lbl = item.Key ?? string.Empty;
-                    var isAcronym = !string.IsNullOrWhiteSpace(lbl) && lbl.Length <= 6 && lbl.ToUpperInvariant() == lbl;
-                    lbl = isAcronym ? lbl : (string.IsNullOrEmpty(lbl) ? string.Empty : char.ToUpperInvariant(lbl[0]) + (lbl.Length > 1 ? lbl.Substring(1).ToLowerInvariant() : string.Empty));
-                    <p class="govuk-body"><span class="govuk-!-font-weight-bold">@lbl:</span> @item.Value</p>
-                }
-            </div>
-        }
-        
         <form method="post" id="confirmation-form" asp-page="/Confirmation">
             @Html.AntiForgeryToken()
             <input type="hidden" asp-for="ConfirmationToken" />
@@ -74,7 +42,37 @@
             
             <div id="confirmation-radios" class="govuk-form-group @(ViewData.ModelState.ContainsKey("Confirmed") ? "govuk-form-group--error" : string.Empty)">
                 <fieldset class="govuk-fieldset">
-                    <legend class="govuk-visually-hidden">Choose Yes or No</legend>
+                    <legend class="govuk-fieldset__legend govuk-fieldset__legend--l">
+                        <h1 class="govuk-fieldset__heading">
+                            @if (hasTaskName)
+                            {
+                                <span class="govuk-caption-l">@taskName</span>
+                            }
+                            @Model.DisplayModel.Title
+                        </h1>
+                    </legend>
+        
+                    @if (!string.IsNullOrWhiteSpace(Model.DisplayModel.DisplayHtml))
+                    {
+                        <div class="govuk-inset-text">
+                            @Html.Raw(MarkdownSafe.ToSafeGovUkHtml(Model.DisplayModel.DisplayHtml))
+                        </div>
+                    }
+                    else if (Model.DisplayModel.DisplayData.Any())
+                    {
+                        var first = Model.DisplayModel.DisplayData.First();
+                        var rest = Model.DisplayModel.DisplayData.Skip(1);
+                        <div class="govuk-inset-text">
+                            <p class="govuk-label--m">@first.Value</p>
+                            @foreach (var item in rest)
+                            {
+                                var lbl = item.Key ?? string.Empty;
+                                var isAcronym = !string.IsNullOrWhiteSpace(lbl) && lbl.Length <= 6 && lbl.ToUpperInvariant() == lbl;
+                                lbl = isAcronym ? lbl : (string.IsNullOrEmpty(lbl) ? string.Empty : char.ToUpperInvariant(lbl[0]) + (lbl.Length > 1 ? lbl.Substring(1).ToLowerInvariant() : string.Empty));
+                                <p class="govuk-body"><span class="govuk-!-font-weight-bold">@lbl:</span> @item.Value</p>
+                            }
+                        </div>
+                    }
                     @if (ViewData.ModelState.ContainsKey("Confirmed"))
                     {
                         <govuk-error-message><span class="govuk-visually-hidden">Error: </span>@ViewData.ModelState["Confirmed"].Errors.FirstOrDefault()?.ErrorMessage </govuk-error-message>
