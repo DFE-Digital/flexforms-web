@@ -273,6 +273,14 @@ The block under **Your application** (grey left border) can list up to **10** la
 
 Property names are **case-sensitive** in template JSON (`label` and `fieldId`, lowercase).
 
+**Validation on save:** Template Manager won't save a version whose `applicationMetaData` paths don't match the template, because those rows would show blank on the task list. Each problem is listed with the item index, label and a suggested fix. A version is rejected when:
+
+- an `application.*` value isn't one of those listed above;
+- a field or collection ID isn't defined on any task page or flow page (the closest match is suggested);
+- a collection path names a field that isn't on that collection's pages (the collection's fields are listed);
+- a child property (`.name`) or index (`[0]`) is used on a plain-value field such as text, email, radios, select, checkboxes or date. Child properties of lookup (`autocomplete` / `complexField`) and upload fields come from external data, so only the field itself is checked;
+- the path is malformed, for example `a..b` or `items[x]`.
+
 ---
 
 ## 4. Task groups
