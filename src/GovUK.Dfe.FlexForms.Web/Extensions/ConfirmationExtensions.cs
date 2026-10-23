@@ -132,7 +132,8 @@ namespace GovUK.Dfe.FlexForms.Web.Extensions
             string? buttonId = null,
             string? title = null,
             string? requiredMessage = null,
-            string? displayExpression = null)
+            string? displayExpression = null,
+            object? additionalAttributes = null)
         {
             return htmlHelper.RenderConfirmationButton(
                 buttonText: buttonText,
@@ -143,7 +144,8 @@ namespace GovUK.Dfe.FlexForms.Web.Extensions
                 buttonId: buttonId,
                 title: title,
                 requiredMessage: requiredMessage,
-                displayExpression: displayExpression);
+                displayExpression: displayExpression,
+                additionalAttributes: additionalAttributes);
         }
 
         public static IHtmlContent RenderLinkConfirmationButton(

@@ -274,7 +274,8 @@
                                         displayFields: "fileName",
                                         title: "Are you sure you want to remove this file?",
                                         requiredMessage: "Select yes if you are sure you want to remove this file",
-                                        buttonId: $"delete-upload-{file.OriginalFileName}")
+                                        buttonId: $"delete-upload-{file.OriginalFileName}",
+                                        additionalAttributes: $"{{'aria-label': 'Delete {file.OriginalFileName}'}}")
                                 </form>
                             </td>
                         </tr>
