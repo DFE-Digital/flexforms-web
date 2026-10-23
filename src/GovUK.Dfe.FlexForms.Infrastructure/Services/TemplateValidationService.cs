@@ -1,3 +1,4 @@
+using GovUK.Dfe.FlexForms.Application.FormEngine;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using Microsoft.Extensions.Logging;
@@ -122,11 +123,12 @@ public class TemplateValidationService(ILogger<TemplateValidationService> logger
             ValidateTaskGroup(group, i, errors);
         }
 
-        ValidateApplicationMetaData(template.ApplicationMetaData, errors);
+        ValidateApplicationMetaData(template, errors);
     }
 
-    private static void ValidateApplicationMetaData(ApplicationMetadataConfiguration? configuration, List<string> errors)
+    private static void ValidateApplicationMetaData(FormTemplate template, List<string> errors)
     {
+        var configuration = template.ApplicationMetaData;
         if (configuration is null || configuration.Items is null || configuration.Items.Count == 0)
             return;
 
@@ -145,7 +147,16 @@ public class TemplateValidationService(ILogger<TemplateValidationService> logger
                 errors.Add($"{context}: 'label' is required");
 
             if (string.IsNullOrWhiteSpace(item.FieldId))
+            {
                 errors.Add($"{context}: 'fieldId' is required");
+                continue;
+            }
+
+            if (ApplicationMetadataBindingValidator.Validate(item.FieldId, template) is { } problem)
+            {
+                var label = string.IsNullOrWhiteSpace(item.Label) ? string.Empty : $" ('{item.Label.Trim()}')";
+                errors.Add($"{context}{label}: fieldId '{item.FieldId.Trim()}' is invalid: {problem}");
+            }
         }
     }
 
