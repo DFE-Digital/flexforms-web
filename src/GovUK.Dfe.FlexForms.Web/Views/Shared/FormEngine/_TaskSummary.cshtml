@@ -2,6 +2,7 @@
 @inject Application.Interfaces.IComplexFieldConfigurationService ComplexFieldConfigurationService
 @using System.Text.Json
 @using GovUK.Dfe.FlexForms.Web.Extensions
+@using GovUK.Dfe.FlexForms.Web.Constants
 @using GovUK.Dfe.FlexForms.Web.Utilities
 
 @if (!ViewData.ModelState.IsValid)
@@ -178,8 +179,8 @@
                                             </dt>
                                             <dd class="govuk-summary-list__value">
                                                 <form method="post" asp-page="/FormEngine/RenderForm" asp-route-referenceNumber="@Model.ReferenceNumber" asp-route-taskId="@Model.TaskId" asp-route-pageId="@(page.PageId)" asp-page-handler="DownloadFile" style="display:inline">
-                                                    <input type="hidden" name="FileId" value="@file.Id" />
-                                                    <input type="hidden" name="ApplicationId" value="@Model.ApplicationId" />
+                                                    <input type="hidden" name="@FormFieldNames.FileId" value="@file.Id" />
+                                                    <input type="hidden" name="@FormFieldNames.ApplicationId" value="@Model.ApplicationId" />
                                                     <button type="submit" class="govuk-link" style="border: none; background: none; padding: 0; color: #1d70b8; text-decoration: underline; cursor: pointer;">
                                                         @file.OriginalFileName
                                                     </button>
@@ -481,7 +482,7 @@
         
         <div class="govuk-checkboxes" data-module="govuk-checkboxes">
             <div class="govuk-checkboxes__item">
-                <input class="govuk-checkboxes__input" id="IsTaskCompleted" name="IsTaskCompleted" type="checkbox" value="true" @(Model.IsTaskCompleted ? "checked" : "")>
+                <input class="govuk-checkboxes__input" id="IsTaskCompleted" name="@FormFieldNames.IsTaskCompleted" type="checkbox" value="true" @(Model.IsTaskCompleted ? "checked" : "")>
                 <label class="govuk-label govuk-checkboxes__label" for="IsTaskCompleted">
                     Mark this section as complete, it's ready for review
                 </label>

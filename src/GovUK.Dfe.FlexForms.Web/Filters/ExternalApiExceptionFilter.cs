@@ -373,7 +373,7 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
             var fieldId = string.Empty;
             if (context.HttpContext.Request.HasFormContentType)
             {
-                fieldId = context.HttpContext.Request.Form["FieldId"].ToString();
+                fieldId = context.HttpContext.Request.Form[FormFieldNames.FieldId].ToString();
             }
 
             return (true, operation, fieldId);
@@ -405,7 +405,7 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
             AddNonFieldError(page, apiMessage);
 
             var returnUrl = httpContext.Request.HasFormContentType
-                ? httpContext.Request.Form["ReturnUrl"].ToString()
+                ? httpContext.Request.Form[FormFieldNames.ReturnUrl].ToString()
                 : string.Empty;
             if (string.IsNullOrEmpty(returnUrl))
                 returnUrl = httpContext.Request.Headers.Referer.ToString();
@@ -484,7 +484,7 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
             if (fileOpInfo.Item2 is "upload" or "delete")
             {
                 var returnUrl = httpContext.Request.HasFormContentType
-                    ? httpContext.Request.Form["ReturnUrl"].ToString()
+                    ? httpContext.Request.Form[FormFieldNames.ReturnUrl].ToString()
                     : string.Empty;
                 if (string.IsNullOrEmpty(returnUrl))
                     returnUrl = httpContext.Request.Headers.Referer.ToString();
