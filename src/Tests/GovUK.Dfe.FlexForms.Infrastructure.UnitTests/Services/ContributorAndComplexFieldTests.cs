@@ -57,6 +57,48 @@ public class ComplexFieldConfigurationServiceTests
     }
 
     [Fact]
+    public void GetAllConfigurations_ShouldListEachIdOnceWithItsBestDefinition()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["FormEngine:ComplexFields:0:Id"] = "TrustComplexField",
+            ["FormEngine:ComplexFields:0:ApiEndpoint"] = "https://example.test/trusts",
+            ["FormEngine:ComplexFields:1:Id"] = "UploadDocumentsComplexField",
+            ["FormEngine:ComplexFields:2:Id"] = "UploadDocumentsComplexField",
+            ["FormEngine:ComplexFields:2:FieldType"] = "upload"
+        }).Build();
+        var requestConfig = Substitute.For<IRequestAppConfiguration>();
+        requestConfig.Current.Returns(configuration);
+        var service = new ComplexFieldConfigurationService(
+            requestConfig,
+            NullLogger<ComplexFieldConfigurationService>.Instance);
+
+        var all = service.GetAllConfigurations();
+
+        Assert.Collection(all,
+            trust => Assert.Equal(("TrustComplexField", "autocomplete"), (trust.Id, trust.FieldType)),
+            upload => Assert.Equal(("UploadDocumentsComplexField", "upload"), (upload.Id, upload.FieldType)));
+    }
+
+    [Fact]
+    public void GetAllConfigurations_ShouldReadKeyedSectionsAndReturnEmptyWhenNothingIsConfigured()
+    {
+        var requestConfig = Substitute.For<IRequestAppConfiguration>();
+        requestConfig.Current.Returns(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["FormEngine:ComplexFields:SchoolSearch:ApiEndpoint"] = "https://example.test/schools"
+        }).Build());
+        var service = new ComplexFieldConfigurationService(
+            requestConfig,
+            NullLogger<ComplexFieldConfigurationService>.Instance);
+
+        Assert.Equal("SchoolSearch", Assert.Single(service.GetAllConfigurations()).Id);
+
+        requestConfig.Current.Returns(new ConfigurationBuilder().Build());
+        Assert.Empty(service.GetAllConfigurations());
+    }
+
+    [Fact]
     public void GetConfiguration_ShouldBindClientCredentialsAndSkipApiKeyFallback()
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>

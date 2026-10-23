@@ -61,6 +61,7 @@ namespace GovUK.Dfe.FlexForms.Web.Extensions
             services.AddScoped<IAutocompleteService, AutocompleteService>();
             services.AddScoped<IApplicationStatusService, ApplicationStatusService>();
             services.AddScoped<ITemplateSelectionService, TemplateSelectionService>();
+            services.AddScoped<ITemplateCacheInvalidator, TemplateCacheInvalidator>();
 
             services.AddScoped<ICollectionFlowProgressStore, CollectionFlowProgressStore>();
             services.AddScoped<IInfectedUploadFilter, InfectedUploadFilter>();

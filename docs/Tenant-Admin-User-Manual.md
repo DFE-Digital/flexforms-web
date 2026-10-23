@@ -229,10 +229,24 @@ If the tenant has no templates, you see “There are no templates for this tenan
 
 Adding a new version **starts from the version you currently have open**, not necessarily the latest. The suggested version number still increments from the **latest**.
 
+#### Edit in the visual editor
+
+Select **Edit in the visual editor** (or **Template editor** on the Admin hub). Page: `/admin/template-editor`. It opens a copy of the version you have open, or the starter template if there are no versions yet.
+
+- **Design** — the left side shows the template's structure: sections, tasks, repeatable lists, pages and questions. Select anything to change it on the right, or to move, duplicate or delete it. Each item has an **Add …** form for what can go inside it. Ids are made from names as you type, until you change an id yourself.
+- **Questions** — choose the question type, wording, hint, whether it must be answered and the error message, options for radios, checkboxes and dropdowns, a length limit, and format checks such as a UK telephone number. Search and upload questions list the complex fields set up for the tenant.
+- **Rules** — lists every rule in plain English, and lets you turn rules on and off. Pages and questions that a rule shows are marked **Shown by a rule** in the structure. To add or change a rule, use the JSON tab.
+- **JSON (advanced)** — the JSON the editor generates. You can edit it directly; your edits are applied when you leave the tab, and you can't leave while the JSON is invalid. Anything the editor doesn't show, such as `semanticKey`, `retiredFields`, dashboard columns and task list details, is kept as it is.
+- **Check for problems** runs the same checks as saving, without saving. Each problem links to the item it is about.
+- **Preview task** opens the task you are working on in a new tab, using your unsaved changes. Nothing is saved, rules aren't run, and search and upload questions are shown as placeholders.
+- **Save new version** works like the JSON route below: version number, reporting confirmation, then save. If the save is rejected, the editor keeps your changes and lists the problems.
+
+The editor warns you before you leave the page with unsaved changes. Unsaved changes are not kept if your session ends, so save versions as you go.
+
 #### Add a new version
 
-1. Select **Add New Template Version**.
-2. **New Version Number** — for example `1.1`, `2.0`, `1.2.1`.
+1. Select **Add New Template Version (JSON)**.
+2. **New Version Number** — three numbers separated by full stops, for example `1.2.1`.
 3. **JSON Schema** — prefilled from the version you opened. Edit it, or paste a schema produced with the [designer manual](Form-Template-Designer-Manual.md). If the curly braces and quotes are unfamiliar, start with [JSON in plain English](Form-Template-Designer-Manual.md#11-json-in-plain-english).
 4. Read the reporting warning (shown in red). Tick:
 

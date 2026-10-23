@@ -1,0 +1,161 @@
+@page "/admin/template-editor/preview"
+@model GovUK.Dfe.FlexForms.Web.Pages.Admin.TemplateEditorPreviewModel
+@using GovUK.Dfe.FlexForms.Web.Pages.FormEngine
+@using GovUK.Dfe.FlexForms.Web.Utilities
+@using Microsoft.AspNetCore.Html
+@inject GovUK.Dfe.FlexForms.Web.Services.IFieldRendererService FieldRenderer
+@{
+    ViewData["Title"] = "Draft preview";
+}
+
+<link rel="stylesheet" href="~/css/template-editor.css" asp-append-version="true" />
+
+<div class="govuk-notification-banner" role="region" aria-labelledby="tpl-preview-banner-title" data-module="govuk-notification-banner">
+    <div class="govuk-notification-banner__header">
+        <h2 class="govuk-notification-banner__title" id="tpl-preview-banner-title">Draft preview</h2>
+    </div>
+    <div class="govuk-notification-banner__content">
+        <p class="govuk-notification-banner__heading">This shows your unsaved changes.</p>
+        <p class="govuk-body">Nothing you enter here is saved and the buttons don't do anything. Rules aren't run, so every page and question is shown. Ones that a rule shows are marked.</p>
+    </div>
+</div>
+
+@if (Model.ParseError is not null)
+{
+    <div class="govuk-error-summary" data-module="govuk-error-summary">
+        <div role="alert">
+            <h2 class="govuk-error-summary__title">There is a problem</h2>
+            <div class="govuk-error-summary__body"><p class="govuk-body">@Model.ParseError</p></div>
+        </div>
+    </div>
+    return;
+}
+
+@if (Model.Problems.Count > 0)
+{
+    <div class="govuk-warning-text">
+        <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+        <strong class="govuk-warning-text__text">
+            <span class="govuk-visually-hidden">Warning</span>
+            This version can't be saved yet. @(Model.Problems.Count == 1 ? "There is 1 problem" : $"There are {Model.Problems.Count} problems"). Use "Check for problems" in the editor to see them.
+        </strong>
+    </div>
+}
+
+<form method="post" class="govuk-!-margin-bottom-6">
+    <input type="hidden" name="Schema" value="@Model.Schema" />
+    <div class="govuk-form-group">
+        <label class="govuk-label govuk-label--s" for="TaskId">Task to preview</label>
+        <select class="govuk-select" id="TaskId" name="TaskId">
+            @foreach (var group in Model.Template!.TaskGroups ?? [])
+            {
+                <optgroup label="@group.GroupName">
+                    @foreach (var task in group.Tasks ?? [])
+                    {
+                        <option value="@task.TaskId" selected="@(task.TaskId == Model.TaskId)">@task.TaskName</option>
+                    }
+                </optgroup>
+            }
+        </select>
+    </div>
+    <button type="submit" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0">Preview task</button>
+</form>
+
+@if (Model.Task is null)
+{
+    <p class="govuk-body">This template has no tasks yet.</p>
+    return;
+}
+
+<h1 class="govuk-heading-xl">@Model.Task.TaskName</h1>
+
+@if (Model.PageSets.Count == 0)
+{
+    <p class="govuk-body">This task has no pages yet.</p>
+}
+
+@foreach (var set in Model.PageSets)
+{
+    @if (set.Title is not null)
+    {
+        <h2 class="govuk-heading-l">@set.Title</h2>
+    }
+
+    @for (var index = 0; index < set.Pages.Count; index++)
+    {
+        var screen = set.Pages[index];
+        var fields = (screen.Fields ?? []).OrderBy(field => field.Order).ToList();
+        var hideFieldLabel = Model.Template!.HideFieldLabelWhenOnlyOneField && fields.Count == 1 && fields[0].Type != "complexField";
+        var caption = Model.Task.Caption is null ? Model.Task.TaskName : DisplayHelpers.InterpolateMessage(Model.Task.Caption, null);
+
+        <div class="tpl-preview__screen">
+            <p class="tpl-preview__meta">
+                Page @(index + 1) of @set.Pages.Count &middot; <code>@screen.PageId</code>
+                @if (Model.RuleTargets.Contains(screen.PageId))
+                {
+                    <strong class="govuk-tag govuk-tag--yellow govuk-!-margin-left-2">Shown by a rule</strong>
+                }
+            </p>
+            <span class="govuk-caption-l">@caption</span>
+            <h2 class="govuk-heading-l">@screen.Title</h2>
+
+            @if (!string.IsNullOrEmpty(screen.Description))
+            {
+                var (descriptionHtml, _) = MarkdownSafe.RenderHintWithClass(screen.Description);
+                <div class="govuk-body">@Html.Raw(descriptionHtml)</div>
+            }
+
+            @if (fields.Count == 0)
+            {
+                <p class="govuk-body govuk-hint">This page has no questions yet.</p>
+            }
+
+            @foreach (var field in fields)
+            {
+                if (hideFieldLabel && field.Label is not null)
+                {
+                    field.Label.IsVisible = false;
+                }
+
+                @if (Model.RuleTargets.Contains(field.FieldId))
+                {
+                    <strong class="govuk-tag govuk-tag--yellow govuk-!-margin-bottom-2">Shown by a rule</strong>
+                }
+
+                @if (field.Type == "complexField")
+                {
+                    <div class="govuk-inset-text">
+                        <p class="govuk-body govuk-!-font-weight-bold">@field.Label?.Value</p>
+                        <p class="govuk-body">Search and upload questions (<code>@field.ComplexField?.Id</code>) call other services, so they're only shown in a full preview from the Admin page after you save.</p>
+                    </div>
+                }
+                else
+                {
+                    IHtmlContent? rendered = null;
+                    string? renderError = null;
+                    try
+                    {
+                        rendered = await FieldRenderer.RenderFieldAsync(field, "Data", string.Empty, Array.Empty<string>(), string.Empty, Model.Task, screen);
+                    }
+                    catch (Exception ex)
+                    {
+                        renderError = $"The question \"{field.FieldId}\" can't be shown: {ex.Message}";
+                    }
+
+                    @if (renderError is not null)
+                    {
+                        <p class="govuk-error-message">@renderError</p>
+                    }
+                    else
+                    {
+                        @rendered
+                    }
+                }
+            }
+
+            <button type="button" class="govuk-button" disabled aria-disabled="true">
+                @(string.IsNullOrWhiteSpace(screen.SaveButtonLabel) ? "Save and continue" : screen.SaveButtonLabel)
+            </button>
+        </div>
+    }
+}

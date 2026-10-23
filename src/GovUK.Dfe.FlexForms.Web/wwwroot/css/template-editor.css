@@ -1,0 +1,254 @@
+.tpl-editor[hidden] {
+    display: none;
+}
+
+.tpl-editor__toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 0;
+    background: #ffffff;
+    border-bottom: 1px solid #b1b4b6;
+}
+
+.tpl-editor__status--dirty {
+    font-weight: 700;
+}
+
+.tpl-editor__status--dirty::before {
+    content: "";
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    margin-right: 8px;
+    border-radius: 50%;
+    background: #f47738;
+}
+
+.tpl-editor__tabs {
+    margin-top: 20px;
+}
+
+.tpl-editor__design {
+    display: flex;
+    align-items: flex-start;
+    gap: 30px;
+}
+
+.tpl-editor__tree {
+    flex: 0 0 34%;
+    position: sticky;
+    top: 70px;
+    max-height: calc(100vh - 90px);
+    overflow: auto;
+    padding-right: 10px;
+    border-right: 1px solid #b1b4b6;
+}
+
+.tpl-editor__inspector {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+@media (max-width: 40.0525em) {
+    .tpl-editor__design {
+        display: block;
+    }
+
+    .tpl-editor__tree {
+        position: static;
+        max-height: 50vh;
+        margin-bottom: 30px;
+        border-right: 0;
+        border-bottom: 1px solid #b1b4b6;
+    }
+}
+
+.tpl-editor__section {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid #b1b4b6;
+}
+
+.tpl-editor__node-actions .govuk-button {
+    margin-right: 10px;
+}
+
+.tpl-editor__inline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 30px;
+}
+
+.tpl-editor__code,
+.tpl-editor__json {
+    font-family: Consolas, "Courier New", monospace;
+}
+
+.tpl-editor__json {
+    min-height: 60vh;
+    font-size: 14px;
+    line-height: 1.4;
+    white-space: pre;
+    overflow-wrap: normal;
+    overflow-x: auto;
+}
+
+.tpl-editor__pattern {
+    margin-bottom: 20px;
+    padding-left: 15px;
+    border-left: 4px solid #b1b4b6;
+}
+
+.tpl-editor__options .govuk-table__cell {
+    vertical-align: middle;
+}
+
+.tpl-editor__row-actions {
+    white-space: nowrap;
+}
+
+.tpl-editor__link-button {
+    margin: 0 10px 0 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-family: inherit;
+    font-size: inherit;
+    color: #1d70b8;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.tpl-editor__link-button:focus {
+    outline: 3px solid transparent;
+    color: #0b0c0c;
+    background-color: #ffdd00;
+    box-shadow: 0 -2px #ffdd00, 0 4px #0b0c0c;
+    text-decoration: none;
+}
+
+/* Structure tree */
+
+.tpl-tree,
+.tpl-tree__children {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.tpl-tree__children {
+    margin-left: 11px;
+    padding-left: 8px;
+    border-left: 1px solid #b1b4b6;
+}
+
+.tpl-tree__row {
+    display: flex;
+    align-items: flex-start;
+}
+
+.tpl-tree__toggle,
+.tpl-tree__spacer {
+    flex: 0 0 22px;
+    width: 22px;
+    min-height: 22px;
+}
+
+.tpl-tree__toggle {
+    margin: 2px 0 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-size: 16px;
+    line-height: 1;
+    color: #0b0c0c;
+    cursor: pointer;
+}
+
+.tpl-tree__node {
+    display: block;
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 1px 0;
+    padding: 4px 6px;
+    border: 0;
+    border-left: 4px solid transparent;
+    background: none;
+    font-family: "GDS Transport", arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.25;
+    text-align: left;
+    color: #1d70b8;
+    cursor: pointer;
+}
+
+.tpl-tree__node:hover .tpl-tree__title {
+    text-decoration-thickness: 3px;
+}
+
+.tpl-tree__toggle:focus,
+.tpl-tree__node:focus {
+    outline: 3px solid transparent;
+    background-color: #ffdd00;
+    box-shadow: 0 0 0 2px #0b0c0c;
+    color: #0b0c0c;
+}
+
+.tpl-tree__node--selected {
+    border-left-color: #1d70b8;
+    background-color: #f3f2f1;
+    color: #0b0c0c;
+    font-weight: 700;
+}
+
+.tpl-tree__title {
+    display: block;
+    overflow-wrap: anywhere;
+    text-decoration: underline;
+}
+
+.tpl-tree__node--selected .tpl-tree__title {
+    text-decoration: none;
+}
+
+.tpl-tree__type {
+    display: block;
+    font-size: 14px;
+    font-weight: 400;
+    color: #505a5f;
+}
+
+.tpl-tree__rule {
+    display: inline-block;
+    margin-top: 2px;
+    padding: 0 4px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #594d00;
+    background: #fff7bf;
+}
+
+.tpl-tree__item--template > .tpl-tree__row .tpl-tree__node {
+    font-weight: 700;
+}
+
+/* Draft preview */
+
+.tpl-preview__screen {
+    margin-bottom: 40px;
+    padding: 20px 30px 10px;
+    border: 1px solid #b1b4b6;
+    border-top: 5px solid #1d70b8;
+}
+
+.tpl-preview__meta {
+    margin-bottom: 15px;
+    font-size: 14px;
+    color: #505a5f;
+}
