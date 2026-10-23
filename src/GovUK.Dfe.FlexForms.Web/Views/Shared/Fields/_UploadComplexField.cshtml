@@ -269,13 +269,12 @@
                                     <input type="hidden" name="fileName" value="@file.OriginalFileName" />
                                     <input type="hidden" name="CurrentTask.TaskName" value="@Model.TaskName" />
                                     @Html.RenderWarningConfirmationButton(
-                                        buttonText: "Delete",
+                                        buttonText: $"Delete <span class='govuk-visually-hidden'>{file.OriginalFileName}</span>",
                                         handler: "DeleteFile",
                                         displayFields: "fileName",
                                         title: "Are you sure you want to remove this file?",
                                         requiredMessage: "Select yes if you are sure you want to remove this file",
-                                        buttonId: $"delete-upload-{file.OriginalFileName}",
-                                        additionalAttributes: $"{{'aria-label': 'Delete {file.OriginalFileName}'}}")
+                                        buttonId: $"delete-upload-{file.OriginalFileName}")
                                 </form>
                             </td>
                         </tr>

@@ -102,7 +102,7 @@
                 dismissLink.append('Dismiss ');
                 const hidden = document.createElement('span');
                 hidden.className = 'govuk-visually-hidden';
-                hidden.textContent = $'notification: {n.message}';
+                hidden.textContent = `notification: ${n.message}`;
                 dismissLink.appendChild(hidden);
             }
 
