@@ -58,7 +58,9 @@ public abstract class FormPage(IPage page)
         await input.ClickAsync();
 
         await input.PressSequentiallyAsync(searchText);
-        await AutocompleteOption(inputId, optionText).ClickAsync();
+
+        // Increase timeout due to downstream dependencies
+        await AutocompleteOption(inputId, optionText).ClickAsync(new LocatorClickOptions { Timeout = 15_000 });
         await AutocompleteConfirmButton().ClickAsync();
     }
 

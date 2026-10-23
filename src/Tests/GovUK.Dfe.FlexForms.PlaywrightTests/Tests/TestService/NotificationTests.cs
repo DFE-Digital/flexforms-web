@@ -50,7 +50,10 @@ public sealed class NotificationTests : PlaywrightTestBase
         await Page.ReloadAsync();
 
         await notificationsPage.ExpectUnreadBadgeAsync(2);
-        await notificationsPage.ExpectNotificationAsync($"The file '{uploadedFileName}' has been validated.");
+
+        // extend timeout for file-validation pipeline completing
+        await notificationsPage.ExpectNotificationAsync(
+            $"The file '{uploadedFileName}' has been validated.", timeout: 20_000);
     }
 
     [TestCase(TestName = "User can dismiss a notification and clear all notifications")]
