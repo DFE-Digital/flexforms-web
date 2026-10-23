@@ -376,6 +376,40 @@ public class TemplateValidationServiceTests
         Assert.Contains(errors, e => e.Contains("applicationMetaData.items[1]: 'fieldId' is required", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void ValidateTemplateJson_ShouldFail_WhenApplicationMetaDataFieldIdNotInTemplate()
+    {
+        var template = CreateMinimalValidTemplate();
+        template.TaskGroups[0].Tasks[0].Pages =
+        [
+            new Page
+            {
+                PageId = "p1",
+                Slug = "p1",
+                Title = "Page",
+                Description = "d",
+                PageOrder = 1,
+                Fields = [new Field { FieldId = "trustName", Type = "text", Label = new Label { Value = "Trust" }, Order = 1 }]
+            }
+        ];
+        template.ApplicationMetaData = new ApplicationMetadataConfiguration
+        {
+            Items =
+            [
+                new ApplicationMetadataItemDefinition { Label = "Trust", FieldId = "field.trustName" },
+                new ApplicationMetadataItemDefinition { Label = "Second trust", FieldId = "field.trustNmae" }
+            ]
+        };
+
+        var (isValid, errors) = _service.ValidateTemplateJson(JsonSerializer.Serialize(template));
+
+        Assert.False(isValid);
+        Assert.Equal(
+            "applicationMetaData.items[1] ('Second trust'): fieldId 'field.trustNmae' is invalid: "
+            + "no field or collection with ID 'trustNmae' exists in the template. Did you mean 'trustName'?",
+            Assert.Single(errors));
+    }
+
     private static FormTemplate CreateMinimalValidTemplate() =>
         new()
         {
