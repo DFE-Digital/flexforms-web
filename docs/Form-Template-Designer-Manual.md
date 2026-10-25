@@ -102,7 +102,7 @@ A common slip when copying an example is leaving a trailing comma after the last
 
 In **Template Manager** you paste or edit this text in the **JSON Schema** box and save a version. If a quote or comma is wrong, save is rejected and you see **There is a problem** with the parse error — usually “missing comma” or “unexpected character”. Fix the punctuation and save again. The rest of this manual is the **meaning** of each key once the text is valid JSON.
 
-You don't have to write the JSON by hand. The **Template editor** (Template Manager → **Edit in the visual editor**) builds sections, tasks, pages, questions, options and checks with forms and writes this JSON for you. Its **JSON (advanced)** tab shows the result, and anything it has no form for is kept as you wrote it.
+You don't have to write the JSON by hand. The **Template editor** (Template Manager → **Edit in the visual editor**, see the [Template Editor User Manual](Template-Editor-User-Manual.md)) builds sections, tasks, pages, questions, options and checks with forms and writes this JSON for you. Its **JSON (advanced)** tab shows the result, and anything it has no form for is kept as you wrote it.
 
 Saving also rejects a version when:
 
