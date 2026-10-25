@@ -1,5 +1,5 @@
-// Visual template editor. Builds GOV.UK-styled controls over a TemplateDocument and writes every change straight
-// into the JSON that is saved. No inline handlers: the Content-Security-Policy blocks them.
+// Visual template editor. Builds GOV.UK Design System components over a TemplateDocument and writes every change
+// straight into the JSON that is saved. No inline handlers: the Content-Security-Policy blocks them.
 (function () {
     'use strict';
 
@@ -25,6 +25,16 @@
     ];
 
     var TEXT_TYPES = ['text', 'email', 'text-area', 'character-count'];
+
+    var KIND_LABELS = {
+        template: 'Template settings',
+        group: 'Section',
+        task: 'Task',
+        page: 'Page',
+        field: 'Question',
+        flow: 'Repeatable list',
+        derivedFlow: 'Derived list'
+    };
 
     var PATTERN_PRESETS = [
         { value: 'custom', label: 'Custom pattern', rule: '', message: '' },
@@ -58,16 +68,22 @@
     var rulesPanel = document.getElementById('tpl-rules');
     var problems = document.getElementById('tpl-problems');
     var statusText = document.getElementById('tpl-status');
+    var tabsElement = document.getElementById('template-editor-tabs');
     var jsonArea = document.getElementById('tpl-json');
+    var jsonGroup = document.getElementById('tpl-json-group');
     var jsonError = document.getElementById('tpl-json-error');
     var saveForm = document.getElementById('tpl-save-form');
     var schemaInput = document.getElementById('NewSchema');
     var previewForm = document.getElementById('tpl-preview-form');
     var tokenInput = saveForm.querySelector('input[name="__RequestVerificationToken"]');
+    var panels = {
+        design: document.getElementById('tpl-panel-design'),
+        rules: document.getElementById('tpl-panel-rules'),
+        json: document.getElementById('tpl-panel-json')
+    };
 
     var doc = null;
     var selected = [];
-    var activeTab = 'design';
     var dirty = !!data.hasUnsavedChanges;
     var jsonDirty = false;
     var submitting = false;
@@ -75,6 +91,37 @@
     var autoIds = new WeakSet();
     var expanded = new WeakSet();
     var treeLabels = new Map();
+    // Which option or format check is open for changing, for example { key: 'option', index: 2 }.
+    var editing = null;
+    var confirmingDelete = false;
+
+    // ---- GOV.UK Frontend ---------------------------------------------------------------------------------------
+
+    // The page template imports GOV.UK Frontend as a module. Importing the same URL shares that instance, so
+    // components the editor adds after the page has loaded can be initialised the same way.
+    function govukFrontendUrl() {
+        var scripts = document.querySelectorAll('script[type="module"]');
+        for (var i = 0; i < scripts.length; i++) {
+            if (scripts[i].src && /govuk-frontend/.test(scripts[i].src)) return scripts[i].src;
+            var match = /from\s+['"]([^'"]*govuk-frontend[^'"]*)['"]/.exec(scripts[i].textContent || '');
+            if (match) return match[1];
+        }
+        return '/govuk-frontend.min.js';
+    }
+
+    var govuk = null;
+    var govukReady = import(govukFrontendUrl())
+        .then(function (module) { govuk = module; return module; })
+        .catch(function () { return null; });
+
+    function enhance(scope) {
+        if (!govuk || !scope) return;
+        var options = { scope: scope, onError: function () { } };
+        govuk.createAll(govuk.Radios, undefined, options);
+        govuk.createAll(govuk.Checkboxes, undefined, options);
+        govuk.createAll(govuk.ErrorSummary, undefined, options);
+        govuk.createAll(govuk.NotificationBanner, undefined, options);
+    }
 
     // ---- DOM helpers -------------------------------------------------------------------------------------------
 
@@ -105,6 +152,10 @@
         element.appendChild(typeof children === 'string' ? document.createTextNode(children) : children);
     }
 
+    function hidden(text) {
+        return text ? h('span', { class: 'govuk-visually-hidden', text: ' ' + text }) : null;
+    }
+
     function hint(id, text) {
         return text ? h('div', { class: 'govuk-hint', id: id + '-hint', text: text }) : null;
     }
@@ -119,24 +170,26 @@
     }
 
     function textInput(options) {
+        var input = h('input', {
+            class: 'govuk-input' + (options.width ? ' govuk-input--width-' + options.width : ''),
+            id: options.id,
+            type: 'text',
+            value: options.value == null ? '' : String(options.value),
+            inputmode: options.numeric ? 'numeric' : null,
+            spellcheck: options.code || options.numeric ? 'false' : null,
+            autocomplete: 'off',
+            'aria-describedby': describedBy(options.id, options.hint, options.describedBy),
+            onFocus: options.onFocus ? function (e) { options.onFocus(e.target.value); } : null,
+            onInput: options.onInput ? function (e) { options.onInput(e.target.value, e.target); } : null,
+            onChange: options.onChange ? function (e) { options.onChange(e.target.value, e.target); } : null
+        });
         return formGroup([
             h('label', { class: 'govuk-label ' + (options.labelClass || 'govuk-label--s'), for: options.id, text: options.label }),
             hint(options.id, options.hint),
-            h('input', {
-                class: 'govuk-input' + (options.width ? ' govuk-input--width-' + options.width : '') + (options.code ? ' tpl-editor__code' : ''),
-                id: options.id,
-                type: 'text',
-                value: options.value == null ? '' : String(options.value),
-                inputmode: options.numeric ? 'numeric' : null,
-                spellcheck: options.code || options.numeric ? 'false' : null,
-                autocomplete: 'off',
-                list: options.list || null,
-                'aria-describedby': describedBy(options.id, options.hint, options.describedBy),
-                onFocus: options.onFocus ? function (e) { options.onFocus(e.target.value); } : null,
-                onInput: options.onInput ? function (e) { options.onInput(e.target.value, e.target); } : null,
-                onChange: options.onChange ? function (e) { options.onChange(e.target.value, e.target); } : null
-            }),
-            options.after || null
+            options.after || null,
+            options.suffix
+                ? h('div', { class: 'govuk-input__wrapper' }, [input, h('div', { class: 'govuk-input__suffix', 'aria-hidden': 'true', text: options.suffix })])
+                : input
         ]);
     }
 
@@ -156,7 +209,7 @@
     }
 
     function checkbox(options) {
-        return formGroup(h('div', { class: 'govuk-checkboxes govuk-checkboxes--small' },
+        return formGroup(h('div', { class: 'govuk-checkboxes govuk-checkboxes--small', 'data-module': 'govuk-checkboxes' },
             h('div', { class: 'govuk-checkboxes__item' }, [
                 h('input', {
                     class: 'govuk-checkboxes__input',
@@ -171,28 +224,53 @@
             ])));
     }
 
+    // Radios, with GOV.UK conditional reveals for items that have a `conditional` element.
     function radios(options) {
+        var group = h('div', {
+            class: 'govuk-radios govuk-radios--small' + (options.inline ? ' govuk-radios--inline' : ''),
+            'data-module': 'govuk-radios'
+        });
+
+        function syncConditionals() {
+            group.querySelectorAll('input[aria-controls], input[data-aria-controls]').forEach(function (input) {
+                var target = document.getElementById(input.getAttribute('aria-controls') || input.getAttribute('data-aria-controls'));
+                if (target) target.classList.toggle('govuk-radios__conditional--hidden', !input.checked);
+            });
+        }
+
+        options.items.forEach(function (item, index) {
+            var id = options.name + '-' + index;
+            var conditionalId = item.conditional ? id + '-conditional' : null;
+            append(group, h('div', { class: 'govuk-radios__item' }, [
+                h('input', {
+                    class: 'govuk-radios__input',
+                    id: id,
+                    name: options.name,
+                    type: 'radio',
+                    value: item.value,
+                    checked: item.value === options.value,
+                    'data-aria-controls': conditionalId,
+                    'aria-describedby': item.hint ? id + '-hint' : null,
+                    onChange: function () {
+                        syncConditionals();
+                        options.onChange(item.value);
+                    }
+                }),
+                h('label', { class: 'govuk-label govuk-radios__label', for: id, text: item.label }),
+                item.hint ? h('div', { class: 'govuk-hint govuk-radios__hint', id: id + '-hint', text: item.hint }) : null
+            ]));
+            if (item.conditional) {
+                append(group, h('div', {
+                    class: 'govuk-radios__conditional' + (item.value === options.value ? '' : ' govuk-radios__conditional--hidden'),
+                    id: conditionalId
+                }, item.conditional));
+            }
+        });
+
         return formGroup(h('fieldset', { class: 'govuk-fieldset', 'aria-describedby': describedBy(options.name, options.hint) }, [
             h('legend', { class: 'govuk-fieldset__legend govuk-fieldset__legend--s', text: options.legend }),
             hint(options.name, options.hint),
-            h('div', { class: 'govuk-radios govuk-radios--small' + (options.inline ? ' govuk-radios--inline' : '') },
-                options.items.map(function (item, index) {
-                    var id = options.name + '-' + index;
-                    return h('div', { class: 'govuk-radios__item' }, [
-                        h('input', {
-                            class: 'govuk-radios__input',
-                            id: id,
-                            name: options.name,
-                            type: 'radio',
-                            value: item.value,
-                            checked: item.value === options.value,
-                            'aria-describedby': item.hint ? id + '-hint' : null,
-                            onChange: function () { options.onChange(item.value); }
-                        }),
-                        h('label', { class: 'govuk-label govuk-radios__label', for: id, text: item.label }),
-                        item.hint ? h('div', { class: 'govuk-hint govuk-radios__hint', id: id + '-hint', text: item.hint }) : null
-                    ]);
-                }))
+            group
         ]));
     }
 
@@ -216,29 +294,74 @@
         return h('button', {
             type: 'button',
             id: id || null,
-            class: 'govuk-button govuk-!-margin-bottom-0' + (variant ? ' govuk-button--' + variant : ''),
+            class: 'govuk-button' + (variant ? ' govuk-button--' + variant : ''),
             onClick: onClick
         }, text);
     }
 
-    function linkButton(text, onClick, label) {
-        return h('button', { type: 'button', class: 'tpl-editor__link-button govuk-link', 'aria-label': label || null, onClick: onClick }, text);
+    function actionLink(action) {
+        return h('a', {
+            href: '#',
+            class: 'govuk-link',
+            onClick: function (e) {
+                e.preventDefault();
+                action.onClick();
+            }
+        }, [action.text, hidden(action.hidden)]);
+    }
+
+    // GOV.UK summary list. Rows are { key, value, actions: [{ text, hidden, onClick }] }.
+    function summaryList(rows, noBorder) {
+        var anyActions = rows.some(function (row) { return row.actions && row.actions.length; });
+        return h('dl', { class: 'govuk-summary-list' + (noBorder ? ' govuk-summary-list--no-border' : '') }, rows.map(function (row) {
+            var actions = (row.actions || []).filter(Boolean);
+            var actionsCell = null;
+            if (actions.length === 1) {
+                actionsCell = h('dd', { class: 'govuk-summary-list__actions' }, actionLink(actions[0]));
+            } else if (actions.length > 1) {
+                actionsCell = h('dd', { class: 'govuk-summary-list__actions' }, h('ul', { class: 'govuk-summary-list__actions-list' },
+                    actions.map(function (action) {
+                        return h('li', { class: 'govuk-summary-list__actions-list-item' }, actionLink(action));
+                    })));
+            }
+            return h('div', { class: 'govuk-summary-list__row' + (anyActions && !actionsCell ? ' govuk-summary-list__row--no-actions' : '') }, [
+                h('dt', { class: 'govuk-summary-list__key' }, row.key),
+                h('dd', { class: 'govuk-summary-list__value' }, row.value),
+                actionsCell
+            ]);
+        }));
+    }
+
+    function tag(text, colour) {
+        return h('strong', { class: 'govuk-tag' + (colour ? ' govuk-tag--' + colour : ''), text: text });
     }
 
     function section(title, children) {
-        return h('div', { class: 'tpl-editor__section' }, [h('h3', { class: 'govuk-heading-s', text: title }), children]);
+        return h('div', null, [
+            h('hr', { class: 'govuk-section-break govuk-section-break--l govuk-section-break--visible' }),
+            h('h3', { class: 'govuk-heading-m', text: title }),
+            children
+        ]);
     }
 
     function inset(text) {
-        return h('div', { class: 'govuk-inset-text govuk-!-margin-top-2', text: text });
+        return h('div', { class: 'govuk-inset-text', text: text });
     }
 
-    function datalist(id, values) {
-        return h('datalist', { id: id }, values.map(function (value) { return h('option', { value: value }); }));
+    function warningText(content) {
+        return h('div', { class: 'govuk-warning-text' }, [
+            h('span', { class: 'govuk-warning-text__icon', 'aria-hidden': 'true', text: '!' }),
+            h('strong', { class: 'govuk-warning-text__text' }, [h('span', { class: 'govuk-visually-hidden', text: 'Warning' }), content])
+        ]);
     }
 
     function lowerFirst(text) {
         return text ? text.charAt(0).toLowerCase() + text.slice(1) : text;
+    }
+
+    function focusById(id) {
+        var element = document.getElementById(id);
+        if (element) element.focus();
     }
 
     // ---- Template helpers --------------------------------------------------------------------------------------
@@ -307,11 +430,16 @@
         }
     }
 
-    function setRequired(field, state) {
+    function setRequired(field, state, message) {
         var rules = rulesOf(field);
         if (state === 'required') {
             field.required = true;
-            if (!findRule(field, ['required'])) rules.unshift({ type: 'required', rule: true, message: defaultRequiredMessage(field) });
+            var rule = findRule(field, ['required']);
+            if (!rule) {
+                rule = { type: 'required', rule: true, message: defaultRequiredMessage(field) };
+                rules.unshift(rule);
+            }
+            if (message) rule.message = message;
             return;
         }
         field.validations = rules.filter(function (rule) { return !(rule.type === 'required' && !rule.condition); });
@@ -336,7 +464,10 @@
         }
 
         if (lib.isChoiceType(field.type)) {
-            if (!Array.isArray(field.options) || field.options.length === 0) field.options = lib.defaultOptions(field.type);
+            if (!Array.isArray(field.options) || field.options.length === 0) {
+                field.options = lib.defaultOptions(field.type);
+                field.options.forEach(function (option) { autoIds.add(option); });
+            }
         } else {
             delete field.options;
         }
@@ -365,17 +496,13 @@
     function nodeType(path) {
         var node = doc.get(path);
         switch (doc.kindOf(path)) {
-            case 'template': return 'Template settings';
-            case 'group': return 'Section';
             case 'task':
                 var mode = node.summary && node.summary.mode;
                 if (mode === 'multiCollectionFlow') return 'Task with repeatable lists';
                 if (mode === 'derivedCollectionFlow') return 'Task with derived lists';
                 return 'Task';
-            case 'page': return 'Page';
             case 'field': return fieldTypeInfo(editorType(node)).short + (isRequired(node) ? '' : ', optional');
-            case 'flow': return 'Repeatable list';
-            default: return 'Derived list';
+            default: return KIND_LABELS[doc.kindOf(path)];
         }
     }
 
@@ -395,6 +522,16 @@
         else if (kind === 'flow' || kind === 'derivedFlow') add(['pages']);
         else if (kind === 'page') add(['fields']);
         return children;
+    }
+
+    function ancestorsOf(path) {
+        var list = [];
+        var current = path;
+        while (current.length) {
+            current = doc.parentPath(current);
+            list.unshift(current);
+        }
+        return list;
     }
 
     function ruleTargets() {
@@ -418,10 +555,9 @@
     // ---- State changes -----------------------------------------------------------------------------------------
 
     function updateStatus() {
-        statusText.textContent = dirty
-            ? 'You have unsaved changes. Save a new version to keep them.'
-            : 'No unsaved changes';
-        statusText.classList.toggle('tpl-editor__status--dirty', dirty);
+        statusText.replaceChildren(h('span', null, dirty
+            ? [tag('Unsaved changes', 'yellow'), ' Save a new version to keep them.']
+            : 'No unsaved changes'));
     }
 
     function markDirty() {
@@ -430,34 +566,35 @@
         updateStatus();
     }
 
-    // A value changed: update the tree label in place so typing stays fast.
+    // A value changed: update the names shown in the structure in place so typing stays fast.
     function edited(path) {
         markDirty();
         var labels = treeLabels.get(lib.pathKey(path));
         if (labels) {
-            labels.title.textContent = nodeTitle(path);
-            labels.type.textContent = nodeType(path);
+            labels.titles.forEach(function (element) { element.textContent = nodeTitle(path); });
+            if (labels.type) labels.type.textContent = nodeType(path);
         }
         var heading = document.getElementById('tpl-inspector-title');
         if (heading && lib.samePath(path, selected)) heading.textContent = nodeTitle(path);
     }
 
-    // The shape changed: rebuild the tree and the inspector.
+    // The shape changed: rebuild the structure and the settings.
     function restructured() {
         markDirty();
         renderTree();
         renderInspector();
     }
 
-    function select(path) {
+    function select(path, focusHeading) {
         selected = path;
+        editing = null;
+        confirmingDelete = false;
         for (var end = 2; end <= path.length; end++) {
             if (typeof path[end - 1] === 'number') expanded.add(doc.get(path.slice(0, end)));
         }
         renderTree();
         renderInspector();
-        var node = tree.querySelector('.tpl-tree__node--selected');
-        if (node) node.scrollIntoView({ block: 'nearest' });
+        if (focusHeading) focusById('tpl-inspector-title');
     }
 
     function addAndSelect(arrayPath, node) {
@@ -472,73 +609,102 @@
         }
     }
 
-    // ---- Tree --------------------------------------------------------------------------------------------------
+    // ---- Structure (nested GOV.UK details) ---------------------------------------------------------------------
 
     function renderTree() {
-        var focusKey = tree.contains(document.activeElement) ? document.activeElement.getAttribute('data-focus-key') : null;
         var targets = ruleTargets();
         treeLabels.clear();
-        tree.replaceChildren(h('ul', { class: 'tpl-tree' }, treeItem([], 0, targets)));
-        if (focusKey) {
-            var target = tree.querySelector('[data-focus-key="' + focusKey + '"]')
-                || tree.querySelector('[data-focus-key="node:' + lib.pathKey(selected) + '"]');
-            if (target) target.focus();
-        }
+        var rootTitle = h('span', { text: nodeTitle([]) });
+        treeLabels.set('', { titles: [rootTitle] });
+
+        tree.replaceChildren(h('div', null, [
+            h('h2', { class: 'govuk-heading-s', text: 'Structure' }),
+            h('p', { class: 'govuk-body govuk-!-font-size-16 govuk-!-margin-bottom-3' }, [
+                editLink([], rootTitle, null),
+                h('br'),
+                h('span', { class: 'govuk-hint govuk-!-font-size-16', text: KIND_LABELS.template })
+            ]),
+            childrenOf([]).map(function (child) { return treeNode(child, targets); })
+        ]));
     }
 
-    function treeItem(path, depth, targets) {
+    function editLink(path, content, hiddenText) {
+        var isCurrent = lib.samePath(path, selected);
+        return h('a', {
+            href: '#tpl-inspector-title',
+            class: 'govuk-link' + (isCurrent ? ' govuk-!-font-weight-bold' : ''),
+            'aria-current': isCurrent ? 'true' : null,
+            onClick: function (e) {
+                e.preventDefault();
+                select(path, true);
+            }
+        }, [content, hidden(hiddenText)]);
+    }
+
+    function treeNode(path, targets) {
         var node = doc.get(path);
         var kind = doc.kindOf(path);
-        var key = lib.pathKey(path);
         var children = childrenOf(path);
-        var open = depth === 0 || expanded.has(node);
-        var isSelected = lib.samePath(path, selected);
-        var title = h('span', { class: 'tpl-tree__title', text: nodeTitle(path) });
-        var type = h('span', { class: 'tpl-tree__type', text: nodeType(path) });
-        var ruleTagged = targets.has(idOf(path));
-        treeLabels.set(key, { title: title, type: type });
+        var summaryTitle = h('span', { text: nodeTitle(path) });
+        var hiddenTitle = h('span', { text: nodeTitle(path) });
+        var type = h('span', { text: nodeType(path) });
+        treeLabels.set(lib.pathKey(path), { titles: [summaryTitle, hiddenTitle], type: type });
 
-        var toggle = children.length && depth > 0
-            ? h('button', {
-                type: 'button',
-                class: 'tpl-tree__toggle',
-                'data-focus-key': 'toggle:' + key,
-                'aria-expanded': String(open),
-                'aria-label': (open ? 'Collapse ' : 'Expand ') + nodeTitle(path),
-                onClick: function () {
-                    if (open) expanded.delete(node); else expanded.add(node);
-                    renderTree();
-                }
-            }, open ? '\u25BE' : '\u25B8')
-            : h('span', { class: 'tpl-tree__spacer', 'aria-hidden': 'true' });
+        var body;
+        if (kind === 'page') {
+            body = children.length
+                ? h('ul', { class: 'govuk-list govuk-!-font-size-16 govuk-!-margin-bottom-0' }, children.map(function (child) {
+                    return treeField(child, targets);
+                }))
+                : h('p', { class: 'govuk-hint govuk-!-font-size-16 govuk-!-margin-bottom-0', text: 'No questions yet' });
+        } else {
+            body = children.length
+                ? children.map(function (child) { return treeNode(child, targets); })
+                : h('p', { class: 'govuk-hint govuk-!-font-size-16 govuk-!-margin-bottom-0', text: 'Nothing added yet' });
+        }
 
-        return h('li', { class: 'tpl-tree__item tpl-tree__item--' + kind }, [
-            h('div', { class: 'tpl-tree__row' }, [
-                toggle,
-                h('button', {
-                    type: 'button',
-                    class: 'tpl-tree__node' + (isSelected ? ' tpl-tree__node--selected' : ''),
-                    'data-focus-key': 'node:' + key,
-                    'aria-current': isSelected ? 'true' : null,
-                    onClick: function () { select(path); }
-                }, [
-                    title,
-                    type,
-                    ruleTagged ? h('span', { class: 'tpl-tree__rule', text: 'Shown by a rule' }) : null
-                ])
-            ]),
-            open && children.length
-                ? h('ul', { class: 'tpl-tree__children' }, children.map(function (child) { return treeItem(child, depth + 1, targets); }))
-                : null
+        var details = h('details', {
+            class: 'govuk-details govuk-!-font-size-16 govuk-!-margin-bottom-2',
+            open: expanded.has(node)
+        }, [
+            h('summary', { class: 'govuk-details__summary' },
+                h('span', { class: 'govuk-details__summary-text' + (lib.samePath(path, selected) ? ' govuk-!-font-weight-bold' : '') }, summaryTitle)),
+            h('div', { class: 'govuk-details__text govuk-!-padding-top-1 govuk-!-padding-bottom-1' }, [
+                h('p', { class: 'govuk-body govuk-!-font-size-16 govuk-!-margin-bottom-2' }, [
+                    h('span', { class: 'govuk-hint govuk-!-font-size-16' }, type),
+                    ' ',
+                    editLink(path, [
+                        'Edit',
+                        h('span', { class: 'govuk-visually-hidden' }, [' ' + KIND_LABELS[kind].toLowerCase() + ' ', hiddenTitle])
+                    ], null),
+                    targets.has(idOf(path)) ? [' ', tag('Shown by a rule', 'yellow')] : null
+                ]),
+                body
+            ])
+        ]);
+        details.addEventListener('toggle', function () {
+            if (details.open) expanded.add(node); else expanded.delete(node);
+        });
+        return details;
+    }
+
+    function treeField(path, targets) {
+        var title = h('span', { text: nodeTitle(path) });
+        var type = h('span', { text: nodeType(path) });
+        treeLabels.set(lib.pathKey(path), { titles: [title], type: type });
+        return h('li', null, [
+            editLink(path, title, null),
+            h('br'),
+            h('span', { class: 'govuk-hint govuk-!-font-size-16' }, type),
+            targets.has(idOf(path)) ? [' ', tag('Shown by a rule', 'yellow')] : null
         ]);
     }
 
-    // ---- Inspector ---------------------------------------------------------------------------------------------
+    // ---- Settings for the selected item ------------------------------------------------------------------------
 
     function renderInspector() {
         var focusId = inspector.contains(document.activeElement) ? document.activeElement.id : null;
         if (!doc.exists(selected)) selected = [];
-        var path = selected;
         var builders = {
             template: templateInspector,
             group: groupInspector,
@@ -548,55 +714,87 @@
             flow: flowInspector,
             derivedFlow: derivedFlowInspector
         };
-        var kind = doc.kindOf(path);
-        inspector.replaceChildren(h('div', { class: 'tpl-editor__inspector-body' }, builders[kind](path, doc.get(path))));
-        if (focusId) {
-            var target = document.getElementById(focusId);
-            if (target) target.focus();
-        }
+        inspector.replaceChildren(h('div', null, builders[doc.kindOf(selected)](selected, doc.get(selected))));
+        enhance(inspector);
+        if (focusId) focusById(focusId);
     }
 
-    function header(path, caption) {
+    function breadcrumbs(path) {
+        var ancestors = ancestorsOf(path);
+        if (!ancestors.length) return null;
+        return h('nav', { class: 'govuk-breadcrumbs govuk-breadcrumbs--collapse-on-mobile govuk-!-margin-top-0', 'aria-label': 'Breadcrumb' },
+            h('ol', { class: 'govuk-breadcrumbs__list' }, ancestors.map(function (ancestor) {
+                return h('li', { class: 'govuk-breadcrumbs__list-item' }, h('a', {
+                    href: '#tpl-inspector-title',
+                    class: 'govuk-breadcrumbs__link',
+                    onClick: function (e) {
+                        e.preventDefault();
+                        select(ancestor, true);
+                    }
+                }, nodeTitle(ancestor)));
+            })));
+    }
+
+    function header(path) {
         return [
-            h('span', { class: 'govuk-caption-m', text: caption }),
-            h('h2', { class: 'govuk-heading-m', id: 'tpl-inspector-title', tabindex: '-1', text: nodeTitle(path) }),
-            path.length ? nodeActions(path) : null
+            breadcrumbs(path),
+            h('span', { class: 'govuk-caption-m', text: KIND_LABELS[doc.kindOf(path)] }),
+            h('h2', { class: 'govuk-heading-l', id: 'tpl-inspector-title', tabindex: '-1', text: nodeTitle(path) }),
+            path.length ? nodeActions(path) : null,
+            path.length && confirmingDelete ? deleteConfirmation(path) : null
         ];
     }
 
     function nodeActions(path) {
         var index = path[path.length - 1];
         var siblings = doc.get(path.slice(0, -1));
-        return h('div', { class: 'govuk-button-group tpl-editor__node-actions' }, [
+        return h('div', { class: 'govuk-button-group' }, [
             index > 0 ? button('Move up', function () { selected = doc.move(path, -1); restructured(); }, 'secondary', 'tpl-move-up') : null,
             index < siblings.length - 1 ? button('Move down', function () { selected = doc.move(path, 1); restructured(); }, 'secondary', 'tpl-move-down') : null,
             button('Duplicate', function () {
                 var copy = doc.duplicate(path);
                 markDirty();
-                select(copy);
+                select(copy, true);
             }, 'secondary', 'tpl-duplicate'),
-            button('Delete', function () { confirmDelete(path); }, 'warning', 'tpl-delete')
+            button('Delete', function () {
+                confirmingDelete = true;
+                renderInspector();
+                focusById('tpl-delete-yes');
+            }, 'warning', 'tpl-delete')
         ]);
     }
 
-    function confirmDelete(path) {
-        var message = 'Delete "' + nodeTitle(path) + '"';
-        var children = childrenOf(path).length;
-        if (children) message += ' and everything in it';
-        message += '?';
+    function deleteConfirmation(path) {
+        var kindLabel = KIND_LABELS[doc.kindOf(path)].toLowerCase();
+        var message = 'Are you sure you want to delete this ' + kindLabel + (childrenOf(path).length ? ' and everything in it?' : '?');
         var references = doc.rulesReferencing(idOf(path)).length;
-        if (references) message += '\n\n' + references + ' rule(s) use it and will need updating.';
-        message += '\n\nIf applications already use this template, removed questions must be retired. Saving will tell you if so.';
-        if (!window.confirm(message)) return;
-        var parent = doc.parentPath(path);
-        doc.remove(path);
-        selected = parent;
-        restructured();
-        var heading = document.getElementById('tpl-inspector-title');
-        if (heading) heading.focus();
+        if (references) message += ' ' + references + (references === 1 ? ' rule uses it and will need updating.' : ' rules use it and will need updating.');
+        message += ' If applications already use this template, saving will tell you if removed questions need to be retired.';
+
+        return h('div', { id: 'tpl-delete-confirm' }, [
+            warningText(message),
+            h('div', { class: 'govuk-button-group' }, [
+                button('Yes, delete this ' + kindLabel, function () {
+                    var parent = doc.parentPath(path);
+                    doc.remove(path);
+                    markDirty();
+                    select(parent, true);
+                }, 'warning', 'tpl-delete-yes'),
+                h('a', {
+                    href: '#tpl-inspector-title',
+                    class: 'govuk-link',
+                    onClick: function (e) {
+                        e.preventDefault();
+                        confirmingDelete = false;
+                        renderInspector();
+                        focusById('tpl-delete');
+                    }
+                }, 'Cancel')
+            ])
+        ]);
     }
 
-    // Name input that also regenerates the id while the node is new.
+    // Name input that also regenerates the id while the item is new.
     function nameInput(path, options) {
         var node = doc.get(path);
         return textInput({
@@ -604,7 +802,6 @@
             label: options.label,
             hint: options.hint,
             value: options.get(node),
-            labelClass: 'govuk-label--s',
             onInput: function (value) {
                 options.set(node, value);
                 if (autoIds.has(node) && options.idKey) {
@@ -630,15 +827,16 @@
     function idInput(path, key, label, hintText) {
         var node = doc.get(path);
         var before = node[key];
-        var warning = h('p', { class: 'govuk-error-message', id: 'tpl-id-' + key + '-warning', hidden: true });
+        var message = h('p', { class: 'govuk-error-message', id: 'tpl-id-' + key + '-message', hidden: true });
         return textInput({
             id: 'tpl-id-' + key,
             label: label,
             hint: hintText,
             value: node[key],
             code: true,
-            describedBy: warning.id,
-            after: warning,
+            width: 20,
+            describedBy: message.id,
+            after: message,
             onFocus: function (value) { before = value; },
             onInput: function (value) {
                 node[key] = value;
@@ -647,25 +845,28 @@
             },
             onChange: function (value) {
                 var trimmed = value.trim();
-                var message = '';
+                var text = '';
                 var isError = true;
                 node[key] = '';
                 var taken = trimmed && doc.collectIds()[bucketFor(path, key)].has(trimmed);
                 node[key] = trimmed;
                 if (!trimmed) {
-                    message = 'Enter an id';
+                    text = 'Enter an id';
                 } else if (taken) {
-                    message = 'Something else in this template already uses this id';
+                    text = 'Something else in this template already uses this id';
                 } else if (doc.kindOf(path) === 'field' || doc.kindOf(path) === 'page') {
                     var updated = doc.renameReferences(before, trimmed);
                     if (updated) {
-                        message = 'Updated ' + updated + ' rule(s) to use the new id.';
+                        text = 'Updated ' + updated + (updated === 1 ? ' rule' : ' rules') + ' to use the new id.';
                         isError = false;
                     }
                 }
-                warning.className = isError ? 'govuk-error-message' : 'govuk-hint';
-                warning.textContent = message;
-                warning.hidden = !message;
+                message.className = isError ? 'govuk-error-message' : 'govuk-hint';
+                message.textContent = '';
+                if (isError && text) append(message, h('span', { class: 'govuk-visually-hidden', text: 'Error: ' }));
+                append(message, text);
+                message.hidden = !text;
+                message.parentElement.classList.toggle('govuk-form-group--error', isError && !!text);
                 before = trimmed;
                 edited(path);
             }
@@ -674,24 +875,37 @@
 
     function addForm(options) {
         var id = options.id;
-        var fields = [];
-        if (options.choices) {
-            fields.push(options.choices);
-        }
-        fields.push(textInput({ id: id, label: options.label, hint: options.hint, labelClass: 'govuk-label--s' }));
-        fields.push(button(options.button, function () {
-            var input = document.getElementById(id);
-            var name = (input.value || '').trim() || options.fallback;
-            options.add(name);
-        }, 'secondary', id + '-button'));
-        return section(options.title, fields);
+        return section(options.title, [
+            options.choices || null,
+            textInput({ id: id, label: options.label, hint: options.hint }),
+            button(options.button, function () {
+                var input = document.getElementById(id);
+                var name = (input.value || '').trim() || options.fallback;
+                options.add(name);
+            }, 'secondary', id + '-button')
+        ]);
+    }
+
+    // A summary list of what's inside the selected item, each with a Change link that opens it.
+    function contents(path, title, emptyText) {
+        var targets = ruleTargets();
+        var children = childrenOf(path);
+        return section(title, children.length
+            ? summaryList(children.map(function (child) {
+                return {
+                    key: [nodeTitle(child), targets.has(idOf(child)) ? [' ', tag('Shown by a rule', 'yellow')] : null],
+                    value: nodeType(child),
+                    actions: [{ text: 'Change', hidden: nodeTitle(child), onClick: function () { select(child, true); } }]
+                };
+            }))
+            : h('p', { class: 'govuk-body', text: emptyText }));
     }
 
     function ruleList(id) {
         var rules = doc.rulesReferencing(id);
         if (!rules.length) return null;
         return section('Rules that use this', h('ul', { class: 'govuk-list govuk-list--bullet' }, rules.map(function (rule) {
-            return h('li', null, describeRule(rule));
+            return h('li', { text: (rule.enabled === false ? '(Turned off) ' : '') + 'When ' + describeConditions(rule.conditionGroup) + ': ' + describeActions(rule) + '.' });
         })));
     }
 
@@ -702,15 +916,8 @@
         var retired = root.retiredFields || [];
         var rules = root.conditionalLogic || [];
 
-        function summaryRow(key, value) {
-            return h('div', { class: 'govuk-summary-list__row' }, [
-                h('dt', { class: 'govuk-summary-list__key', text: key }),
-                h('dd', { class: 'govuk-summary-list__value', text: value })
-            ]);
-        }
-
         return [
-            header(path, 'Template settings'),
+            header(path),
             textInput({
                 id: 'tpl-template-name', label: 'Template name', value: root.templateName,
                 onInput: function (value) { root.templateName = value; edited(path); }
@@ -720,7 +927,7 @@
                 onInput: function (value) { root.description = value; edited(path); }
             }),
             textInput({
-                id: 'tpl-id-templateId', label: 'Template id', code: true, value: root.templateId,
+                id: 'tpl-id-templateId', label: 'Template id', value: root.templateId, width: 20,
                 hint: 'An id inside the JSON, not the database id. Keep it the same across versions.',
                 onInput: function (value) { root.templateId = value; edited(path); }
             }),
@@ -736,7 +943,7 @@
             }),
             checkbox({
                 id: 'tpl-hide-single-label',
-                label: 'Use the page title as the question when a page has one question',
+                label: 'Use the page heading as the question when a page has one question',
                 hint: 'The question label is hidden so it isn\'t repeated under the heading.',
                 checked: root.hideFieldLabelWhenOnlyOneField !== false,
                 onChange: function (checked) { root.hideFieldLabelWhenOnlyOneField = checked; edited(path); }
@@ -747,14 +954,7 @@
                 checked: root.contributorPattern !== false,
                 onChange: function (checked) { root.contributorPattern = checked; edited(path); }
             }),
-            section('Set up in the JSON tab', [
-                h('dl', { class: 'govuk-summary-list govuk-summary-list--no-border' }, [
-                    summaryRow('Dashboard columns', dashboard.length ? String(dashboard.length) : 'Default columns'),
-                    summaryRow('Task list details', metadata.length ? metadata.length + ' row(s)' : 'Default rows'),
-                    summaryRow('Retired questions', String(retired.length)),
-                    summaryRow('Rules', String(rules.length))
-                ])
-            ]),
+            contents(path, 'Sections', 'This template has no sections yet.'),
             addForm({
                 id: 'tpl-new-group',
                 title: 'Add a section',
@@ -763,20 +963,26 @@
                 button: 'Add section',
                 fallback: 'New section',
                 add: function (name) { addAndSelect(['taskGroups'], doc.newGroup(name)); }
-            })
+            }),
+            section('Set up in the JSON tab', summaryList([
+                { key: 'Dashboard columns', value: dashboard.length ? String(dashboard.length) : 'Default columns' },
+                { key: 'Task list details', value: metadata.length ? metadata.length + (metadata.length === 1 ? ' row' : ' rows') : 'Default rows' },
+                { key: 'Retired questions', value: String(retired.length) },
+                { key: 'Rules', value: String(rules.length) }
+            ], true))
         ];
     }
 
     function groupInspector(path, group) {
         return [
-            header(path, 'Section'),
+            header(path),
             nameInput(path, {
                 id: 'tpl-group-name', label: 'Section heading', kind: 'group', idKey: 'groupId',
                 get: function (node) { return node.groupName; },
                 set: function (node, value) { node.groupName = value; }
             }),
             idInput(path, 'groupId', 'Section id', null),
-            (group.tasks || []).length ? null : inset('Add at least one task. A section without tasks can\'t be saved.'),
+            contents(path, 'Tasks', 'Add at least one task. A section without tasks can\'t be saved.'),
             addForm({
                 id: 'tpl-new-task',
                 title: 'Add a task',
@@ -804,7 +1010,7 @@
     function taskInspector(path, task) {
         var mode = task.summary && task.summary.mode;
         var items = [
-            header(path, 'Task'),
+            header(path),
             nameInput(path, {
                 id: 'tpl-task-name', label: 'Task name', kind: 'task', idKey: 'taskId',
                 get: function (node) { return node.taskName; },
@@ -823,12 +1029,14 @@
         ];
 
         if (mode === 'multiCollectionFlow') {
+            items.push(contents(path, 'Repeatable lists', 'This task has no lists yet.'));
             items.push(addForm({
                 id: 'tpl-new-flow', title: 'Add a repeatable list', label: 'List name', button: 'Add list', fallback: 'New list',
                 add: function (name) { addAndSelect(path.concat(['summary', 'flows']), doc.newFlow(name)); }
             }));
         } else if (mode === 'derivedCollectionFlow') {
-            items.push(inset('Derived lists repeat pages for each item in another list. Set them up in the JSON tab. You can edit their pages and questions here.'));
+            items.push(contents(path, 'Derived lists', 'This task has no lists yet.'));
+            items.push(inset('Derived lists repeat pages for each item in another list. Set up new ones in the JSON tab.'));
         } else {
             items.push(checkbox({
                 id: 'tpl-task-start-first', label: 'Open the first page when the task hasn\'t been started',
@@ -836,6 +1044,7 @@
                 checked: task.startAtFirstPageWhenNotStarted === true,
                 onChange: function (checked) { task.startAtFirstPageWhenNotStarted = checked || null; edited(path); }
             }));
+            items.push(contents(path, 'Pages', 'This task has no pages yet.'));
             items.push(addForm({
                 id: 'tpl-new-page', title: 'Add a page', label: 'Page heading', button: 'Add page', fallback: 'New page',
                 hint: 'Each page is one screen. Add questions to it next.',
@@ -848,7 +1057,7 @@
     function pageInspector(path, page) {
         var defaultNavigation = page.returnToSummaryPage === false ? 'Go to the next page (default)' : 'Go back to the task summary (default)';
         return [
-            header(path, 'Page'),
+            header(path),
             nameInput(path, {
                 id: 'tpl-page-title', label: 'Page heading', kind: 'page', idKey: 'pageId',
                 hint: 'On a page with one question, the heading is the question.',
@@ -878,6 +1087,7 @@
                 hint: 'Leave blank for "Save and continue".',
                 onInput: function (value) { page.saveButtonLabel = value || null; edited(path); }
             }),
+            contents(path, 'Questions', 'This page has no questions yet.'),
             section('Add a question', [
                 selectInput({
                     id: 'tpl-new-field-type', label: 'Question type', value: 'text',
@@ -904,12 +1114,22 @@
     function fieldInspector(path, field) {
         var type = editorType(field);
         var label = field.label || (field.label = { value: '', isVisible: false });
-        var requirement = requiredState(field);
         var requiredRule = findRule(field, ['required']);
         var policy = doc.root.defaultFieldRequirementPolicy === 'required' ? 'required' : 'optional';
 
+        var requiredMessage = textInput({
+            id: 'tpl-field-required-message',
+            label: 'Error message if it isn\'t answered',
+            value: requiredRule ? requiredRule.message : defaultRequiredMessage(field),
+            onInput: function (value) {
+                var rule = findRule(field, ['required']);
+                if (rule) rule.message = value;
+                edited(path);
+            }
+        });
+
         var items = [
-            header(path, 'Question'),
+            header(path),
             selectInput({
                 id: 'tpl-field-type', label: 'Question type', value: type, items: FIELD_TYPES,
                 onChange: function (value) { changeFieldType(field, value); restructured(); }
@@ -917,7 +1137,15 @@
             nameInput(path, {
                 id: 'tpl-field-label', label: 'Question', kind: 'field', idKey: 'fieldId',
                 get: function (node) { return node.label.value; },
-                set: function (node, value) { node.label.value = value; }
+                set: function (node, value) {
+                    var rule = findRule(node, ['required']);
+                    var followsLabel = rule && rule.message === defaultRequiredMessage(node);
+                    node.label.value = value;
+                    if (followsLabel) {
+                        rule.message = defaultRequiredMessage(node);
+                        document.getElementById('tpl-field-required-message').value = rule.message;
+                    }
+                }
             }),
             checkbox({
                 id: 'tpl-field-label-visible', label: 'Show the question above the answer',
@@ -935,23 +1163,18 @@
             radios({
                 name: 'tpl-field-required',
                 legend: 'Do applicants have to answer this?',
-                value: requirement,
-                inline: false,
+                value: requiredState(field),
                 items: [
-                    { value: 'required', label: 'Yes' },
+                    { value: 'required', label: 'Yes', conditional: requiredMessage },
                     { value: 'optional', label: 'No' },
                     { value: 'default', label: 'Use the template setting (' + policy + ')' }
                 ],
-                onChange: function (value) { setRequired(field, value); restructured(); }
+                onChange: function (value) {
+                    setRequired(field, value, document.getElementById('tpl-field-required-message').value);
+                    edited(path);
+                }
             })
         ];
-
-        if (requiredRule) {
-            items.push(textInput({
-                id: 'tpl-field-required-message', label: 'Error message if it isn\'t answered', value: requiredRule.message,
-                onInput: function (value) { requiredRule.message = value; edited(path); }
-            }));
-        }
 
         if (lib.isChoiceType(field.type)) items.push(optionsEditor(path, field));
         if (field.type === 'date') {
@@ -969,95 +1192,124 @@
             return rule.condition || ['required', 'regex', 'maxLength', 'maxWords'].indexOf(rule.type) === -1
                 || (TEXT_TYPES.indexOf(field.type) === -1 && (rule.type === 'maxLength' || rule.type === 'maxWords'));
         });
-        if (other.length) items.push(inset(other.length + ' more check(s) on this question are set in the JSON tab.'));
+        if (other.length) items.push(inset(other.length + (other.length === 1 ? ' more check on this question is' : ' more checks on this question are') + ' set in the JSON tab.'));
 
         items.push(ruleList(field.fieldId));
         return items;
     }
 
+    function startEditing(key, index, focusId) {
+        editing = { key: key, index: index };
+        renderInspector();
+        focusById(focusId);
+    }
+
+    function stopEditing(focusId) {
+        editing = null;
+        renderInspector();
+        if (focusId) focusById(focusId);
+    }
+
+    function isEditing(key, index) {
+        return !!editing && editing.key === key && (index === undefined || editing.index === index);
+    }
+
     function optionsEditor(path, field) {
         var options = field.options || (field.options = []);
+
+        function move(from, to) {
+            options.splice(to, 0, options.splice(from, 1)[0]);
+            editing = null;
+            restructured();
+        }
+
         var rows = options.map(function (option, index) {
-            var valueId = 'tpl-option-' + index + '-value';
-            return h('tr', { class: 'govuk-table__row' }, [
-                h('td', { class: 'govuk-table__cell' }, h('input', {
-                    class: 'govuk-input', id: 'tpl-option-' + index + '-label', type: 'text', value: option.label,
-                    'aria-label': 'Option ' + (index + 1) + ' text',
-                    onInput: function (e) {
-                        var previous = option.label;
-                        option.label = e.target.value;
-                        if (!option.value || option.value === previous || option.value === lib.kebabCase(previous)) {
-                            option.value = option.value === previous && previous ? e.target.value : lib.kebabCase(e.target.value) || e.target.value;
-                            document.getElementById(valueId).value = option.value;
-                        }
-                        edited(path);
-                    }
-                })),
-                h('td', { class: 'govuk-table__cell' }, h('input', {
-                    class: 'govuk-input tpl-editor__code', id: valueId, type: 'text', value: option.value, spellcheck: 'false',
-                    'aria-label': 'Option ' + (index + 1) + ' saved value',
-                    onInput: function (e) { option.value = e.target.value; edited(path); }
-                })),
-                h('td', { class: 'govuk-table__cell tpl-editor__row-actions' }, [
-                    index > 0 ? linkButton('Up', function () { options.splice(index - 1, 0, options.splice(index, 1)[0]); restructured(); }, 'Move option ' + (index + 1) + ' up') : null,
-                    index < options.length - 1 ? linkButton('Down', function () { options.splice(index + 1, 0, options.splice(index, 1)[0]); restructured(); }, 'Move option ' + (index + 1) + ' down') : null,
-                    linkButton('Remove', function () { options.splice(index, 1); restructured(); }, 'Remove option ' + (index + 1))
-                ])
-            ]);
+            var name = 'option ' + (index + 1);
+            return {
+                key: option.label || 'No text',
+                value: option.value,
+                actions: [
+                    { text: 'Change', hidden: name, onClick: function () { startEditing('option', index, 'tpl-option-text'); } },
+                    index > 0 ? { text: 'Move up', hidden: name, onClick: function () { move(index, index - 1); } } : null,
+                    index < options.length - 1 ? { text: 'Move down', hidden: name, onClick: function () { move(index, index + 1); } } : null,
+                    { text: 'Remove', hidden: name, onClick: function () { options.splice(index, 1); editing = null; restructured(); } }
+                ]
+            };
         });
 
-        return section('Options', [
-            h('p', { class: 'govuk-hint', text: 'The text is what applicants see. The saved value is stored with the answer and used by rules.' }),
-            h('table', { class: 'govuk-table tpl-editor__options' }, [
-                h('thead', { class: 'govuk-table__head' }, h('tr', { class: 'govuk-table__row' }, [
-                    h('th', { class: 'govuk-table__header', scope: 'col', text: 'Text' }),
-                    h('th', { class: 'govuk-table__header', scope: 'col', text: 'Saved value' }),
-                    h('th', { class: 'govuk-table__header', scope: 'col' }, h('span', { class: 'govuk-visually-hidden', text: 'Actions' }))
-                ])),
-                h('tbody', { class: 'govuk-table__body' }, rows)
-            ]),
-            button('Add an option', function () {
+        var parts = [
+            h('p', { class: 'govuk-body', text: 'Applicants see the text. The saved value is stored with the answer and used by rules.' }),
+            options.length ? summaryList(rows) : h('p', { class: 'govuk-body', text: 'There are no options yet.' })
+        ];
+
+        if (isEditing('option') && options[editing.index]) {
+            parts.push(optionForm(path, options[editing.index], editing.index));
+        } else {
+            parts.push(button('Add an option', function () {
                 var number = options.length + 1;
-                options.push({ value: 'option-' + number, label: 'Option ' + number });
-                restructured();
-                var input = document.getElementById('tpl-option-' + (options.length - 1) + '-label');
-                if (input) { input.focus(); input.select(); }
-            }, 'secondary', 'tpl-add-option')
+                var option = { value: 'option-' + number, label: 'Option ' + number };
+                autoIds.add(option);
+                options.push(option);
+                markDirty();
+                startEditing('option', options.length - 1, 'tpl-option-text');
+            }, 'secondary', 'tpl-add-option'));
+        }
+        return section('Options', parts);
+    }
+
+    function optionForm(path, option, index) {
+        return h('fieldset', { class: 'govuk-fieldset' }, [
+            h('legend', { class: 'govuk-fieldset__legend govuk-fieldset__legend--m', text: 'Option ' + (index + 1) }),
+            textInput({
+                id: 'tpl-option-text', label: 'Text', value: option.label,
+                onInput: function (value) {
+                    option.label = value;
+                    // Answers and rules already use the saved values of existing options, so only new ones follow the text.
+                    if (autoIds.has(option)) {
+                        option.value = lib.kebabCase(value) || value;
+                        document.getElementById('tpl-option-value').value = option.value;
+                    }
+                    edited(path);
+                }
+            }),
+            textInput({
+                id: 'tpl-option-value', label: 'Saved value', value: option.value, code: true, width: 20,
+                hint: autoIds.has(option) ? null : 'Saved answers and rules use this value. Only change it if nothing uses it yet.',
+                onInput: function (value) { option.value = value; autoIds.delete(option); edited(path); }
+            }),
+            button('Done', function () { stopEditing('tpl-add-option'); }, 'secondary', 'tpl-option-done')
         ]);
     }
 
     function complexFieldEditor(path, field, type) {
         var config = field.complexField || (field.complexField = { id: '' });
         var ids = complexFieldIds(type);
-        var listId = 'tpl-complex-ids';
-        var warning = h('p', { class: 'govuk-error-message', id: 'tpl-complex-warning' });
-
-        function check(value) {
-            var known = complexFieldConfig(value);
-            warning.textContent = value && !known
-                ? 'No ' + (type === 'upload' ? 'upload' : 'search') + ' field called "' + value + '" is set up for this tenant. Add it in Tenant settings under FormEngine:ComplexFields.'
-                : '';
-            warning.hidden = !warning.textContent;
-        }
-        check(config.id);
+        var known = !!complexFieldConfig(config.id);
+        var items = ids.map(function (id) { return { value: id, label: id }; });
+        if (config.id && !known) items.unshift({ value: config.id, label: config.id + ' (not set up for this tenant)' });
+        if (!items.length) items.push({ value: '', label: 'Nothing is set up for this tenant' });
 
         return section(type === 'upload' ? 'Upload settings' : 'Search settings', [
-            textInput({
-                id: 'tpl-complex-id', label: type === 'upload' ? 'Upload field' : 'What to search', value: config.id, code: true, list: listId,
-                hint: ids.length ? 'Set up for this tenant: ' + ids.join(', ') : 'Nothing is set up for this tenant yet.',
-                describedBy: warning.id,
-                after: [warning, datalist(listId, ids)],
-                onInput: function (value) { config.id = value.trim(); check(config.id); edited(path); },
-                onChange: function () { restructured(); }
-            })
+            selectInput({
+                id: 'tpl-complex-id',
+                label: type === 'upload' ? 'Upload field' : 'What to search',
+                hint: 'These come from FormEngine:ComplexFields in Tenant settings.',
+                value: config.id,
+                items: items,
+                onChange: function (value) { config.id = value; restructured(); }
+            }),
+            config.id && !known
+                ? warningText('No ' + (type === 'upload' ? 'upload' : 'search') + ' field called "' + config.id + '" is set up for this tenant. Applicants will see an error until it is added in Tenant settings.')
+                : null
         ]);
     }
 
     function lengthEditor(path, field) {
         var rule = findRule(field, ['maxLength', 'maxWords']);
+        var unit = rule && rule.type === 'maxWords' ? 'words' : 'characters';
         var parts = [
             textInput({
-                id: 'tpl-limit', label: 'Maximum length (optional)', value: rule ? rule.rule : '', width: 5, numeric: true,
+                id: 'tpl-limit', label: 'Maximum length (optional)', value: rule ? rule.rule : '', width: 5, numeric: true, suffix: unit,
                 hint: field.type === 'character-count' ? 'Applicants see a count of what they have left.' : null,
                 onChange: function (value) {
                     var number = parseInt(value, 10);
@@ -1078,10 +1330,9 @@
                 name: 'tpl-limit-unit', legend: 'Count', inline: true, value: rule.type,
                 items: [{ value: 'maxLength', label: 'Characters' }, { value: 'maxWords', label: 'Words' }],
                 onChange: function (value) {
-                    var unitBefore = rule.type === 'maxWords' ? 'words' : 'characters';
                     var unitAfter = value === 'maxWords' ? 'words' : 'characters';
                     rule.type = value;
-                    if (typeof rule.message === 'string') rule.message = rule.message.replace(unitBefore, unitAfter);
+                    if (typeof rule.message === 'string') rule.message = rule.message.replace(unit, unitAfter);
                     restructured();
                 }
             }));
@@ -1093,38 +1344,67 @@
         return section('Length limit', parts);
     }
 
+    function presetFor(rule) {
+        return PATTERN_PRESETS.find(function (preset) { return preset.rule && preset.rule === rule.rule; });
+    }
+
     function patternEditor(path, field) {
         var patterns = (field.validations || []).filter(function (rule) { return rule.type === 'regex' && !rule.condition; });
-        var parts = patterns.map(function (rule, index) {
-            return h('div', { class: 'tpl-editor__pattern' }, [
+        var parts = [];
+
+        if (patterns.length) {
+            parts.push(summaryList(patterns.map(function (rule, index) {
+                var name = 'format check ' + (index + 1);
+                return {
+                    key: (presetFor(rule) || PATTERN_PRESETS[0]).label,
+                    value: [h('code', { text: rule.rule || '(no pattern)' }), h('br'), rule.message || 'No error message'],
+                    actions: [
+                        { text: 'Change', hidden: name, onClick: function () { startEditing('pattern', index, 'tpl-pattern-rule'); } },
+                        {
+                            text: 'Remove', hidden: name, onClick: function () {
+                                field.validations = rulesOf(field).filter(function (item) { return item !== rule; });
+                                editing = null;
+                                restructured();
+                            }
+                        }
+                    ]
+                };
+            })));
+        }
+
+        if (isEditing('pattern') && patterns[editing.index]) {
+            var rule = patterns[editing.index];
+            parts.push(h('fieldset', { class: 'govuk-fieldset' }, [
+                h('legend', { class: 'govuk-fieldset__legend govuk-fieldset__legend--m', text: 'Format check ' + (editing.index + 1) }),
                 textInput({
-                    id: 'tpl-pattern-' + index, label: 'Pattern ' + (index + 1) + ' (regular expression)', value: rule.rule, code: true,
+                    id: 'tpl-pattern-rule', label: 'Pattern (regular expression)', value: rule.rule, code: true,
                     onInput: function (value) { rule.rule = value; edited(path); }
                 }),
                 textInput({
-                    id: 'tpl-pattern-' + index + '-message', label: 'Error message if it doesn\'t match', value: rule.message,
+                    id: 'tpl-pattern-message', label: 'Error message if it doesn\'t match', value: rule.message,
                     onInput: function (value) { rule.message = value; edited(path); }
                 }),
-                linkButton('Remove pattern ' + (index + 1), function () {
-                    field.validations = rulesOf(field).filter(function (item) { return item !== rule; });
-                    restructured();
-                })
-            ]);
-        });
-
-        parts.push(selectInput({
-            id: 'tpl-pattern-preset', label: 'Add a format check', value: 'custom', items: PATTERN_PRESETS, onChange: function () { }
-        }));
-        parts.push(button('Add check', function () {
-            var choice = document.getElementById('tpl-pattern-preset').value;
-            var preset = PATTERN_PRESETS.find(function (item) { return item.value === choice; }) || PATTERN_PRESETS[0];
-            rulesOf(field).push({ type: 'regex', rule: preset.rule, message: preset.message });
-            restructured();
-            var input = document.getElementById('tpl-pattern-' + patterns.length);
-            if (input) input.focus();
-        }, 'secondary', 'tpl-add-pattern'));
+                button('Done', function () { stopEditing('tpl-add-pattern'); }, 'secondary', 'tpl-pattern-done')
+            ]));
+        } else {
+            parts.push(selectInput({
+                id: 'tpl-pattern-preset', label: 'Add a format check', value: 'custom', items: PATTERN_PRESETS, onChange: function () { }
+            }));
+            parts.push(button('Add check', function () {
+                var choice = document.getElementById('tpl-pattern-preset').value;
+                var preset = PATTERN_PRESETS.find(function (item) { return item.value === choice; }) || PATTERN_PRESETS[0];
+                rulesOf(field).push({ type: 'regex', rule: preset.rule, message: preset.message });
+                markDirty();
+                startEditing('pattern', patterns.length, 'tpl-pattern-rule');
+            }, 'secondary', 'tpl-add-pattern'));
+        }
 
         return section('Format checks', parts);
+    }
+
+    function numberOrNull(value) {
+        var number = parseInt(value, 10);
+        return isNaN(number) ? null : number;
     }
 
     function flowFieldIds(flow) {
@@ -1135,14 +1415,10 @@
         return ids;
     }
 
-    function numberOrNull(value) {
-        var number = parseInt(value, 10);
-        return isNaN(number) ? null : number;
-    }
-
     function flowInspector(path, flow) {
+        var answerIds = flowFieldIds(flow);
         return [
-            header(path, 'Repeatable list'),
+            header(path),
             nameInput(path, {
                 id: 'tpl-flow-title', label: 'List name', kind: 'flow', idKey: 'flowId',
                 get: function (node) { return node.title; },
@@ -1165,21 +1441,19 @@
                 id: 'tpl-flow-add', label: 'Add button text', value: flow.addButtonLabel, width: 20,
                 onInput: function (value) { flow.addButtonLabel = value; edited(path); }
             }),
-            h('div', { class: 'tpl-editor__inline' }, [
-                textInput({
-                    id: 'tpl-flow-min', label: 'Fewest items (optional)', value: flow.minItems, width: 3, numeric: true,
-                    onInput: function (value) { flow.minItems = numberOrNull(value); edited(path); }
-                }),
-                textInput({
-                    id: 'tpl-flow-max', label: 'Most items (optional)', value: flow.maxItems, width: 3, numeric: true,
-                    onInput: function (value) { flow.maxItems = numberOrNull(value); edited(path); }
-                })
-            ]),
+            textInput({
+                id: 'tpl-flow-min', label: 'Fewest items (optional)', value: flow.minItems, width: 3, numeric: true, suffix: 'items',
+                onInput: function (value) { flow.minItems = numberOrNull(value); edited(path); }
+            }),
+            textInput({
+                id: 'tpl-flow-max', label: 'Most items (optional)', value: flow.maxItems, width: 3, numeric: true, suffix: 'items',
+                onInput: function (value) { flow.maxItems = numberOrNull(value); edited(path); }
+            }),
             textInput({
                 id: 'tpl-flow-title-binding', label: 'Answer used as each item\'s name', value: flow.itemTitleBinding, code: true,
-                list: 'tpl-flow-field-ids',
-                hint: 'An answer id from this list\'s pages. For a search answer add the property, for example trustSearch.name.',
-                after: datalist('tpl-flow-field-ids', flowFieldIds(flow)),
+                hint: answerIds.length
+                    ? 'An answer id from this list\'s pages: ' + answerIds.join(', ') + '. For a search answer add the property, for example ' + answerIds[0] + '.name.'
+                    : 'An answer id from this list\'s pages. Add pages and questions first.',
                 onInput: function (value) { flow.itemTitleBinding = value || null; edited(path); }
             }),
             radios({
@@ -1191,6 +1465,7 @@
             idInput(path, 'fieldId', 'Answer id for the whole list',
                 'Every item is saved under this id. Changing it once applications exist loses their answers.'),
             inset('Summary columns and the added, updated and removed messages are set in the JSON tab.'),
+            contents(path, 'Pages for each item', 'This list has no pages yet.'),
             addForm({
                 id: 'tpl-new-page', title: 'Add a page to each item', label: 'Page heading', button: 'Add page', fallback: 'New page',
                 add: function (name) { addAndSelect(path.concat(['pages']), doc.newPage(name)); }
@@ -1199,18 +1474,16 @@
     }
 
     function derivedFlowInspector(path, flow) {
-        var sources = Array.from(doc.collectIds().field);
         return [
-            header(path, 'Derived list'),
+            header(path),
             nameInput(path, {
                 id: 'tpl-flow-title', label: 'List name', kind: 'derivedFlow', idKey: 'flowId',
                 get: function (node) { return node.title; },
                 set: function (node, value) { node.title = value; }
             }),
             textInput({
-                id: 'tpl-derived-source', label: 'Repeat for each item in', value: flow.sourceFieldId, code: true, list: 'tpl-derived-sources',
+                id: 'tpl-derived-source', label: 'Repeat for each item in', value: flow.sourceFieldId, code: true, width: 20,
                 hint: 'The answer id of a list, or of a search or checkboxes question.',
-                after: datalist('tpl-derived-sources', sources),
                 onInput: function (value) { flow.sourceFieldId = value; edited(path); }
             }),
             selectInput({
@@ -1231,6 +1504,7 @@
             idInput(path, 'flowId', 'List id', null),
             idInput(path, 'fieldId', 'Answer id for the whole list',
                 'Every item is saved under this id. Changing it once applications exist loses their answers.'),
+            contents(path, 'Pages for each item', 'This list has no pages yet.'),
             addForm({
                 id: 'tpl-new-page', title: 'Add a page to each item', label: 'Page heading', button: 'Add page', fallback: 'New page',
                 add: function (name) { addAndSelect(path.concat(['pages']), doc.newPage(name)); }
@@ -1261,40 +1535,49 @@
         return (group && group.logicalOperator) === 'NOT' ? 'not all of: ' + text : text;
     }
 
-    function describeRule(rule) {
-        var actions = (rule.affectedElements || []).map(function (element) {
+    function describeActions(rule) {
+        return (rule.affectedElements || []).map(function (element) {
             return element.action + ' ' + element.elementType + ' ' + titleForId(element.elementId);
         }).join(', ');
-        return (rule.enabled === false ? '(Turned off) ' : '') + 'When ' + describeConditions(rule.conditionGroup) + ': ' + actions + '.';
     }
 
     function renderRules() {
         var rules = doc.root.conditionalLogic || [];
-        var intro = [
-            h('h2', { class: 'govuk-heading-m', text: 'Rules' }),
+        var content = [
+            h('h2', { class: 'govuk-heading-l', text: 'Rules' }),
             h('p', { class: 'govuk-body', text: 'Rules show, hide or skip pages and questions depending on answers. Anything a rule shows stays hidden until its condition is met, so most rules come in pairs: one to show and one to hide.' }),
             inset('You can turn rules on and off here. To add or change a rule, use the JSON tab. A rule builder is planned next.')
         ];
+
         if (!rules.length) {
-            rulesPanel.replaceChildren(h('div', null, [intro, h('p', { class: 'govuk-body', text: 'This template has no rules.' })]));
-            return;
+            content.push(h('p', { class: 'govuk-body', text: 'This template has no rules.' }));
         }
-        var cards = rules.map(function (rule, index) {
-            return h('div', { class: 'govuk-summary-card' }, [
+
+        rules.forEach(function (rule, index) {
+            var title = rule.name || rule.id || 'Rule ' + (index + 1);
+            var isOn = rule.enabled !== false;
+            content.push(h('div', { class: 'govuk-summary-card' }, [
                 h('div', { class: 'govuk-summary-card__title-wrapper' }, [
-                    h('h3', { class: 'govuk-summary-card__title', text: rule.name || rule.id || 'Rule ' + (index + 1) }),
-                    h('strong', { class: 'govuk-tag ' + (rule.enabled === false ? 'govuk-tag--grey' : 'govuk-tag--green'), text: rule.enabled === false ? 'Off' : 'On' })
+                    h('h3', { class: 'govuk-summary-card__title', text: title }),
+                    h('ul', { class: 'govuk-summary-card__actions' }, h('li', { class: 'govuk-summary-card__action' }, actionLink({
+                        text: isOn ? 'Turn off' : 'Turn on',
+                        hidden: title,
+                        onClick: function () {
+                            rule.enabled = !isOn;
+                            markDirty();
+                            renderRules();
+                        }
+                    })))
                 ]),
-                h('div', { class: 'govuk-summary-card__content' }, [
-                    h('p', { class: 'govuk-body', text: describeRule(rule) }),
-                    checkbox({
-                        id: 'tpl-rule-' + index + '-enabled', label: 'Rule is on', checked: rule.enabled !== false,
-                        onChange: function (checked) { rule.enabled = checked; markDirty(); renderRules(); }
-                    })
-                ])
-            ]);
+                h('div', { class: 'govuk-summary-card__content' }, summaryList([
+                    { key: 'Status', value: isOn ? tag('On', 'green') : tag('Off', 'grey') },
+                    { key: 'When', value: describeConditions(rule.conditionGroup) || 'Always' },
+                    { key: 'Then', value: describeActions(rule) || 'Nothing' }
+                ]))
+            ]));
         });
-        rulesPanel.replaceChildren(h('div', null, [intro, cards]));
+
+        rulesPanel.replaceChildren(h('div', null, content));
     }
 
     // ---- Tabs and JSON -----------------------------------------------------------------------------------------
@@ -1311,10 +1594,11 @@
 
     function showJsonError(error) {
         var location = errorLocation(jsonArea.value, error.message || '');
-        jsonError.textContent = location
+        jsonError.replaceChildren(h('span', { class: 'govuk-visually-hidden', text: 'Error: ' }), location
             ? 'The JSON isn\'t valid at line ' + location.line + ', column ' + location.column + '. Check for a missing or extra comma, quote or bracket there or just before it.'
-            : 'The JSON isn\'t valid: ' + (error.message || 'check for a missing or extra comma, quote or bracket.');
+            : 'The JSON isn\'t valid: ' + (error.message || 'check for a missing or extra comma, quote or bracket.'));
         jsonError.hidden = false;
+        jsonGroup.classList.add('govuk-form-group--error');
         jsonArea.classList.add('govuk-textarea--error');
         jsonArea.focus();
         if (location && location.position != null) jsonArea.setSelectionRange(location.position, location.position + 1);
@@ -1322,7 +1606,8 @@
 
     function clearJsonError() {
         jsonError.hidden = true;
-        jsonError.textContent = '';
+        jsonError.replaceChildren();
+        jsonGroup.classList.remove('govuk-form-group--error');
         jsonArea.classList.remove('govuk-textarea--error');
     }
 
@@ -1341,54 +1626,77 @@
         expanded = new WeakSet();
         (doc.root.taskGroups || []).forEach(function (group) { expanded.add(group); });
         if (!doc.exists(selected)) selected = [];
-        return true;
-    }
-
-    function setTabUi(name) {
-        container.querySelectorAll('[data-tpl-tab]').forEach(function (tab) {
-            var isActive = tab.getAttribute('data-tpl-tab') === name;
-            tab.parentElement.classList.toggle('govuk-tabs__list-item--selected', isActive);
-            tab.setAttribute('aria-selected', String(isActive));
-            tab.setAttribute('tabindex', isActive ? '0' : '-1');
-            document.getElementById(tab.getAttribute('aria-controls')).classList.toggle('govuk-tabs__panel--hidden', !isActive);
-        });
-    }
-
-    function showTab(name) {
-        if (name === activeTab) return true;
-        if (activeTab === 'json' && !applyJson()) return false;
-        activeTab = name;
-        setTabUi(name);
-        if (name === 'json') {
-            jsonArea.value = doc.toJson();
-            jsonDirty = false;
-            clearJsonError();
-        } else if (name === 'rules') {
-            renderRules();
-        } else {
-            renderTree();
-            renderInspector();
-        }
+        editing = null;
+        confirmingDelete = false;
         return true;
     }
 
     // The JSON to save or preview, or null if the JSON tab has a mistake in it.
     function currentSchema() {
-        if (activeTab === 'json' && !applyJson()) return null;
+        if (jsonDirty && !applyJson()) return null;
         return doc.toJson();
     }
 
-    container.querySelectorAll('[data-tpl-tab]').forEach(function (tab) {
-        tab.addEventListener('click', function (e) {
-            e.preventDefault();
-            showTab(tab.getAttribute('data-tpl-tab'));
+    function isShown(panel) {
+        return !panel.classList.contains('govuk-tabs__panel--hidden');
+    }
+
+    function tabLink(name) {
+        return tabsElement.querySelector('.govuk-tabs__tab[href="#tpl-panel-' + name + '"]');
+    }
+
+    function showTab(name) {
+        if (isShown(panels[name])) return;
+        var link = tabLink(name);
+        if (link) link.click();
+    }
+
+    // Stops GOV.UK Tabs leaving the JSON tab while the JSON can't be read. This runs before the Tabs component's
+    // own listeners because it is registered on an ancestor in the capture phase.
+    function guardTabChange(event) {
+        if (event.type === 'keydown' && ['ArrowLeft', 'ArrowRight', 'Left', 'Right'].indexOf(event.key) === -1) return;
+        var target = event.target.closest && event.target.closest('.govuk-tabs__tab');
+        if (!target || !isShown(panels.json)) return;
+        if (event.type === 'click' && target === tabLink('json')) return;
+        if (!applyJson()) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+    }
+
+    tabsElement.addEventListener('click', guardTabChange, true);
+    tabsElement.addEventListener('keydown', guardTabChange, true);
+
+    var shownBefore = {};
+    function panelShown(name) {
+        if (name === 'json' && !jsonDirty) {
+            jsonArea.value = doc.toJson();
+            clearJsonError();
+        } else if (name === 'rules') {
+            renderRules();
+        } else if (name === 'design') {
+            renderTree();
+            renderInspector();
+        }
+    }
+
+    var panelObserver = new MutationObserver(function () {
+        Object.keys(panels).forEach(function (name) {
+            var shown = isShown(panels[name]);
+            if (shown && !shownBefore[name] && doc) panelShown(name);
+            shownBefore[name] = shown;
         });
-        tab.addEventListener('keydown', function (e) {
-            if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
-            var tabs = Array.from(container.querySelectorAll('[data-tpl-tab]'));
-            var next = tabs[(tabs.indexOf(tab) + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
-            if (showTab(next.getAttribute('data-tpl-tab'))) next.focus();
-        });
+    });
+    Object.keys(panels).forEach(function (name) {
+        shownBefore[name] = isShown(panels[name]);
+        panelObserver.observe(panels[name], { attributes: true, attributeFilter: ['class'] });
+    });
+
+    // On narrow screens GOV.UK Tabs shows every panel at once, so refresh the JSON when someone starts editing it.
+    jsonArea.addEventListener('focus', function () {
+        if (jsonDirty || !doc) return;
+        var json = doc.toJson();
+        if (jsonArea.value !== json) jsonArea.value = json;
     });
 
     jsonArea.addEventListener('input', function () {
@@ -1407,35 +1715,54 @@
 
     // ---- Problems, preview and save ----------------------------------------------------------------------------
 
+    function targetFor(message) {
+        var quoted = (message.match(/'([^']+)'/g) || []).map(function (text) { return text.slice(1, -1); });
+        // Messages name the most specific thing first, for example "Field 'x' on page 'y' in task 'z'".
+        for (var i = 0; i < quoted.length; i++) {
+            var path = doc.findById(quoted[i]) || doc.findByName(quoted[i]);
+            if (path) return path;
+        }
+        return null;
+    }
+
     function showProblems(errors, failedToRun) {
         if (!errors.length) {
-            problems.replaceChildren(h('div', { class: 'govuk-inset-text' }, 'No problems found. This template can be saved.'));
-            problems.focus();
+            problems.replaceChildren(h('div', {
+                class: 'govuk-notification-banner govuk-notification-banner--success',
+                role: 'alert',
+                'aria-labelledby': 'tpl-problems-title',
+                'data-module': 'govuk-notification-banner'
+            }, [
+                h('div', { class: 'govuk-notification-banner__header' },
+                    h('h2', { class: 'govuk-notification-banner__title', id: 'tpl-problems-title', text: 'Success' })),
+                h('div', { class: 'govuk-notification-banner__content' },
+                    h('p', { class: 'govuk-notification-banner__heading', text: 'No problems found. This template can be saved.' }))
+            ]));
+            enhance(problems);
+            if (!govuk) problems.focus();
             return;
         }
+
         var list = errors.map(function (message) {
-            var ids = (message.match(/'([^']+)'/g) || []).map(function (quoted) { return quoted.slice(1, -1); });
-            var target = null;
-            // Messages name the most specific thing first, for example "Field 'x' on page 'y' in task 'z'".
-            for (var i = 0; i < ids.length && !target; i++) target = doc.findById(ids[i]) || doc.findByName(ids[i]);
-            if (!target || failedToRun) return h('li', { text: message });
+            var target = failedToRun ? null : targetFor(message);
             return h('li', null, h('a', {
-                href: '#tpl-inspector',
-                class: 'govuk-link',
+                href: target ? '#tpl-inspector-title' : '#template-editor-tabs',
                 onClick: function (e) {
+                    if (!target) return;
                     e.preventDefault();
-                    if (!showTab('design')) return;
-                    select(target);
-                    var heading = document.getElementById('tpl-inspector-title');
-                    if (heading) heading.focus();
+                    showTab('design');
+                    if (!isShown(panels.design)) return;
+                    select(target, true);
                 }
             }, message));
         });
+
         problems.replaceChildren(h('div', { class: 'govuk-error-summary', 'data-module': 'govuk-error-summary' }, h('div', { role: 'alert' }, [
-            h('h2', { class: 'govuk-error-summary__title', text: failedToRun ? 'The check didn\'t run' : 'There ' + (errors.length === 1 ? 'is 1 problem' : 'are ' + errors.length + ' problems') }),
+            h('h2', { class: 'govuk-error-summary__title', text: failedToRun ? 'The check didn\'t run' : 'There is a problem' }),
             h('div', { class: 'govuk-error-summary__body' }, h('ul', { class: 'govuk-list govuk-error-summary__list' }, list))
         ])));
-        problems.focus();
+        enhance(problems);
+        if (!govuk) problems.focus();
     }
 
     document.getElementById('tpl-check-button').addEventListener('click', function (e) {
@@ -1477,6 +1804,7 @@
         var schema = currentSchema();
         if (schema == null) {
             e.preventDefault();
+            showTab('json');
             return;
         }
         schemaInput.value = schema;
@@ -1495,14 +1823,22 @@
     container.hidden = false;
     updateStatus();
 
+    // If GOV.UK Frontend didn't load, show every panel rather than leaving two of them unreachable.
+    govukReady.then(function () {
+        window.setTimeout(function () {
+            if (tabsElement.querySelector('[role="tablist"]')) return;
+            Object.keys(panels).forEach(function (name) { panels[name].classList.remove('govuk-tabs__panel--hidden'); });
+        }, 1000);
+    });
+
     try {
         doc = lib.TemplateDocument.parse(data.schemaJson);
     } catch (error) {
-        doc = new lib.TemplateDocument({});
-        activeTab = 'json';
-        setTabUi('json');
+        doc = new lib.TemplateDocument({ taskGroups: [] });
         jsonArea.value = data.schemaJson || '';
         jsonDirty = true;
+        // GOV.UK Tabs opens the tab named in the address when it starts.
+        if (window.history.replaceState) window.history.replaceState(null, '', '#tpl-panel-json');
         showJsonError(error);
         return;
     }
@@ -1510,4 +1846,5 @@
     (doc.root.taskGroups || []).forEach(function (group) { expanded.add(group); });
     renderTree();
     renderInspector();
+    renderRules();
 })();

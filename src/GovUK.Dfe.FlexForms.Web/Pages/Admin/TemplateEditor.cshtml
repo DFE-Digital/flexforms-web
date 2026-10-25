@@ -5,8 +5,6 @@
     bool HasError(string key) => ViewData.ModelState[key]?.Errors.Any() == true;
 }
 
-<link rel="stylesheet" href="~/css/template-editor.css" asp-append-version="true" />
-
 <a asp-page="/Admin/TemplateManager" class="govuk-back-link">Back to Template Manager</a>
 
 @if (Model.SavedVersion is not null)
@@ -24,21 +22,28 @@
 
 @if (!ViewData.ModelState.IsValid)
 {
-    <govuk-error-summary>
-        @foreach (var entry in ViewData.ModelState.Where(item => item.Value?.Errors.Count > 0))
-        {
-            var href = entry.Key switch
-            {
-                nameof(Model.NewVersion) => "#NewVersion",
-                nameof(Model.AcknowledgeReportingImpact) => "#AcknowledgeReportingImpact",
-                _ => "#template-editor-tabs"
-            };
-            foreach (var error in entry.Value!.Errors)
-            {
-                <govuk-error-summary-item href="@href">@error.ErrorMessage</govuk-error-summary-item>
-            }
-        }
-    </govuk-error-summary>
+    <div class="govuk-error-summary" data-module="govuk-error-summary">
+        <div role="alert">
+            <h2 class="govuk-error-summary__title">There is a problem</h2>
+            <div class="govuk-error-summary__body">
+                <ul class="govuk-list govuk-error-summary__list">
+                    @foreach (var entry in ViewData.ModelState.Where(item => item.Value?.Errors.Count > 0))
+                    {
+                        var href = entry.Key switch
+                        {
+                            nameof(Model.NewVersion) => "#NewVersion",
+                            nameof(Model.AcknowledgeReportingImpact) => "#AcknowledgeReportingImpact",
+                            _ => "#template-editor-tabs"
+                        };
+                        foreach (var error in entry.Value!.Errors)
+                        {
+                            <li><a href="@href">@error.ErrorMessage</a></li>
+                        }
+                    }
+                </ul>
+            </div>
+        </div>
+    </div>
 }
 
 @if (Model.LoadError is not null)
@@ -83,53 +88,54 @@
     </div>
 </noscript>
 
-<div id="template-editor" class="tpl-editor" hidden>
-    <div class="tpl-editor__toolbar">
-        <p class="govuk-body govuk-!-margin-bottom-0 tpl-editor__status" id="tpl-status" role="status" aria-live="polite">No unsaved changes</p>
-        <div class="govuk-button-group govuk-!-margin-bottom-0">
-            <button type="button" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" id="tpl-check-button">Check for problems</button>
-            <button type="button" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" id="tpl-preview-button">Preview task</button>
-            <a href="#tpl-save" class="govuk-button govuk-!-margin-bottom-0" id="tpl-go-to-save">Save new version</a>
-        </div>
+<div id="template-editor" hidden>
+    <p class="govuk-body" id="tpl-status" role="status">No unsaved changes</p>
+    <div class="govuk-button-group">
+        <button type="button" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="tpl-check-button">Check for problems</button>
+        <button type="button" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="tpl-preview-button">Preview task</button>
+        <a href="#tpl-save" role="button" draggable="false" class="govuk-button" data-module="govuk-button" id="tpl-go-to-save">Save new version</a>
     </div>
 
-    <div id="tpl-problems" class="govuk-!-margin-top-4" tabindex="-1"></div>
+    <div id="tpl-problems" tabindex="-1"></div>
 
-    <div class="govuk-tabs tpl-editor__tabs" id="template-editor-tabs">
-        <ul class="govuk-tabs__list" role="tablist">
-            <li class="govuk-tabs__list-item govuk-tabs__list-item--selected" role="presentation">
-                <a class="govuk-tabs__tab" href="#tpl-panel-design" role="tab" id="tpl-tab-design" aria-controls="tpl-panel-design" aria-selected="true" data-tpl-tab="design">Design</a>
+    <div class="govuk-tabs" data-module="govuk-tabs" id="template-editor-tabs">
+        <h2 class="govuk-tabs__title">Editor</h2>
+        <ul class="govuk-tabs__list">
+            <li class="govuk-tabs__list-item govuk-tabs__list-item--selected">
+                <a class="govuk-tabs__tab" href="#tpl-panel-design">Design</a>
             </li>
-            <li class="govuk-tabs__list-item" role="presentation">
-                <a class="govuk-tabs__tab" href="#tpl-panel-rules" role="tab" id="tpl-tab-rules" aria-controls="tpl-panel-rules" aria-selected="false" tabindex="-1" data-tpl-tab="rules">Rules</a>
+            <li class="govuk-tabs__list-item">
+                <a class="govuk-tabs__tab" href="#tpl-panel-rules">Rules</a>
             </li>
-            <li class="govuk-tabs__list-item" role="presentation">
-                <a class="govuk-tabs__tab" href="#tpl-panel-json" role="tab" id="tpl-tab-json" aria-controls="tpl-panel-json" aria-selected="false" tabindex="-1" data-tpl-tab="json">JSON (advanced)</a>
+            <li class="govuk-tabs__list-item">
+                <a class="govuk-tabs__tab" href="#tpl-panel-json">JSON (advanced)</a>
             </li>
         </ul>
 
-        <section class="govuk-tabs__panel" id="tpl-panel-design" role="tabpanel" aria-labelledby="tpl-tab-design">
-            <div class="tpl-editor__design">
-                <nav class="tpl-editor__tree" id="tpl-tree" aria-label="Template structure"></nav>
-                <div class="tpl-editor__inspector" id="tpl-inspector"></div>
+        <div class="govuk-tabs__panel" id="tpl-panel-design">
+            <div class="govuk-grid-row">
+                <nav class="govuk-grid-column-one-third" id="tpl-tree" aria-label="Template structure"></nav>
+                <div class="govuk-grid-column-two-thirds" id="tpl-inspector"></div>
             </div>
-        </section>
+        </div>
 
-        <section class="govuk-tabs__panel govuk-tabs__panel--hidden" id="tpl-panel-rules" role="tabpanel" aria-labelledby="tpl-tab-rules">
+        <div class="govuk-tabs__panel govuk-tabs__panel--hidden" id="tpl-panel-rules">
             <div id="tpl-rules"></div>
-        </section>
+        </div>
 
-        <section class="govuk-tabs__panel govuk-tabs__panel--hidden" id="tpl-panel-json" role="tabpanel" aria-labelledby="tpl-tab-json">
-            <div class="govuk-form-group">
-                <label class="govuk-label govuk-label--m" for="tpl-json">Template JSON</label>
+        <div class="govuk-tabs__panel govuk-tabs__panel--hidden" id="tpl-panel-json">
+            <div class="govuk-form-group" id="tpl-json-group">
+                <h2 class="govuk-label-wrapper">
+                    <label class="govuk-label govuk-label--m" for="tpl-json">Template JSON</label>
+                </h2>
                 <div class="govuk-hint" id="tpl-json-hint">
                     This is the JSON the editor generates. Changes you make here are applied when you leave this tab, check for problems, preview or save.
                 </div>
                 <p class="govuk-error-message" id="tpl-json-error" hidden></p>
-                <textarea class="govuk-textarea tpl-editor__json" id="tpl-json" rows="30" spellcheck="false" aria-describedby="tpl-json-hint tpl-json-error"></textarea>
+                <textarea class="govuk-textarea" id="tpl-json" rows="30" spellcheck="false" aria-describedby="tpl-json-hint tpl-json-error"></textarea>
             </div>
-            <button type="button" class="govuk-button govuk-button--secondary" id="tpl-json-format">Format JSON</button>
-        </section>
+            <button type="button" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="tpl-json-format">Format JSON</button>
+        </div>
     </div>
 
     <h2 class="govuk-heading-l govuk-!-margin-top-8" id="tpl-save" tabindex="-1">Save a new version</h2>

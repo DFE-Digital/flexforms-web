@@ -8,8 +8,6 @@
     ViewData["Title"] = "Draft preview";
 }
 
-<link rel="stylesheet" href="~/css/template-editor.css" asp-append-version="true" />
-
 <div class="govuk-notification-banner" role="region" aria-labelledby="tpl-preview-banner-title" data-module="govuk-notification-banner">
     <div class="govuk-notification-banner__header">
         <h2 class="govuk-notification-banner__title" id="tpl-preview-banner-title">Draft preview</h2>
@@ -67,6 +65,37 @@
     return;
 }
 
+<details class="govuk-details">
+    <summary class="govuk-details__summary">
+        <span class="govuk-details__summary-text">Show the task list</span>
+    </summary>
+    <div class="govuk-details__text">
+        @foreach (var group in Model.Template!.TaskGroups ?? [])
+        {
+            <h2 class="govuk-heading-m">@group.GroupName</h2>
+            <ul class="govuk-task-list">
+                @foreach (var task in group.Tasks ?? [])
+                {
+                    var isShown = task.TaskId == Model.TaskId;
+                    <li class="govuk-task-list__item">
+                        <div class="govuk-task-list__name-and-hint">
+                            <div>@task.TaskName</div>
+                        </div>
+                        @if (isShown)
+                        {
+                            <div class="govuk-task-list__status"><strong class="govuk-tag govuk-tag--green">Shown below</strong></div>
+                        }
+                        else
+                        {
+                            <div class="govuk-task-list__status govuk-task-list__status--cannot-start-yet">Not shown</div>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+</details>
+
 <h1 class="govuk-heading-xl">@Model.Task.TaskName</h1>
 
 @if (Model.PageSets.Count == 0)
@@ -88,12 +117,13 @@
         var hideFieldLabel = Model.Template!.HideFieldLabelWhenOnlyOneField && fields.Count == 1 && fields[0].Type != "complexField";
         var caption = Model.Task.Caption is null ? Model.Task.TaskName : DisplayHelpers.InterpolateMessage(Model.Task.Caption, null);
 
-        <div class="tpl-preview__screen">
-            <p class="tpl-preview__meta">
-                Page @(index + 1) of @set.Pages.Count &middot; <code>@screen.PageId</code>
+        <hr class="govuk-section-break govuk-section-break--xl govuk-section-break--visible" />
+        <div>
+            <p class="govuk-body-s govuk-!-margin-bottom-4">
+                Page @(index + 1) of @set.Pages.Count, page id @screen.PageId
                 @if (Model.RuleTargets.Contains(screen.PageId))
                 {
-                    <strong class="govuk-tag govuk-tag--yellow govuk-!-margin-left-2">Shown by a rule</strong>
+                    <strong class="govuk-tag govuk-tag--yellow">Shown by a rule</strong>
                 }
             </p>
             <span class="govuk-caption-l">@caption</span>
@@ -126,7 +156,7 @@
                 {
                     <div class="govuk-inset-text">
                         <p class="govuk-body govuk-!-font-weight-bold">@field.Label?.Value</p>
-                        <p class="govuk-body">Search and upload questions (<code>@field.ComplexField?.Id</code>) call other services, so they're only shown in a full preview from the Admin page after you save.</p>
+                        <p class="govuk-body">Search and upload questions (@field.ComplexField?.Id) call other services, so they're only shown in a full preview from the Admin page after you save.</p>
                     </div>
                 }
                 else
