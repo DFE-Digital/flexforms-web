@@ -1,4 +1,4 @@
-// In-memory form template for the visual editor. It edits the raw JSON so properties the editor doesn't know
+// In-memory form template for Template Studio. It edits the raw JSON so properties Template Studio doesn't know
 // about (semanticKey, retiredFields, ...) are saved unchanged. Nodes are addressed by paths such as
 // ['taskGroups', 0, 'tasks', 1, 'pages', 0, 'fields', 2].
 (function (root) {

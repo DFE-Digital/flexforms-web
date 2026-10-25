@@ -25,7 +25,7 @@ using Task = System.Threading.Tasks.Task;
 
 namespace GovUK.Dfe.FlexForms.Web.UnitTests.Pages.Admin;
 
-public class TemplateEditorModelTests
+public class TemplateStudioModelTests
 {
     private const string StoredSchema = """{ "templateId": "tpl", "templateName": "Transfers", "semanticKeyKeptHere": true }""";
 
@@ -37,12 +37,12 @@ public class TemplateEditorModelTests
     private readonly IApplicationsClient _applications = Substitute.For<IApplicationsClient>();
     private readonly InMemorySession _session = new();
     private readonly TemplateDto _template = new() { TemplateId = Guid.NewGuid(), Name = "Transfers", CreatedOn = DateTime.UtcNow };
-    private readonly TemplateEditorModel _model;
+    private readonly TemplateStudioModel _model;
 
-    public TemplateEditorModelTests()
+    public TemplateStudioModelTests()
     {
-        _model = new TemplateEditorModel(
-            _admin, _selection, _validation, _cacheInvalidator, _complexFields, _applications, NullLogger<TemplateEditorModel>.Instance);
+        _model = new TemplateStudioModel(
+            _admin, _selection, _validation, _cacheInvalidator, _complexFields, _applications, NullLogger<TemplateStudioModel>.Instance);
         GivenApplicationCount(Task.FromResult(new PagedResultOfApplicationDto { TotalCount = 4 }));
 
         var httpContext = new DefaultHttpContext();
@@ -54,7 +54,7 @@ public class TemplateEditorModelTests
         };
         var url = Substitute.For<IUrlHelper>();
         url.ActionContext.Returns(new ActionContext(httpContext, new RouteData(), new ActionDescriptor()));
-        url.RouteUrl(Arg.Any<UrlRouteContext>()).Returns("/admin/template-editor?handler=Validate");
+        url.RouteUrl(Arg.Any<UrlRouteContext>()).Returns("/admin/template-studio?handler=Validate");
         _model.Url = url;
 
         _selection.GetSelectableTemplatesAsync(Arg.Any<CancellationToken>()).Returns([_template]);
@@ -85,12 +85,12 @@ public class TemplateEditorModelTests
 
         Assert.IsType<PageResult>(result);
         Assert.Equal("1.0.4", _model.NewVersion);
-        using var data = JsonDocument.Parse(_model.EditorDataJson);
+        using var data = JsonDocument.Parse(_model.StudioDataJson);
         Assert.Equal(StoredSchema, data.RootElement.GetProperty("schemaJson").GetString());
         Assert.False(data.RootElement.GetProperty("isStarter").GetBoolean());
         Assert.Equal("TrustComplexField", data.RootElement.GetProperty("complexFields")[0].GetProperty("id").GetString());
-        Assert.DoesNotContain("api-key-value", _model.EditorDataJson);
-        Assert.DoesNotContain("client-secret-value", _model.EditorDataJson);
+        Assert.DoesNotContain("api-key-value", _model.StudioDataJson);
+        Assert.DoesNotContain("client-secret-value", _model.StudioDataJson);
     }
 
     [Fact]
@@ -99,7 +99,7 @@ public class TemplateEditorModelTests
         await _model.OnGetAsync(null, CancellationToken.None);
 
         Assert.Equal("1.0.0", _model.NewVersion);
-        using var data = JsonDocument.Parse(_model.EditorDataJson);
+        using var data = JsonDocument.Parse(_model.StudioDataJson);
         Assert.True(data.RootElement.GetProperty("isStarter").GetBoolean());
         Assert.Contains("starter-group", data.RootElement.GetProperty("schemaJson").GetString());
         Assert.Equal(0, data.RootElement.GetProperty("applicationCount").GetInt32());
@@ -108,13 +108,13 @@ public class TemplateEditorModelTests
     }
 
     [Fact]
-    public async Task OnGetAsync_ShouldTellTheEditorHowManyApplicationsUseTheTemplate_AndWhatTheyWereSavedAgainst()
+    public async Task OnGetAsync_ShouldTellTemplateStudioHowManyApplicationsUseTheTemplate_AndWhatTheyWereSavedAgainst()
     {
         GivenStoredVersion("1.0.3");
 
         await _model.OnGetAsync(null, CancellationToken.None);
 
-        using var data = JsonDocument.Parse(_model.EditorDataJson);
+        using var data = JsonDocument.Parse(_model.StudioDataJson);
         Assert.Equal(4, data.RootElement.GetProperty("applicationCount").GetInt32());
         Assert.Equal(StoredSchema, data.RootElement.GetProperty("baselineSchemaJson").GetString());
         await _applications.Received(1).GetApplicationsByTemplateAsync(
@@ -130,7 +130,7 @@ public class TemplateEditorModelTests
 
         await _model.OnGetAsync(null, CancellationToken.None);
 
-        using var data = JsonDocument.Parse(_model.EditorDataJson);
+        using var data = JsonDocument.Parse(_model.StudioDataJson);
         Assert.Equal(JsonValueKind.Null, data.RootElement.GetProperty("applicationCount").ValueKind);
     }
 
@@ -145,7 +145,7 @@ public class TemplateEditorModelTests
 
         await _model.OnPostSaveAsync(CancellationToken.None);
 
-        using var data = JsonDocument.Parse(_model.EditorDataJson);
+        using var data = JsonDocument.Parse(_model.StudioDataJson);
         Assert.Equal(StoredSchema, data.RootElement.GetProperty("baselineSchemaJson").GetString());
     }
 
@@ -171,7 +171,7 @@ public class TemplateEditorModelTests
         await _model.OnGetAsync(null, CancellationToken.None);
 
         Assert.Equal(TemplateManagerMessages.LoadFailed, _model.LoadError);
-        Assert.Equal("{}", _model.EditorDataJson);
+        Assert.Equal("{}", _model.StudioDataJson);
     }
 
     [Fact]
@@ -187,7 +187,7 @@ public class TemplateEditorModelTests
 
         Assert.IsType<PageResult>(result);
         Assert.Equal("Template must have a 'templateId'", _model.ModelState["NewSchema"]!.Errors.Single().ErrorMessage);
-        using var data = JsonDocument.Parse(_model.EditorDataJson);
+        using var data = JsonDocument.Parse(_model.StudioDataJson);
         Assert.Equal("""{ "edited": true }""", data.RootElement.GetProperty("schemaJson").GetString());
         Assert.True(data.RootElement.GetProperty("hasUnsavedChanges").GetBoolean());
         await _admin.DidNotReceiveWithAnyArgs().CreateVersionAsync(default!, default, default);
@@ -223,7 +223,7 @@ public class TemplateEditorModelTests
     {
         _validation.ValidateTemplateJson("{}").Returns((false, new List<string> { "Template must have a 'templateId'" }));
 
-        var result = Assert.IsType<JsonResult>(_model.OnPostValidate(new TemplateEditorValidateRequest("{}")));
+        var result = Assert.IsType<JsonResult>(_model.OnPostValidate(new TemplateStudioValidateRequest("{}")));
 
         var json = JsonSerializer.Serialize(result.Value);
         Assert.Equal("""{"isValid":false,"errors":["Template must have a \u0027templateId\u0027"]}""", json);

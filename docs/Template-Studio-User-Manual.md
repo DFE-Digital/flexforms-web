@@ -1,6 +1,6 @@
-# Template Editor User Manual
+# Template Studio User Manual
 
-A step-by-step guide to designing application forms with the **Template editor**, the visual way to build and change FlexForms templates without writing JSON.
+A step-by-step guide to designing application forms with **Template Studio**, the visual way to build and change FlexForms templates without writing JSON.
 
 It is written for anyone who designs or maintains a form: content designers, service owners, tenant administrators and developers. You do not need to know JSON.
 
@@ -16,7 +16,7 @@ The screenshots show the **Transfer Applications** template. Your service header
 ## Contents
 
 1. [Before you start](#1-before-you-start)
-2. [A tour of the editor](#2-a-tour-of-the-editor)
+2. [A tour of Template Studio](#2-a-tour-of-template-studio)
 3. [Finding your way around the structure](#3-finding-your-way-around-the-structure)
 4. [Template settings](#4-template-settings)
 5. [Sections](#5-sections)
@@ -40,38 +40,38 @@ The screenshots show the **Transfer Applications** template. Your service header
 
 ## 1. Before you start
 
-### 1.1 What the editor does
+### 1.1 What Template Studio does
 
 A FlexForms template describes a whole application form: the **sections** on the task list, the **tasks** in each section, the **pages** in each task, and the **questions** on each page. It also holds the **rules** that show or hide pages and questions, and settings such as the dashboard columns.
 
-The editor lets you change all of that with forms and buttons. Behind the scenes it writes the template JSON for you. Anything the editor doesn't have a form for yet is kept exactly as it is.
+Template Studio lets you change all of that with forms and buttons. Behind the scenes it writes the template JSON for you. Anything Template Studio doesn't have a form for yet is kept exactly as it is.
 
 ### 1.2 Who can use it
 
-You need permission to manage templates: the **Admin** or **SuperAdmin** role, or a role that includes a template **Manage** permission (for example the **Template Manager** role). If you can open **Template Manager**, you can open the editor.
+You need permission to manage templates: the **Admin** or **SuperAdmin** role, or a role that includes a template **Manage** permission (for example the **Template Manager** role). If you can open **Template Manager**, you can open Template Studio.
 
-### 1.3 Opening the editor
+### 1.3 Opening Template Studio
 
 1. Go to **Admin**.
 2. In **Template Management**, select **Template Manager**.
 3. Choose the template and, if you need to, the version you want to start from. Select **Open template** or **Open version**.
-4. Select **Edit in the visual editor**.
+4. Select **Open in Template Studio**.
 
-You can also select **Template editor** on the Admin hub. It opens whichever template you last chose in Template Manager. To edit a different template, choose it in Template Manager first.
+You can also select **Template Studio** on the Admin hub. It opens whichever template you last chose in Template Manager. To edit a different template, choose it in Template Manager first.
 
 ### 1.4 What you are editing
 
-The editor opens a **copy** of the version you chose. Nothing you do affects applicants until you [save a new version](#163-saving-a-new-version). Even then, the form only changes for applicants once the template is live, which is set on the Admin hub.
+Template Studio opens a **copy** of the version you chose. Nothing you do affects applicants until you [save a new version](#163-saving-a-new-version). Even then, the form only changes for applicants once the template is live, which is set on the Admin hub.
 
-- If the template has no versions yet, the editor starts from the **starter template**: one section, one task, one page and one question.
-- If the template can't be loaded, the editor shows an error and doesn't open, so a saved version can't be replaced by mistake.
-- The editor needs JavaScript. Without it, you can still edit the JSON in Template Manager.
+- If the template has no versions yet, Template Studio starts from the **starter template**: one section, one task, one page and one question.
+- If the template can't be loaded, Template Studio shows an error and doesn't open, so a saved version can't be replaced by mistake.
+- Template Studio needs JavaScript. Without it, you can still edit the JSON in Template Manager.
 
 ---
 
-## 2. A tour of the editor
+## 2. A tour of Template Studio
 
-![The top of the editor: heading, status, the applications note, the toolbar and the tabs](images/te-01-overview.png)
+![The top of Template Studio: heading, status, the applications note, the toolbar and the tabs](images/ts-01-overview.png)
 
 From top to bottom:
 
@@ -86,15 +86,15 @@ From top to bottom:
 | **Save new version** | Takes you to the save form at the bottom of the page. |
 | **Design** tab | The structure on the left and the settings for the selected item on the right. You spend most of your time here. |
 | **Rules** tab | Add, change, turn off and delete rules. |
-| **JSON (advanced)** tab | The JSON the editor writes, for advanced changes. |
+| **JSON (advanced)** tab | The JSON Template Studio writes, for advanced changes. |
 
-The editor warns you if you try to leave the page with unsaved changes.
+Template Studio warns you if you try to leave the page with unsaved changes.
 
 ---
 
 ## 3. Finding your way around the structure
 
-![The structure: sections that open and close, with tasks, pages and questions inside](images/te-02-structure.png)
+![The structure: sections that open and close, with tasks, pages and questions inside](images/ts-02-structure.png)
 
 The **Structure** on the left of the Design tab shows the whole template:
 
@@ -115,7 +115,7 @@ Each set of settings also lists what is inside the item, each with a **Change** 
 
 Select the template name at the top of the structure.
 
-![Template settings: name, description, template id and form-wide choices](images/te-03-template-settings.png)
+![Template settings: name, description, template id and form-wide choices](images/ts-03-template-settings.png)
 
 | Setting | What it does |
 |---|---|
@@ -139,9 +139,9 @@ The applications dashboard shows default columns until you choose your own.
    - **Something built in**: reference, date started, date submitted, status or action.
 4. Select **Done**.
 
-![Dashboard columns, with a column that shows an answer being changed](images/te-04-dashboard-columns.png)
+![Dashboard columns, with a column that shows an answer being changed](images/ts-04-dashboard-columns.png)
 
-Up to 3 columns can show answers; any more are ignored, and the editor warns you. **Use the default columns** goes back to the platform defaults.
+Up to 3 columns can show answers; any more are ignored, and Template Studio warns you. **Use the default columns** goes back to the platform defaults.
 
 ### 4.2 Details on the task list
 
@@ -152,7 +152,7 @@ The block under "Your application" on the task list shows default details (refer
 3. For each detail, enter a **Label** and choose **What it shows**: an application detail, an answer, or **Something else (enter a path)** for an answer inside a repeatable list, for example `trusts[0].trustSearch.name` for the first trust's name.
 4. Select **Done**.
 
-![Task list details, with a detail that uses an answer path](images/te-05-task-list-details.png)
+![Task list details, with a detail that uses an answer path](images/ts-05-task-list-details.png)
 
 You can have up to 10. **Use the default details** goes back to the platform defaults. Saving checks that every path points at a real answer.
 
@@ -170,7 +170,7 @@ Sections are the headings on the task list. Each holds one or more tasks.
 
 **To change a section:** select **Edit** next to it in the structure.
 
-![A section: its heading, id and tasks](images/te-06-section.png)
+![A section: its heading, id and tasks](images/ts-06-section.png)
 
 - **Section heading** is what applicants see.
 - **Section id** is made from the heading while the section is new. You can change it.
@@ -191,11 +191,11 @@ Tasks are the rows applicants select on the task list.
    - **Pages repeated for each item in another list**: for example a declaration for each trust added earlier. See [section 10](#10-pages-repeated-for-each-item-in-another-list).
 3. Enter the **Task name** and select **Add task**.
 
-![Adding a task: choose its kind and name it](images/te-07-add-task.png)
+![Adding a task: choose its kind and name it](images/ts-07-add-task.png)
 
 ### 6.2 Task settings
 
-![A task's settings](images/te-08-task.png)
+![A task's settings](images/ts-08-task.png)
 
 | Setting | What it does |
 |---|---|
@@ -208,13 +208,13 @@ Tasks are the rows applicants select on the task list.
 
 While a task has no pages, you can change its type:
 
-![A new task with its type still open to change](images/te-33-task-type.png)
+![A new task with its type still open to change](images/ts-33-task-type.png)
 
 ### 6.3 A task's pages
 
 The task lists its pages, each with **Change**. Under **Add a page**, enter a **Page heading** and select **Add page**.
 
-![A task's pages and the Add a page form](images/te-09-task-pages.png)
+![A task's pages and the Add a page form](images/ts-09-task-pages.png)
 
 ---
 
@@ -222,7 +222,7 @@ The task lists its pages, each with **Change**. Under **Add a page**, enter a **
 
 A page is one screen in the form.
 
-![A page's settings](images/te-10-page.png)
+![A page's settings](images/ts-10-page.png)
 
 | Setting | What it does |
 |---|---|
@@ -239,7 +239,7 @@ A page is one screen in the form.
 3. Enter the **Question**. On a page with no questions yet, you can leave it blank to use the page heading.
 4. Select **Add question**.
 
-![The page's questions and the Add a question form](images/te-11-add-question.png)
+![The page's questions and the Add a question form](images/ts-11-add-question.png)
 
 New questions are set so applicants **must answer them**, with a suitable error message. You can change both.
 
@@ -253,7 +253,7 @@ At the bottom of a page's settings, **Rules** lists the rules that use the page.
 
 Select a question in the structure, or **Change** next to it in its page's list.
 
-![A question's main settings](images/te-12-question.png)
+![A question's main settings](images/ts-12-question.png)
 
 ### 8.1 Question types
 
@@ -280,12 +280,12 @@ Changing the type keeps the wording. Options are added when you change to a choi
 
 ### 8.3 Answer id and reporting key
 
-![Answer id, reporting key and whether the question must be answered](images/te-13-answer-id-and-required.png)
+![Answer id, reporting key and whether the question must be answered](images/ts-13-answer-id-and-required.png)
 
 - **Answer id** is what the applicant's answer is saved against. It is also how rules and reports refer to the question.
   - If you change it, rules that use it are updated for you.
   - If applications already use the template, changing it is done safely for reports. See [section 13.3](#133-renaming-an-answer-id).
-- **Reporting key (advanced)** lines answers up across versions in reports. It is the answer id unless you set it. You normally only need it when renaming a question; the editor sets it for you then.
+- **Reporting key (advanced)** lines answers up across versions in reports. It is the answer id unless you set it. You normally only need it when renaming a question; Template Studio sets it for you then.
 
 ### 8.4 Whether applicants must answer
 
@@ -299,7 +299,7 @@ This can't depend on another answer. To ask a question only sometimes, use a [ru
 
 ### 8.5 Options (radios, checkboxes and dropdowns)
 
-![Options, with one option being changed](images/te-14-options.png)
+![Options, with one option being changed](images/ts-14-options.png)
 
 Each option has:
 
@@ -316,7 +316,7 @@ For new options, the saved value follows the text as you type. For existing opti
 
 ### 8.7 Search and upload questions
 
-![Search settings: choose what to search, and format checks](images/te-21-search-settings.png)
+![Search settings: choose what to search, and format checks](images/ts-21-search-settings.png)
 
 Choose **What to search** (or which **Upload field** to use) from the search and upload fields set up for your organisation, under `FormEngine:ComplexFields` in Tenant settings. If the question uses one that isn't set up, a warning tells you; applicants would see an error until it is added.
 
@@ -324,7 +324,7 @@ Choose **What to search** (or which **Upload field** to use) from the search and
 
 For short answers, email, long answers and long answers with a limit.
 
-![A length limit of 500 characters](images/te-16-length-limit.png)
+![A length limit of 500 characters](images/ts-16-length-limit.png)
 
 1. Enter the **Maximum length** and press Tab (or select elsewhere).
 2. Choose whether to **Count** characters or words.
@@ -345,7 +345,7 @@ Format checks make sure an answer matches a pattern, for example a phone number.
 
 A length limit or format check can apply only when another answer matches.
 
-![A format check that only applies when another answer is "yes"](images/te-17-format-check.png)
+![A format check that only applies when another answer is "yes"](images/ts-17-format-check.png)
 
 1. Tick **Only check this when another answer matches**.
 2. Choose the **Question**, whether the answer **is** or **is not**, and the **Answer**.
@@ -354,10 +354,10 @@ The summary shows "Only when … is …" under the check.
 
 ### 8.11 More checks and rules
 
-- If a question has checks the editor can't show (for example a "required" check with a condition), a note tells you how many are set in the JSON tab.
+- If a question has checks Template Studio can't show (for example a "required" check with a condition), a note tells you how many are set in the JSON tab.
 - **Rules** lists the rules that use the question. **Add a rule that shows this question** starts a rule with this question already chosen.
 
-![The rules that use a question](images/te-15-question-rules.png)
+![The rules that use a question](images/ts-15-question-rules.png)
 
 ---
 
@@ -367,7 +367,7 @@ A repeatable list lets applicants add as many items as they need, each with its 
 
 **To add one:** add a task of the kind **A repeatable list** (see [6.1](#61-adding-a-task)). It starts with one list. A task can have several lists; open the task and use **Add a repeatable list**.
 
-![A repeatable list's settings](images/te-18-repeatable-list.png)
+![A repeatable list's settings](images/ts-18-repeatable-list.png)
 
 | Setting | What it does |
 |---|---|
@@ -381,7 +381,7 @@ A repeatable list lets applicants add as many items as they need, each with its 
 
 ### 9.1 Columns and messages
 
-![Columns shown for each added item](images/te-19-list-columns-messages.png)
+![Columns shown for each added item](images/ts-19-list-columns-messages.png)
 
 - **Columns in the list of added items**: answers shown for each item once added. Select **Add a column**, enter the **Column heading**, choose the **Answer**, and select **Done**.
 - **Messages**: shown after an item is added, changed or removed. Include an answer in curly brackets, for example `{trustSearch.name}`.
@@ -398,7 +398,7 @@ These repeat the same pages for every item in an earlier list or answer. For exa
 
 **To add one:** add a task of the kind **Pages repeated for each item in another list**. Its settings let you set the **Heading on the task page** and the text under it. Open the repeated pages to set them up:
 
-![Repeated pages: what they repeat for](images/te-20-repeated-pages.png)
+![Repeated pages: what they repeat for](images/ts-20-repeated-pages.png)
 
 1. **Repeat the pages for each item in**: choose a repeatable list, or a search, checkboxes or dropdown question. **That answer is** is filled in for you.
 2. **Property used as each item's name**: for example "name" for a trust found by search.
@@ -423,7 +423,7 @@ Moves the item within its list. Order numbers are kept in step for you.
 
 Moves a question to another page, a page to another task or list, a task to another section, or a list to another task.
 
-![Moving a question to another page](images/te-22-move.png)
+![Moving a question to another page](images/ts-22-move.png)
 
 1. Select **Move to another page** (or task, section).
 2. Choose where it should go. The choices are grouped by task or section.
@@ -440,7 +440,7 @@ With a mouse, you can drag items in the structure:
 
 Drops that don't make sense are refused, for example a question onto a section. If you're not using a mouse, Move up, Move down and Move to do the same.
 
-![Dragging a page: the blue line shows where it will go](images/te-24-drag-and-drop.png)
+![Dragging a page: the blue line shows where it will go](images/ts-24-drag-and-drop.png)
 
 ### 11.4 Duplicate
 
@@ -464,7 +464,7 @@ You can [undo](#14-undo-and-redo) a delete.
 
 A rule shows pages and questions only when an earlier answer matches. Anything a rule shows is **hidden until** the condition is met. For example: show "Forecast of pupil numbers" only when "Are pupil numbers at risk?" is "Yes".
 
-The editor saves each rule as the pair of rules the form needs: one that skips the pages and hides the questions when the answer doesn't match, and one that shows them when it does. You only see one rule.
+Template Studio saves each rule as the pair of rules the form needs: one that skips the pages and hides the questions when the answer doesn't match, and one that shows them when it does. You only see one rule.
 
 ### 12.2 Adding a rule
 
@@ -479,24 +479,24 @@ The editor saves each rule as the pair of rules the form needs: one that skips t
    - **has not been given**.
 5. Choose the **Answer** (or answers). For radios, checkboxes and dropdowns you pick from the options; for other questions you type it.
 
-   ![Adding a rule: name, question, condition and answer](images/te-25-rule-builder.png)
+   ![Adding a rule: name, question, condition and answer](images/ts-25-rule-builder.png)
 
 6. **Which task are the pages and questions in?**: it starts with the task the question is in. Change it to show pages in another task.
 7. Tick the **Pages to show** and **Questions to show**.
 
-   ![Choosing the pages and questions the rule shows](images/te-26-rule-builder-targets.png)
+   ![Choosing the pages and questions the rule shows](images/ts-26-rule-builder-targets.png)
 
 8. Select **Save rule**.
 
-If something is missing, the editor tells you what to fix:
+If something is missing, Template Studio tells you what to fix:
 
-![Errors when saving an incomplete rule](images/te-28-rule-errors.png)
+![Errors when saving an incomplete rule](images/ts-28-rule-errors.png)
 
 Pages and questions the rule shows get a **Shown by a rule** tag in the structure.
 
 ### 12.3 Rules in this template
 
-![The list of rules](images/te-27-rules-list.png)
+![The list of rules](images/ts-27-rules-list.png)
 
 Each rule shows whether it is **On** or **Off**, **When** it applies and what it **Shows**.
 
@@ -521,23 +521,23 @@ A page set to **Go to the next page a rule shows** branches: applicants go to wh
 
 ## 13. When applications already use the template
 
-Reports line answers up across template versions by answer id and reporting key. Once applications use a template, removing or changing questions carelessly can break reports. The editor protects you.
+Reports line answers up across template versions by answer id and reporting key. Once applications use a template, removing or changing questions carelessly can break reports. Template Studio protects you.
 
-### 13.1 How the editor knows
+### 13.1 How Template Studio knows
 
-The editor checks how many applications use the template, and the applications note under the status says so. If it can't check, it says so and treats the template as in use, to be safe.
+Template Studio checks how many applications use the template, and the applications note under the status says so. If it can't check, it says so and treats the template as in use, to be safe.
 
 ### 13.2 Deleting questions applications have answered
 
 When you delete a question, list, page, task or section containing questions applications have answered, the confirmation lists them and explains that they will be **retired**: taken out of the form, but kept in reports.
 
-![Deleting a question that applications have answered](images/te-23-delete-retire.png)
+![Deleting a question that applications have answered](images/ts-23-delete-retire.png)
 
 If another question replaces a deleted question, choose it in **Does another question replace it?** so reports show that the new question takes over.
 
 ### 13.3 Renaming an answer id
 
-If you change the answer id of a question applications have answered, the editor:
+If you change the answer id of a question applications have answered, Template Studio:
 
 - retires the old id;
 - names the new id as its replacement;
@@ -548,9 +548,9 @@ A message under the answer id confirms this. If you change it back, all of that 
 
 ### 13.4 Changing what a question stores
 
-Changing a question's type to one that stores a different kind of answer (for example from radios to a short answer) needs a new answer id. The editor warns you and offers **Give it a new answer id**, which retires the old id for you.
+Changing a question's type to one that stores a different kind of answer (for example from radios to a short answer) needs a new answer id. Template Studio warns you and offers **Give it a new answer id**, which retires the old id for you.
 
-![The warning when an answered question's type changes](images/te-34-type-change-warning.png)
+![The warning when an answered question's type changes](images/ts-34-type-change-warning.png)
 
 ### 13.5 Before you save
 
@@ -567,21 +567,21 @@ Changing a question's type to one that stores a different kind of answer (for ex
 - The last 50 changes are kept.
 - Undoing everything takes the status back to **No unsaved changes**.
 
-![The status and toolbar with unsaved changes](images/te-35-toolbar-unsaved.png)
+![The status and toolbar with unsaved changes](images/ts-35-toolbar-unsaved.png)
 
 ---
 
 ## 15. The JSON (advanced) tab
 
-The JSON tab shows the template JSON the editor writes. Use it for things the editor doesn't have forms for, or to paste in a larger change.
+The JSON tab shows the template JSON Template Studio writes. Use it for things Template Studio doesn't have forms for, or to paste in a larger change.
 
-![The JSON tab](images/te-29-json-tab.png)
+![The JSON tab](images/ts-29-json-tab.png)
 
 - Your changes are applied when you leave the tab, check for problems, preview or save.
 - **Format JSON** tidies the layout.
 - If the JSON can't be read, you can't leave the tab until it is fixed. The error message says where to look.
 
-![An error in the JSON](images/te-30-json-error.png)
+![An error in the JSON](images/ts-30-json-error.png)
 
 The [Form Template Designer Manual](Form-Template-Designer-Manual.md) explains every part of the JSON.
 
@@ -593,7 +593,7 @@ The [Form Template Designer Manual](Form-Template-Designer-Manual.md) explains e
 
 Select **Check for problems** at any time. It runs the same checks as saving, without saving, and lists anything that would stop the save. That includes missing ids, duplicate ids, questions without options, rules that point at missing questions and reporting problems.
 
-![A problem found by Check for problems](images/te-31-check-problems.png)
+![A problem found by Check for problems](images/ts-31-check-problems.png)
 
 Select a problem to go straight to the item it is about. If there are none, you'll see "No problems found. This template can be saved."
 
@@ -608,14 +608,14 @@ Select **Preview task** to see the task you are working on (or the first task) i
 
 ### 16.3 Saving a new version
 
-![The save form](images/te-32-save.png)
+![The save form](images/ts-32-save.png)
 
 1. Select **Save new version** (or scroll to the bottom of the page).
 2. Check the **Version number**. The next number is suggested. It must be three numbers separated by full stops, for example 1.2.1, and each number can only be used once.
 3. Read the warning, then tick **I have discussed these changes with the relevant data team**.
 4. Select **Save new version**.
 
-If the save is rejected, the editor keeps your changes and lists the problems at the top. If it succeeds, you'll see "Version … saved" and can carry on editing.
+If the save is rejected, Template Studio keeps your changes and lists the problems at the top. If it succeeds, you'll see "Version … saved" and can carry on editing.
 
 New applications use the latest saved version. Applications already started keep the version they started on. To make the template available to applicants, make it live on the Admin hub.
 
@@ -669,8 +669,8 @@ New applications use the latest saved version. Applications already started keep
 
 | Problem | What to do |
 |---|---|
-| I can't find the editor | Check you can open Template Manager. If you can't, ask an administrator for template Manage permission. |
-| The editor opened the wrong template | Choose the template in Template Manager first, then open the editor. |
+| I can't find Template Studio | Check you can open Template Manager. If you can't, ask an administrator for template Manage permission. |
+| Template Studio opened the wrong template | Choose the template in Template Manager first, then open Template Studio. |
 | "There was an error loading the template data" | Reload the page. If it keeps happening, the template's latest version may not be readable; check it in Template Manager. |
 | I can't leave the JSON tab | The JSON has a mistake. Fix it using the error message, or use **Undo**. |
 | A section can't be saved | Every section needs at least one task. |

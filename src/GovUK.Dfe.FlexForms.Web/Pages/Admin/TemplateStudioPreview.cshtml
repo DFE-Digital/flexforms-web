@@ -1,5 +1,5 @@
-@page "/admin/template-editor/preview"
-@model GovUK.Dfe.FlexForms.Web.Pages.Admin.TemplateEditorPreviewModel
+@page "/admin/template-studio/preview"
+@model GovUK.Dfe.FlexForms.Web.Pages.Admin.TemplateStudioPreviewModel
 @using GovUK.Dfe.FlexForms.Web.Pages.FormEngine
 @using GovUK.Dfe.FlexForms.Web.Utilities
 @using Microsoft.AspNetCore.Html
@@ -35,7 +35,7 @@
         <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
         <strong class="govuk-warning-text__text">
             <span class="govuk-visually-hidden">Warning</span>
-            This version can't be saved yet. @(Model.Problems.Count == 1 ? "There is 1 problem" : $"There are {Model.Problems.Count} problems"). Use "Check for problems" in the editor to see them.
+            This version can't be saved yet. @(Model.Problems.Count == 1 ? "There is 1 problem" : $"There are {Model.Problems.Count} problems"). Use "Check for problems" in Template Studio to see them.
         </strong>
     </div>
 }

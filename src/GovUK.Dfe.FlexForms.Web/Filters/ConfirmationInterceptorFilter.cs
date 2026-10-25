@@ -163,7 +163,7 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
             }
 
             var request = context.HttpContext.Request;
-            // JSON posts, such as the template editor's problem check, have no form to inspect.
+            // JSON posts, such as Template Studio's problem check, have no form to inspect.
             var form = request.HasFormContentType ? await request.ReadFormAsync() : null;
 
             if (form is null || form.Count == 0)

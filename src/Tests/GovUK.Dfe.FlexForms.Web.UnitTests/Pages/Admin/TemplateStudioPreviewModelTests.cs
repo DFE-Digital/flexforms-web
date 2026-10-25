@@ -6,7 +6,7 @@ using NSubstitute;
 
 namespace GovUK.Dfe.FlexForms.Web.UnitTests.Pages.Admin;
 
-public class TemplateEditorPreviewModelTests
+public class TemplateStudioPreviewModelTests
 {
     private const string Schema = """
         {
@@ -27,18 +27,18 @@ public class TemplateEditorPreviewModelTests
         """;
 
     private readonly ITemplateValidationService _validation = Substitute.For<ITemplateValidationService>();
-    private readonly TemplateEditorPreviewModel _model;
+    private readonly TemplateStudioPreviewModel _model;
 
-    public TemplateEditorPreviewModelTests()
+    public TemplateStudioPreviewModelTests()
     {
         _validation.ValidateTemplateJson(Arg.Any<string>()).Returns((true, new List<string>()));
-        _model = new TemplateEditorPreviewModel(_validation);
+        _model = new TemplateStudioPreviewModel(_validation);
     }
 
     [Fact]
-    public void OnGet_ShouldSendPeopleBackToTheEditor()
+    public void OnGet_ShouldSendPeopleBackToTemplateStudio()
     {
-        Assert.Equal("/Admin/TemplateEditor", Assert.IsType<RedirectToPageResult>(_model.OnGet()).PageName);
+        Assert.Equal("/Admin/TemplateStudio", Assert.IsType<RedirectToPageResult>(_model.OnGet()).PageName);
     }
 
     [Fact]

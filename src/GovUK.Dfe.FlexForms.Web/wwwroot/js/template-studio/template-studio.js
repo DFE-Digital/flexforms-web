@@ -1,11 +1,11 @@
-// Visual template editor. Builds GOV.UK Design System components over a TemplateDocument and writes every change
+// Template Studio. Builds GOV.UK Design System components over a TemplateDocument and writes every change
 // straight into the JSON that is saved. No inline handlers: the Content-Security-Policy blocks them.
 (function () {
     'use strict';
 
     var lib = window.FlexFormsTemplateDocument;
-    var container = document.getElementById('template-editor');
-    var dataElement = document.getElementById('template-editor-data');
+    var container = document.getElementById('template-studio');
+    var dataElement = document.getElementById('template-studio-data');
     if (!lib || !container || !dataElement) return;
 
     var data = JSON.parse(dataElement.textContent || '{}');
@@ -68,7 +68,7 @@
     var rulesPanel = document.getElementById('tpl-rules');
     var problems = document.getElementById('tpl-problems');
     var statusText = document.getElementById('tpl-status');
-    var tabsElement = document.getElementById('template-editor-tabs');
+    var tabsElement = document.getElementById('template-studio-tabs');
     var jsonArea = document.getElementById('tpl-json');
     var jsonGroup = document.getElementById('tpl-json-group');
     var jsonError = document.getElementById('tpl-json-error');
@@ -127,7 +127,7 @@
     // ---- GOV.UK Frontend ---------------------------------------------------------------------------------------
 
     // The page template imports GOV.UK Frontend as a module. Importing the same URL shares that instance, so
-    // components the editor adds after the page has loaded can be initialised the same way.
+    // components Template Studio adds after the page has loaded can be initialised the same way.
     function govukFrontendUrl() {
         var scripts = document.querySelectorAll('script[type="module"]');
         for (var i = 0; i < scripts.length; i++) {
@@ -2993,7 +2993,7 @@
         var list = errors.map(function (message) {
             var target = failedToRun ? null : targetFor(message);
             return h('li', null, h('a', {
-                href: target ? '#tpl-inspector-title' : '#template-editor-tabs',
+                href: target ? '#tpl-inspector-title' : '#template-studio-tabs',
                 onClick: function (e) {
                     if (!target) return;
                     e.preventDefault();
@@ -3082,7 +3082,7 @@
             return;
         }
         var text = applicationCount === null
-            ? 'We couldn\'t check whether applications use this template, so the editor treats it as in use.'
+            ? 'We couldn\'t check whether applications use this template, so Template Studio treats it as in use.'
             : applicationCount === 0
                 ? 'No applications use this template yet, so you can change or delete any question.'
                 : (applicationCount === 1 ? '1 application uses' : applicationCount + ' applications use') + ' this template.';

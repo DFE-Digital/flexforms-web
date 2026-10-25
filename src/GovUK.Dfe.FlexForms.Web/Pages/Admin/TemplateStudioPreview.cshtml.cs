@@ -16,7 +16,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 [Authorize(Policy = AdminAccessHelper.CanManageTemplatesPolicy)]
 [RequestSizeLimit(52_428_800)]
 [RequestFormLimits(ValueLengthLimit = 52_428_800, ValueCountLimit = 1000)]
-public class TemplateEditorPreviewModel(ITemplateValidationService templateValidationService) : PageModel
+public class TemplateStudioPreviewModel(ITemplateValidationService templateValidationService) : PageModel
 {
     // Matches how the form engine reads templates (JsonFormTemplateParser).
     private static readonly JsonSerializerOptions ParseOptions = new()
@@ -38,13 +38,13 @@ public class TemplateEditorPreviewModel(ITemplateValidationService templateValid
     public IReadOnlySet<string> RuleTargets { get; private set; } = new HashSet<string>();
     public string? ParseError { get; private set; }
 
-    public IActionResult OnGet() => RedirectToPage("/Admin/TemplateEditor");
+    public IActionResult OnGet() => RedirectToPage("/Admin/TemplateStudio");
 
     public IActionResult OnPost()
     {
         if (string.IsNullOrWhiteSpace(Schema))
         {
-            ParseError = "There's no template to preview. Go back to the editor and try again.";
+            ParseError = "There's no template to preview. Go back to Template Studio and try again.";
             return Page();
         }
 

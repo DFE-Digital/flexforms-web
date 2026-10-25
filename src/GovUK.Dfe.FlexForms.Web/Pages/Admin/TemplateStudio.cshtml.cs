@@ -13,20 +13,20 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 
 /// <summary>
-/// Visual editor for the template selected in Template Manager. The browser edits the JSON in memory and posts it
+/// Template Studio: visual editing for the template selected in Template Manager. The browser edits the JSON in memory and posts it
 /// back as a new version through the same validation and save path as the JSON textarea.
 /// </summary>
 [Authorize(Policy = AdminAccessHelper.CanManageTemplatesPolicy)]
 [RequestSizeLimit(52_428_800)]
 [RequestFormLimits(ValueLengthLimit = 52_428_800, ValueCountLimit = 1000)]
-public class TemplateEditorModel(
+public class TemplateStudioModel(
     ITemplateManagerAdmin templateManagerAdmin,
     ITemplateSelectionService templateSelectionService,
     ITemplateValidationService templateValidationService,
     ITemplateCacheInvalidator templateCacheInvalidator,
     IComplexFieldConfigurationService complexFieldConfigurationService,
     IApplicationsClient applicationsClient,
-    ILogger<TemplateEditorModel> logger) : PageModel
+    ILogger<TemplateStudioModel> logger) : PageModel
 {
     private const string TemplateVersionSessionKey = "TemplateVersionNumber";
 
@@ -35,7 +35,7 @@ public class TemplateEditorModel(
     public string? LatestVersionNumber { get; private set; }
     public string? SavedVersion { get; private set; }
     public string? LoadError { get; private set; }
-    public string EditorDataJson { get; private set; } = "{}";
+    public string StudioDataJson { get; private set; } = "{}";
 
     [BindProperty]
     public string? NewVersion { get; set; }
@@ -57,7 +57,7 @@ public class TemplateEditorModel(
             return Page();
 
         NewVersion = SuggestVersion(state);
-        await BuildEditorDataAsync(state, schemaJson: null, hasUnsavedChanges: false, cancellationToken);
+        await BuildStudioDataAsync(state, schemaJson: null, hasUnsavedChanges: false, cancellationToken);
         return Page();
     }
 
@@ -67,7 +67,7 @@ public class TemplateEditorModel(
         if (state is null)
             return RedirectToPage("/Admin/TemplateManager");
 
-        // The posted JSON is the designer's work, so keep the editor open with it even if reloading the stored version failed.
+        // The posted JSON is the designer's work, so keep Template Studio open with it even if reloading the stored version failed.
         if (!string.IsNullOrWhiteSpace(NewSchema))
             LoadError = null;
 
@@ -84,11 +84,11 @@ public class TemplateEditorModel(
             foreach (var error in outcome.Errors)
                 ModelState.AddModelError(error.FieldKey, error.Message);
 
-            await BuildEditorDataAsync(state, schemaJson: NewSchema, hasUnsavedChanges: true, cancellationToken);
+            await BuildStudioDataAsync(state, schemaJson: NewSchema, hasUnsavedChanges: true, cancellationToken);
             return Page();
         }
 
-        logger.LogInformation("Template editor saved version {Version} for {TemplateId}",
+        logger.LogInformation("Template Studio saved version {Version} for {TemplateId}",
             state.NewVersion, SelectedTemplate!.TemplateId);
 
         await templateCacheInvalidator.InvalidateAsync(SelectedTemplate.TemplateId.ToString());
@@ -99,9 +99,9 @@ public class TemplateEditorModel(
     }
 
     /// <summary>
-    /// Runs the save-time checks without saving, so the editor can list problems as the designer works.
+    /// Runs the save-time checks without saving, so Template Studio can list problems as the designer works.
     /// </summary>
-    public IActionResult OnPostValidate([FromBody] TemplateEditorValidateRequest? request)
+    public IActionResult OnPostValidate([FromBody] TemplateStudioValidateRequest? request)
     {
         var (isValid, errors) = templateValidationService.ValidateTemplateJson(request?.Schema ?? string.Empty);
         return new JsonResult(new { isValid, errors });
@@ -141,7 +141,7 @@ public class TemplateEditorModel(
 
     /// <summary>
     /// How many applications use the template, or null when that can't be checked. Once there are any, the API
-    /// rejects versions that drop or change questions without retiring them, so the editor retires them instead.
+    /// rejects versions that drop or change questions without retiring them, so Template Studio retires them instead.
     /// </summary>
     private async Task<int?> CountApplicationsAsync(Guid templateId, CancellationToken cancellationToken)
     {
@@ -162,7 +162,7 @@ public class TemplateEditorModel(
         }
     }
 
-    private async Task BuildEditorDataAsync(
+    private async Task BuildStudioDataAsync(
         TemplateManagerWorkState state,
         string? schemaJson,
         bool hasUnsavedChanges,
@@ -193,7 +193,7 @@ public class TemplateEditorModel(
             ? 0
             : await CountApplicationsAsync(SelectedTemplate!.TemplateId, cancellationToken);
 
-        EditorDataJson = JsonSerializer.Serialize(new
+        StudioDataJson = JsonSerializer.Serialize(new
         {
             templateName = SelectedTemplate!.Name,
             versionNumber = CurrentVersionNumber,
@@ -204,9 +204,9 @@ public class TemplateEditorModel(
             isStarter,
             hasUnsavedChanges,
             complexFields,
-            validateUrl = Url.Page("/Admin/TemplateEditor", "Validate")
+            validateUrl = Url.Page("/Admin/TemplateStudio", "Validate")
         });
     }
 }
 
-public sealed record TemplateEditorValidateRequest(string? Schema);
+public sealed record TemplateStudioValidateRequest(string? Schema);
