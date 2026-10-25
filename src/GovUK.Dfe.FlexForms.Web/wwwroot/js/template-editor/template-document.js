@@ -382,13 +382,52 @@
             taskStatus: 'NotStarted',
             visibleInTaskList: true
         };
+        this.setTaskShape(task, shape || 'pages');
+        return task;
+    };
+
+    TemplateDocument.prototype.taskShape = function (task) {
+        var mode = task.summary && task.summary.mode;
+        if (mode === 'multiCollectionFlow') return 'collection';
+        if (mode === 'derivedCollectionFlow') return 'derived';
+        return 'pages';
+    };
+
+    // A task can only change shape while nothing has been added to it, so no pages or questions are lost.
+    TemplateDocument.prototype.isTaskEmpty = function (task) {
+        if (Array.isArray(task.pages) && task.pages.length) return false;
+        var summary = task.summary || {};
+        return (summary.flows || []).concat(summary.derivedFlows || []).every(function (flow) {
+            return !(flow.pages || []).length;
+        });
+    };
+
+    TemplateDocument.prototype.setTaskShape = function (task, shape) {
         if (shape === 'collection') {
             task.pages = null;
-            task.summary = { mode: 'multiCollectionFlow', title: null, description: null, flows: [this.newFlow(name)] };
+            task.summary = { mode: 'multiCollectionFlow', title: null, description: null, flows: [this.newFlow(task.taskName)] };
+        } else if (shape === 'derived') {
+            task.pages = null;
+            task.summary = { mode: 'derivedCollectionFlow', title: task.taskName, description: null, flows: null, derivedFlows: [this.newDerivedFlow(task.taskName)] };
         } else {
             task.pages = [];
+            delete task.summary;
         }
-        return task;
+    };
+
+    TemplateDocument.prototype.newDerivedFlow = function (title) {
+        return {
+            flowId: this.idFor('flow', title),
+            title: title,
+            description: null,
+            sourceFieldId: '',
+            sourceType: 'collection',
+            fieldId: this.idFor('field', title),
+            itemTitleBinding: 'name',
+            sectionOrder: 1,
+            statusField: 'status',
+            pages: []
+        };
     };
 
     TemplateDocument.prototype.newFlow = function (title) {
@@ -429,6 +468,364 @@
         return field;
     };
 
+    // ---- Rules made with the rule builder -------------------------------------------------------------------------
+    //
+    // Anything a rule targets starts hidden, and hide rules run before show rules (lower priority first). A builder
+    // rule is stored as that pair: "<id>-hide" skips the pages and hides the questions when the answer doesn't
+    // match, and "<id>-show" shows them when it does.
+
+    var NEGATED_OPERATORS = {
+        equals: 'notEquals',
+        notEquals: 'equals',
+        'in': 'notIn',
+        notIn: 'in',
+        isEmpty: 'isNotEmpty',
+        isNotEmpty: 'isEmpty'
+    };
+
+    var VALUELESS_OPERATORS = ['isEmpty', 'isNotEmpty'];
+
+    function negateOperator(operator) {
+        return NEGATED_OPERATORS[operator] || null;
+    }
+
+    function ruleTargets(rule, type) {
+        return (rule.affectedElements || [])
+            .filter(function (element) { return element.elementType === type; })
+            .map(function (element) { return element.elementId; });
+    }
+
+    function singleCondition(rule) {
+        var conditions = rule.conditionGroup && rule.conditionGroup.conditions;
+        return conditions && conditions.length === 1 && !(conditions[0].conditions || []).length ? conditions[0] : null;
+    }
+
+    function sameValue(a, b) {
+        return JSON.stringify(a) === JSON.stringify(b);
+    }
+
+    // Pairs of rules the builder can open again. Rules written by hand are left alone.
+    TemplateDocument.prototype.builderRules = function () {
+        var rules = this.root.conditionalLogic || [];
+        var pairs = [];
+        rules.forEach(function (show) {
+            if (typeof show.id !== 'string' || !/-show$/.test(show.id)) return;
+            var base = show.id.slice(0, -'-show'.length);
+            var hide = rules.find(function (rule) { return rule.id === base + '-hide'; });
+            var showCondition = singleCondition(show);
+            var hideCondition = hide && singleCondition(hide);
+            if (!showCondition || !hideCondition) return;
+            if (!(show.affectedElements || []).every(function (element) { return element.action === 'show'; })) return;
+            if (hideCondition.triggerField !== showCondition.triggerField
+                || hideCondition.operator !== negateOperator(showCondition.operator)
+                || !sameValue(hideCondition.value, showCondition.value)) return;
+            pairs.push({ base: base, show: show, hide: hide });
+        });
+        return pairs;
+    };
+
+    TemplateDocument.prototype.builderRuleDraft = function (pair) {
+        var condition = singleCondition(pair.show);
+        return {
+            base: pair.base,
+            name: pair.show.name || '',
+            enabled: pair.show.enabled !== false,
+            triggerField: condition.triggerField,
+            operator: condition.operator,
+            value: condition.value,
+            pages: ruleTargets(pair.show, 'page'),
+            fields: ruleTargets(pair.show, 'field')
+        };
+    };
+
+    TemplateDocument.prototype.uniqueRuleBase = function (name, ignoreBase) {
+        var ids = new Set((this.root.conditionalLogic || []).map(function (rule) { return rule.id; }));
+        var base = kebabCase(name) || 'rule';
+        var candidate = base;
+        for (var n = 2; candidate !== ignoreBase && (ids.has(candidate + '-show') || ids.has(candidate + '-hide')); n++) {
+            candidate = base + '-' + n;
+        }
+        return candidate;
+    };
+
+    // Writes a builder rule as its hide and show pair. Returns the pair's base id.
+    TemplateDocument.prototype.saveBuilderRule = function (draft) {
+        var rules = this.root.conditionalLogic || (this.root.conditionalLogic = []);
+        var existing = draft.base
+            ? this.builderRules().find(function (pair) { return pair.base === draft.base; })
+            : null;
+        var base = existing ? existing.base : this.uniqueRuleBase(draft.name);
+        var value = VALUELESS_OPERATORS.indexOf(draft.operator) !== -1 ? '' : draft.value;
+        var priority = existing && typeof existing.hide.priority === 'number'
+            ? existing.hide.priority
+            : rules.reduce(function (max, rule) { return Math.max(max, typeof rule.priority === 'number' ? rule.priority : 100); }, 90) + 10;
+
+        function condition(operator) {
+            return { triggerField: draft.triggerField, operator: operator, value: value, dataType: 'string' };
+        }
+
+        function elements(pageAction, fieldAction) {
+            return (draft.pages || []).map(function (id) { return { elementId: id, elementType: 'page', action: pageAction }; })
+                .concat((draft.fields || []).map(function (id) { return { elementId: id, elementType: 'field', action: fieldAction }; }));
+        }
+
+        var hide = {
+            id: base + '-hide',
+            name: 'Hide unless: ' + draft.name,
+            priority: priority,
+            enabled: draft.enabled !== false,
+            conditionGroup: { logicalOperator: 'AND', conditions: [condition(negateOperator(draft.operator))] },
+            affectedElements: elements('skip', 'hide')
+        };
+        var show = {
+            id: base + '-show',
+            name: draft.name,
+            priority: priority + 1,
+            enabled: draft.enabled !== false,
+            conditionGroup: { logicalOperator: 'AND', conditions: [condition(draft.operator)] },
+            affectedElements: elements('show', 'show')
+        };
+
+        if (existing) {
+            rules[rules.indexOf(existing.hide)] = hide;
+            rules[rules.indexOf(existing.show)] = show;
+        } else {
+            rules.push(hide, show);
+        }
+        return base;
+    };
+
+    TemplateDocument.prototype.removeRules = function (toRemove) {
+        if (!this.root.conditionalLogic) return;
+        this.root.conditionalLogic = this.root.conditionalLogic.filter(function (rule) { return toRemove.indexOf(rule) === -1; });
+    };
+
+    // ---- Reporting safety ------------------------------------------------------------------------------------------
+    //
+    // Mirrors the API's field compatibility policy: once applications exist, a field keeps its kind and reporting
+    // key, and can only leave the template by being listed in retiredFields.
+
+    function fieldKind(field) {
+        var type = String(field.type || '').toLowerCase();
+        if (['text', 'textarea', 'text-area', 'email', 'character-count'].indexOf(type) !== -1) return 'text';
+        if (type === 'radios' || type === 'select') return 'a single choice';
+        if (type === 'checkboxes') return 'multiple choices';
+        if (type === 'date' || type === 'datetime' || type === 'date-time') return 'a date';
+        if (type === 'autocomplete' || type === 'complexfield') return 'a lookup of "' + ((field.complexField && field.complexField.id) || '') + '"';
+        return 'a "' + type + '" answer';
+    }
+
+    var COLLECTION_KIND = 'a collection of items';
+
+    function fieldKey(parentFieldId, fieldId) {
+        return String(parentFieldId || '').toLowerCase() + '|' + String(fieldId || '').toLowerCase();
+    }
+
+    // The fields reporting knows about, keyed by collection and field id.
+    function inventory(root) {
+        var fields = new Map();
+        var retired = [];
+        function addPageFields(owner, parentFieldId, parentReportingKey) {
+            (owner.pages || []).forEach(function (page) {
+                (page.fields || []).forEach(function (field) {
+                    if (!field.fieldId) return;
+                    var semanticKey = field.semanticKey || field.fieldId;
+                    var key = fieldKey(parentFieldId, field.fieldId);
+                    if (!fields.has(key)) {
+                        fields.set(key, {
+                            fieldId: field.fieldId,
+                            parentFieldId: parentFieldId || '',
+                            kind: fieldKind(field),
+                            semanticKey: semanticKey,
+                            reportingKey: parentReportingKey ? parentReportingKey + '/' + semanticKey : semanticKey
+                        });
+                    }
+                });
+            });
+        }
+        (root.taskGroups || []).forEach(function (group) {
+            (group.tasks || []).forEach(function (task) {
+                addPageFields(task, '', '');
+                var summary = task.summary || {};
+                (summary.flows || []).concat(summary.derivedFlows || []).forEach(function (flow) {
+                    if (!flow.fieldId) return;
+                    var key = fieldKey('', flow.fieldId);
+                    var semanticKey = flow.semanticKey || flow.fieldId;
+                    if (!fields.has(key)) {
+                        fields.set(key, { fieldId: flow.fieldId, parentFieldId: '', kind: COLLECTION_KIND, semanticKey: semanticKey, reportingKey: semanticKey });
+                    }
+                    addPageFields(flow, flow.fieldId, fields.get(key).reportingKey);
+                });
+            });
+        });
+        (root.retiredFields || []).forEach(function (entry) {
+            if (entry && entry.fieldId) retired.push(entry);
+        });
+        return { fields: fields, retired: retired };
+    }
+
+    function isRetiredIn(retired, parentFieldId, fieldId) {
+        return retired.some(function (entry) {
+            return fieldKey(entry.parentFieldId, entry.fieldId) === fieldKey(parentFieldId, fieldId);
+        });
+    }
+
+    function describeField(field) {
+        return '"' + field.fieldId + '"' + (field.parentFieldId ? ' (in the list "' + field.parentFieldId + '")' : '');
+    }
+
+    // Problems the API will reject once applications use the template. `baselineRoot` is the version being edited.
+    TemplateDocument.prototype.reportingIssues = function (baselineRoot) {
+        var before = inventory(baselineRoot);
+        var after = inventory(this.root);
+        var issues = [];
+
+        before.fields.forEach(function (previous, key) {
+            var current = after.fields.get(key);
+            if (!current) {
+                if (!isRetiredIn(after.retired, previous.parentFieldId, previous.fieldId)
+                    && !(previous.parentFieldId && isRetiredIn(after.retired, '', previous.parentFieldId))) {
+                    issues.push({
+                        fieldId: previous.fieldId,
+                        message: 'Question ' + describeField(previous) + ' has been removed but isn\'t retired. Applications already have answers to it, so retire it instead of deleting it.'
+                    });
+                }
+                return;
+            }
+            if (previous.kind !== current.kind) {
+                issues.push({
+                    fieldId: current.fieldId,
+                    message: 'Question ' + describeField(current) + ' used to store ' + previous.kind + ' but now stores ' + current.kind + '. Give it a new answer id and retire the old one.'
+                });
+            } else if (previous.semanticKey.toLowerCase() !== current.semanticKey.toLowerCase()) {
+                issues.push({
+                    fieldId: current.fieldId,
+                    message: 'Question ' + describeField(current) + ' has a different reporting key ("' + current.semanticKey + '" instead of "' + previous.semanticKey + '"). Put it back to "' + previous.semanticKey + '".'
+                });
+            }
+        });
+
+        // A new id can only carry on a removed question's reporting key as its declared, like-for-like replacement.
+        after.fields.forEach(function (current, key) {
+            if (before.fields.has(key)) return;
+            var previous = Array.from(before.fields.values()).find(function (field) {
+                return field.reportingKey.toLowerCase() === current.reportingKey.toLowerCase()
+                    && !after.fields.has(fieldKey(field.parentFieldId, field.fieldId));
+            });
+            if (!previous) return;
+            if (previous.kind !== current.kind) {
+                issues.push({
+                    fieldId: current.fieldId,
+                    message: 'Question ' + describeField(current) + ' keeps the reporting key of ' + describeField(previous) + ', which stored ' + previous.kind
+                        + ', but it stores ' + current.kind + '. Give it its own reporting key.'
+                });
+                return;
+            }
+            var retirement = after.retired.find(function (entry) {
+                return fieldKey(entry.parentFieldId, entry.fieldId) === fieldKey(previous.parentFieldId, previous.fieldId);
+            });
+            var named = retirement && (retirement.replacedBy || []).some(function (id) { return String(id).toLowerCase() === current.fieldId.toLowerCase(); });
+            if (!named && !current.parentFieldId) {
+                issues.push({
+                    fieldId: current.fieldId,
+                    message: 'Question ' + describeField(current) + ' keeps the reporting key of ' + describeField(previous) + ', so the retired "' + previous.fieldId + '" must name it as its replacement.'
+                });
+            }
+        });
+
+        after.retired.forEach(function (entry) {
+            if (after.fields.has(fieldKey(entry.parentFieldId, entry.fieldId))) {
+                issues.push({
+                    fieldId: entry.fieldId,
+                    message: 'Question ' + describeField({ fieldId: entry.fieldId, parentFieldId: entry.parentFieldId }) + ' is retired but is still in the template. Remove it from the retired list, or delete the question.'
+                });
+            }
+            (entry.replacedBy || []).forEach(function (replacement) {
+                var exists = Array.from(after.fields.values()).some(function (field) { return field.fieldId.toLowerCase() === String(replacement).toLowerCase(); });
+                if (!exists) {
+                    issues.push({
+                        fieldId: entry.fieldId,
+                        message: 'Retired question "' + entry.fieldId + '" is replaced by "' + replacement + '", but there is no question with that answer id.'
+                    });
+                }
+            });
+        });
+
+        var byReportingKey = new Map();
+        after.fields.forEach(function (field) {
+            var key = field.reportingKey.toLowerCase();
+            byReportingKey.set(key, (byReportingKey.get(key) || []).concat([field]));
+            if (field.semanticKey.indexOf('/') !== -1) {
+                issues.push({ fieldId: field.fieldId, message: 'Question ' + describeField(field) + ' has a reporting key containing "/", which isn\'t allowed.' });
+            }
+        });
+        byReportingKey.forEach(function (shared) {
+            if (shared.length > 1) {
+                issues.push({
+                    fieldId: shared[0].fieldId,
+                    message: 'Questions ' + shared.map(describeField).join(' and ') + ' share the reporting key "' + shared[0].reportingKey + '". Each needs its own.'
+                });
+            }
+        });
+
+        return issues;
+    };
+
+    // The reporting identity of a question or list: its id and the list it belongs to.
+    TemplateDocument.prototype.fieldKeyOf = function (path) {
+        var node = this.get(path);
+        var kind = this.kindOf(path);
+        if (kind === 'flow' || kind === 'derivedFlow') return { fieldId: node.fieldId, parentFieldId: '' };
+        if (kind !== 'field') return null;
+        var owner = this.ancestorPath(path, 'flow') || this.ancestorPath(path, 'derivedFlow');
+        return { fieldId: node.fieldId, parentFieldId: owner ? this.get(owner).fieldId : '' };
+    };
+
+    // Every reporting key under a node. A list counts as one key: retiring a list retires its questions.
+    TemplateDocument.prototype.fieldKeysIn = function (path) {
+        var self = this;
+        var kind = this.kindOf(path);
+        if (kind === 'field' || kind === 'flow' || kind === 'derivedFlow') return [this.fieldKeyOf(path)];
+        var keys = [];
+        (function walk(current) {
+            var currentKind = self.kindOf(current);
+            if (currentKind === 'field' || currentKind === 'flow' || currentKind === 'derivedFlow') {
+                keys.push(self.fieldKeyOf(current));
+                return;
+            }
+            var node = self.get(current);
+            var containers = { template: [['taskGroups']], group: [['tasks']], task: [['pages'], ['summary', 'flows'], ['summary', 'derivedFlows']], page: [['fields']] }[currentKind] || [];
+            containers.forEach(function (keyPath) {
+                var items = keyPath.reduce(function (value, part) { return value && value[part]; }, node);
+                (items || []).forEach(function (_, index) { walk(current.concat(keyPath, [index])); });
+            });
+        })(path);
+        return keys;
+    };
+
+    TemplateDocument.prototype.retire = function (key, replacedBy) {
+        var retired = this.root.retiredFields || (this.root.retiredFields = []);
+        var entry = retired.find(function (item) { return fieldKey(item.parentFieldId, item.fieldId) === fieldKey(key.parentFieldId, key.fieldId); });
+        if (!entry) {
+            entry = { fieldId: key.fieldId };
+            if (key.parentFieldId) entry.parentFieldId = key.parentFieldId;
+            retired.push(entry);
+        }
+        (replacedBy || []).forEach(function (id) {
+            if (!id) return;
+            entry.replacedBy = entry.replacedBy || [];
+            if (entry.replacedBy.indexOf(id) === -1) entry.replacedBy.push(id);
+        });
+        return entry;
+    };
+
+    TemplateDocument.prototype.unretire = function (key) {
+        if (!this.root.retiredFields) return;
+        this.root.retiredFields = this.root.retiredFields.filter(function (item) {
+            return fieldKey(item.parentFieldId, item.fieldId) !== fieldKey(key.parentFieldId, key.fieldId);
+        });
+    };
+
     function defaultOptions(type) {
         return type === 'radios'
             ? [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }]
@@ -444,7 +841,11 @@
         pathKey: pathKey,
         samePath: samePath,
         startsWith: startsWith,
-        eachCondition: eachCondition
+        eachCondition: eachCondition,
+        negateOperator: negateOperator,
+        fieldKind: fieldKind,
+        fieldKey: fieldKey,
+        inventory: inventory
     };
 
     if (typeof module !== 'undefined' && module.exports) {

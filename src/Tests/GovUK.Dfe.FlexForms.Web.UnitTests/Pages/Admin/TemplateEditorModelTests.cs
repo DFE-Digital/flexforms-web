@@ -1,7 +1,9 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json;
+using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
+using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Application.Admin;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Application.Validation;
@@ -32,6 +34,7 @@ public class TemplateEditorModelTests
     private readonly ITemplateValidationService _validation = Substitute.For<ITemplateValidationService>();
     private readonly ITemplateCacheInvalidator _cacheInvalidator = Substitute.For<ITemplateCacheInvalidator>();
     private readonly IComplexFieldConfigurationService _complexFields = Substitute.For<IComplexFieldConfigurationService>();
+    private readonly IApplicationsClient _applications = Substitute.For<IApplicationsClient>();
     private readonly InMemorySession _session = new();
     private readonly TemplateDto _template = new() { TemplateId = Guid.NewGuid(), Name = "Transfers", CreatedOn = DateTime.UtcNow };
     private readonly TemplateEditorModel _model;
@@ -39,7 +42,8 @@ public class TemplateEditorModelTests
     public TemplateEditorModelTests()
     {
         _model = new TemplateEditorModel(
-            _admin, _selection, _validation, _cacheInvalidator, _complexFields, NullLogger<TemplateEditorModel>.Instance);
+            _admin, _selection, _validation, _cacheInvalidator, _complexFields, _applications, NullLogger<TemplateEditorModel>.Instance);
+        GivenApplicationCount(Task.FromResult(new PagedResultOfApplicationDto { TotalCount = 4 }));
 
         var httpContext = new DefaultHttpContext();
         httpContext.Features.Set<ISessionFeature>(new StubSessionFeature { Session = _session });
@@ -98,7 +102,59 @@ public class TemplateEditorModelTests
         using var data = JsonDocument.Parse(_model.EditorDataJson);
         Assert.True(data.RootElement.GetProperty("isStarter").GetBoolean());
         Assert.Contains("starter-group", data.RootElement.GetProperty("schemaJson").GetString());
+        Assert.Equal(0, data.RootElement.GetProperty("applicationCount").GetInt32());
+        Assert.Equal(JsonValueKind.Null, data.RootElement.GetProperty("baselineSchemaJson").ValueKind);
+        await _applications.DidNotReceiveWithAnyArgs().GetApplicationsByTemplateAsync(default);
     }
+
+    [Fact]
+    public async Task OnGetAsync_ShouldTellTheEditorHowManyApplicationsUseTheTemplate_AndWhatTheyWereSavedAgainst()
+    {
+        GivenStoredVersion("1.0.3");
+
+        await _model.OnGetAsync(null, CancellationToken.None);
+
+        using var data = JsonDocument.Parse(_model.EditorDataJson);
+        Assert.Equal(4, data.RootElement.GetProperty("applicationCount").GetInt32());
+        Assert.Equal(StoredSchema, data.RootElement.GetProperty("baselineSchemaJson").GetString());
+        await _applications.Received(1).GetApplicationsByTemplateAsync(
+            _template.TemplateId, false, 1, 1, Arg.Any<string?>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(),
+            Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Arg.Any<ApplicationStatus?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task OnGetAsync_ShouldLeaveTheApplicationCountUnknown_WhenItCannotBeChecked()
+    {
+        GivenStoredVersion("1.0.3");
+        GivenApplicationCount(Task.FromException<PagedResultOfApplicationDto>(new HttpRequestException("forbidden")));
+
+        await _model.OnGetAsync(null, CancellationToken.None);
+
+        using var data = JsonDocument.Parse(_model.EditorDataJson);
+        Assert.Equal(JsonValueKind.Null, data.RootElement.GetProperty("applicationCount").ValueKind);
+    }
+
+    [Fact]
+    public async Task OnPostSaveAsync_ShouldCompareWithTheStoredVersion_NotTheEditedOne_WhenRedisplaying()
+    {
+        GivenStoredVersion("1.0.3");
+        _model.NewVersion = "1.0.4";
+        _model.NewSchema = """{ "edited": true }""";
+        _admin.ValidateNewVersion(Arg.Any<TemplateManagerWorkState>())
+            .Returns(AdminPageOutcome.Stay(errors: [new FormValidationError("NewSchema", "problem")]));
+
+        await _model.OnPostSaveAsync(CancellationToken.None);
+
+        using var data = JsonDocument.Parse(_model.EditorDataJson);
+        Assert.Equal(StoredSchema, data.RootElement.GetProperty("baselineSchemaJson").GetString());
+    }
+
+    private void GivenApplicationCount(Task<PagedResultOfApplicationDto> result) =>
+        _applications.GetApplicationsByTemplateAsync(
+                Arg.Any<Guid>(), Arg.Any<bool?>(), Arg.Any<int?>(), Arg.Any<int?>(), Arg.Any<string?>(),
+                Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(),
+                Arg.Any<ApplicationStatus?>(), Arg.Any<CancellationToken>())
+            .Returns(result);
 
     [Fact]
     public async Task OnGetAsync_ShouldNotOfferTheStarterTemplate_WhenTheTemplateFailedToLoad()

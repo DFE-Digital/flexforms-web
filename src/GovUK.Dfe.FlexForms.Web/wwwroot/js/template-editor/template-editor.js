@@ -33,7 +33,7 @@
         page: 'Page',
         field: 'Question',
         flow: 'Repeatable list',
-        derivedFlow: 'Derived list'
+        derivedFlow: 'Repeated pages'
     };
 
     var PATTERN_PRESETS = [
@@ -94,6 +94,27 @@
     // Which option or format check is open for changing, for example { key: 'option', index: 2 }.
     var editing = null;
     var confirmingDelete = false;
+    // The rule being added or changed in the Rules tab, and the rule waiting for delete confirmation.
+    var ruleDraft = null;
+    var ruleErrors = {};
+    var confirmingRuleDelete = null;
+
+    // The stored version this copy started from. Once applications use the template, reporting compares new versions
+    // with it, so removed or changed questions have to be retired rather than lost.
+    var baselineRoot = (function () {
+        try { return data.baselineSchemaJson ? JSON.parse(data.baselineSchemaJson) : {}; } catch (e) { return {}; }
+    })();
+    var baselineFields = lib.inventory(baselineRoot).fields;
+    var applicationCount = typeof data.applicationCount === 'number' ? data.applicationCount : null;
+
+    // Unknown counts are treated as in use, which is the safe way round.
+    function inUse() {
+        return baselineFields.size > 0 && applicationCount !== 0;
+    }
+
+    function baselineFor(key) {
+        return key ? baselineFields.get(lib.fieldKey(key.parentFieldId, key.fieldId)) || null : null;
+    }
 
     // ---- GOV.UK Frontend ---------------------------------------------------------------------------------------
 
@@ -499,7 +520,7 @@
             case 'task':
                 var mode = node.summary && node.summary.mode;
                 if (mode === 'multiCollectionFlow') return 'Task with repeatable lists';
-                if (mode === 'derivedCollectionFlow') return 'Task with derived lists';
+                if (mode === 'derivedCollectionFlow') return 'Task with repeated pages';
                 return 'Task';
             case 'field': return fieldTypeInfo(editorType(node)).short + (isRequired(node) ? '' : ', optional');
             default: return KIND_LABELS[doc.kindOf(path)];
@@ -765,18 +786,55 @@
     }
 
     function deleteConfirmation(path) {
-        var kindLabel = KIND_LABELS[doc.kindOf(path)].toLowerCase();
+        var kind = doc.kindOf(path);
+        var kindLabel = KIND_LABELS[kind].toLowerCase();
         var message = 'Are you sure you want to delete this ' + kindLabel + (childrenOf(path).length ? ' and everything in it?' : '?');
         var references = doc.rulesReferencing(idOf(path)).length;
         if (references) message += ' ' + references + (references === 1 ? ' rule uses it and will need updating.' : ' rules use it and will need updating.');
-        message += ' If applications already use this template, saving will tell you if removed questions need to be retired.';
+
+        // Questions applications have already answered are retired, so reports keep their answers.
+        var toRetire = inUse() ? doc.fieldKeysIn(path).filter(function (key) { return !!baselineFor(key); }) : [];
+        var replacement = null;
+        var retireParts = [];
+        if (toRetire.length) {
+            retireParts.push(h('p', { class: 'govuk-body', text: 'Applications already have answers to '
+                + (toRetire.length === 1 ? 'this question' : 'these ' + toRetire.length + ' questions and lists')
+                + '. Deleting retires ' + (toRetire.length === 1 ? 'it' : 'them') + ', so reports keep the answers:' }));
+            retireParts.push(h('ul', { class: 'govuk-list govuk-list--bullet' }, toRetire.map(function (key) {
+                return h('li', { text: key.fieldId + (key.parentFieldId ? ' (in ' + key.parentFieldId + ')' : '') });
+            })));
+            if (kind === 'field') {
+                var others = [];
+                doc.eachPageSet(function (pages) {
+                    pages.forEach(function (page) {
+                        (page.fields || []).forEach(function (field) {
+                            if (field !== doc.get(path)) others.push({ value: field.fieldId, label: ((field.label && field.label.value) || field.fieldId) + ' (' + field.fieldId + ')' });
+                        });
+                    });
+                });
+                replacement = selectInput({
+                    id: 'tpl-delete-replacement',
+                    label: 'Does another question replace it?',
+                    hint: 'Reports will show that the new question takes over from this one.',
+                    value: '',
+                    items: [{ value: '', label: 'No' }].concat(others),
+                    onChange: function () { }
+                });
+            }
+        }
 
         return h('div', { id: 'tpl-delete-confirm' }, [
             warningText(message),
+            retireParts,
+            replacement,
             h('div', { class: 'govuk-button-group' }, [
-                button('Yes, delete this ' + kindLabel, function () {
+                button((toRetire.length ? 'Yes, retire and delete this ' : 'Yes, delete this ') + kindLabel, function () {
+                    var replacedBy = document.getElementById('tpl-delete-replacement');
                     var parent = doc.parentPath(path);
                     doc.remove(path);
+                    toRetire.forEach(function (key) {
+                        doc.retire(key, replacedBy && replacedBy.value ? [replacedBy.value] : []);
+                    });
                     markDirty();
                     select(parent, true);
                 }, 'warning', 'tpl-delete-yes'),
@@ -854,12 +912,18 @@
                     text = 'Enter an id';
                 } else if (taken) {
                     text = 'Something else in this template already uses this id';
-                } else if (doc.kindOf(path) === 'field' || doc.kindOf(path) === 'page') {
-                    var updated = doc.renameReferences(before, trimmed);
-                    if (updated) {
-                        text = 'Updated ' + updated + (updated === 1 ? ' rule' : ' rules') + ' to use the new id.';
-                        isError = false;
+                } else {
+                    var notes = [];
+                    if (doc.kindOf(path) === 'field' || doc.kindOf(path) === 'page') {
+                        var updated = doc.renameReferences(before, trimmed);
+                        if (updated) notes.push('Updated ' + updated + (updated === 1 ? ' rule' : ' rules') + ' to use the new id.');
                     }
+                    if (key === 'fieldId') {
+                        var retired = answerIdRenamed(path, before, trimmed);
+                        if (retired) notes.push(retired);
+                    }
+                    text = notes.join(' ');
+                    isError = false;
                 }
                 message.className = isError ? 'govuk-error-message' : 'govuk-hint';
                 message.textContent = '';
@@ -871,6 +935,30 @@
                 edited(path);
             }
         });
+    }
+
+    // Once applications have answers saved under an id, renaming it is a retirement plus a replacement that keeps
+    // the old reporting key. Renaming back undoes that.
+    function answerIdRenamed(path, before, after) {
+        if (!before || before === after) return '';
+        (doc.root.retiredFields || []).forEach(function (entry) {
+            if (entry.replacedBy) entry.replacedBy = entry.replacedBy.map(function (id) { return id === before ? after : id; });
+        });
+
+        var node = doc.get(path);
+        var parentFieldId = doc.fieldKeyOf(path).parentFieldId;
+        var original = baselineFor({ fieldId: after, parentFieldId: parentFieldId });
+        if (original) {
+            doc.unretire({ fieldId: after, parentFieldId: parentFieldId });
+            if (node.semanticKey === original.semanticKey && original.semanticKey === after) delete node.semanticKey;
+            return '';
+        }
+
+        var previous = inUse() ? baselineFor({ fieldId: before, parentFieldId: parentFieldId }) : null;
+        if (!previous) return '';
+        doc.retire({ fieldId: before, parentFieldId: parentFieldId }, [after]);
+        if (!node.semanticKey) node.semanticKey = previous.semanticKey;
+        return 'Applications already have answers saved as "' + before + '", so it is retired and replaced by "' + after + '", which keeps its reporting key.';
     }
 
     function addForm(options) {
@@ -901,20 +989,276 @@
             : h('p', { class: 'govuk-body', text: emptyText }));
     }
 
-    function ruleList(id) {
+    function isInList(path) {
+        return !!(doc.ancestorPath(path, 'flow') || doc.ancestorPath(path, 'derivedFlow'));
+    }
+
+    function ruleList(path) {
+        var id = idOf(path);
+        var kindLabel = KIND_LABELS[doc.kindOf(path)].toLowerCase();
         var rules = doc.rulesReferencing(id);
-        if (!rules.length) return null;
-        return section('Rules that use this', h('ul', { class: 'govuk-list govuk-list--bullet' }, rules.map(function (rule) {
-            return h('li', { text: (rule.enabled === false ? '(Turned off) ' : '') + 'When ' + describeConditions(rule.conditionGroup) + ': ' + describeActions(rule) + '.' });
-        })));
+        var taskPath = doc.ancestorPath(path, 'task');
+        return section('Rules', [
+            rules.length
+                ? h('ul', { class: 'govuk-list govuk-list--bullet' }, rules.map(function (rule) {
+                    return h('li', { text: (rule.enabled === false ? '(Turned off) ' : '') + 'When ' + describeConditions(rule.conditionGroup) + ': ' + describeActions(rule) + '.' });
+                }))
+                : h('p', { class: 'govuk-body', text: 'No rules use this ' + kindLabel + '. Applicants always see it.' }),
+            isInList(path) || !taskPath ? null : button('Add a rule that shows this ' + kindLabel, function () {
+                startRule({
+                    pages: doc.kindOf(path) === 'page' ? [id] : [],
+                    fields: doc.kindOf(path) === 'field' ? [id] : [],
+                    targetTaskId: doc.get(taskPath).taskId
+                });
+            }, 'secondary', 'tpl-add-rule-here')
+        ]);
+    }
+
+    var SYSTEM_COLUMNS = [
+        { value: 'reference', label: 'Reference' },
+        { value: 'dateStarted', label: 'Date started' },
+        { value: 'dateSubmitted', label: 'Date submitted' },
+        { value: 'status', label: 'Status' },
+        { value: 'action', label: 'Action' }
+    ];
+
+    var APPLICATION_BINDINGS = [
+        { value: 'application.reference', label: 'Application reference' },
+        { value: 'application.version', label: 'Template version the application uses' },
+        { value: 'application.leadApplicant', label: 'Lead applicant\'s name' },
+        { value: 'application.leadApplicantEmail', label: 'Lead applicant\'s email' }
+    ];
+
+    // Every answer a dashboard column or task list detail can show: questions, and the lists they're in.
+    function answerChoices() {
+        var choices = [];
+        doc.eachTask(function (task) {
+            var summary = task.summary || {};
+            (summary.flows || []).concat(summary.derivedFlows || []).forEach(function (flow) {
+                if (flow.fieldId) choices.push({ value: flow.fieldId, label: (flow.title || flow.fieldId) + ' (list: ' + flow.fieldId + ')' });
+            });
+        });
+        doc.eachPageSet(function (pages) {
+            pages.forEach(function (page) {
+                (page.fields || []).forEach(function (field) {
+                    if (field.fieldId) choices.push({ value: field.fieldId, label: ((field.label && field.label.value) || field.fieldId) + ' (' + field.fieldId + ')' });
+                });
+            });
+        });
+        return choices;
+    }
+
+    function choiceLabel(choices, value) {
+        var match = choices.find(function (choice) { return choice.value === value; });
+        return match ? match.label : value;
+    }
+
+    // Shared list editing: a summary list with Change, Move and Remove, and a form for the item being changed.
+    function listEditor(options) {
+        var items = options.items;
+        function moved() {
+            if (options.renumber) options.renumber();
+            editing = null;
+            restructured();
+        }
+        var rows = items.map(function (item, index) {
+            var name = options.noun + ' ' + (index + 1);
+            return {
+                key: options.key(item, index),
+                value: options.value(item, index),
+                actions: [
+                    { text: 'Change', hidden: name, onClick: function () { startEditing(options.editKey, index, options.firstInputId); } },
+                    index > 0 ? { text: 'Move up', hidden: name, onClick: function () { items.splice(index - 1, 0, items.splice(index, 1)[0]); moved(); } } : null,
+                    index < items.length - 1 ? { text: 'Move down', hidden: name, onClick: function () { items.splice(index + 1, 0, items.splice(index, 1)[0]); moved(); } } : null,
+                    { text: 'Remove', hidden: name, onClick: function () { items.splice(index, 1); moved(); } }
+                ]
+            };
+        });
+        var parts = [items.length ? summaryList(rows) : h('p', { class: 'govuk-body', text: options.emptyText })];
+        if (isEditing(options.editKey) && items[editing.index]) {
+            parts.push(h('fieldset', { class: 'govuk-fieldset' }, [
+                h('legend', { class: 'govuk-fieldset__legend govuk-fieldset__legend--m', text: options.noun.charAt(0).toUpperCase() + options.noun.slice(1) + ' ' + (editing.index + 1) }),
+                options.form(items[editing.index], editing.index),
+                button('Done', function () { stopEditing(options.addId); }, 'secondary', options.editKey + '-done')
+            ]));
+        } else if (!options.max || items.length < options.max) {
+            parts.push(button(options.addText, function () {
+                items.push(options.create());
+                if (options.renumber) options.renumber();
+                markDirty();
+                startEditing(options.editKey, items.length - 1, options.firstInputId);
+            }, 'secondary', options.addId));
+        }
+        return parts;
+    }
+
+    function isFieldColumn(column) {
+        return column.type === 'field' || (!column.type && !!column.fieldId);
+    }
+
+    function dashboardEditor() {
+        var root = doc.root;
+        var columns = root.dashboard && Array.isArray(root.dashboard.columns) ? root.dashboard.columns : null;
+        if (!columns || !columns.length) {
+            return section('Dashboard columns', [
+                h('p', { class: 'govuk-body', text: 'The applications dashboard shows the default columns: reference, date started, date submitted, status and an action link.' }),
+                button('Choose the columns', function () {
+                    root.dashboard = { columns: SYSTEM_COLUMNS.map(function (column, index) { return { type: 'system', id: column.value, order: (index + 1) * 10 }; }) };
+                    restructured();
+                }, 'secondary', 'tpl-dashboard-customise')
+            ]);
+        }
+
+        var choices = answerChoices();
+        var answerColumns = columns.filter(isFieldColumn).length;
+        return section('Dashboard columns', [
+            h('p', { class: 'govuk-body', text: 'Columns on the applications dashboard, in order. Up to 3 can show answers.' }),
+            answerColumns > 3 ? warningText('Only the first 3 answer columns are shown.') : null,
+            listEditor({
+                items: columns,
+                noun: 'column',
+                editKey: 'column',
+                firstInputId: 'tpl-column-type-0',
+                addId: 'tpl-add-column',
+                addText: 'Add a column',
+                emptyText: 'There are no columns.',
+                renumber: function () { columns.forEach(function (column, index) { column.order = (index + 1) * 10; }); },
+                key: function (column) {
+                    return column.header || (isFieldColumn(column) ? column.fieldId || 'Answer not chosen' : choiceLabel(SYSTEM_COLUMNS, column.id));
+                },
+                value: function (column) {
+                    return isFieldColumn(column) ? 'Answer: ' + (column.fieldId ? choiceLabel(choices, column.fieldId) : 'not chosen') : 'Built in: ' + choiceLabel(SYSTEM_COLUMNS, column.id);
+                },
+                create: function () { return { type: 'field', fieldId: '', header: '', order: 0 }; },
+                form: function (column) {
+                    var showsAnswer = isFieldColumn(column);
+                    return [
+                        radios({
+                            name: 'tpl-column-type', legend: 'What does the column show?', inline: true, value: showsAnswer ? 'field' : 'system',
+                            items: [{ value: 'field', label: 'An answer' }, { value: 'system', label: 'Something built in' }],
+                            onChange: function (value) {
+                                column.type = value;
+                                if (value === 'system') {
+                                    delete column.fieldId;
+                                    column.id = column.id || 'reference';
+                                } else {
+                                    delete column.id;
+                                    column.fieldId = column.fieldId || '';
+                                }
+                                markDirty();
+                                renderInspector();
+                            }
+                        }),
+                        showsAnswer
+                            ? selectInput({
+                                id: 'tpl-column-field', label: 'Answer', value: column.fieldId,
+                                items: [{ value: '', label: 'Choose an answer' }].concat(choices),
+                                onChange: function (value) { column.fieldId = value; markDirty(); }
+                            })
+                            : selectInput({
+                                id: 'tpl-column-system', label: 'Built-in column', value: column.id, items: SYSTEM_COLUMNS,
+                                onChange: function (value) { column.id = value; markDirty(); }
+                            }),
+                        textInput({
+                            id: 'tpl-column-header', label: showsAnswer ? 'Column heading' : 'Column heading (optional)', value: column.header, width: 20,
+                            onInput: function (value) { column.header = value || undefined; if (!value) delete column.header; markDirty(); }
+                        })
+                    ];
+                }
+            }),
+            h('p', { class: 'govuk-body' }, actionLink({
+                text: 'Use the default columns',
+                onClick: function () { root.dashboard = null; editing = null; restructured(); }
+            }))
+        ]);
+    }
+
+    function metadataEditor() {
+        var root = doc.root;
+        var items = root.applicationMetaData && Array.isArray(root.applicationMetaData.items) ? root.applicationMetaData.items : null;
+        if (!items || !items.length) {
+            return section('Details on the task list', [
+                h('p', { class: 'govuk-body', text: 'The task list shows the default details: application reference, template version and lead applicant.' }),
+                button('Choose the details', function () {
+                    root.applicationMetaData = {
+                        items: [
+                            { label: 'Application reference', fieldId: 'application.reference', order: 10 },
+                            { label: 'Application version', fieldId: 'application.version', order: 20 },
+                            { label: 'Lead applicant', fieldId: 'application.leadApplicant', order: 30 }
+                        ]
+                    };
+                    restructured();
+                }, 'secondary', 'tpl-metadata-customise')
+            ]);
+        }
+
+        var choices = APPLICATION_BINDINGS.concat(answerChoices());
+        return section('Details on the task list', [
+            h('p', { class: 'govuk-body', text: 'Rows shown under "Your application" on the task list, in order. You can have up to 10.' }),
+            listEditor({
+                items: items,
+                noun: 'detail',
+                editKey: 'detail',
+                firstInputId: 'tpl-detail-label',
+                addId: 'tpl-add-detail',
+                addText: 'Add a detail',
+                emptyText: 'There are no details.',
+                max: 10,
+                renumber: function () { items.forEach(function (item, index) { item.order = (index + 1) * 10; }); },
+                key: function (item) { return item.label || 'No label'; },
+                value: function (item) { return item.fieldId ? choiceLabel(choices, item.fieldId) : 'Not chosen'; },
+                create: function () { return { label: '', fieldId: '', order: 0 }; },
+                form: function (item) {
+                    var isCustom = (editing && editing.custom)
+                        || (!!item.fieldId && !choices.some(function (choice) { return choice.value === item.fieldId; }));
+                    return [
+                        textInput({
+                            id: 'tpl-detail-label', label: 'Label', value: item.label,
+                            onInput: function (value) { item.label = value; markDirty(); }
+                        }),
+                        selectInput({
+                            id: 'tpl-detail-field', label: 'What it shows', value: isCustom ? 'custom' : item.fieldId,
+                            items: [{ value: '', label: 'Choose something to show' }].concat(choices, [{ value: 'custom', label: 'Something else (enter a path)' }]),
+                            onChange: function (value) {
+                                editing.custom = value === 'custom';
+                                if (!editing.custom) item.fieldId = value;
+                                markDirty();
+                                renderInspector();
+                            }
+                        }),
+                        isCustom
+                            ? textInput({
+                                id: 'tpl-detail-path', label: 'Answer path', value: item.fieldId,
+                                hint: 'For an answer in a list, name the list and the question, for example trusts[0].trustSearch.name for the first trust\'s name.',
+                                onInput: function (value) { item.fieldId = value; markDirty(); }
+                            })
+                            : null
+                    ];
+                }
+            }),
+            h('p', { class: 'govuk-body' }, actionLink({
+                text: 'Use the default details',
+                onClick: function () { root.applicationMetaData = null; editing = null; restructured(); }
+            }))
+        ]);
+    }
+
+    function retiredList() {
+        var retired = doc.root.retiredFields || [];
+        if (!retired.length) return null;
+        return section('Retired questions', [
+            h('p', { class: 'govuk-body', text: 'Questions taken out of the template after applications had answered them. Reports keep their answers.' }),
+            summaryList(retired.map(function (entry) {
+                return {
+                    key: entry.fieldId + (entry.parentFieldId ? ' (in ' + entry.parentFieldId + ')' : ''),
+                    value: entry.replacedBy && entry.replacedBy.length ? 'Replaced by ' + entry.replacedBy.join(', ') : 'Not replaced'
+                };
+            }))
+        ]);
     }
 
     function templateInspector(path) {
         var root = doc.root;
-        var dashboard = (root.dashboard && root.dashboard.columns) || [];
-        var metadata = (root.applicationMetaData && root.applicationMetaData.items) || [];
-        var retired = root.retiredFields || [];
-        var rules = root.conditionalLogic || [];
 
         return [
             header(path),
@@ -964,12 +1308,9 @@
                 fallback: 'New section',
                 add: function (name) { addAndSelect(['taskGroups'], doc.newGroup(name)); }
             }),
-            section('Set up in the JSON tab', summaryList([
-                { key: 'Dashboard columns', value: dashboard.length ? String(dashboard.length) : 'Default columns' },
-                { key: 'Task list details', value: metadata.length ? metadata.length + (metadata.length === 1 ? ' row' : ' rows') : 'Default rows' },
-                { key: 'Retired questions', value: String(retired.length) },
-                { key: 'Rules', value: String(rules.length) }
-            ], true))
+            dashboardEditor(),
+            metadataEditor(),
+            retiredList()
         ];
     }
 
@@ -993,10 +1334,7 @@
                     name: 'tpl-new-task-shape',
                     legend: 'What kind of task?',
                     value: 'pages',
-                    items: [
-                        { value: 'pages', label: 'Questions on one or more pages' },
-                        { value: 'collection', label: 'A repeatable list', hint: 'Applicants add as many items as they need, for example trusts or academies.' }
-                    ],
+                    items: TASK_SHAPES,
                     onChange: function () { }
                 }),
                 add: function (name) {
@@ -1005,6 +1343,30 @@
                 }
             })
         ];
+    }
+
+    var TASK_SHAPES = [
+        { value: 'pages', label: 'Questions on one or more pages' },
+        { value: 'collection', label: 'A repeatable list', hint: 'Applicants add as many items as they need, for example trusts or academies.' },
+        { value: 'derived', label: 'Pages repeated for each item in another list', hint: 'For example a declaration for each trust added earlier.' }
+    ];
+
+    function taskTypeSetting(path, task) {
+        var shape = doc.taskShape(task);
+        if (!doc.isTaskEmpty(task)) {
+            return summaryList([{
+                key: 'Task type',
+                value: [TASK_SHAPES.find(function (item) { return item.value === shape; }).label, h('br'),
+                    h('span', { class: 'govuk-hint', text: 'To change the type, delete its pages first.' })]
+            }], true);
+        }
+        return radios({
+            name: 'tpl-task-shape', legend: 'Task type', value: shape, items: TASK_SHAPES,
+            onChange: function (value) {
+                doc.setTaskShape(task, value);
+                restructured();
+            }
+        });
     }
 
     function taskInspector(path, task) {
@@ -1025,7 +1387,8 @@
             checkbox({
                 id: 'tpl-task-visible', label: 'Show this task on the task list', checked: task.visibleInTaskList !== false,
                 onChange: function (checked) { task.visibleInTaskList = checked; edited(path); }
-            })
+            }),
+            taskTypeSetting(path, task)
         ];
 
         if (mode === 'multiCollectionFlow') {
@@ -1035,8 +1398,22 @@
                 add: function (name) { addAndSelect(path.concat(['summary', 'flows']), doc.newFlow(name)); }
             }));
         } else if (mode === 'derivedCollectionFlow') {
-            items.push(contents(path, 'Derived lists', 'This task has no lists yet.'));
-            items.push(inset('Derived lists repeat pages for each item in another list. Set up new ones in the JSON tab.'));
+            items.push(textInput({
+                id: 'tpl-task-summary-title', label: 'Heading on the task page', value: task.summary.title,
+                onInput: function (value) { task.summary.title = value || null; edited(path); }
+            }));
+            items.push(textArea({
+                id: 'tpl-task-summary-description', label: 'Text under the heading (optional)', value: task.summary.description, rows: 2,
+                onInput: function (value) { task.summary.description = value || null; edited(path); }
+            }));
+            items.push(contents(path, 'Repeated pages', 'This task has nothing to repeat yet.'));
+            items.push(addForm({
+                id: 'tpl-new-derived', title: 'Repeat pages for another list', label: 'Name', button: 'Add', fallback: 'New repeated pages',
+                add: function (name) {
+                    if (!Array.isArray(task.summary.derivedFlows)) task.summary.derivedFlows = [];
+                    addAndSelect(path.concat(['summary', 'derivedFlows']), doc.newDerivedFlow(name));
+                }
+            }));
         } else {
             items.push(checkbox({
                 id: 'tpl-task-start-first', label: 'Open the first page when the task hasn\'t been started',
@@ -1107,8 +1484,99 @@
                     addAndSelect(path.concat(['fields']), field);
                 }, 'secondary', 'tpl-new-field-button')
             ]),
-            ruleList(page.pageId)
+            ruleList(path)
         ];
+    }
+
+    // A question applications have answered can't start storing a different kind of answer under the same id.
+    function kindChangeWarning(path, field) {
+        if (!inUse()) return null;
+        var key = doc.fieldKeyOf(path);
+        var previous = baselineFor(key);
+        if (!previous && field.semanticKey) {
+            // A renamed question that kept an earlier question's reporting key.
+            var takenOver = Array.from(baselineFields.values()).find(function (item) {
+                return item.parentFieldId.toLowerCase() === key.parentFieldId.toLowerCase()
+                    && item.semanticKey.toLowerCase() === field.semanticKey.toLowerCase();
+            });
+            if (!takenOver || takenOver.kind === lib.fieldKind(field)) return null;
+            return h('div', null, [
+                warningText('This question keeps the reporting key of "' + takenOver.fieldId + '", which stored ' + takenOver.kind
+                    + '. It now stores ' + lib.fieldKind(field) + ', so it needs its own reporting key.'),
+                button('Give it its own reporting key', function () {
+                    delete field.semanticKey;
+                    restructured();
+                }, 'secondary', 'tpl-own-reporting-key')
+            ]);
+        }
+        if (!previous || previous.kind === lib.fieldKind(field)) return null;
+        return h('div', null, [
+            warningText('Applications already have answers to this question saved as ' + previous.kind + '. It now stores '
+                + lib.fieldKind(field) + ', so it needs a new answer id. The old one will be retired.'),
+            button('Give it a new answer id', function () {
+                var newId = doc.idFor('field', (field.label && field.label.value) || field.fieldId);
+                doc.retire(key, [newId]);
+                doc.renameReferences(field.fieldId, newId);
+                field.fieldId = newId;
+                delete field.semanticKey;
+                restructured();
+            }, 'secondary', 'tpl-new-answer-id')
+        ]);
+    }
+
+    function reportingKeySetting(path, field) {
+        var details = h('details', { class: 'govuk-details' }, [
+            h('summary', { class: 'govuk-details__summary' }, h('span', { class: 'govuk-details__summary-text', text: 'Reporting key (advanced)' })),
+            h('div', { class: 'govuk-details__text' }, textInput({
+                id: 'tpl-field-semantic-key', label: 'Reporting key', value: field.semanticKey, width: 20,
+                hint: 'Reports use this to line answers up across versions. It\'s the answer id unless you set it. It can\'t contain "/".',
+                onInput: function (value) {
+                    if (value.trim()) field.semanticKey = value.trim(); else delete field.semanticKey;
+                    edited(path);
+                }
+            }))
+        ]);
+        if (field.semanticKey) details.setAttribute('open', '');
+        return details;
+    }
+
+    // "Only check this when …" for length limits and format checks. Required stays unconditional, because task
+    // completion ignores conditions on required checks.
+    function conditionSetting(path, rule, idPrefix) {
+        var condition = rule.condition;
+        var parts = [checkbox({
+            id: idPrefix + '-conditional',
+            label: 'Only check this when another answer matches',
+            checked: !!condition,
+            onChange: function (checked) {
+                if (checked) rule.condition = { triggerField: '', operator: 'equals', value: '', dataType: 'string' };
+                else delete rule.condition;
+                markDirty();
+                renderInspector();
+            }
+        })];
+        if (condition) {
+            var trigger = questionById(condition.triggerField);
+            parts.push(h('div', { class: 'govuk-inset-text' }, [
+                questionSelect({
+                    id: idPrefix + '-trigger', label: 'Question', value: condition.triggerField,
+                    onChange: function (value) { condition.triggerField = value; condition.value = ''; markDirty(); renderInspector(); }
+                }),
+                radios({
+                    name: idPrefix + '-operator', legend: 'Check when the answer', inline: true, value: condition.operator,
+                    items: [{ value: 'equals', label: 'is' }, { value: 'notEquals', label: 'is not' }],
+                    onChange: function (value) { condition.operator = value; markDirty(); }
+                }),
+                answerValueInput(idPrefix + '-value', 'Answer', trigger, condition.value, function (value) { condition.value = value; markDirty(); })
+            ]));
+        }
+        return parts;
+    }
+
+    function conditionText(condition) {
+        if (!condition) return null;
+        var operator = condition.operator === 'notEquals' ? 'is not' : 'is';
+        return 'Only when ' + titleForId(condition.triggerField) + ' ' + operator + ' "' + condition.value + '"';
     }
 
     function fieldInspector(path, field) {
@@ -1134,6 +1602,7 @@
                 id: 'tpl-field-type', label: 'Question type', value: type, items: FIELD_TYPES,
                 onChange: function (value) { changeFieldType(field, value); restructured(); }
             }),
+            kindChangeWarning(path, field),
             nameInput(path, {
                 id: 'tpl-field-label', label: 'Question', kind: 'field', idKey: 'fieldId',
                 get: function (node) { return node.label.value; },
@@ -1158,8 +1627,10 @@
                 hint: 'Help text shown under the question. You can use Markdown.',
                 onInput: function (value) { field.tooltip = value || null; edited(path); }
             }),
-            idInput(path, 'fieldId', 'Answer id',
-                'Answers are saved against this id. Changing it once applications exist loses their answers unless you retire the old id.'),
+            idInput(path, 'fieldId', 'Answer id', inUse()
+                ? 'Answers are saved against this id. If you change it, the old id is retired and the new one keeps its reporting key.'
+                : 'Answers are saved against this id.'),
+            reportingKeySetting(path, field),
             radios({
                 name: 'tpl-field-required',
                 legend: 'Do applicants have to answer this?',
@@ -1189,12 +1660,13 @@
         if (TEXT_TYPES.indexOf(field.type) !== -1 || type === 'search') items.push(patternEditor(path, field));
 
         var other = (field.validations || []).filter(function (rule) {
-            return rule.condition || ['required', 'regex', 'maxLength', 'maxWords'].indexOf(rule.type) === -1
+            return (rule.type === 'required' && rule.condition)
+                || ['required', 'regex', 'maxLength', 'maxWords'].indexOf(rule.type) === -1
                 || (TEXT_TYPES.indexOf(field.type) === -1 && (rule.type === 'maxLength' || rule.type === 'maxWords'));
         });
         if (other.length) items.push(inset(other.length + (other.length === 1 ? ' more check on this question is' : ' more checks on this question are') + ' set in the JSON tab.'));
 
-        items.push(ruleList(field.fieldId));
+        items.push(ruleList(path));
         return items;
     }
 
@@ -1305,7 +1777,7 @@
     }
 
     function lengthEditor(path, field) {
-        var rule = findRule(field, ['maxLength', 'maxWords']);
+        var rule = (field.validations || []).find(function (item) { return item.type === 'maxLength' || item.type === 'maxWords'; });
         var unit = rule && rule.type === 'maxWords' ? 'words' : 'characters';
         var parts = [
             textInput({
@@ -1340,6 +1812,7 @@
                 id: 'tpl-limit-message', label: 'Error message if it\'s too long', value: rule.message,
                 onInput: function (value) { rule.message = value; edited(path); }
             }));
+            parts.push(conditionSetting(path, rule, 'tpl-limit'));
         }
         return section('Length limit', parts);
     }
@@ -1349,7 +1822,7 @@
     }
 
     function patternEditor(path, field) {
-        var patterns = (field.validations || []).filter(function (rule) { return rule.type === 'regex' && !rule.condition; });
+        var patterns = (field.validations || []).filter(function (rule) { return rule.type === 'regex'; });
         var parts = [];
 
         if (patterns.length) {
@@ -1357,7 +1830,10 @@
                 var name = 'format check ' + (index + 1);
                 return {
                     key: (presetFor(rule) || PATTERN_PRESETS[0]).label,
-                    value: [h('code', { text: rule.rule || '(no pattern)' }), h('br'), rule.message || 'No error message'],
+                    value: [
+                        h('code', { text: rule.rule || '(no pattern)' }), h('br'), rule.message || 'No error message',
+                        rule.condition ? [h('br'), h('span', { class: 'govuk-hint', text: conditionText(rule.condition) })] : null
+                    ],
                     actions: [
                         { text: 'Change', hidden: name, onClick: function () { startEditing('pattern', index, 'tpl-pattern-rule'); } },
                         {
@@ -1384,6 +1860,7 @@
                     id: 'tpl-pattern-message', label: 'Error message if it doesn\'t match', value: rule.message,
                     onInput: function (value) { rule.message = value; edited(path); }
                 }),
+                conditionSetting(path, rule, 'tpl-pattern'),
                 button('Done', function () { stopEditing('tpl-add-pattern'); }, 'secondary', 'tpl-pattern-done')
             ]));
         } else {
@@ -1462,9 +1939,25 @@
                 onChange: function (value) { flow.tableType = value; edited(path); }
             }),
             idInput(path, 'flowId', 'List id', null),
-            idInput(path, 'fieldId', 'Answer id for the whole list',
-                'Every item is saved under this id. Changing it once applications exist loses their answers.'),
-            inset('Summary columns and the added, updated and removed messages are set in the JSON tab.'),
+            idInput(path, 'fieldId', 'Answer id for the whole list', inUse()
+                ? 'Every item is saved under this id. If you change it, the old id is retired and the new one keeps its reporting key.'
+                : 'Every item is saved under this id.'),
+            summaryColumnsEditor(flow),
+            section('Messages', [
+                h('p', { class: 'govuk-body', text: 'Shown after an item is added, changed or removed. Include an answer like this: {trustSearch.name}.' }),
+                textInput({
+                    id: 'tpl-flow-added', label: 'When an item is added (optional)', value: flow.addItemMessage,
+                    onInput: function (value) { flow.addItemMessage = value || null; edited(path); }
+                }),
+                textInput({
+                    id: 'tpl-flow-updated', label: 'When an item is changed (optional)', value: flow.updateItemMessage,
+                    onInput: function (value) { flow.updateItemMessage = value || null; edited(path); }
+                }),
+                textInput({
+                    id: 'tpl-flow-deleted', label: 'When an item is removed (optional)', value: flow.deleteItemMessage,
+                    onInput: function (value) { flow.deleteItemMessage = value || null; edited(path); }
+                })
+            ]),
             contents(path, 'Pages for each item', 'This list has no pages yet.'),
             addForm({
                 id: 'tpl-new-page', title: 'Add a page to each item', label: 'Page heading', button: 'Add page', fallback: 'New page',
@@ -1473,18 +1966,105 @@
         ];
     }
 
+    function summaryColumnsEditor(flow) {
+        // Only added to the JSON once someone adds a column.
+        var columns = Array.isArray(flow.summaryColumns) ? flow.summaryColumns : [];
+        var choices = flowFieldIds(flow).map(function (id) { return { value: id, label: id }; });
+        return section('Columns in the list of added items', [
+            h('p', { class: 'govuk-body', text: 'Answers shown for each item once it has been added.' }),
+            listEditor({
+                items: columns,
+                noun: 'column',
+                editKey: 'summaryColumn',
+                firstInputId: 'tpl-summary-column-label',
+                addId: 'tpl-add-summary-column',
+                addText: 'Add a column',
+                emptyText: 'No columns yet. Only each item\'s name is shown.',
+                key: function (column) { return column.label || 'No heading'; },
+                value: function (column) { return column.field || 'Answer not chosen'; },
+                create: function () {
+                    flow.summaryColumns = columns;
+                    return { label: '', field: '' };
+                },
+                form: function (column) {
+                    return [
+                        textInput({
+                            id: 'tpl-summary-column-label', label: 'Column heading', value: column.label,
+                            onInput: function (value) { column.label = value; markDirty(); }
+                        }),
+                        selectInput({
+                            id: 'tpl-summary-column-field', label: 'Answer', value: column.field,
+                            items: [{ value: '', label: 'Choose an answer' }].concat(choices),
+                            onChange: function (value) { column.field = value; markDirty(); }
+                        })
+                    ];
+                }
+            })
+        ]);
+    }
+
+    // Lists, and search, checkboxes or dropdown questions, that pages can be repeated for.
+    function derivedSources() {
+        var sources = [];
+        doc.eachTask(function (task) {
+            ((task.summary && task.summary.flows) || []).forEach(function (flow) {
+                if (flow.fieldId) sources.push({ value: flow.fieldId, label: (flow.title || flow.fieldId) + ' (repeatable list)', sourceType: 'collection' });
+            });
+        });
+        doc.eachPageSet(function (pages) {
+            pages.forEach(function (page) {
+                (page.fields || []).forEach(function (field) {
+                    var type = editorType(field);
+                    var sourceType = { search: 'autocomplete', checkboxes: 'checkboxes', select: 'select' }[type];
+                    if (sourceType && field.fieldId) {
+                        sources.push({ value: field.fieldId, label: ((field.label && field.label.value) || field.fieldId) + ' (' + fieldTypeInfo(type).short.toLowerCase() + ')', sourceType: sourceType });
+                    }
+                });
+            });
+        });
+        return sources;
+    }
+
     function derivedFlowInspector(path, flow) {
+        var sources = derivedSources();
+        var items = sources.map(function (source) { return { value: source.value, label: source.label }; });
+        if (flow.sourceFieldId && !sources.some(function (source) { return source.value === flow.sourceFieldId; })) {
+            items.unshift({ value: flow.sourceFieldId, label: flow.sourceFieldId + ' (not in this template)' });
+        }
         return [
             header(path),
             nameInput(path, {
-                id: 'tpl-flow-title', label: 'List name', kind: 'derivedFlow', idKey: 'flowId',
+                id: 'tpl-flow-title', label: 'Name', kind: 'derivedFlow', idKey: 'flowId',
                 get: function (node) { return node.title; },
                 set: function (node, value) { node.title = value; }
             }),
+            selectInput({
+                id: 'tpl-derived-source', label: 'Repeat the pages for each item in', value: flow.sourceFieldId,
+                hint: 'A repeatable list, or a search, checkboxes or dropdown question.',
+                items: [{ value: '', label: 'Choose a list or question' }].concat(items),
+                onChange: function (value) {
+                    flow.sourceFieldId = value;
+                    var source = sources.find(function (item) { return item.value === value; });
+                    if (source) flow.sourceType = source.sourceType;
+                    restructured();
+                }
+            }),
             textInput({
-                id: 'tpl-derived-source', label: 'Repeat for each item in', value: flow.sourceFieldId, code: true, width: 20,
-                hint: 'The answer id of a list, or of a search or checkboxes question.',
-                onInput: function (value) { flow.sourceFieldId = value; edited(path); }
+                id: 'tpl-derived-item-title', label: 'Property used as each item\'s name', value: flow.itemTitleBinding, width: 20,
+                hint: 'For example "name" for a trust found by search.',
+                onInput: function (value) { flow.itemTitleBinding = value || 'name'; edited(path); }
+            }),
+            textInput({
+                id: 'tpl-derived-empty', label: 'Message when there are no items yet (optional)', value: flow.emptyStateMessage,
+                onInput: function (value) { flow.emptyStateMessage = value || null; edited(path); }
+            }),
+            textInput({
+                id: 'tpl-derived-no-items', label: 'Error when there are no items (optional)', value: flow.noItemsErrorMessage,
+                onInput: function (value) { flow.noItemsErrorMessage = value || null; edited(path); }
+            }),
+            textInput({
+                id: 'tpl-derived-unsigned', label: 'Error when an item isn\'t complete (optional)', value: flow.unsignedItemErrorMessage,
+                onInput: function (value) { flow.unsignedItemErrorMessage = value || null; edited(path); }
             }),
             selectInput({
                 id: 'tpl-derived-source-type', label: 'That answer is', value: flow.sourceType || 'autocomplete',
@@ -1501,9 +2081,10 @@
                 hint: 'Use {displayName} for the item\'s name.',
                 onInput: function (value) { flow.signedMessage = value || null; edited(path); }
             }),
-            idInput(path, 'flowId', 'List id', null),
-            idInput(path, 'fieldId', 'Answer id for the whole list',
-                'Every item is saved under this id. Changing it once applications exist loses their answers.'),
+            idInput(path, 'flowId', 'Id', null),
+            idInput(path, 'fieldId', 'Answer id for the whole list', inUse()
+                ? 'Every item is saved under this id. If you change it, the old id is retired and the new one keeps its reporting key.'
+                : 'Every item is saved under this id.'),
             contents(path, 'Pages for each item', 'This list has no pages yet.'),
             addForm({
                 id: 'tpl-new-page', title: 'Add a page to each item', label: 'Page heading', button: 'Add page', fallback: 'New page',
@@ -1541,43 +2122,395 @@
         }).join(', ');
     }
 
-    function renderRules() {
-        var rules = doc.root.conditionalLogic || [];
-        var content = [
-            h('h2', { class: 'govuk-heading-l', text: 'Rules' }),
-            h('p', { class: 'govuk-body', text: 'Rules show, hide or skip pages and questions depending on answers. Anything a rule shows stays hidden until its condition is met, so most rules come in pairs: one to show and one to hide.' }),
-            inset('You can turn rules on and off here. To add or change a rule, use the JSON tab. A rule builder is planned next.')
-        ];
+    // Questions on task pages. Rules work on the answers to a task's pages, not on answers inside repeatable lists.
+    function taskQuestions() {
+        var list = [];
+        doc.eachTask(function (task) {
+            (task.pages || []).forEach(function (page) {
+                (page.fields || []).forEach(function (field) {
+                    if (field.fieldId) list.push({ field: field, page: page, task: task });
+                });
+            });
+        });
+        return list;
+    }
 
-        if (!rules.length) {
-            content.push(h('p', { class: 'govuk-body', text: 'This template has no rules.' }));
+    function questionById(id) {
+        var match = taskQuestions().find(function (question) { return question.field.fieldId === id; });
+        return match ? match.field : null;
+    }
+
+    function questionText(field) {
+        return ((field.label && field.label.value) || field.fieldId) + ' (' + field.fieldId + ')';
+    }
+
+    function questionSelect(options) {
+        var groups = [];
+        taskQuestions().forEach(function (question) {
+            var name = question.task.taskName || question.task.taskId;
+            var group = groups.find(function (item) { return item.name === name; });
+            if (!group) groups.push(group = { name: name, questions: [] });
+            group.questions.push(question.field);
+        });
+        return formGroup([
+            h('label', { class: 'govuk-label govuk-label--s', for: options.id, text: options.label }),
+            hint(options.id, options.hint),
+            h('select', {
+                class: 'govuk-select',
+                id: options.id,
+                value: options.value || '',
+                'aria-describedby': describedBy(options.id, options.hint),
+                onChange: function (e) { options.onChange(e.target.value); }
+            }, [h('option', { value: '', text: 'Choose a question' })].concat(groups.map(function (group) {
+                return h('optgroup', { label: group.name }, group.questions.map(function (field) {
+                    return h('option', { value: field.fieldId, text: questionText(field) });
+                }));
+            })))
+        ]);
+    }
+
+    function optionItems(field) {
+        return ((field && field.options) || []).map(function (option) {
+            return { value: option.value, label: option.label === option.value ? option.label : option.label + ' (' + option.value + ')' };
+        });
+    }
+
+    // One answer to compare with: a choice from the question's options, or typed in.
+    function answerValueInput(id, label, trigger, value, onChange) {
+        var items = optionItems(trigger);
+        if (items.length) {
+            return selectInput({
+                id: id, label: label, value: value == null ? '' : String(value),
+                items: [{ value: '', label: 'Choose an answer' }].concat(items),
+                onChange: onChange
+            });
+        }
+        return textInput({ id: id, label: label, value: value, width: 20, onInput: onChange });
+    }
+
+    function checkboxGroup(options) {
+        return formGroup(h('fieldset', { class: 'govuk-fieldset', 'aria-describedby': describedBy(options.name, options.hint) }, [
+            h('legend', { class: 'govuk-fieldset__legend govuk-fieldset__legend--s', text: options.legend }),
+            hint(options.name, options.hint),
+            h('div', { class: 'govuk-checkboxes govuk-checkboxes--small', 'data-module': 'govuk-checkboxes' }, options.items.map(function (item, index) {
+                var id = options.name + '-' + index;
+                return h('div', { class: 'govuk-checkboxes__item' }, [
+                    h('input', {
+                        class: 'govuk-checkboxes__input', id: id, name: options.name, type: 'checkbox', value: item.value,
+                        checked: options.values.indexOf(item.value) !== -1,
+                        onChange: function (e) { options.onChange(item.value, e.target.checked); }
+                    }),
+                    h('label', { class: 'govuk-label govuk-checkboxes__label', for: id, text: item.label })
+                ]);
+            }))
+        ]));
+    }
+
+    // Adds a GOV.UK error message to a form group built by the helpers above.
+    function withError(group, message) {
+        if (!message || !group) return group;
+        group.classList.add('govuk-form-group--error');
+        var holder = group.querySelector('fieldset') || group;
+        var anchor = holder.querySelector(':scope > .govuk-hint') || holder.querySelector(':scope > legend, :scope > label');
+        var error = h('p', { class: 'govuk-error-message' }, [h('span', { class: 'govuk-visually-hidden', text: 'Error: ' }), message]);
+        if (anchor) anchor.parentNode.insertBefore(error, anchor.nextSibling); else holder.insertBefore(error, holder.firstChild);
+        group.querySelectorAll('.govuk-input').forEach(function (input) { input.classList.add('govuk-input--error'); });
+        group.querySelectorAll('.govuk-select').forEach(function (input) { input.classList.add('govuk-select--error'); });
+        return group;
+    }
+
+    function toggle(list, value, on) {
+        var index = list.indexOf(value);
+        if (on && index === -1) list.push(value);
+        if (!on && index !== -1) list.splice(index, 1);
+    }
+
+    function blankRuleDraft() {
+        return { base: null, name: '', enabled: true, triggerField: '', operator: 'equals', value: '', pages: [], fields: [], targetTaskId: null };
+    }
+
+    function startRule(partial) {
+        ruleDraft = Object.assign(blankRuleDraft(), partial || {});
+        ruleErrors = {};
+        confirmingRuleDelete = null;
+        if (isShown(panels.rules)) renderRules(); else showTab('rules');
+        if (!isShown(panels.rules)) renderRules();
+        window.setTimeout(function () { focusById('tpl-rule-heading'); }, 0);
+    }
+
+    function pagesTasks() {
+        var tasks = [];
+        doc.eachTask(function (task) { if (Array.isArray(task.pages) && task.pages.length) tasks.push(task); });
+        return tasks;
+    }
+
+    function ruleValueControl(draft, trigger) {
+        if (draft.operator === 'isEmpty' || draft.operator === 'isNotEmpty') return null;
+        var items = optionItems(trigger);
+        if (draft.operator === 'in') {
+            if (!Array.isArray(draft.value)) draft.value = draft.value ? [draft.value] : [];
+            if (items.length) {
+                return withError(checkboxGroup({
+                    name: 'tpl-rule-value', legend: 'Answers', items: items, values: draft.value,
+                    onChange: function (value, checked) { toggle(draft.value, value, checked); }
+                }), ruleErrors['tpl-rule-value-0']);
+            }
+            return withError(textInput({
+                id: 'tpl-rule-value', label: 'Answers', hint: 'Separate answers with commas.', value: draft.value.join(', '),
+                onInput: function (value) { draft.value = value.split(',').map(function (item) { return item.trim(); }).filter(Boolean); }
+            }), ruleErrors['tpl-rule-value']);
+        }
+        if (Array.isArray(draft.value)) draft.value = draft.value[0] || '';
+        return withError(answerValueInput('tpl-rule-value', 'Answer', trigger, draft.value, function (value) { draft.value = value; }),
+            ruleErrors['tpl-rule-value']);
+    }
+
+    function autoRuleName(draft) {
+        var targets = draft.pages.concat(draft.fields);
+        var first = doc.findById(targets[0]);
+        var what = (first ? nodeTitle(first) : targets[0]) + (targets.length > 1 ? ' and ' + (targets.length - 1) + ' more' : '');
+        var trigger = questionById(draft.triggerField);
+        var condition = OPERATOR_TEXT[draft.operator] + (NO_VALUE_OPERATORS.indexOf(draft.operator) !== -1 ? '' : ' ' + formatValue(draft.value));
+        return 'Show ' + what + ' when ' + (trigger ? (trigger.label && trigger.label.value) || trigger.fieldId : draft.triggerField) + ' ' + condition;
+    }
+
+    function saveRule() {
+        var draft = ruleDraft;
+        var trigger = questionById(draft.triggerField);
+        var hasOptions = optionItems(trigger).length > 0;
+        var errors = {};
+        if (!draft.triggerField) errors['tpl-rule-trigger'] = 'Choose the question that decides it';
+        if (draft.operator === 'in') {
+            if (!draft.value.length) errors[hasOptions ? 'tpl-rule-value-0' : 'tpl-rule-value'] = 'Choose at least one answer';
+        } else if (draft.operator !== 'isEmpty' && draft.operator !== 'isNotEmpty' && !String(draft.value || '').trim()) {
+            errors['tpl-rule-value'] = hasOptions ? 'Choose an answer' : 'Enter an answer';
+        }
+        if (!draft.pages.length && !draft.fields.length) {
+            errors[document.getElementById('tpl-rule-pages-0') ? 'tpl-rule-pages-0' : 'tpl-rule-fields-0'] = 'Choose at least one page or question to show';
+        }
+        ruleErrors = errors;
+        if (Object.keys(errors).length) {
+            renderRules();
+            return;
         }
 
-        rules.forEach(function (rule, index) {
-            var title = rule.name || rule.id || 'Rule ' + (index + 1);
-            var isOn = rule.enabled !== false;
-            content.push(h('div', { class: 'govuk-summary-card' }, [
-                h('div', { class: 'govuk-summary-card__title-wrapper' }, [
-                    h('h3', { class: 'govuk-summary-card__title', text: title }),
-                    h('ul', { class: 'govuk-summary-card__actions' }, h('li', { class: 'govuk-summary-card__action' }, actionLink({
-                        text: isOn ? 'Turn off' : 'Turn on',
-                        hidden: title,
-                        onClick: function () {
-                            rule.enabled = !isOn;
+        if (!draft.name.trim()) draft.name = autoRuleName(draft);
+        var base = doc.saveBuilderRule(draft);
+        ruleDraft = null;
+        markDirty();
+        renderRules();
+        focusById('tpl-rule-card-' + base);
+    }
+
+    function ruleBuilder() {
+        var draft = ruleDraft;
+        var trigger = questionById(draft.triggerField);
+        var tasks = pagesTasks();
+        if (!draft.targetTaskId) {
+            var owner = taskQuestions().find(function (question) { return question.field.fieldId === draft.triggerField; });
+            draft.targetTaskId = owner ? owner.task.taskId : tasks[0] && tasks[0].taskId;
+        }
+        var targetTask = tasks.find(function (task) { return task.taskId === draft.targetTaskId; }) || tasks[0];
+        var pages = (targetTask && targetTask.pages) || [];
+        var questions = [];
+        pages.forEach(function (page) {
+            (page.fields || []).forEach(function (field) { if (field.fieldId !== draft.triggerField) questions.push(field); });
+        });
+        var elsewhere = draft.pages.filter(function (id) { return !pages.some(function (page) { return page.pageId === id; }); })
+            .concat(draft.fields.filter(function (id) { return !questions.some(function (field) { return field.fieldId === id; }); }));
+        var errorIds = Object.keys(ruleErrors);
+
+        return h('div', { class: 'govuk-!-margin-bottom-9' }, [
+            h('h2', { class: 'govuk-heading-l', id: 'tpl-rule-heading', tabindex: '-1', text: draft.base ? 'Change rule' : 'Add a rule' }),
+            errorIds.length ? h('div', { class: 'govuk-error-summary', 'data-module': 'govuk-error-summary' }, h('div', { role: 'alert' }, [
+                h('h2', { class: 'govuk-error-summary__title', text: 'There is a problem' }),
+                h('div', { class: 'govuk-error-summary__body' }, h('ul', { class: 'govuk-list govuk-error-summary__list' }, errorIds.map(function (id) {
+                    return h('li', null, h('a', { href: '#' + id, text: ruleErrors[id] }));
+                })))
+            ])) : null,
+            textInput({
+                id: 'tpl-rule-name', label: 'Rule name (optional)', value: draft.name,
+                hint: 'Leave blank to name it from what it does.',
+                onInput: function (value) { draft.name = value; }
+            }),
+            withError(questionSelect({
+                id: 'tpl-rule-trigger', label: 'Which question decides it?', value: draft.triggerField,
+                onChange: function (value) {
+                    draft.triggerField = value;
+                    draft.value = draft.operator === 'in' ? [] : '';
+                    draft.targetTaskId = null;
+                    redrawDraft();
+                }
+            }), ruleErrors['tpl-rule-trigger']),
+            radios({
+                name: 'tpl-rule-operator', legend: 'Show the pages and questions when the answer', value: draft.operator,
+                items: [
+                    { value: 'equals', label: 'is' },
+                    { value: 'notEquals', label: 'is not' },
+                    { value: 'in', label: 'is one of' },
+                    { value: 'isNotEmpty', label: 'has been given' },
+                    { value: 'isEmpty', label: 'has not been given' }
+                ],
+                onChange: function (value) { draft.operator = value; redrawDraft(); }
+            }),
+            ruleValueControl(draft, trigger),
+            draft.operator !== 'equals'
+                ? inset('Pages after one set to "Go to the next page a rule shows" only follow rules that use "is".')
+                : null,
+            tasks.length > 1 ? selectInput({
+                id: 'tpl-rule-task', label: 'Which task are the pages and questions in?', value: targetTask && targetTask.taskId,
+                items: tasks.map(function (task) { return { value: task.taskId, label: task.taskName || task.taskId }; }),
+                onChange: function (value) { draft.targetTaskId = value; redrawDraft(); }
+            }) : null,
+            withError(checkboxGroup({
+                name: 'tpl-rule-pages', legend: 'Pages to show', hint: 'The pages are skipped when the answer doesn\'t match.',
+                items: pages.map(function (page) { return { value: page.pageId, label: page.title || page.pageId }; }),
+                values: draft.pages,
+                onChange: function (value, checked) { toggle(draft.pages, value, checked); }
+            }), ruleErrors['tpl-rule-pages-0']),
+            questions.length ? withError(checkboxGroup({
+                name: 'tpl-rule-fields', legend: 'Questions to show', hint: 'The questions are hidden when the answer doesn\'t match.',
+                items: questions.map(function (field) { return { value: field.fieldId, label: questionText(field) }; }),
+                values: draft.fields,
+                onChange: function (value, checked) { toggle(draft.fields, value, checked); }
+            }), ruleErrors['tpl-rule-fields-0']) : null,
+            elsewhere.length
+                ? h('p', { class: 'govuk-body', text: 'It also shows ' + elsewhere.map(titleForId).join(', ') + ' from other tasks.' })
+                : null,
+            h('div', { class: 'govuk-button-group' }, [
+                button('Save rule', saveRule, null, 'tpl-rule-save'),
+                h('a', {
+                    href: '#tpl-rules-heading', class: 'govuk-link',
+                    onClick: function (e) {
+                        e.preventDefault();
+                        ruleDraft = null;
+                        ruleErrors = {};
+                        renderRules();
+                        focusById('tpl-add-rule');
+                    }
+                }, 'Cancel')
+            ])
+        ]);
+    }
+
+    function ruleCard(options) {
+        var isConfirming = confirmingRuleDelete === options.deleteKey;
+        var actions = isConfirming ? [] : options.actions.concat([
+            { text: options.isOn ? 'Turn off' : 'Turn on', onClick: function () {
+                options.rules.forEach(function (rule) { rule.enabled = !options.isOn; });
+                markDirty();
+                renderRules();
+            } },
+            { text: 'Delete', onClick: function () {
+                confirmingRuleDelete = options.deleteKey;
+                renderRules();
+                focusById('tpl-rule-delete-yes');
+            } }
+        ]);
+        return h('div', { class: 'govuk-summary-card' }, [
+            h('div', { class: 'govuk-summary-card__title-wrapper' }, [
+                h('h3', { class: 'govuk-summary-card__title', id: options.id, tabindex: '-1', text: options.title }),
+                actions.length ? h('ul', { class: 'govuk-summary-card__actions' }, actions.map(function (action) {
+                    return h('li', { class: 'govuk-summary-card__action' }, actionLink({ text: action.text, hidden: options.title, onClick: action.onClick }));
+                })) : null
+            ]),
+            h('div', { class: 'govuk-summary-card__content' }, [
+                summaryList(options.rows),
+                options.note ? h('p', { class: 'govuk-hint govuk-!-margin-bottom-0', text: options.note }) : null,
+                isConfirming ? h('div', { class: 'govuk-!-margin-top-4' }, [
+                    warningText('Are you sure you want to delete this rule? Pages and questions it shows will be shown to everyone.'),
+                    h('div', { class: 'govuk-button-group' }, [
+                        button('Yes, delete this rule', function () {
+                            doc.removeRules(options.rules);
+                            confirmingRuleDelete = null;
                             markDirty();
                             renderRules();
-                        }
-                    })))
-                ]),
-                h('div', { class: 'govuk-summary-card__content' }, summaryList([
+                            focusById('tpl-rules-heading');
+                        }, 'warning', 'tpl-rule-delete-yes'),
+                        h('a', {
+                            href: '#' + options.id, class: 'govuk-link',
+                            onClick: function (e) {
+                                e.preventDefault();
+                                confirmingRuleDelete = null;
+                                renderRules();
+                                focusById(options.id);
+                            }
+                        }, 'Cancel')
+                    ])
+                ]) : null
+            ])
+        ]);
+    }
+
+    function renderRules() {
+        var focusId = rulesPanel.contains(document.activeElement) ? document.activeElement.id : null;
+        var rules = doc.root.conditionalLogic || [];
+        var pairs = doc.builderRules();
+        var paired = new Set();
+        pairs.forEach(function (pair) { paired.add(pair.show); paired.add(pair.hide); });
+
+        var content = [
+            h('h2', { class: 'govuk-heading-l', id: 'tpl-rules-heading', tabindex: '-1', text: 'Rules' }),
+            h('p', { class: 'govuk-body', text: 'Rules show pages and questions only when an earlier answer matches. Anything a rule shows is hidden until then.' })
+        ];
+
+        if (ruleDraft) {
+            content.push(ruleBuilder());
+        } else if (taskQuestions().length) {
+            content.push(button('Add a rule', function () { startRule(); }, null, 'tpl-add-rule'));
+        } else {
+            content.push(inset('Add questions to a task\'s pages before adding rules.'));
+        }
+
+        content.push(h('h2', { class: 'govuk-heading-m', text: 'Rules in this template' }));
+        if (!rules.length) content.push(h('p', { class: 'govuk-body', text: 'This template has no rules yet.' }));
+
+        pairs.forEach(function (pair) {
+            var isOn = pair.show.enabled !== false;
+            content.push(ruleCard({
+                id: 'tpl-rule-card-' + pair.base,
+                title: pair.show.name || pair.base,
+                isOn: isOn,
+                rules: [pair.hide, pair.show],
+                deleteKey: pair.base,
+                actions: [{ text: 'Change', onClick: function () { startRule(doc.builderRuleDraft(pair)); } }],
+                rows: [
+                    { key: 'Status', value: isOn ? tag('On', 'green') : tag('Off', 'grey') },
+                    { key: 'When', value: describeConditions(pair.show.conditionGroup) },
+                    { key: 'Shows', value: (pair.show.affectedElements || []).map(function (element) { return titleForId(element.elementId); }).join(', ') }
+                ]
+            }));
+        });
+
+        rules.filter(function (rule) { return !paired.has(rule); }).forEach(function (rule, index) {
+            var isOn = rule.enabled !== false;
+            content.push(ruleCard({
+                id: 'tpl-rule-card-other-' + index,
+                title: rule.name || rule.id || 'Rule ' + (index + 1),
+                isOn: isOn,
+                rules: [rule],
+                deleteKey: rule,
+                actions: [],
+                note: 'Written in JSON. To change it, use the JSON tab.',
+                rows: [
                     { key: 'Status', value: isOn ? tag('On', 'green') : tag('Off', 'grey') },
                     { key: 'When', value: describeConditions(rule.conditionGroup) || 'Always' },
                     { key: 'Then', value: describeActions(rule) || 'Nothing' }
-                ]))
-            ]));
+                ]
+            }));
         });
 
         rulesPanel.replaceChildren(h('div', null, content));
+        enhance(rulesPanel);
+        var showingErrors = !!ruleDraft && Object.keys(ruleErrors).length > 0;
+        if (showingErrors && !govuk) focusById('tpl-rule-heading');
+        else if (focusId && !showingErrors) focusById(focusId);
+    }
+
+    // The draft changed shape: drop old error messages and redraw the builder.
+    function redrawDraft() {
+        ruleErrors = {};
+        renderRules();
     }
 
     // ---- Tabs and JSON -----------------------------------------------------------------------------------------
@@ -1716,7 +2649,7 @@
     // ---- Problems, preview and save ----------------------------------------------------------------------------
 
     function targetFor(message) {
-        var quoted = (message.match(/'([^']+)'/g) || []).map(function (text) { return text.slice(1, -1); });
+        var quoted = (message.match(/'[^']+'|"[^"]+"/g) || []).map(function (text) { return text.slice(1, -1); });
         // Messages name the most specific thing first, for example "Field 'x' on page 'y' in task 'z'".
         for (var i = 0; i < quoted.length; i++) {
             var path = doc.findById(quoted[i]) || doc.findByName(quoted[i]);
@@ -1783,7 +2716,7 @@
                 if (!response.ok) throw new Error('Status ' + response.status);
                 return response.json();
             })
-            .then(function (result) { showProblems(result.errors || [], false); })
+            .then(function (result) { showProblems((result.errors || []).concat(reportingProblems()), false); })
             .catch(function () {
                 showProblems(['The check couldn\'t be run. Try again. Saving runs the same check.'], true);
             })
@@ -1800,6 +2733,12 @@
         previewForm.submit();
     });
 
+    // What the API would reject because applications already have answers. Empty when nothing uses the template.
+    function reportingProblems() {
+        if (!inUse()) return [];
+        return doc.reportingIssues(baselineRoot).map(function (issue) { return issue.message; });
+    }
+
     saveForm.addEventListener('submit', function (e) {
         var schema = currentSchema();
         if (schema == null) {
@@ -1807,9 +2746,37 @@
             showTab('json');
             return;
         }
+        var reporting = reportingProblems();
+        if (reporting.length) {
+            e.preventDefault();
+            showProblems(reporting, false);
+            problems.scrollIntoView();
+            return;
+        }
         schemaInput.value = schema;
         submitting = true;
     });
+
+    function renderUsage() {
+        var usage = document.getElementById('tpl-usage');
+        if (!usage) {
+            usage = h('div', { id: 'tpl-usage' });
+            statusText.parentNode.insertBefore(usage, statusText.nextSibling);
+        }
+        if (!baselineFields.size) {
+            usage.replaceChildren();
+            return;
+        }
+        var text = applicationCount === null
+            ? 'We couldn\'t check whether applications use this template, so the editor treats it as in use.'
+            : applicationCount === 0
+                ? 'No applications use this template yet, so you can change or delete any question.'
+                : (applicationCount === 1 ? '1 application uses' : applicationCount + ' applications use') + ' this template.';
+        if (applicationCount !== 0) {
+            text += ' Deleting a question retires it and renaming an answer id keeps its reporting key, so reports keep earlier answers.';
+        }
+        usage.replaceChildren(inset(text));
+    }
 
     window.addEventListener('beforeunload', function (e) {
         if (dirty && !submitting) {
@@ -1822,6 +2789,7 @@
 
     container.hidden = false;
     updateStatus();
+    renderUsage();
 
     // If GOV.UK Frontend didn't load, show every panel rather than leaving two of them unreachable.
     govukReady.then(function () {

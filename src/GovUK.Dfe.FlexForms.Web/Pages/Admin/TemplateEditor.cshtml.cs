@@ -1,5 +1,6 @@
 using System.Text.Json;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
+using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Application.Admin;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.Templates;
@@ -24,6 +25,7 @@ public class TemplateEditorModel(
     ITemplateValidationService templateValidationService,
     ITemplateCacheInvalidator templateCacheInvalidator,
     IComplexFieldConfigurationService complexFieldConfigurationService,
+    IApplicationsClient applicationsClient,
     ILogger<TemplateEditorModel> logger) : PageModel
 {
     private const string TemplateVersionSessionKey = "TemplateVersionNumber";
@@ -55,7 +57,7 @@ public class TemplateEditorModel(
             return Page();
 
         NewVersion = SuggestVersion(state);
-        BuildEditorData(state, schemaJson: null, hasUnsavedChanges: false);
+        await BuildEditorDataAsync(state, schemaJson: null, hasUnsavedChanges: false, cancellationToken);
         return Page();
     }
 
@@ -82,7 +84,7 @@ public class TemplateEditorModel(
             foreach (var error in outcome.Errors)
                 ModelState.AddModelError(error.FieldKey, error.Message);
 
-            BuildEditorData(state, schemaJson: NewSchema, hasUnsavedChanges: true);
+            await BuildEditorDataAsync(state, schemaJson: NewSchema, hasUnsavedChanges: true, cancellationToken);
             return Page();
         }
 
@@ -137,7 +139,34 @@ public class TemplateEditorModel(
             ? StarterFormTemplateSchema.DefaultVersionNumber
             : templateManagerAdmin.SuggestNextVersion(state.LatestVersionNumber, state.CurrentVersionNumber);
 
-    private void BuildEditorData(TemplateManagerWorkState state, string? schemaJson, bool hasUnsavedChanges)
+    /// <summary>
+    /// How many applications use the template, or null when that can't be checked. Once there are any, the API
+    /// rejects versions that drop or change questions without retiring them, so the editor retires them instead.
+    /// </summary>
+    private async Task<int?> CountApplicationsAsync(Guid templateId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var page = await applicationsClient.GetApplicationsByTemplateAsync(
+                templateId,
+                includeSchema: false,
+                pageNumber: 1,
+                pageSize: 1,
+                cancellationToken: cancellationToken);
+            return page.TotalCount;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not count applications for template {TemplateId}", templateId);
+            return null;
+        }
+    }
+
+    private async Task BuildEditorDataAsync(
+        TemplateManagerWorkState state,
+        string? schemaJson,
+        bool hasUnsavedChanges,
+        CancellationToken cancellationToken)
     {
         var isStarter = false;
         if (string.IsNullOrWhiteSpace(schemaJson))
@@ -160,11 +189,18 @@ public class TemplateEditorModel(
                 label = configuration.Label
             });
 
+        var applicationCount = state.AvailableVersions.Count == 0
+            ? 0
+            : await CountApplicationsAsync(SelectedTemplate!.TemplateId, cancellationToken);
+
         EditorDataJson = JsonSerializer.Serialize(new
         {
             templateName = SelectedTemplate!.Name,
             versionNumber = CurrentVersionNumber,
             schemaJson,
+            // The stored version is what reporting compares a new version with.
+            baselineSchemaJson = state.CurrentTemplateJson,
+            applicationCount,
             isStarter,
             hasUnsavedChanges,
             complexFields,
