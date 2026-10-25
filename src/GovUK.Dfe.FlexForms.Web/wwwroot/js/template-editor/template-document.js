@@ -61,6 +61,11 @@
         return path.join('/');
     }
 
+    function parsePathKey(key) {
+        if (!key) return [];
+        return key.split('/').map(function (part) { return /^\d+$/.test(part) ? Number(part) : part; });
+    }
+
     function samePath(a, b) {
         return !!a && !!b && pathKey(a) === pathKey(b);
     }
@@ -171,6 +176,29 @@
         items.splice(to, 0, node);
         this.renumber(arrayPath);
         return arrayPath.concat([to]);
+    };
+
+    // Moves a node into another list of the same kind, for example a question to another page. Leave `index`
+    // out to add it at the end. Returns its new path.
+    TemplateDocument.prototype.moveTo = function (path, toArrayPath, index) {
+        var fromArrayPath = path.slice(0, -1);
+        var from = path[path.length - 1];
+        var source = this.get(fromArrayPath);
+        var owner = this.get(toArrayPath.slice(0, -1));
+        var key = toArrayPath[toArrayPath.length - 1];
+        if (!Array.isArray(owner[key])) owner[key] = [];
+        var target = owner[key];
+
+        var node = source.splice(from, 1)[0];
+        var at = index == null ? target.length : index;
+        if (source === target && from < at) at--;
+        at = Math.max(0, Math.min(at, target.length));
+        target.splice(at, 0, node);
+
+        // Nothing of one kind lives inside a list of the same kind, so removing the node can't shift the target path.
+        this.renumber(fromArrayPath);
+        this.renumber(toArrayPath);
+        return toArrayPath.concat([at]);
     };
 
     // Copies a node, giving it and everything inside it new ids. Returns the copy's path.
@@ -839,6 +867,7 @@
         kebabCase: kebabCase,
         camelCase: camelCase,
         pathKey: pathKey,
+        parsePathKey: parsePathKey,
         samePath: samePath,
         startsWith: startsWith,
         eachCondition: eachCondition,

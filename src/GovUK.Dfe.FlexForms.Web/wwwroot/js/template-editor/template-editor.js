@@ -94,6 +94,14 @@
     // Which option or format check is open for changing, for example { key: 'option', index: 2 }.
     var editing = null;
     var confirmingDelete = false;
+    var moving = false;
+    // Undo and redo keep whole copies of the JSON. Typing in one box is a single step.
+    var undoStack = [];
+    var redoStack = [];
+    var committedJson = null;
+    var initialJson = null;
+    var commitTimer = null;
+    var HISTORY_LIMIT = 50;
     // The rule being added or changed in the Rules tab, and the rule waiting for delete confirmation.
     var ruleDraft = null;
     var ruleErrors = {};
@@ -527,9 +535,10 @@
         }
     }
 
-    function childrenOf(path) {
-        var node = doc.get(path);
-        var kind = doc.kindOf(path);
+    function childrenOf(path, source) {
+        var from = source || doc;
+        var node = from.get(path);
+        var kind = from.kindOf(path);
         var children = [];
         function add(key) {
             var items = key.reduce(function (value, part) { return value && value[part]; }, node);
@@ -582,9 +591,102 @@
     }
 
     function markDirty() {
+        scheduleCommit();
         if (dirty) return;
         dirty = true;
         updateStatus();
+    }
+
+    // ---- Undo and redo -----------------------------------------------------------------------------------------
+
+    var liveRegion = h('span', { class: 'govuk-visually-hidden', 'aria-live': 'polite' });
+    container.appendChild(liveRegion);
+
+    function announce(text) {
+        liveRegion.textContent = '';
+        window.setTimeout(function () { liveRegion.textContent = text; }, 50);
+    }
+
+    function scheduleCommit() {
+        window.clearTimeout(commitTimer);
+        commitTimer = window.setTimeout(commitHistory, 500);
+    }
+
+    // Records the current JSON as an undo step if it changed since the last one.
+    function commitHistory() {
+        window.clearTimeout(commitTimer);
+        commitTimer = null;
+        if (!doc || committedJson === null) return;
+        var json = doc.toJson();
+        if (json === committedJson) return;
+        undoStack.push(committedJson);
+        if (undoStack.length > HISTORY_LIMIT) undoStack.shift();
+        redoStack = [];
+        committedJson = json;
+        updateHistoryButtons();
+    }
+
+    function updateHistoryButtons() {
+        [['tpl-undo', undoStack], ['tpl-redo', redoStack]].forEach(function (pair) {
+            var historyButton = document.getElementById(pair[0]);
+            if (!historyButton) return;
+            historyButton.disabled = !pair[1].length;
+            historyButton.setAttribute('aria-disabled', String(!pair[1].length));
+        });
+    }
+
+    // Keeps the same sections, tasks and pages open after the document is replaced.
+    function carryOverExpanded(previous, next) {
+        var open = [];
+        (function walk(path) {
+            if (path.length && expanded.has(previous.get(path))) open.push(path);
+            childrenOf(path, previous).forEach(walk);
+        })([]);
+        expanded = new WeakSet();
+        open.forEach(function (path) { if (next.exists(path)) expanded.add(next.get(path)); });
+    }
+
+    function restore(json) {
+        var previous = doc;
+        doc = lib.TemplateDocument.parse(json);
+        carryOverExpanded(previous, doc);
+        committedJson = json;
+        jsonDirty = false;
+        editing = null;
+        confirmingDelete = false;
+        moving = false;
+        ruleDraft = null;
+        ruleErrors = {};
+        confirmingRuleDelete = null;
+        if (!doc.exists(selected)) selected = [];
+        dirty = initialJson === null || json !== initialJson;
+        updateStatus();
+        renderTree();
+        renderInspector();
+        renderRules();
+        if (isShown(panels.json)) {
+            jsonArea.value = doc.toJson();
+            clearJsonError();
+        }
+        updateHistoryButtons();
+    }
+
+    function undo() {
+        if (jsonDirty && !applyJson()) return;
+        commitHistory();
+        if (!undoStack.length) return;
+        redoStack.push(committedJson);
+        restore(undoStack.pop());
+        announce('Undone');
+    }
+
+    function redo() {
+        if (jsonDirty && !applyJson()) return;
+        commitHistory();
+        if (!redoStack.length) return;
+        undoStack.push(committedJson);
+        restore(redoStack.pop());
+        announce('Redone');
     }
 
     // A value changed: update the names shown in the structure in place so typing stays fast.
@@ -610,6 +712,7 @@
         selected = path;
         editing = null;
         confirmingDelete = false;
+        moving = false;
         for (var end = 2; end <= path.length; end++) {
             if (typeof path[end - 1] === 'number') expanded.add(doc.get(path.slice(0, end)));
         }
@@ -639,7 +742,8 @@
         treeLabels.set('', { titles: [rootTitle] });
 
         tree.replaceChildren(h('div', null, [
-            h('h2', { class: 'govuk-heading-s', text: 'Structure' }),
+            h('h2', { class: 'govuk-heading-s govuk-!-margin-bottom-1', text: 'Structure' }),
+            h('p', { class: 'govuk-hint govuk-!-font-size-16', text: 'Drag sections, tasks, pages and questions to move them, or use the Move buttons.' }),
             h('p', { class: 'govuk-body govuk-!-font-size-16 govuk-!-margin-bottom-3' }, [
                 editLink([], rootTitle, null),
                 h('br'),
@@ -688,7 +792,7 @@
             class: 'govuk-details govuk-!-font-size-16 govuk-!-margin-bottom-2',
             open: expanded.has(node)
         }, [
-            h('summary', { class: 'govuk-details__summary' },
+            h('summary', { class: 'govuk-details__summary', draggable: 'true', 'data-tree-path': lib.pathKey(path) },
                 h('span', { class: 'govuk-details__summary-text' + (lib.samePath(path, selected) ? ' govuk-!-font-weight-bold' : '') }, summaryTitle)),
             h('div', { class: 'govuk-details__text govuk-!-padding-top-1 govuk-!-padding-bottom-1' }, [
                 h('p', { class: 'govuk-body govuk-!-font-size-16 govuk-!-margin-bottom-2' }, [
@@ -713,13 +817,104 @@
         var title = h('span', { text: nodeTitle(path) });
         var type = h('span', { text: nodeType(path) });
         treeLabels.set(lib.pathKey(path), { titles: [title], type: type });
-        return h('li', null, [
+        return h('li', { draggable: 'true', 'data-tree-path': lib.pathKey(path) }, [
             editLink(path, title, null),
             h('br'),
             h('span', { class: 'govuk-hint govuk-!-font-size-16' }, type),
             targets.has(idOf(path)) ? [' ', tag('Shown by a rule', 'yellow')] : null
         ]);
     }
+
+    // ---- Drag and drop in the structure ------------------------------------------------------------------------
+    //
+    // Mouse users can drag items. Everyone else uses Move up, Move down and Move to, which do the same thing.
+
+    var dragSource = null;
+    var dropMarker = null;
+
+    // The list a dragged node of this kind would join if dropped on `target`, or null.
+    function containerFor(kind, target) {
+        var targetKind = doc.kindOf(target);
+        var node = doc.get(target);
+        if (kind === 'field' && targetKind === 'page') return target.concat(['fields']);
+        if (kind === 'page' && targetKind === 'task' && Array.isArray(node.pages)) return target.concat(['pages']);
+        if (kind === 'page' && (targetKind === 'flow' || targetKind === 'derivedFlow')) return target.concat(['pages']);
+        if (kind === 'task' && targetKind === 'group') return target.concat(['tasks']);
+        if (kind === 'flow' && targetKind === 'task' && doc.taskShape(node) === 'collection') return target.concat(['summary', 'flows']);
+        if (kind === 'derivedFlow' && targetKind === 'task' && doc.taskShape(node) === 'derived') return target.concat(['summary', 'derivedFlows']);
+        return null;
+    }
+
+    function dropFor(event) {
+        if (!dragSource) return null;
+        var element = event.target.closest && event.target.closest('[data-tree-path]');
+        if (!element || !tree.contains(element)) return null;
+        var target = lib.parsePathKey(element.getAttribute('data-tree-path'));
+        if (lib.startsWith(target, dragSource)) return null;
+
+        var kind = doc.kindOf(dragSource);
+        if (doc.kindOf(target) === kind) {
+            var box = element.getBoundingClientRect();
+            var after = event.clientY > box.top + box.height / 2;
+            return { element: element, arrayPath: target.slice(0, -1), index: target[target.length - 1] + (after ? 1 : 0), position: after ? 'after' : 'before' };
+        }
+        var into = containerFor(kind, target);
+        return into ? { element: element, arrayPath: into, index: null, position: 'into' } : null;
+    }
+
+    function clearDropMarker() {
+        if (!dropMarker) return;
+        dropMarker.style.boxShadow = '';
+        dropMarker.style.outline = '';
+        dropMarker = null;
+    }
+
+    function showDropMarker(drop) {
+        dropMarker = drop.element;
+        if (drop.position === 'into') {
+            dropMarker.style.outline = '3px solid var(--govuk-focus-colour, #ffdd00)';
+        } else {
+            dropMarker.style.boxShadow = 'inset 0 ' + (drop.position === 'before' ? '4px' : '-4px') + ' 0 0 var(--govuk-brand-colour, #1d70b8)';
+        }
+    }
+
+    tree.addEventListener('dragstart', function (event) {
+        var element = event.target.closest && event.target.closest('[data-tree-path]');
+        if (!element) return;
+        dragSource = lib.parsePathKey(element.getAttribute('data-tree-path'));
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', nodeTitle(dragSource));
+    });
+
+    tree.addEventListener('dragover', function (event) {
+        var drop = dropFor(event);
+        clearDropMarker();
+        if (!drop) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        showDropMarker(drop);
+    });
+
+    tree.addEventListener('dragleave', function (event) {
+        if (!tree.contains(event.relatedTarget)) clearDropMarker();
+    });
+
+    tree.addEventListener('drop', function (event) {
+        var drop = dropFor(event);
+        clearDropMarker();
+        if (!drop) return;
+        event.preventDefault();
+        var newPath = doc.moveTo(dragSource, drop.arrayPath, drop.index);
+        dragSource = null;
+        markDirty();
+        select(newPath);
+        announce('Moved ' + nodeTitle(newPath));
+    });
+
+    tree.addEventListener('dragend', function () {
+        dragSource = null;
+        clearDropMarker();
+    });
 
     // ---- Settings for the selected item ------------------------------------------------------------------------
 
@@ -762,16 +957,131 @@
             h('span', { class: 'govuk-caption-m', text: KIND_LABELS[doc.kindOf(path)] }),
             h('h2', { class: 'govuk-heading-l', id: 'tpl-inspector-title', tabindex: '-1', text: nodeTitle(path) }),
             path.length ? nodeActions(path) : null,
-            path.length && confirmingDelete ? deleteConfirmation(path) : null
+            path.length && confirmingDelete ? deleteConfirmation(path) : null,
+            path.length && moving ? movePanel(path) : null
         ];
+    }
+
+    var MOVE_TARGET_LABELS = { field: 'page', page: 'task or list', task: 'section', flow: 'task', derivedFlow: 'task' };
+
+    // The lists a node could move to, grouped for a select, leaving out the one it's in.
+    function moveDestinations(path) {
+        var kind = doc.kindOf(path);
+        var current = lib.pathKey(path.slice(0, -1));
+        var items = [];
+        function add(arrayPath, label, group) {
+            var key = lib.pathKey(arrayPath);
+            if (key !== current) items.push({ value: key, label: label, group: group });
+        }
+        if (kind === 'field') {
+            doc.eachPageSet(function (pages, pagesPath, ownerPath) {
+                var group = nodeTitle(ownerPath) + (doc.kindOf(ownerPath) === 'task' ? '' : ' (' + KIND_LABELS[doc.kindOf(ownerPath)].toLowerCase() + ')');
+                pages.forEach(function (page, index) {
+                    add(pagesPath.concat([index, 'fields']), page.title || page.pageId, group);
+                });
+            });
+        } else if (kind === 'page') {
+            (doc.root.taskGroups || []).forEach(function (group, g) {
+                (group.tasks || []).forEach(function (task, t) {
+                    var taskPath = ['taskGroups', g, 'tasks', t];
+                    if (Array.isArray(task.pages)) add(taskPath.concat(['pages']), task.taskName || task.taskId, group.groupName || group.groupId);
+                    var summary = task.summary || {};
+                    ['flows', 'derivedFlows'].forEach(function (key) {
+                        (summary[key] || []).forEach(function (flow, f) {
+                            add(taskPath.concat(['summary', key, f, 'pages']), (flow.title || flow.flowId) + ' (in ' + (task.taskName || task.taskId) + ')', group.groupName || group.groupId);
+                        });
+                    });
+                });
+            });
+        } else if (kind === 'task') {
+            (doc.root.taskGroups || []).forEach(function (group, g) {
+                add(['taskGroups', g, 'tasks'], group.groupName || group.groupId, 'Sections');
+            });
+        } else if (kind === 'flow' || kind === 'derivedFlow') {
+            var shape = kind === 'flow' ? 'collection' : 'derived';
+            doc.eachTask(function (task, taskPath) {
+                if (doc.taskShape(task) === shape) add(taskPath.concat(['summary', kind === 'flow' ? 'flows' : 'derivedFlows']), task.taskName || task.taskId, 'Tasks');
+            });
+        }
+        return items;
+    }
+
+    function groupedSelect(options) {
+        var groups = [];
+        options.items.forEach(function (item) {
+            var group = groups.find(function (entry) { return entry.name === item.group; });
+            if (!group) groups.push(group = { name: item.group, items: [] });
+            group.items.push(item);
+        });
+        return formGroup([
+            h('label', { class: 'govuk-label govuk-label--s', for: options.id, text: options.label }),
+            hint(options.id, options.hint),
+            h('select', { class: 'govuk-select', id: options.id, 'aria-describedby': describedBy(options.id, options.hint) },
+                groups.map(function (group) {
+                    return h('optgroup', { label: group.name }, group.items.map(function (item) {
+                        return h('option', { value: item.value, text: item.label });
+                    }));
+                }))
+        ]);
+    }
+
+    // Where a question's answers are stored: at the top level, or inside a repeatable list.
+    function listOwnerOf(arrayPath) {
+        var owner = doc.ancestorPath(arrayPath.concat([0]), 'flow') || doc.ancestorPath(arrayPath.concat([0]), 'derivedFlow');
+        return owner ? doc.get(owner).fieldId : '';
+    }
+
+    function movePanel(path) {
+        var kind = doc.kindOf(path);
+        var destinations = moveDestinations(path);
+        var answered = inUse() && doc.fieldKeysIn(path).some(function (key) { return !!baselineFor(key); });
+        return h('div', { id: 'tpl-move-panel' }, [
+            groupedSelect({
+                id: 'tpl-move-to',
+                label: 'Move to which ' + MOVE_TARGET_LABELS[kind] + '?',
+                hint: kind === 'field' ? 'It goes at the end of that page.' : 'It goes at the end.',
+                items: destinations
+            }),
+            answered && (kind === 'field' || kind === 'page')
+                ? inset('Applications have answers to questions here. Moving them into or out of a repeatable list changes where answers are saved, so check for problems after moving.')
+                : null,
+            h('div', { class: 'govuk-button-group' }, [
+                button('Move', function () {
+                    var destination = lib.parsePathKey(document.getElementById('tpl-move-to').value);
+                    var crossesList = listOwnerOf(path.slice(0, -1)) !== listOwnerOf(destination);
+                    var newPath = doc.moveTo(path, destination);
+                    moving = false;
+                    markDirty();
+                    select(newPath, true);
+                    announce('Moved to ' + nodeTitle(doc.parentPath(newPath)) + (crossesList && answered ? '. Check for problems before saving.' : ''));
+                }, null, 'tpl-move-confirm'),
+                h('a', {
+                    href: '#tpl-inspector-title',
+                    class: 'govuk-link',
+                    onClick: function (e) {
+                        e.preventDefault();
+                        moving = false;
+                        renderInspector();
+                        focusById('tpl-move-to-button');
+                    }
+                }, 'Cancel')
+            ])
+        ]);
     }
 
     function nodeActions(path) {
         var index = path[path.length - 1];
         var siblings = doc.get(path.slice(0, -1));
+        var canMoveElsewhere = MOVE_TARGET_LABELS[doc.kindOf(path)] && moveDestinations(path).length > 0;
         return h('div', { class: 'govuk-button-group' }, [
             index > 0 ? button('Move up', function () { selected = doc.move(path, -1); restructured(); }, 'secondary', 'tpl-move-up') : null,
             index < siblings.length - 1 ? button('Move down', function () { selected = doc.move(path, 1); restructured(); }, 'secondary', 'tpl-move-down') : null,
+            canMoveElsewhere ? button('Move to another ' + MOVE_TARGET_LABELS[doc.kindOf(path)], function () {
+                moving = true;
+                confirmingDelete = false;
+                renderInspector();
+                focusById('tpl-move-to');
+            }, 'secondary', 'tpl-move-to-button') : null,
             button('Duplicate', function () {
                 var copy = doc.duplicate(path);
                 markDirty();
@@ -779,6 +1089,7 @@
             }, 'secondary', 'tpl-duplicate'),
             button('Delete', function () {
                 confirmingDelete = true;
+                moving = false;
                 renderInspector();
                 focusById('tpl-delete-yes');
             }, 'warning', 'tpl-delete')
@@ -2561,6 +2872,9 @@
         if (!doc.exists(selected)) selected = [];
         editing = null;
         confirmingDelete = false;
+        moving = false;
+        if (committedJson === null) committedJson = doc.toJson();
+        commitHistory();
         return true;
     }
 
@@ -2778,6 +3092,26 @@
         usage.replaceChildren(inset(text));
     }
 
+    document.getElementById('tpl-undo').addEventListener('click', undo);
+    document.getElementById('tpl-redo').addEventListener('click', redo);
+
+    // Leaving a box ends that undo step, so the next change is undone separately.
+    container.addEventListener('focusout', function () {
+        if (commitTimer) commitHistory();
+    });
+
+    // Ctrl+Z and Ctrl+Y (Cmd on a Mac) outside text boxes, which keep their own undo.
+    document.addEventListener('keydown', function (e) {
+        if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+        var key = e.key.toLowerCase();
+        if (key !== 'z' && key !== 'y') return;
+        var target = e.target;
+        if (target && (target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName))) return;
+        if (!container.contains(target) && target !== document.body) return;
+        e.preventDefault();
+        if (key === 'y' || e.shiftKey) redo(); else undo();
+    });
+
     window.addEventListener('beforeunload', function (e) {
         if (dirty && !submitting) {
             e.preventDefault();
@@ -2812,6 +3146,8 @@
     }
 
     (doc.root.taskGroups || []).forEach(function (group) { expanded.add(group); });
+    committedJson = doc.toJson();
+    initialJson = data.hasUnsavedChanges ? null : committedJson;
     renderTree();
     renderInspector();
     renderRules();
