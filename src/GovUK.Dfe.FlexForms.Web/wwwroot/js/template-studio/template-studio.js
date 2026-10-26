@@ -56,7 +56,7 @@
         equals: 'is', notEquals: 'is not', 'not_equals': 'is not', 'in': 'is one of', notIn: 'is not one of',
         contains: 'contains', 'not_contains': 'does not contain', startsWith: 'starts with', endsWith: 'ends with',
         greaterThan: 'is more than', lessThan: 'is less than', greaterThanOrEqual: 'is at least',
-        lessThanOrEqual: 'is at most', between: 'is between', isEmpty: 'is not answered', isNotEmpty: 'is answered',
+        lessThanOrEqual: 'is at most', between: 'is between', isEmpty: 'has not been given', isNotEmpty: 'has been given',
         isTrue: 'is true', isFalse: 'is false', hasLength: 'has length', matchesPattern: 'matches',
         isValidEmail: 'is a valid email', isValidPhone: 'is a valid phone number'
     };
