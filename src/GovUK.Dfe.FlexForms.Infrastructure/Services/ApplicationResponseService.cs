@@ -21,6 +21,10 @@ public class ApplicationResponseService(
 {
     private const string SessionKeyFormData = FormSessionKeys.AccumulatedFormData;
 
+    private string? _cachedSessionJson;
+    private string? _cachedApplicationId;
+    private Dictionary<string, object>? _cachedFormData;
+
     public async Task SaveApplicationResponseAsync(Guid applicationId, Dictionary<string, object> formData, CancellationToken cancellationToken = default)
     {
         // Every save sends the full response body built from session, so the session must hold this application's data.
@@ -178,13 +182,21 @@ public class ApplicationResponseService(
             return new Dictionary<string, object>();
         }
         
+        // Get applicationId from session for filename-based blacklist checking
+        var applicationId = sessionStore.GetString(FormSessionKeys.ApplicationId);
+
+        // This service is scoped, so the cache lasts one request. Callers may change the dictionary they get back.
+        if (_cachedFormData != null
+            && string.Equals(jsonString, _cachedSessionJson, StringComparison.Ordinal)
+            && string.Equals(applicationId, _cachedApplicationId, StringComparison.Ordinal))
+        {
+            return new Dictionary<string, object>(_cachedFormData);
+        }
+
         try
         {
             var rawData = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonString) 
                          ?? new Dictionary<string, object>();
-            
-            // Get applicationId from session for filename-based blacklist checking
-            var applicationId = sessionStore.GetString(FormSessionKeys.ApplicationId);
             
             // Filter out any infected files from the data
             var filteredData = FilterInfectedFilesFromData(rawData, applicationId);
@@ -194,8 +206,12 @@ public class ApplicationResponseService(
             {
                 cleanedData[kvp.Key] = CleanFormValue(kvp.Value);
             }
-            
-            return cleanedData;
+
+            _cachedSessionJson = jsonString;
+            _cachedApplicationId = applicationId;
+            _cachedFormData = cleanedData;
+
+            return new Dictionary<string, object>(cleanedData);
         }
         catch (JsonException ex)
         {
@@ -339,104 +355,64 @@ public class ApplicationResponseService(
 
     /// <summary>
     /// Filters out infected files from form data using Redis blacklist.
-    /// Uses direct key lookup instead of KEYS command for better reliability and performance.
-    /// Checks both file ID-based and filename-based blacklists.
+    /// Checks both file ID-based and filename-based blacklists, for every uploaded file in one round trip.
+    /// Lists of objects are rewritten as JSON strings; every other value is kept as it is.
     /// </summary>
     private Dictionary<string, object> FilterInfectedFilesFromData(Dictionary<string, object> data, string? applicationId)
     {
         try
         {
-            int filteredCount = 0;
-            
-            // Filter infected files from each field
-            var filteredData = new Dictionary<string, object>();
+            var objectLists = new Dictionary<string, List<JsonElement>>();
+            var candidates = new List<InfectedFileCandidate>();
+
             foreach (var kvp in data)
             {
-                var fieldValue = kvp.Value?.ToString();
-                if (string.IsNullOrEmpty(fieldValue))
-                {
-                    filteredData[kvp.Key] = kvp.Value;
+                if (!TryReadObjectList(kvp.Value?.ToString(), out var items))
                     continue;
-                }
-                
-                // Try to parse as file list
-                try
+
+                objectLists[kvp.Key] = items;
+                foreach (var item in items)
                 {
-                    var files = JsonSerializer.Deserialize<List<JsonElement>>(fieldValue);
-                    if (files != null)
+                    if (TryReadUploadedFile(item, out var fileId, out var originalFileName))
+                        candidates.Add(new InfectedFileCandidate(fileId, originalFileName));
+                }
+            }
+
+            var infected = candidates.Count == 0
+                ? new HashSet<Guid>()
+                : infectedFileStore.FindInfectedFiles(applicationId, candidates);
+
+            int filteredCount = 0;
+            var filteredData = new Dictionary<string, object>(data);
+            foreach (var (key, items) in objectLists)
+            {
+                var cleanItems = new List<JsonElement>(items.Count);
+                foreach (var item in items)
+                {
+                    if (TryReadUploadedFile(item, out var fileId, out var originalFileName) && infected.Contains(fileId))
                     {
-                        // Filter out infected files by checking each file against BOTH blacklist types
-                        var cleanFiles = new List<JsonElement>();
-                        foreach (var file in files)
-                        {
-                            bool isInfected = false;
-                            string? originalFileName = null;
-                            
-                            // Get file properties
-                            if (file.TryGetProperty("id", out var idProp) && 
-                                Guid.TryParse(idProp.GetString(), out var fileId))
-                            {
-                                if (infectedFileStore.IsFileInfected(fileId))
-                                {
-                                    isInfected = true;
-                                }
-                                
-                                if (!isInfected && !string.IsNullOrEmpty(applicationId))
-                                {
-                                    if (file.TryGetProperty("originalFileName", out var fileNameProp))
-                                    {
-                                        originalFileName = fileNameProp.GetString();
-                                    }
-                                    
-                                    if (!string.IsNullOrEmpty(originalFileName)
-                                        && infectedFileStore.IsFileNameInfected(applicationId, originalFileName))
-                                    {
-                                        isInfected = true;
-                                    }
-                                }
-                                
-                                if (!isInfected)
-                                {
-                                    cleanFiles.Add(file);
-                                }
-                                else
-                                {
-                                    filteredCount++;
-                                    logger.LogWarning(
-                                        "Filtered infected file {FileId} ({FileName}) from field {FieldKey}",
-                                        fileId,
-                                        originalFileName ?? "unknown",
-                                        kvp.Key);
-                                }
-                            }
-                            else
-                            {
-                                // Keep files without valid ID (might not be file uploads)
-                                cleanFiles.Add(file);
-                            }
-                        }
-                        
-                        // Update with cleaned list
-                        filteredData[kvp.Key] = JsonSerializer.Serialize(cleanFiles);
+                        filteredCount++;
+                        logger.LogWarning(
+                            "Filtered infected file {FileId} ({FileName}) from field {FieldKey}",
+                            fileId,
+                            originalFileName ?? "unknown",
+                            key);
                         continue;
                     }
+
+                    cleanItems.Add(item);
                 }
-                catch
-                {
-                    // Not a file list, keep as-is
-                }
-                
-                // Not a file list, keep original value
-                filteredData[kvp.Key] = kvp.Value;
+
+                filteredData[key] = JsonSerializer.Serialize(cleanItems);
             }
-            
+
             if (filteredCount > 0)
             {
                 logger.LogInformation(
                     "Filtered {Count} infected file(s) from form data",
                     filteredCount);
             }
-            
+
             return filteredData;
         }
         catch (Exception ex)
@@ -444,6 +420,62 @@ public class ApplicationResponseService(
             logger.LogError(ex, "Error filtering infected files from data");
             return data; // Return original data if filtering fails
         }
+    }
+
+    /// <summary>
+    /// Reads a JSON list whose items are all objects with no id or a text id. Other values, including lists of
+    /// plain text such as checkbox answers, are not rewritten.
+    /// </summary>
+    private static bool TryReadObjectList(string? value, out List<JsonElement> items)
+    {
+        items = [];
+        if (string.IsNullOrEmpty(value) || !value.AsSpan().TrimStart().StartsWith("["))
+            return false;
+
+        try
+        {
+            var parsed = JsonSerializer.Deserialize<List<JsonElement>>(value);
+            if (parsed == null)
+                return false;
+
+            foreach (var item in parsed)
+            {
+                if (item.ValueKind != JsonValueKind.Object)
+                    return false;
+                if (item.TryGetProperty("id", out var id)
+                    && id.ValueKind is not (JsonValueKind.String or JsonValueKind.Null))
+                    return false;
+            }
+
+            items = parsed;
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Uploaded files carry a file name or size; repeatable-list items and search results do not.
+    /// </summary>
+    private static bool TryReadUploadedFile(JsonElement item, out Guid fileId, out string? originalFileName)
+    {
+        fileId = Guid.Empty;
+        originalFileName = null;
+
+        var hasOriginalFileName = item.TryGetProperty("originalFileName", out var nameProp);
+        var looksLikeFile = hasOriginalFileName
+            || item.TryGetProperty("fileName", out _)
+            || item.TryGetProperty("fileSize", out _);
+
+        if (!looksLikeFile
+            || !item.TryGetProperty("id", out var idProp)
+            || !Guid.TryParse(idProp.GetString(), out fileId))
+            return false;
+
+        originalFileName = hasOriginalFileName && nameProp.ValueKind == JsonValueKind.String ? nameProp.GetString() : null;
+        return true;
     }
 
     public string TransformToResponseJson(
