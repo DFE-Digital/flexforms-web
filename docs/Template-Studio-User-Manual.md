@@ -139,6 +139,8 @@ The applications dashboard shows default columns until you choose your own.
    - **Something built in**: reference, date started, date submitted, status or action.
 4. Select **Done**.
 
+Answers are grouped by task, in the order applicants see them. Each repeatable list has its own group with the questions inside it. You can't choose a whole list, because it would show as raw data. If a column already shows a whole list, Template Studio warns you; choose one of the list's questions instead.
+
 ![Dashboard columns, with a column that shows an answer being changed](images/ts-04-dashboard-columns.png)
 
 Up to 3 columns can show answers; any more are ignored, and Template Studio warns you. **Use the default columns** goes back to the platform defaults.
@@ -149,7 +151,7 @@ The block under "Your application" on the task list shows default details (refer
 
 1. Select **Choose the details**.
 2. Change, move or remove details, or select **Add a detail**.
-3. For each detail, enter a **Label** and choose **What it shows**: an application detail, an answer, or **Something else (enter a path)** for an answer inside a repeatable list, for example `trusts[0].trustSearch.name` for the first trust's name.
+3. For each detail, enter a **Label** and choose **What it shows**: an application detail, or an answer. Answers are grouped by task, and the questions inside each repeatable list are grouped under the list. A whole list can't be chosen. For anything else, choose **Something else (enter a path)**, for example `trusts[0].trustSearch.name` for the first trust's name.
 4. Select **Done**.
 
 ![Task list details, with a detail that uses an answer path](images/ts-05-task-list-details.png)

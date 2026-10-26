@@ -1059,22 +1059,31 @@
         return items;
     }
 
+    // A select whose options sit under headings that can't be chosen. Items without a group are listed on their own.
     function groupedSelect(options) {
-        var groups = [];
+        var entries = [];
         options.items.forEach(function (item) {
-            var group = groups.find(function (entry) { return entry.name === item.group; });
-            if (!group) groups.push(group = { name: item.group, items: [] });
+            if (!item.group) {
+                entries.push({ item: item });
+                return;
+            }
+            var group = entries.find(function (entry) { return entry.name === item.group; });
+            if (!group) entries.push(group = { name: item.group, items: [] });
             group.items.push(item);
         });
+        var option = function (item) { return h('option', { value: item.value, text: item.label }); };
         return formGroup([
             h('label', { class: 'govuk-label govuk-label--s', for: options.id, text: options.label }),
             hint(options.id, options.hint),
-            h('select', { class: 'govuk-select', id: options.id, 'aria-describedby': describedBy(options.id, options.hint) },
-                groups.map(function (group) {
-                    return h('optgroup', { label: group.name }, group.items.map(function (item) {
-                        return h('option', { value: item.value, text: item.label });
-                    }));
-                }))
+            h('select', {
+                class: 'govuk-select',
+                id: options.id,
+                value: options.value == null ? undefined : options.value,
+                'aria-describedby': describedBy(options.id, options.hint),
+                onChange: options.onChange ? function (e) { options.onChange(e.target.value); } : null
+            }, entries.map(function (entry) {
+                return entry.item ? option(entry.item) : h('optgroup', { label: entry.name }, entry.items.map(option));
+            }))
         ]);
     }
 
@@ -1406,23 +1415,47 @@
         { value: 'application.leadApplicantEmail', label: 'Lead applicant\'s email' }
     ];
 
-    // Every answer a dashboard column or task list detail can show: questions, and the lists they're in.
+    // Every answer a dashboard column or task list detail can show, grouped by task and by the list each question is in,
+    // in the order applicants see them. A whole list isn't a choice: it would show as raw data.
     function answerChoices() {
         var choices = [];
-        doc.eachTask(function (task) {
-            var summary = task.summary || {};
-            (summary.flows || []).concat(summary.derivedFlows || []).forEach(function (flow) {
-                if (flow.fieldId) choices.push({ value: flow.fieldId, label: (flow.title || flow.fieldId) + ' (list: ' + flow.fieldId + ')' });
-            });
-        });
-        doc.eachPageSet(function (pages) {
-            pages.forEach(function (page) {
+        function addQuestions(pages, group) {
+            (pages || []).forEach(function (page) {
                 (page.fields || []).forEach(function (field) {
-                    if (field.fieldId) choices.push({ value: field.fieldId, label: ((field.label && field.label.value) || field.fieldId) + ' (' + field.fieldId + ')' });
+                    if (field.fieldId) choices.push({ value: field.fieldId, label: ((field.label && field.label.value) || field.fieldId) + ' (' + field.fieldId + ')', group: group });
                 });
+            });
+        }
+        doc.eachTask(function (task) {
+            var taskName = task.taskName || task.taskId;
+            var summary = task.summary || {};
+            addQuestions(task.pages, taskName);
+            (summary.flows || []).forEach(function (flow) {
+                addQuestions(flow.pages, taskName + ': ' + (flow.title || flow.fieldId) + ' (repeatable list)');
+            });
+            (summary.derivedFlows || []).forEach(function (flow) {
+                addQuestions(flow.pages, taskName + ': ' + (flow.title || flow.fieldId) + ' (repeated pages)');
             });
         });
         return choices;
+    }
+
+    function listTitleFor(fieldId) {
+        var found = null;
+        doc.eachTask(function (task) {
+            var summary = task.summary || {};
+            (summary.flows || []).concat(summary.derivedFlows || []).forEach(function (flow) {
+                if (!found && fieldId && flow.fieldId === fieldId) found = flow.title || flow.fieldId;
+            });
+        });
+        return found;
+    }
+
+    function wholeListWarning(fieldId) {
+        var title = listTitleFor(fieldId);
+        return title
+            ? warningText('This shows the whole list "' + title + '", which appears as raw data. Choose one of the questions in the list instead.')
+            : null;
     }
 
     function choiceLabel(choices, value) {
@@ -1504,7 +1537,9 @@
                     return column.header || (isFieldColumn(column) ? column.fieldId || 'Answer not chosen' : choiceLabel(SYSTEM_COLUMNS, column.id));
                 },
                 value: function (column) {
-                    return isFieldColumn(column) ? 'Answer: ' + (column.fieldId ? choiceLabel(choices, column.fieldId) : 'not chosen') : 'Built in: ' + choiceLabel(SYSTEM_COLUMNS, column.id);
+                    if (!isFieldColumn(column)) return 'Built in: ' + choiceLabel(SYSTEM_COLUMNS, column.id);
+                    if (listTitleFor(column.fieldId)) return 'The whole list "' + listTitleFor(column.fieldId) + '": choose a question in it';
+                    return 'Answer: ' + (column.fieldId ? choiceLabel(choices, column.fieldId) : 'not chosen');
                 },
                 create: function () { return { type: 'field', fieldId: '', header: '', order: 0 }; },
                 form: function (column) {
@@ -1526,11 +1561,13 @@
                                 renderInspector();
                             }
                         }),
+                        showsAnswer && listTitleFor(column.fieldId) ? wholeListWarning(column.fieldId) : null,
                         showsAnswer
-                            ? selectInput({
-                                id: 'tpl-column-field', label: 'Answer', value: column.fieldId,
+                            ? groupedSelect({
+                                id: 'tpl-column-field', label: 'Answer', value: listTitleFor(column.fieldId) ? '' : column.fieldId,
+                                hint: 'Questions are grouped by task, and by the repeatable list they are in.',
                                 items: [{ value: '', label: 'Choose an answer' }].concat(choices),
-                                onChange: function (value) { column.fieldId = value; markDirty(); }
+                                onChange: function (value) { column.fieldId = value; markDirty(); renderInspector(); }
                             })
                             : selectInput({
                                 id: 'tpl-column-system', label: 'Built-in column', value: column.id, items: SYSTEM_COLUMNS,
@@ -1569,7 +1606,8 @@
             ]);
         }
 
-        var choices = APPLICATION_BINDINGS.concat(answerChoices());
+        var choices = APPLICATION_BINDINGS.map(function (binding) { return Object.assign({ group: 'About the application' }, binding); })
+            .concat(answerChoices());
         return section('Details on the task list', [
             h('p', { class: 'govuk-body', text: 'Rows shown under "Your application" on the task list, in order. You can have up to 10.' }),
             listEditor({
@@ -1583,18 +1621,24 @@
                 max: 10,
                 renumber: function () { items.forEach(function (item, index) { item.order = (index + 1) * 10; }); },
                 key: function (item) { return item.label || 'No label'; },
-                value: function (item) { return item.fieldId ? choiceLabel(choices, item.fieldId) : 'Not chosen'; },
+                value: function (item) {
+                    if (listTitleFor(item.fieldId)) return 'The whole list "' + listTitleFor(item.fieldId) + '": choose a question in it';
+                    return item.fieldId ? choiceLabel(choices, item.fieldId) : 'Not chosen';
+                },
                 create: function () { return { label: '', fieldId: '', order: 0 }; },
                 form: function (item) {
-                    var isCustom = (editing && editing.custom)
-                        || (!!item.fieldId && !choices.some(function (choice) { return choice.value === item.fieldId; }));
+                    var wholeList = !!listTitleFor(item.fieldId);
+                    var isCustom = !wholeList && ((editing && editing.custom)
+                        || (!!item.fieldId && !choices.some(function (choice) { return choice.value === item.fieldId; })));
                     return [
                         textInput({
                             id: 'tpl-detail-label', label: 'Label', value: item.label,
                             onInput: function (value) { item.label = value; markDirty(); }
                         }),
-                        selectInput({
-                            id: 'tpl-detail-field', label: 'What it shows', value: isCustom ? 'custom' : item.fieldId,
+                        wholeList ? wholeListWarning(item.fieldId) : null,
+                        groupedSelect({
+                            id: 'tpl-detail-field', label: 'What it shows', value: isCustom ? 'custom' : wholeList ? '' : item.fieldId,
+                            hint: 'Questions are grouped by task, and by the repeatable list they are in.',
                             items: [{ value: '', label: 'Choose something to show' }].concat(choices, [{ value: 'custom', label: 'Something else (enter a path)' }]),
                             onChange: function (value) {
                                 editing.custom = value === 'custom';
