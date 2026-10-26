@@ -5,7 +5,7 @@
     'use strict';
 
     // The engine sorts by these and also walks array order, so they're kept equal to the position.
-    var ORDER_KEYS = { taskGroups: 'groupOrder', tasks: 'taskOrder', pages: 'pageOrder', fields: 'order' };
+    var ORDER_KEYS = { taskGroups: 'groupOrder', tasks: 'taskOrder', pages: 'pageOrder', fields: 'order', derivedFlows: 'sectionOrder' };
 
     var KIND_BY_CONTAINER = {
         taskGroups: 'group',
@@ -283,6 +283,14 @@
         return ids;
     };
 
+    // Event mapping references ({ fieldId, eventType, mappingId }) whose answer id isn't in the template any more.
+    TemplateDocument.prototype.missingMappedFields = function (references) {
+        var ids = new Set(Array.from(this.collectIds().field).map(function (id) { return id.toLowerCase(); }));
+        return (references || []).filter(function (reference) {
+            return reference && reference.fieldId && !ids.has(String(reference.fieldId).toLowerCase());
+        });
+    };
+
     TemplateDocument.prototype.uniqueIdFrom = function (base, used) {
         var id = base || 'item';
         if (!used.has(id)) return id;
@@ -499,8 +507,9 @@
     // ---- Rules made with the rule builder -------------------------------------------------------------------------
     //
     // Anything a rule targets starts hidden, and hide rules run before show rules (lower priority first). A builder
-    // rule is stored as that pair: "<id>-hide" skips the pages and hides the questions when the answer doesn't
-    // match, and "<id>-show" shows them when it does.
+    // rule that shows things is stored as a pair: "<id>-hide" skips the pages and hides the questions when the
+    // conditions aren't met, and "<id>-show" shows them when they are. Rules that set or clear answers are one rule,
+    // "<id>-set" or "<id>-clear".
 
     var NEGATED_OPERATORS = {
         equals: 'notEquals',
@@ -508,10 +517,23 @@
         'in': 'notIn',
         notIn: 'in',
         isEmpty: 'isNotEmpty',
-        isNotEmpty: 'isEmpty'
+        isNotEmpty: 'isEmpty',
+        greaterThan: 'lessThanOrEqual',
+        lessThanOrEqual: 'greaterThan',
+        lessThan: 'greaterThanOrEqual',
+        greaterThanOrEqual: 'lessThan'
     };
 
     var VALUELESS_OPERATORS = ['isEmpty', 'isNotEmpty'];
+
+    // What the builder can write: the operator, and the data type it compares as.
+    var BUILDER_COMPARISONS = {
+        equals: ['string'], notEquals: ['string'], 'in': ['string'], notIn: ['string'],
+        isEmpty: ['string'], isNotEmpty: ['string'],
+        greaterThan: ['number', 'date'], lessThan: ['number', 'date']
+    };
+
+    var RULE_KINDS = { show: '-show', set: '-set', clear: '-clear' };
 
     function negateOperator(operator) {
         return NEGATED_OPERATORS[operator] || null;
@@ -523,103 +545,218 @@
             .map(function (element) { return element.elementId; });
     }
 
-    function singleCondition(rule) {
-        var conditions = rule.conditionGroup && rule.conditionGroup.conditions;
-        return conditions && conditions.length === 1 && !(conditions[0].conditions || []).length ? conditions[0] : null;
-    }
-
     function sameValue(a, b) {
         return JSON.stringify(a) === JSON.stringify(b);
     }
 
-    // Pairs of rules the builder can open again. Rules written by hand are left alone.
-    TemplateDocument.prototype.builderRules = function () {
-        var rules = this.root.conditionalLogic || [];
-        var pairs = [];
-        rules.forEach(function (show) {
-            if (typeof show.id !== 'string' || !/-show$/.test(show.id)) return;
-            var base = show.id.slice(0, -'-show'.length);
-            var hide = rules.find(function (rule) { return rule.id === base + '-hide'; });
-            var showCondition = singleCondition(show);
-            var hideCondition = hide && singleCondition(hide);
-            if (!showCondition || !hideCondition) return;
-            if (!(show.affectedElements || []).every(function (element) { return element.action === 'show'; })) return;
-            if (hideCondition.triggerField !== showCondition.triggerField
-                || hideCondition.operator !== negateOperator(showCondition.operator)
-                || !sameValue(hideCondition.value, showCondition.value)) return;
-            pairs.push({ base: base, show: show, hide: hide });
-        });
-        return pairs;
-    };
-
-    TemplateDocument.prototype.builderRuleDraft = function (pair) {
-        var condition = singleCondition(pair.show);
+    function builderCondition(condition) {
         return {
-            base: pair.base,
-            name: pair.show.name || '',
-            enabled: pair.show.enabled !== false,
             triggerField: condition.triggerField,
             operator: condition.operator,
-            value: condition.value,
-            pages: ruleTargets(pair.show, 'page'),
-            fields: ruleTargets(pair.show, 'field')
+            value: VALUELESS_OPERATORS.indexOf(condition.operator) !== -1 ? '' : condition.value,
+            dataType: condition.dataType || 'string'
         };
+    }
+
+    function builderGroup(draft) {
+        return {
+            logicalOperator: draft.match === 'any' && draft.conditions.length > 1 ? 'OR' : 'AND',
+            conditions: draft.conditions.map(builderCondition)
+        };
+    }
+
+    // The group that is true exactly when `group` is false: each condition flipped, and "all" swapped with "any".
+    function negateGroup(group) {
+        var conditions = group.conditions.map(function (condition) {
+            return builderCondition({
+                triggerField: condition.triggerField,
+                operator: negateOperator(condition.operator),
+                value: condition.value,
+                dataType: condition.dataType
+            });
+        });
+        var flipped = group.logicalOperator === 'OR' ? 'AND' : 'OR';
+        return { logicalOperator: conditions.length > 1 ? flipped : 'AND', conditions: conditions };
+    }
+
+    // The conditions of a rule the builder wrote, or null when the rule was written by hand.
+    function builderConditions(rule) {
+        var group = rule && rule.conditionGroup;
+        var conditions = group && group.conditions;
+        if (!conditions || !conditions.length) return null;
+        if (['AND', 'OR', undefined, null].indexOf(group.logicalOperator) === -1) return null;
+        var simple = conditions.every(function (condition) {
+            var types = BUILDER_COMPARISONS[condition.operator];
+            return condition.triggerField && !(condition.conditions || []).length
+                && types && types.indexOf(condition.dataType || 'string') !== -1;
+        });
+        return simple ? group : null;
+    }
+
+    function ruleBase(rule, kind) {
+        var suffix = RULE_KINDS[kind];
+        if (typeof rule.id !== 'string') return null;
+        return rule.id.slice(-suffix.length) === suffix ? rule.id.slice(0, -suffix.length) : rule.id;
+    }
+
+    function targetKeys(rule) {
+        return (rule.affectedElements || []).map(function (element) { return element.elementType + ':' + element.elementId; }).sort();
+    }
+
+    function triggerFields(group) {
+        return group.conditions.map(function (condition) { return condition.triggerField; }).sort();
+    }
+
+    // A rule that hides exactly what `show` shows, depending on the same answers. Because everything a rule shows
+    // starts hidden, the builder can rewrite it as the opposite of the show rule without changing what applicants see.
+    function isHideFor(hide, show) {
+        var group = builderConditions(hide);
+        if (!group || !(hide.affectedElements || []).length) return false;
+        var hides = hide.affectedElements.every(function (element) {
+            return element.elementType === 'page' ? element.action === 'skip' || element.action === 'hide'
+                : element.elementType === 'field' && element.action === 'hide';
+        });
+        return hides
+            && sameValue(targetKeys(hide), targetKeys(show))
+            && sameValue(triggerFields(group), triggerFields(show.conditionGroup));
+    }
+
+    // Rules the builder can open again: rules that show things (with their matching hide rule, if there is one), and
+    // rules that fill in or clear answers. Rules with conditions or actions the builder can't show are left alone.
+    TemplateDocument.prototype.builderRules = function () {
+        var rules = this.root.conditionalLogic || [];
+        var claimed = new Set();
+        var entries = [];
+        rules.forEach(function (rule) {
+            if (claimed.has(rule) || !builderConditions(rule)) return;
+            var elements = rule.affectedElements || [];
+            if (!elements.length) return;
+            var only = function (action) { return elements.every(function (element) { return element.action === action; }); };
+
+            if (only('show')) {
+                var hide = rules.find(function (other) { return other !== rule && !claimed.has(other) && isHideFor(other, rule); }) || null;
+                claimed.add(rule);
+                if (hide) claimed.add(hide);
+                entries.push({ base: ruleBase(rule, 'show'), kind: 'show', show: rule, hide: hide, rules: hide ? [hide, rule] : [rule] });
+            } else if (only('setValue') && elements.length === 1 && elements[0].elementType === 'field') {
+                claimed.add(rule);
+                entries.push({ base: ruleBase(rule, 'set'), kind: 'set', show: rule, rules: [rule] });
+            } else if (only('clearValue') && elements.every(function (element) { return element.elementType === 'field'; })) {
+                claimed.add(rule);
+                entries.push({ base: ruleBase(rule, 'clear'), kind: 'clear', show: rule, rules: [rule] });
+            }
+        });
+        return entries;
+    };
+
+    TemplateDocument.prototype.builderRuleDraft = function (entry) {
+        var group = entry.show.conditionGroup;
+        var draft = {
+            base: entry.base,
+            kind: entry.kind,
+            name: entry.show.name || '',
+            enabled: entry.show.enabled !== false,
+            match: group.logicalOperator === 'OR' ? 'any' : 'all',
+            conditions: group.conditions.map(function (condition) {
+                return { triggerField: condition.triggerField, operator: condition.operator, value: condition.value, dataType: condition.dataType || 'string' };
+            }),
+            pages: [],
+            fields: [],
+            setField: '',
+            setValue: '',
+            clearFields: []
+        };
+        if (entry.kind === 'show') {
+            draft.pages = ruleTargets(entry.show, 'page');
+            draft.fields = ruleTargets(entry.show, 'field');
+        } else if (entry.kind === 'set') {
+            var element = entry.show.affectedElements[0];
+            draft.setField = element.elementId;
+            draft.setValue = element.actionConfig && element.actionConfig.value != null ? element.actionConfig.value : '';
+        } else {
+            draft.clearFields = ruleTargets(entry.show, 'field');
+        }
+        return draft;
     };
 
     TemplateDocument.prototype.uniqueRuleBase = function (name, ignoreBase) {
         var ids = new Set((this.root.conditionalLogic || []).map(function (rule) { return rule.id; }));
         var base = kebabCase(name) || 'rule';
+        var taken = function (candidate) {
+            return ['-show', '-hide', '-set', '-clear'].some(function (suffix) { return ids.has(candidate + suffix); });
+        };
         var candidate = base;
-        for (var n = 2; candidate !== ignoreBase && (ids.has(candidate + '-show') || ids.has(candidate + '-hide')); n++) {
+        for (var n = 2; candidate !== ignoreBase && taken(candidate); n++) {
             candidate = base + '-' + n;
         }
         return candidate;
     };
 
-    // Writes a builder rule as its hide and show pair. Returns the pair's base id.
+    // Writes a builder rule, replacing the rules it was opened from. Returns its base id.
     TemplateDocument.prototype.saveBuilderRule = function (draft) {
         var rules = this.root.conditionalLogic || (this.root.conditionalLogic = []);
         var existing = draft.base
-            ? this.builderRules().find(function (pair) { return pair.base === draft.base; })
+            ? this.builderRules().find(function (entry) { return entry.base === draft.base; })
             : null;
-        var base = existing ? existing.base : this.uniqueRuleBase(draft.name);
-        var value = VALUELESS_OPERATORS.indexOf(draft.operator) !== -1 ? '' : draft.value;
-        var priority = existing && typeof existing.hide.priority === 'number'
-            ? existing.hide.priority
+        var kind = draft.kind || 'show';
+        var base = existing && existing.kind === kind ? existing.base : this.uniqueRuleBase(draft.name, existing && existing.base);
+        var first = existing ? existing.rules[0] : null;
+        var priority = first && typeof first.priority === 'number'
+            ? first.priority
             : rules.reduce(function (max, rule) { return Math.max(max, typeof rule.priority === 'number' ? rule.priority : 100); }, 90) + 10;
+        var enabled = draft.enabled !== false;
+        var group = builderGroup(draft);
+        // A rule changed without changing what it does keeps its id, priority and any settings the builder doesn't show.
+        var same = !!existing && existing.kind === kind;
+        var keep = function (rule, changes) { return Object.assign({}, same && rule ? rule : {}, changes); };
+        var priorityOf = function (rule, fallback) { return same && rule && typeof rule.priority === 'number' ? rule.priority : fallback; };
 
-        function condition(operator) {
-            return { triggerField: draft.triggerField, operator: operator, value: value, dataType: 'string' };
-        }
-
-        function elements(pageAction, fieldAction) {
-            return (draft.pages || []).map(function (id) { return { elementId: id, elementType: 'page', action: pageAction }; })
-                .concat((draft.fields || []).map(function (id) { return { elementId: id, elementType: 'field', action: fieldAction }; }));
-        }
-
-        var hide = {
-            id: base + '-hide',
-            name: 'Hide unless: ' + draft.name,
-            priority: priority,
-            enabled: draft.enabled !== false,
-            conditionGroup: { logicalOperator: 'AND', conditions: [condition(negateOperator(draft.operator))] },
-            affectedElements: elements('skip', 'hide')
-        };
-        var show = {
-            id: base + '-show',
-            name: draft.name,
-            priority: priority + 1,
-            enabled: draft.enabled !== false,
-            conditionGroup: { logicalOperator: 'AND', conditions: [condition(draft.operator)] },
-            affectedElements: elements('show', 'show')
-        };
-
-        if (existing) {
-            rules[rules.indexOf(existing.hide)] = hide;
-            rules[rules.indexOf(existing.show)] = show;
+        var written;
+        if (kind === 'show') {
+            var elements = function (pageAction, fieldAction) {
+                return (draft.pages || []).map(function (id) { return { elementId: id, elementType: 'page', action: pageAction }; })
+                    .concat((draft.fields || []).map(function (id) { return { elementId: id, elementType: 'field', action: fieldAction }; }));
+            };
+            var oldShow = same ? existing.show : null;
+            var oldHide = same ? existing.hide : null;
+            written = [];
+            if (!same || oldHide) {
+                written.push(keep(oldHide, {
+                    id: oldHide ? oldHide.id : base + '-hide',
+                    name: oldHide && draft.name === oldShow.name ? oldHide.name : 'Hide unless: ' + draft.name,
+                    priority: priorityOf(oldHide, priority),
+                    enabled: enabled,
+                    conditionGroup: negateGroup(group),
+                    affectedElements: elements('skip', 'hide')
+                }));
+            }
+            written.push(keep(oldShow, {
+                id: oldShow ? oldShow.id : base + '-show',
+                name: draft.name,
+                priority: priorityOf(oldShow, priority + 1),
+                enabled: enabled,
+                conditionGroup: group,
+                affectedElements: elements('show', 'show')
+            }));
         } else {
-            rules.push(hide, show);
+            written = [keep(same ? existing.show : null, {
+                id: same ? existing.show.id : base + RULE_KINDS[kind],
+                name: draft.name,
+                priority: priorityOf(same ? existing.show : null, priority),
+                enabled: enabled,
+                conditionGroup: group,
+                affectedElements: kind === 'set'
+                    ? [{ elementId: draft.setField, elementType: 'field', action: 'setValue', actionConfig: { value: draft.setValue } }]
+                    : (draft.clearFields || []).map(function (id) { return { elementId: id, elementType: 'field', action: 'clearValue' }; })
+            })];
         }
+
+        var at = existing ? rules.indexOf(existing.rules[0]) : rules.length;
+        if (existing) {
+            this.root.conditionalLogic = rules = rules.filter(function (rule) { return existing.rules.indexOf(rule) === -1; });
+            at = Math.min(at, rules.length);
+        }
+        rules.splice.apply(rules, [at, 0].concat(written));
         return base;
     };
 

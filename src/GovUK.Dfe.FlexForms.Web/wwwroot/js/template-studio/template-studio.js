@@ -63,6 +63,16 @@
 
     var NO_VALUE_OPERATORS = ['isEmpty', 'isNotEmpty', 'isTrue', 'isFalse', 'isValidEmail', 'isValidPhone'];
 
+    // Comparisons the rule builder offers that don't need an answer to compare with.
+    var VALUELESS = ['isEmpty', 'isNotEmpty'];
+
+    var DATE_OPERATOR_TEXT = { lessThan: 'is before', greaterThan: 'is after', lessThanOrEqual: 'is on or before', greaterThanOrEqual: 'is on or after' };
+
+    function operatorText(condition) {
+        if (condition.dataType === 'date' && DATE_OPERATOR_TEXT[condition.operator]) return DATE_OPERATOR_TEXT[condition.operator];
+        return OPERATOR_TEXT[condition.operator] || condition.operator;
+    }
+
     var tree = document.getElementById('tpl-tree');
     var inspector = document.getElementById('tpl-inspector');
     var rulesPanel = document.getElementById('tpl-rules');
@@ -122,6 +132,46 @@
 
     function baselineFor(key) {
         return key ? baselineFields.get(lib.fieldKey(key.parentFieldId, key.fieldId)) || null : null;
+    }
+
+    // Answers the tenant's event mappings read. Events are sent without an answer that no longer exists.
+    var eventMappings = Array.isArray(data.eventMappings) ? data.eventMappings : [];
+
+    function mappingsReading(fieldIds) {
+        var wanted = new Set(fieldIds.map(function (id) { return String(id).toLowerCase(); }));
+        return eventMappings.filter(function (reference) { return wanted.has(String(reference.fieldId).toLowerCase()); });
+    }
+
+    function describeMapping(reference) {
+        return 'the ' + reference.eventType + ' event mapping (' + reference.mappingId + ')';
+    }
+
+    // Every answer id at or under a node: questions, and the lists that hold repeated answers.
+    function answerIdsIn(node) {
+        var ids = [];
+        (function walk(value) {
+            if (Array.isArray(value)) { value.forEach(walk); return; }
+            if (!value || typeof value !== 'object') return;
+            if (typeof value.fieldId === 'string' && value.fieldId) ids.push(value.fieldId);
+            Object.keys(value).forEach(function (key) { if (key !== 'conditionalLogic') walk(value[key]); });
+        })(node);
+        return ids;
+    }
+
+    function renderMappingWarnings() {
+        var area = document.getElementById('tpl-mapping-warnings');
+        if (!area || !doc) return;
+        var missing = doc.missingMappedFields(eventMappings);
+        if (!missing.length) {
+            area.replaceChildren();
+            return;
+        }
+        area.replaceChildren(warningText([
+            'Event mappings read answers that aren\'t in this version. Events will be sent without them until the mappings are updated in Event mappings:',
+            h('ul', { class: 'govuk-list govuk-list--bullet govuk-!-margin-top-2 govuk-!-margin-bottom-0' }, missing.map(function (reference) {
+                return h('li', { text: '"' + reference.fieldId + '" in ' + describeMapping(reference) });
+            }))
+        ]));
     }
 
     // ---- GOV.UK Frontend ---------------------------------------------------------------------------------------
@@ -230,6 +280,7 @@
                 class: 'govuk-textarea',
                 id: options.id,
                 rows: String(options.rows || 3),
+                spellcheck: options.code ? 'false' : null,
                 value: options.value == null ? '' : String(options.value),
                 'aria-describedby': describedBy(options.id, options.hint),
                 onInput: function (e) { options.onInput(e.target.value); }
@@ -624,6 +675,7 @@
         redoStack = [];
         committedJson = json;
         updateHistoryButtons();
+        renderMappingWarnings();
     }
 
     function updateHistoryButtons() {
@@ -669,6 +721,7 @@
             clearJsonError();
         }
         updateHistoryButtons();
+        renderMappingWarnings();
     }
 
     function undo() {
@@ -1102,6 +1155,13 @@
         var message = 'Are you sure you want to delete this ' + kindLabel + (childrenOf(path).length ? ' and everything in it?' : '?');
         var references = doc.rulesReferencing(idOf(path)).length;
         if (references) message += ' ' + references + (references === 1 ? ' rule uses it and will need updating.' : ' rules use it and will need updating.');
+        var mapped = mappingsReading(answerIdsIn(doc.get(path)));
+        var mappingParts = mapped.length ? [
+            h('p', { class: 'govuk-body', text: 'Event mappings read answers from here. After you save, update them in Event mappings or the events will be sent without these answers:' }),
+            h('ul', { class: 'govuk-list govuk-list--bullet' }, mapped.map(function (reference) {
+                return h('li', { text: '"' + reference.fieldId + '" in ' + describeMapping(reference) });
+            }))
+        ] : null;
 
         // Questions applications have already answered are retired, so reports keep their answers.
         var toRetire = inUse() ? doc.fieldKeysIn(path).filter(function (key) { return !!baselineFor(key); }) : [];
@@ -1137,6 +1197,7 @@
         return h('div', { id: 'tpl-delete-confirm' }, [
             warningText(message),
             retireParts,
+            mappingParts,
             replacement,
             h('div', { class: 'govuk-button-group' }, [
                 button((toRetire.length ? 'Yes, retire and delete this ' : 'Yes, delete this ') + kindLabel, function () {
@@ -1232,6 +1293,11 @@
                     if (key === 'fieldId') {
                         var retired = answerIdRenamed(path, before, trimmed);
                         if (retired) notes.push(retired);
+                        var mapped = before && before !== trimmed ? mappingsReading([before]) : [];
+                        if (mapped.length) {
+                            notes.push(mapped.map(function (reference) { return describeMapping(reference).replace(/^t/, 'T'); }).join(', ')
+                                + ' still read' + (mapped.length === 1 ? 's' : '') + ' "' + before + '". Update ' + (mapped.length === 1 ? 'it' : 'them') + ' in Event mappings after you save.');
+                        }
                     }
                     text = notes.join(' ');
                     isError = false;
@@ -2083,8 +2149,40 @@
             }),
             config.id && !known
                 ? warningText('No ' + (type === 'upload' ? 'upload' : 'search') + ' field called "' + config.id + '" is set up for this tenant. Applicants will see an error until it is added in Tenant settings.')
-                : null
+                : null,
+            type === 'search' ? searchDisplaySettings(path, config) : null
         ]);
+    }
+
+    var SEARCH_DISPLAYS = [
+        { key: 'dropdownDisplay', label: 'Each search result', hint: 'How each result in the list of matches looks.' },
+        { key: 'confirmationDisplay', label: 'The "Is this the right one?" box', hint: 'What applicants check before they confirm their choice. This replaces the whole box.' },
+        { key: 'summaryDisplay', label: 'The answer on summary pages', hint: 'How the chosen result looks when applicants check their answers.' }
+    ];
+
+    // Expressions such as  name + " (" + ukprn + ")"  that override the tenant's layout for this question only.
+    function searchDisplaySettings(path, config) {
+        var tenant = complexFieldConfig(config.id) || {};
+        var changed = SEARCH_DISPLAYS.some(function (display) { return !!config[display.key]; });
+        var details = h('details', { class: 'govuk-details' }, [
+            h('summary', { class: 'govuk-details__summary' }, h('span', { class: 'govuk-details__summary-text', text: 'How results are shown (optional)' })),
+            h('div', { class: 'govuk-details__text' }, [
+                h('p', { class: 'govuk-body', text: 'Leave these blank to use the tenant\'s layout. Join the result\'s properties and text with +, for example  name + " (" + ukprn + ")". You can use Markdown, such as ** for bold.' }),
+                SEARCH_DISPLAYS.map(function (display) {
+                    var current = tenant[display.key];
+                    return textArea({
+                        id: 'tpl-complex-' + display.key, label: display.label, value: config[display.key], rows: 2, code: true,
+                        hint: display.hint + (current ? ' The tenant uses: ' + current : ' The tenant uses the built-in layout.'),
+                        onInput: function (value) {
+                            if (value.trim()) config[display.key] = value; else delete config[display.key];
+                            edited(path);
+                        }
+                    });
+                })
+            ])
+        ]);
+        if (changed) details.setAttribute('open', '');
+        return details;
     }
 
     function lengthEditor(path, field) {
@@ -2420,7 +2518,7 @@
         var joiner = (group && group.logicalOperator) === 'OR' ? ' or ' : ' and ';
         var text = ((group && group.conditions) || []).map(function (condition) {
             if (condition.conditions && condition.conditions.length) return '(' + describeConditions(condition) + ')';
-            var operator = OPERATOR_TEXT[condition.operator] || condition.operator;
+            var operator = operatorText(condition);
             var value = NO_VALUE_OPERATORS.indexOf(condition.operator) !== -1 ? '' : ' ' + formatValue(condition.value);
             return titleForId(condition.triggerField) + ' ' + operator + value;
         }).join(joiner);
@@ -2536,8 +2634,15 @@
         if (!on && index !== -1) list.splice(index, 1);
     }
 
+    function blankCondition(triggerField) {
+        return { triggerField: triggerField || '', operator: 'equals', value: '', dataType: 'string' };
+    }
+
     function blankRuleDraft() {
-        return { base: null, name: '', enabled: true, triggerField: '', operator: 'equals', value: '', pages: [], fields: [], targetTaskId: null };
+        return {
+            base: null, kind: 'show', name: '', enabled: true, match: 'all', conditions: [blankCondition()],
+            pages: [], fields: [], setField: '', setValue: '', clearFields: [], targetTaskId: null
+        };
     }
 
     function startRule(partial) {
@@ -2555,52 +2660,172 @@
         return tasks;
     }
 
-    function ruleValueControl(draft, trigger) {
-        if (draft.operator === 'isEmpty' || draft.operator === 'isNotEmpty') return null;
+    // The comparisons offered for a question, worded for how its answer is stored. Values are "operator|dataType".
+    function comparisonsFor(trigger) {
+        var type = trigger ? editorType(trigger) : 'text';
+        var given = [{ value: 'isNotEmpty|string', label: 'has been given' }, { value: 'isEmpty|string', label: 'has not been given' }];
+        if (type === 'radios' || type === 'select') {
+            return [
+                { value: 'equals|string', label: 'is' }, { value: 'notEquals|string', label: 'is not' },
+                { value: 'in|string', label: 'is one of' }, { value: 'notIn|string', label: 'is not one of' }
+            ].concat(given);
+        }
+        if (type === 'checkboxes') {
+            return [{ value: 'equals|string', label: 'includes' }, { value: 'notEquals|string', label: 'does not include' }].concat(given);
+        }
+        if (type === 'date') {
+            return [{ value: 'lessThan|date', label: 'is before' }, { value: 'greaterThan|date', label: 'is after' }].concat(given);
+        }
+        if (type === 'search' || type === 'upload') return given;
+        return [
+            { value: 'equals|string', label: 'is' }, { value: 'notEquals|string', label: 'is not' },
+            { value: 'greaterThan|number', label: 'is more than (a number)' }, { value: 'lessThan|number', label: 'is less than (a number)' }
+        ].concat(given);
+    }
+
+    function comparisonKey(condition) {
+        return condition.operator + '|' + (condition.dataType || 'string');
+    }
+
+    function comparisonLabel(condition) {
+        var match = comparisonsFor(questionById(condition.triggerField)).find(function (item) { return item.value === comparisonKey(condition); });
+        return match ? match.label : operatorText(condition);
+    }
+
+    function isListComparison(condition) {
+        return condition.operator === 'in' || condition.operator === 'notIn';
+    }
+
+    function conditionValueControl(condition, index) {
+        if (VALUELESS.indexOf(condition.operator) !== -1) return null;
+        var trigger = questionById(condition.triggerField);
+        var id = 'tpl-rule-value-' + index;
         var items = optionItems(trigger);
-        if (draft.operator === 'in') {
-            if (!Array.isArray(draft.value)) draft.value = draft.value ? [draft.value] : [];
+        if (isListComparison(condition)) {
+            if (!Array.isArray(condition.value)) condition.value = condition.value ? [condition.value] : [];
             if (items.length) {
                 return withError(checkboxGroup({
-                    name: 'tpl-rule-value', legend: 'Answers', items: items, values: draft.value,
-                    onChange: function (value, checked) { toggle(draft.value, value, checked); }
-                }), ruleErrors['tpl-rule-value-0']);
+                    name: id, legend: 'Answers', items: items, values: condition.value,
+                    onChange: function (value, checked) { toggle(condition.value, value, checked); }
+                }), ruleErrors[id + '-0']);
             }
             return withError(textInput({
-                id: 'tpl-rule-value', label: 'Answers', hint: 'Separate answers with commas.', value: draft.value.join(', '),
-                onInput: function (value) { draft.value = value.split(',').map(function (item) { return item.trim(); }).filter(Boolean); }
-            }), ruleErrors['tpl-rule-value']);
+                id: id, label: 'Answers', hint: 'Separate answers with commas.', value: condition.value.join(', '),
+                onInput: function (value) { condition.value = value.split(',').map(function (item) { return item.trim(); }).filter(Boolean); }
+            }), ruleErrors[id]);
         }
-        if (Array.isArray(draft.value)) draft.value = draft.value[0] || '';
-        return withError(answerValueInput('tpl-rule-value', 'Answer', trigger, draft.value, function (value) { draft.value = value; }),
-            ruleErrors['tpl-rule-value']);
+        if (Array.isArray(condition.value)) condition.value = condition.value[0] || '';
+        if (condition.dataType === 'date') {
+            return withError(textInput({
+                id: id, label: 'Date', hint: 'Year, month and day, for example 2024-09-30', value: condition.value, width: 10, code: true,
+                onInput: function (value) { condition.value = value.trim(); }
+            }), ruleErrors[id]);
+        }
+        if (condition.dataType === 'number') {
+            return withError(textInput({
+                id: id, label: 'Number', value: condition.value, width: 5, numeric: true,
+                onInput: function (value) { condition.value = value.trim(); }
+            }), ruleErrors[id]);
+        }
+        return withError(answerValueInput(id, 'Answer', trigger, condition.value, function (value) { condition.value = value; }),
+            ruleErrors[id]);
+    }
+
+    function conditionEditor(draft, condition, index) {
+        var trigger = questionById(condition.triggerField);
+        var comparisons = comparisonsFor(trigger);
+        if (!comparisons.some(function (item) { return item.value === comparisonKey(condition); })) {
+            var first = comparisons[0].value.split('|');
+            condition.operator = first[0];
+            condition.dataType = first[1];
+        }
+        var many = draft.conditions.length > 1;
+        return h('div', { class: many ? 'govuk-inset-text govuk-!-margin-top-0' : null }, [
+            many ? h('h3', { class: 'govuk-heading-s', text: 'Condition ' + (index + 1) }) : null,
+            withError(questionSelect({
+                id: 'tpl-rule-trigger-' + index, label: 'Question', value: condition.triggerField,
+                onChange: function (value) {
+                    condition.triggerField = value;
+                    condition.value = '';
+                    if (index === 0) draft.targetTaskId = null;
+                    redrawDraft();
+                }
+            }), ruleErrors['tpl-rule-trigger-' + index]),
+            selectInput({
+                id: 'tpl-rule-comparison-' + index, label: 'The answer', value: comparisonKey(condition), items: comparisons,
+                onChange: function (value) {
+                    var parts = value.split('|');
+                    var wasList = isListComparison(condition);
+                    condition.operator = parts[0];
+                    condition.dataType = parts[1];
+                    if (wasList !== isListComparison(condition) || parts[1] !== 'string') condition.value = isListComparison(condition) ? [] : '';
+                    redrawDraft();
+                }
+            }),
+            conditionValueControl(condition, index),
+            many ? h('p', { class: 'govuk-body' }, actionLink({
+                text: 'Remove this condition', hidden: 'condition ' + (index + 1),
+                onClick: function () {
+                    draft.conditions.splice(index, 1);
+                    redrawDraft();
+                    focusById('tpl-rule-trigger-' + Math.max(0, index - 1));
+                }
+            })) : null
+        ]);
+    }
+
+    function questionName(fieldId) {
+        var field = questionById(fieldId);
+        return field ? (field.label && field.label.value) || field.fieldId : fieldId;
     }
 
     function autoRuleName(draft) {
+        var when = draft.conditions.map(function (condition) {
+            var value = VALUELESS.indexOf(condition.operator) !== -1 ? '' : ' ' + formatValue(condition.value);
+            return questionName(condition.triggerField) + ' ' + comparisonLabel(condition) + value;
+        }).join(draft.match === 'any' ? ' or ' : ' and ');
+        if (draft.kind === 'set') return 'Fill in ' + questionName(draft.setField) + ' when ' + when;
+        if (draft.kind === 'clear') {
+            return 'Clear ' + questionName(draft.clearFields[0]) + (draft.clearFields.length > 1 ? ' and ' + (draft.clearFields.length - 1) + ' more' : '') + ' when ' + when;
+        }
         var targets = draft.pages.concat(draft.fields);
         var first = doc.findById(targets[0]);
         var what = (first ? nodeTitle(first) : targets[0]) + (targets.length > 1 ? ' and ' + (targets.length - 1) + ' more' : '');
-        var trigger = questionById(draft.triggerField);
-        var condition = OPERATOR_TEXT[draft.operator] + (NO_VALUE_OPERATORS.indexOf(draft.operator) !== -1 ? '' : ' ' + formatValue(draft.value));
-        return 'Show ' + what + ' when ' + (trigger ? (trigger.label && trigger.label.value) || trigger.fieldId : draft.triggerField) + ' ' + condition;
+        return 'Show ' + what + ' when ' + when;
+    }
+
+    function ruleDraftErrors(draft) {
+        var errors = {};
+        draft.conditions.forEach(function (condition, index) {
+            var id = 'tpl-rule-value-' + index;
+            var hasOptions = optionItems(questionById(condition.triggerField)).length > 0;
+            if (!condition.triggerField) errors['tpl-rule-trigger-' + index] = 'Choose the question for condition ' + (index + 1);
+            else if (VALUELESS.indexOf(condition.operator) !== -1) return;
+            else if (isListComparison(condition)) {
+                if (!condition.value.length) errors[hasOptions ? id + '-0' : id] = 'Choose at least one answer';
+            } else if (condition.dataType === 'date' && !/^\d{4}-\d{2}-\d{2}$/.test(String(condition.value || ''))) {
+                errors[id] = 'Enter a date as year, month and day, for example 2024-09-30';
+            } else if (condition.dataType === 'number' && !/^-?\d+(\.\d+)?$/.test(String(condition.value || ''))) {
+                errors[id] = 'Enter a number, like 10 or 2.5';
+            } else if (!String(condition.value || '').trim()) {
+                errors[id] = hasOptions ? 'Choose an answer' : 'Enter an answer';
+            }
+        });
+        if (draft.kind === 'show' && !draft.pages.length && !draft.fields.length) {
+            errors[document.getElementById('tpl-rule-pages-0') ? 'tpl-rule-pages-0' : 'tpl-rule-fields-0'] = 'Choose at least one page or question to show';
+        }
+        if (draft.kind === 'set') {
+            if (!draft.setField) errors['tpl-rule-set-field'] = 'Choose the question to fill in';
+            else if (!String(draft.setValue || '').trim()) errors['tpl-rule-set-value'] = 'Enter the answer to fill in';
+        }
+        if (draft.kind === 'clear' && !draft.clearFields.length) errors['tpl-rule-clear-0'] = 'Choose at least one question to clear';
+        return errors;
     }
 
     function saveRule() {
         var draft = ruleDraft;
-        var trigger = questionById(draft.triggerField);
-        var hasOptions = optionItems(trigger).length > 0;
-        var errors = {};
-        if (!draft.triggerField) errors['tpl-rule-trigger'] = 'Choose the question that decides it';
-        if (draft.operator === 'in') {
-            if (!draft.value.length) errors[hasOptions ? 'tpl-rule-value-0' : 'tpl-rule-value'] = 'Choose at least one answer';
-        } else if (draft.operator !== 'isEmpty' && draft.operator !== 'isNotEmpty' && !String(draft.value || '').trim()) {
-            errors['tpl-rule-value'] = hasOptions ? 'Choose an answer' : 'Enter an answer';
-        }
-        if (!draft.pages.length && !draft.fields.length) {
-            errors[document.getElementById('tpl-rule-pages-0') ? 'tpl-rule-pages-0' : 'tpl-rule-fields-0'] = 'Choose at least one page or question to show';
-        }
-        ruleErrors = errors;
-        if (Object.keys(errors).length) {
+        ruleErrors = ruleDraftErrors(draft);
+        if (Object.keys(ruleErrors).length) {
             renderRules();
             return;
         }
@@ -2613,23 +2838,96 @@
         focusById('tpl-rule-card-' + base);
     }
 
-    function ruleBuilder() {
-        var draft = ruleDraft;
-        var trigger = questionById(draft.triggerField);
+    // Questions in the chosen task, for showing or clearing.
+    function taskTargets(draft) {
         var tasks = pagesTasks();
         if (!draft.targetTaskId) {
-            var owner = taskQuestions().find(function (question) { return question.field.fieldId === draft.triggerField; });
+            var owner = taskQuestions().find(function (question) { return question.field.fieldId === draft.conditions[0].triggerField; });
             draft.targetTaskId = owner ? owner.task.taskId : tasks[0] && tasks[0].taskId;
         }
-        var targetTask = tasks.find(function (task) { return task.taskId === draft.targetTaskId; }) || tasks[0];
-        var pages = (targetTask && targetTask.pages) || [];
+        var task = tasks.find(function (item) { return item.taskId === draft.targetTaskId; }) || tasks[0];
+        var pages = (task && task.pages) || [];
+        var triggers = draft.conditions.map(function (condition) { return condition.triggerField; });
         var questions = [];
         pages.forEach(function (page) {
-            (page.fields || []).forEach(function (field) { if (field.fieldId !== draft.triggerField) questions.push(field); });
+            (page.fields || []).forEach(function (field) { if (triggers.indexOf(field.fieldId) === -1) questions.push(field); });
         });
-        var elsewhere = draft.pages.filter(function (id) { return !pages.some(function (page) { return page.pageId === id; }); })
-            .concat(draft.fields.filter(function (id) { return !questions.some(function (field) { return field.fieldId === id; }); }));
+        return {
+            tasks: tasks,
+            task: task,
+            pages: pages,
+            questions: questions,
+            select: tasks.length > 1 ? selectInput({
+                id: 'tpl-rule-task', label: 'Which task are they in?', value: task && task.taskId,
+                items: tasks.map(function (item) { return { value: item.taskId, label: item.taskName || item.taskId }; }),
+                onChange: function (value) { draft.targetTaskId = value; redrawDraft(); }
+            }) : null
+        };
+    }
+
+    function showTargets(draft) {
+        var targets = taskTargets(draft);
+        var elsewhere = draft.pages.filter(function (id) { return !targets.pages.some(function (page) { return page.pageId === id; }); })
+            .concat(draft.fields.filter(function (id) { return !targets.questions.some(function (field) { return field.fieldId === id; }); }));
+        var comparesNumbersOrDates = draft.conditions.some(function (condition) { return condition.dataType !== 'string'; });
+        return [
+            comparesNumbersOrDates
+                ? inset('Pages set to "Go to the next page a rule shows" don\'t follow rules that compare numbers or dates.')
+                : null,
+            targets.select,
+            withError(checkboxGroup({
+                name: 'tpl-rule-pages', legend: 'Pages to show', hint: 'The pages are skipped when the conditions aren\'t met.',
+                items: targets.pages.map(function (page) { return { value: page.pageId, label: page.title || page.pageId }; }),
+                values: draft.pages,
+                onChange: function (value, checked) { toggle(draft.pages, value, checked); }
+            }), ruleErrors['tpl-rule-pages-0']),
+            targets.questions.length ? withError(checkboxGroup({
+                name: 'tpl-rule-fields', legend: 'Questions to show', hint: 'The questions are hidden when the conditions aren\'t met.',
+                items: targets.questions.map(function (field) { return { value: field.fieldId, label: questionText(field) }; }),
+                values: draft.fields,
+                onChange: function (value, checked) { toggle(draft.fields, value, checked); }
+            }), ruleErrors['tpl-rule-fields-0']) : null,
+            elsewhere.length
+                ? h('p', { class: 'govuk-body', text: 'It also shows ' + elsewhere.map(titleForId).join(', ') + ' from other tasks.' })
+                : null
+        ];
+    }
+
+    function setTargets(draft) {
+        var field = questionById(draft.setField);
+        return [
+            withError(questionSelect({
+                id: 'tpl-rule-set-field', label: 'Question to fill in', value: draft.setField,
+                hint: 'The answer is filled in when the applicant saves a page and the conditions are met.',
+                onChange: function (value) { draft.setField = value; draft.setValue = ''; redrawDraft(); }
+            }), ruleErrors['tpl-rule-set-field']),
+            draft.setField
+                ? withError(answerValueInput('tpl-rule-set-value', 'Answer to fill in', field, draft.setValue, function (value) { draft.setValue = value; }),
+                    ruleErrors['tpl-rule-set-value'])
+                : null
+        ];
+    }
+
+    function clearTargets(draft) {
+        var targets = taskTargets(draft);
+        var others = draft.clearFields.filter(function (id) { return !targets.questions.some(function (field) { return field.fieldId === id; }); });
+        return [
+            targets.select,
+            withError(checkboxGroup({
+                name: 'tpl-rule-clear', legend: 'Questions to clear',
+                hint: 'Use this to remove answers that no longer apply, for example to questions a rule now hides.',
+                items: targets.questions.map(function (field) { return { value: field.fieldId, label: questionText(field) }; }),
+                values: draft.clearFields,
+                onChange: function (value, checked) { toggle(draft.clearFields, value, checked); }
+            }), ruleErrors['tpl-rule-clear-0']),
+            others.length ? h('p', { class: 'govuk-body', text: 'It also clears ' + others.map(titleForId).join(', ') + ' from other tasks.' }) : null
+        ];
+    }
+
+    function ruleBuilder() {
+        var draft = ruleDraft;
         var errorIds = Object.keys(ruleErrors);
+        var kindLegends = { show: 'Show the pages and questions when', set: 'Fill in the answer when', clear: 'Clear the answers when' };
 
         return h('div', { class: 'govuk-!-margin-bottom-9' }, [
             h('h2', { class: 'govuk-heading-l', id: 'tpl-rule-heading', tabindex: '-1', text: draft.base ? 'Change rule' : 'Add a rule' }),
@@ -2644,50 +2942,29 @@
                 hint: 'Leave blank to name it from what it does.',
                 onInput: function (value) { draft.name = value; }
             }),
-            withError(questionSelect({
-                id: 'tpl-rule-trigger', label: 'Which question decides it?', value: draft.triggerField,
-                onChange: function (value) {
-                    draft.triggerField = value;
-                    draft.value = draft.operator === 'in' ? [] : '';
-                    draft.targetTaskId = null;
-                    redrawDraft();
-                }
-            }), ruleErrors['tpl-rule-trigger']),
             radios({
-                name: 'tpl-rule-operator', legend: 'Show the pages and questions when the answer', value: draft.operator,
+                name: 'tpl-rule-kind', legend: 'What should the rule do?', value: draft.kind,
                 items: [
-                    { value: 'equals', label: 'is' },
-                    { value: 'notEquals', label: 'is not' },
-                    { value: 'in', label: 'is one of' },
-                    { value: 'isNotEmpty', label: 'has been given' },
-                    { value: 'isEmpty', label: 'has not been given' }
+                    { value: 'show', label: 'Show pages or questions', hint: 'They stay hidden until the conditions are met.' },
+                    { value: 'set', label: 'Fill in an answer' },
+                    { value: 'clear', label: 'Clear answers' }
                 ],
-                onChange: function (value) { draft.operator = value; redrawDraft(); }
+                onChange: function (value) { draft.kind = value; redrawDraft(); }
             }),
-            ruleValueControl(draft, trigger),
-            draft.operator !== 'equals'
-                ? inset('Pages after one set to "Go to the next page a rule shows" only follow rules that use "is".')
-                : null,
-            tasks.length > 1 ? selectInput({
-                id: 'tpl-rule-task', label: 'Which task are the pages and questions in?', value: targetTask && targetTask.taskId,
-                items: tasks.map(function (task) { return { value: task.taskId, label: task.taskName || task.taskId }; }),
-                onChange: function (value) { draft.targetTaskId = value; redrawDraft(); }
+            h('h3', { class: 'govuk-heading-m', text: kindLegends[draft.kind] || kindLegends.show }),
+            draft.conditions.length > 1 ? radios({
+                name: 'tpl-rule-match', legend: 'Which conditions must be met?', value: draft.match, inline: true,
+                items: [{ value: 'all', label: 'All of them' }, { value: 'any', label: 'Any of them' }],
+                onChange: function (value) { draft.match = value; }
             }) : null,
-            withError(checkboxGroup({
-                name: 'tpl-rule-pages', legend: 'Pages to show', hint: 'The pages are skipped when the answer doesn\'t match.',
-                items: pages.map(function (page) { return { value: page.pageId, label: page.title || page.pageId }; }),
-                values: draft.pages,
-                onChange: function (value, checked) { toggle(draft.pages, value, checked); }
-            }), ruleErrors['tpl-rule-pages-0']),
-            questions.length ? withError(checkboxGroup({
-                name: 'tpl-rule-fields', legend: 'Questions to show', hint: 'The questions are hidden when the answer doesn\'t match.',
-                items: questions.map(function (field) { return { value: field.fieldId, label: questionText(field) }; }),
-                values: draft.fields,
-                onChange: function (value, checked) { toggle(draft.fields, value, checked); }
-            }), ruleErrors['tpl-rule-fields-0']) : null,
-            elsewhere.length
-                ? h('p', { class: 'govuk-body', text: 'It also shows ' + elsewhere.map(titleForId).join(', ') + ' from other tasks.' })
-                : null,
+            draft.conditions.map(function (condition, index) { return conditionEditor(draft, condition, index); }),
+            button('Add another condition', function () {
+                draft.conditions.push(blankCondition());
+                redrawDraft();
+                focusById('tpl-rule-trigger-' + (draft.conditions.length - 1));
+            }, 'secondary', 'tpl-rule-add-condition'),
+            h('h3', { class: 'govuk-heading-m', text: draft.kind === 'set' ? 'Answer' : draft.kind === 'clear' ? 'Answers to clear' : 'What it shows' }),
+            draft.kind === 'set' ? setTargets(draft) : draft.kind === 'clear' ? clearTargets(draft) : showTargets(draft),
             h('div', { class: 'govuk-button-group' }, [
                 button('Save rule', saveRule, null, 'tpl-rule-save'),
                 h('a', {
@@ -2729,7 +3006,7 @@
                 summaryList(options.rows),
                 options.note ? h('p', { class: 'govuk-hint govuk-!-margin-bottom-0', text: options.note }) : null,
                 isConfirming ? h('div', { class: 'govuk-!-margin-top-4' }, [
-                    warningText('Are you sure you want to delete this rule? Pages and questions it shows will be shown to everyone.'),
+                    warningText(options.deleteText || 'Are you sure you want to delete this rule?'),
                     h('div', { class: 'govuk-button-group' }, [
                         button('Yes, delete this rule', function () {
                             doc.removeRules(options.rules);
@@ -2756,13 +3033,13 @@
     function renderRules() {
         var focusId = rulesPanel.contains(document.activeElement) ? document.activeElement.id : null;
         var rules = doc.root.conditionalLogic || [];
-        var pairs = doc.builderRules();
+        var entries = doc.builderRules();
         var paired = new Set();
-        pairs.forEach(function (pair) { paired.add(pair.show); paired.add(pair.hide); });
+        entries.forEach(function (entry) { entry.rules.forEach(function (rule) { paired.add(rule); }); });
 
         var content = [
             h('h2', { class: 'govuk-heading-l', id: 'tpl-rules-heading', tabindex: '-1', text: 'Rules' }),
-            h('p', { class: 'govuk-body', text: 'Rules show pages and questions only when an earlier answer matches. Anything a rule shows is hidden until then.' })
+            h('p', { class: 'govuk-body', text: 'Rules use earlier answers to show pages and questions, or to fill in or clear answers. Anything a rule shows is hidden until its conditions are met.' })
         ];
 
         if (ruleDraft) {
@@ -2776,19 +3053,28 @@
         content.push(h('h2', { class: 'govuk-heading-m', text: 'Rules in this template' }));
         if (!rules.length) content.push(h('p', { class: 'govuk-body', text: 'This template has no rules yet.' }));
 
-        pairs.forEach(function (pair) {
-            var isOn = pair.show.enabled !== false;
+        entries.forEach(function (entry) {
+            var isOn = entry.show.enabled !== false;
+            var targets = (entry.show.affectedElements || []).map(function (element) {
+                return (element.elementType === 'page' ? 'page ' : 'question ') + titleForId(element.elementId);
+            }).join(', ');
+            var then = entry.kind === 'set'
+                ? { key: 'Fills in', value: targets + ' with ' + formatValue(((entry.show.affectedElements[0] || {}).actionConfig || {}).value) }
+                : entry.kind === 'clear' ? { key: 'Clears', value: targets } : { key: 'Shows', value: targets };
             content.push(ruleCard({
-                id: 'tpl-rule-card-' + pair.base,
-                title: pair.show.name || pair.base,
+                id: 'tpl-rule-card-' + entry.base,
+                title: entry.show.name || entry.base,
                 isOn: isOn,
-                rules: [pair.hide, pair.show],
-                deleteKey: pair.base,
-                actions: [{ text: 'Change', onClick: function () { startRule(doc.builderRuleDraft(pair)); } }],
+                rules: entry.rules,
+                deleteKey: entry.base,
+                deleteText: entry.kind === 'show'
+                    ? 'Are you sure you want to delete this rule? Pages and questions it shows will be shown to everyone.'
+                    : 'Are you sure you want to delete this rule? Answers it ' + (entry.kind === 'set' ? 'fills in' : 'clears') + ' will be left as applicants give them.',
+                actions: [{ text: 'Change', onClick: function () { startRule(doc.builderRuleDraft(entry)); } }],
                 rows: [
                     { key: 'Status', value: isOn ? tag('On', 'green') : tag('Off', 'grey') },
-                    { key: 'When', value: describeConditions(pair.show.conditionGroup) },
-                    { key: 'Shows', value: (pair.show.affectedElements || []).map(function (element) { return titleForId(element.elementId); }).join(', ') }
+                    { key: 'When', value: describeConditions(entry.show.conditionGroup) },
+                    then
                 ]
             }));
         });
@@ -2873,8 +3159,18 @@
         editing = null;
         confirmingDelete = false;
         moving = false;
+        ruleDraft = null;
+        ruleErrors = {};
+        confirmingRuleDelete = null;
         if (committedJson === null) committedJson = doc.toJson();
         commitHistory();
+        dirty = initialJson === null || doc.toJson() !== initialJson;
+        updateStatus();
+        // Every tab shows the new JSON, including the ones that aren't open, so nothing shows the old template.
+        renderTree();
+        renderInspector();
+        renderRules();
+        renderMappingWarnings();
         return true;
     }
 
@@ -2951,6 +3247,11 @@
         markDirty();
     });
 
+    // On narrow screens every panel is shown and there's no tab to leave, so apply the JSON when the box loses focus.
+    jsonArea.addEventListener('change', function () {
+        if (jsonDirty) applyJson();
+    });
+
     document.getElementById('tpl-json-format').addEventListener('click', function () {
         try {
             jsonArea.value = JSON.stringify(JSON.parse(jsonArea.value), null, 2);
@@ -2982,8 +3283,12 @@
             }, [
                 h('div', { class: 'govuk-notification-banner__header' },
                     h('h2', { class: 'govuk-notification-banner__title', id: 'tpl-problems-title', text: 'Success' })),
-                h('div', { class: 'govuk-notification-banner__content' },
-                    h('p', { class: 'govuk-notification-banner__heading', text: 'No problems found. This template can be saved.' }))
+                h('div', { class: 'govuk-notification-banner__content' }, [
+                    h('p', { class: 'govuk-notification-banner__heading', text: 'No problems found. This template can be saved.' }),
+                    doc.missingMappedFields(eventMappings).length
+                        ? h('p', { class: 'govuk-body' }, ['Some event mappings will need updating after you save. ', h('a', { class: 'govuk-notification-banner__link', href: '#tpl-mapping-warnings', text: 'See which answers they read' }), '.'])
+                        : null
+                ])
             ]));
             enhance(problems);
             if (!govuk) problems.focus();
@@ -3151,4 +3456,5 @@
     renderTree();
     renderInspector();
     renderRules();
+    renderMappingWarnings();
 })();

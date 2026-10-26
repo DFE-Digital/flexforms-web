@@ -25,6 +25,7 @@ public class TemplateStudioModel(
     ITemplateValidationService templateValidationService,
     ITemplateCacheInvalidator templateCacheInvalidator,
     IComplexFieldConfigurationService complexFieldConfigurationService,
+    IEventMappingReferenceReader eventMappingReferenceReader,
     IApplicationsClient applicationsClient,
     ILogger<TemplateStudioModel> logger) : PageModel
 {
@@ -46,6 +47,18 @@ public class TemplateStudioModel(
     [BindProperty]
     public bool AcknowledgeReportingImpact { get; set; }
 
+    /// <summary>
+    /// The latest version when Template Studio was opened. A different latest version at save time means someone
+    /// else saved in between, and saving would leave their changes out of the new version.
+    /// </summary>
+    [BindProperty]
+    public string? StartedFromLatestVersion { get; set; }
+
+    [BindProperty]
+    public bool SaveOverNewerVersion { get; set; }
+
+    public bool HasNewerVersion { get; private set; }
+
     public async Task<IActionResult> OnGetAsync(string? saved, CancellationToken cancellationToken)
     {
         var state = await LoadSelectedTemplateAsync(cancellationToken);
@@ -56,6 +69,7 @@ public class TemplateStudioModel(
         if (LoadError is not null)
             return Page();
 
+        StartedFromLatestVersion = LatestVersionNumber;
         NewVersion = SuggestVersion(state);
         await BuildStudioDataAsync(state, schemaJson: null, hasUnsavedChanges: false, cancellationToken);
         return Page();
@@ -75,11 +89,18 @@ public class TemplateStudioModel(
         state.NewSchema = NewSchema;
         state.AcknowledgeReportingImpact = AcknowledgeReportingImpact;
 
+        HasNewerVersion = !string.Equals(StartedFromLatestVersion ?? string.Empty, LatestVersionNumber ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        if (HasNewerVersion && !SaveOverNewerVersion)
+        {
+            ModelState.AddModelError(nameof(SaveOverNewerVersion),
+                $"Version {LatestVersionNumber} was saved after you opened Template Studio. Your version won't include its changes. Check version {LatestVersionNumber} in Template Manager, or confirm you want to save anyway");
+        }
+
         var outcome = templateManagerAdmin.ValidateNewVersion(state);
-        if (outcome.Errors.Count == 0)
+        if (outcome.Errors.Count == 0 && ModelState.IsValid)
             outcome = await templateManagerAdmin.CreateVersionAsync(state, SelectedTemplate!.TemplateId, cancellationToken);
 
-        if (outcome.Errors.Count > 0)
+        if (outcome.Errors.Count > 0 || !ModelState.IsValid)
         {
             foreach (var error in outcome.Errors)
                 ModelState.AddModelError(error.FieldKey, error.Message);
@@ -180,13 +201,16 @@ public class TemplateStudioModel(
             isStarter = true;
         }
 
-        // Only ids, kinds and labels: the configuration also holds API keys and client secrets.
+        // Only ids, kinds, labels and display layouts: the configuration also holds API keys and client secrets.
         var complexFields = complexFieldConfigurationService.GetAllConfigurations()
             .Select(configuration => new
             {
                 id = configuration.Id,
                 fieldType = configuration.FieldType,
-                label = configuration.Label
+                label = configuration.Label,
+                dropdownDisplay = configuration.DropdownDisplay,
+                confirmationDisplay = configuration.ConfirmationDisplay,
+                summaryDisplay = configuration.SummaryDisplay
             });
 
         var applicationCount = state.AvailableVersions.Count == 0
@@ -204,8 +228,44 @@ public class TemplateStudioModel(
             isStarter,
             hasUnsavedChanges,
             complexFields,
+            eventMappings = ReadEventMappingReferences(schemaJson, state.CurrentTemplateJson)
+                .Select(reference => new { fieldId = reference.FieldId, eventType = reference.EventType, mappingId = reference.MappingId }),
             validateUrl = Url.Page("/Admin/TemplateStudio", "Validate")
         });
+    }
+
+    private IReadOnlyList<EventMappingFieldReference> ReadEventMappingReferences(params string?[] schemas)
+    {
+        var keys = new List<string> { SelectedTemplate!.TemplateId.ToString() };
+        keys.AddRange(schemas.Select(EmbeddedTemplateId).OfType<string>());
+        try
+        {
+            return eventMappingReferenceReader.GetFieldReferences(keys);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not read event mappings for template {TemplateId}", SelectedTemplate.TemplateId);
+            return [];
+        }
+    }
+
+    private static string? EmbeddedTemplateId(string? schemaJson)
+    {
+        if (string.IsNullOrWhiteSpace(schemaJson))
+            return null;
+        try
+        {
+            using var document = JsonDocument.Parse(schemaJson);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("templateId", out var id)
+                && id.ValueKind == JsonValueKind.String
+                ? id.GetString()
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 }
 

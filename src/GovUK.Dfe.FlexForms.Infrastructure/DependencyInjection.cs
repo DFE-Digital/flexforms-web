@@ -26,6 +26,7 @@ public static class DependencyInjection
         services.AddScoped<IApplicationStateService, ApplicationStateService>();
         services.AddScoped<IFileUploadService, FileUploadService>();
         services.AddScoped<IComplexFieldConfigurationService, ComplexFieldConfigurationService>();
+        services.AddScoped<IEventMappingReferenceReader, EventMappingReferenceReader>();
         services.AddScoped<IComplexFieldRendererFactory, ComplexFieldRendererFactory>();
         services.AddScoped<IComplexFieldRenderer, AutocompleteComplexFieldRenderer>();
         services.AddScoped<IComplexFieldRenderer, CompositeComplexFieldRenderer>();

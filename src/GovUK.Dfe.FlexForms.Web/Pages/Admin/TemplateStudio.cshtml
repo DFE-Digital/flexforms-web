@@ -33,6 +33,7 @@
                         {
                             nameof(Model.NewVersion) => "#NewVersion",
                             nameof(Model.AcknowledgeReportingImpact) => "#AcknowledgeReportingImpact",
+                            nameof(Model.SaveOverNewerVersion) => "#SaveOverNewerVersion",
                             _ => "#template-studio-tabs"
                         };
                         foreach (var error in entry.Value!.Errors)
@@ -143,6 +144,34 @@
     <h2 class="govuk-heading-l govuk-!-margin-top-8" id="tpl-save" tabindex="-1">Save a new version</h2>
     <form method="post" asp-page-handler="Save" id="tpl-save-form">
         <input type="hidden" asp-for="NewSchema" id="NewSchema" />
+        <input type="hidden" asp-for="StartedFromLatestVersion" />
+
+        @if (Model.HasNewerVersion)
+        {
+            <div class="govuk-form-group @(HasError(nameof(Model.SaveOverNewerVersion)) ? "govuk-form-group--error" : "")">
+                <fieldset class="govuk-fieldset" aria-describedby="SaveOverNewerVersion-hint">
+                    <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Someone saved a newer version</legend>
+                    <div id="SaveOverNewerVersion-hint" class="govuk-hint">
+                        Version @Model.LatestVersionNumber was saved after you opened Template Studio. Your version is based on @(Model.CurrentVersionNumber ?? "the starter template"), so it won't include the changes in version @Model.LatestVersionNumber.
+                    </div>
+                    @if (ViewData.ModelState[nameof(Model.SaveOverNewerVersion)]?.Errors.FirstOrDefault() is { } newerError)
+                    {
+                        <p id="SaveOverNewerVersion-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @newerError.ErrorMessage</p>
+                    }
+                    <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+                        <div class="govuk-checkboxes__item">
+                            <input class="govuk-checkboxes__input" asp-for="SaveOverNewerVersion" type="checkbox"
+                                   aria-describedby="@(HasError(nameof(Model.SaveOverNewerVersion)) ? "SaveOverNewerVersion-error" : null)" />
+                            <label class="govuk-label govuk-checkboxes__label" asp-for="SaveOverNewerVersion">
+                                Save my version anyway
+                            </label>
+                        </div>
+                    </div>
+                </fieldset>
+            </div>
+        }
+
+        <div id="tpl-mapping-warnings"></div>
 
         <div class="govuk-form-group @(HasError(nameof(Model.NewVersion)) ? "govuk-form-group--error" : "")">
             <label class="govuk-label govuk-label--s" asp-for="NewVersion">Version number</label>

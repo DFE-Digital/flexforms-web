@@ -26,7 +26,7 @@ The screenshots show the **Transfer Applications** template. Your service header
 9. [Repeatable lists](#9-repeatable-lists)
 10. [Pages repeated for each item in another list](#10-pages-repeated-for-each-item-in-another-list)
 11. [Moving, copying and deleting](#11-moving-copying-and-deleting)
-12. [Rules: showing pages and questions only when they apply](#12-rules-showing-pages-and-questions-only-when-they-apply)
+12. [Rules: reacting to earlier answers](#12-rules-reacting-to-earlier-answers)
 13. [When applications already use the template](#13-when-applications-already-use-the-template)
 14. [Undo and redo](#14-undo-and-redo)
 15. [The JSON (advanced) tab](#15-the-json-advanced-tab)
@@ -245,7 +245,7 @@ New questions are set so applicants **must answer them**, with a suitable error 
 
 ### 7.2 Rules on a page
 
-At the bottom of a page's settings, **Rules** lists the rules that use the page. **Add a rule that shows this page** starts a rule with this page already chosen. See [section 12](#12-rules-showing-pages-and-questions-only-when-they-apply).
+At the bottom of a page's settings, **Rules** lists the rules that use the page. **Add a rule that shows this page** starts a rule with this page already chosen. See [section 12](#12-rules-reacting-to-earlier-answers).
 
 ---
 
@@ -295,7 +295,7 @@ Changing the type keeps the wording. Options are added when you change to a choi
 - **No**.
 - **Use the template setting**: follows [Template settings](#4-template-settings).
 
-This can't depend on another answer. To ask a question only sometimes, use a [rule](#12-rules-showing-pages-and-questions-only-when-they-apply) to show it.
+This can't depend on another answer. To ask a question only sometimes, use a [rule](#12-rules-reacting-to-earlier-answers) to show it.
 
 ### 8.5 Options (radios, checkboxes and dropdowns)
 
@@ -319,6 +319,14 @@ For new options, the saved value follows the text as you type. For existing opti
 ![Search settings: choose what to search, and format checks](images/ts-21-search-settings.png)
 
 Choose **What to search** (or which **Upload field** to use) from the search and upload fields set up for your organisation, under `FormEngine:ComplexFields` in Tenant settings. If the question uses one that isn't set up, a warning tells you; applicants would see an error until it is added.
+
+**How results are shown (optional)**, for search questions only, changes how this question shows its results without changing the tenant's setting for other questions:
+
+- **Each search result**: how each match in the list looks.
+- **The "Is this the right one?" box**: what applicants check before they confirm. This replaces the whole box.
+- **The answer on summary pages**: how the chosen result looks when applicants check their answers.
+
+Join the result's properties and your own text with `+`, for example `name + " (" + ukprn + ")"`. You can use Markdown, such as `**` for bold. The hint under each box shows what the tenant uses now. Leave a box blank to keep the tenant's layout.
 
 ### 8.8 Length limits
 
@@ -409,6 +417,8 @@ These repeat the same pages for every item in an earlier list or answer. For exa
    - **Message when an item is complete**: use `{displayName}` for the item's name.
 4. Use **Add a page to each item** to add the pages.
 
+If a task has more than one set of repeated pages, applicants see them in the order shown in the structure. Use **Move up** and **Move down** to change it.
+
 ---
 
 ## 11. Moving, copying and deleting
@@ -452,41 +462,45 @@ Copies the item and everything in it, with new ids, straight after the original.
 2. Read the warning. It says if anything inside will be deleted too, and how many rules use the item.
 3. Select **Yes, delete this …**, or **Cancel**.
 
-If applications already have answers to questions being deleted, the warning explains that they will be retired. See [13.2](#132-deleting-questions-applications-have-answered).
+If applications already have answers to questions being deleted, the warning explains that they will be retired. See [13.2](#132-deleting-questions-applications-have-answered). If event mappings read any of the answers, the warning lists them too. See [13.6](#136-event-mappings).
 
 You can [undo](#14-undo-and-redo) a delete.
 
 ---
 
-## 12. Rules: showing pages and questions only when they apply
+## 12. Rules: reacting to earlier answers
 
 ### 12.1 How rules work
 
-A rule shows pages and questions only when an earlier answer matches. Anything a rule shows is **hidden until** the condition is met. For example: show "Forecast of pupil numbers" only when "Are pupil numbers at risk?" is "Yes".
+A rule looks at earlier answers and does one of three things:
 
-Template Studio saves each rule as the pair of rules the form needs: one that skips the pages and hides the questions when the answer doesn't match, and one that shows them when it does. You only see one rule.
+- **Show pages or questions**: anything the rule shows is **hidden until** its conditions are met. For example, show "Forecast of pupil numbers" only when "Are pupil numbers at risk?" is "Yes".
+- **Fill in an answer**: when the conditions are met, the answer to another question is filled in as the applicant saves a page.
+- **Clear answers**: when the conditions are met, answers to other questions are removed as the applicant saves a page. Use this to remove answers that no longer apply, for example to a question a rule now hides.
+
+For a rule that shows things, Template Studio saves the pair of rules the form needs: one that skips the pages and hides the questions when the conditions aren't met, and one that shows them when they are. You only see one rule.
 
 ### 12.2 Adding a rule
 
 1. Go to the **Rules** tab and select **Add a rule**. Or, from a page or question, select **Add a rule that shows this page** (or question).
 2. **Rule name (optional)**: leave blank to name it from what it does.
-3. **Which question decides it?**: choose a question. Questions are grouped by task.
-4. **Show the pages and questions when the answer**:
-   - **is** one answer;
-   - **is not** one answer;
-   - **is one of** several answers;
-   - **has been given**;
-   - **has not been given**.
-5. Choose the **Answer** (or answers). For radios, checkboxes and dropdowns you pick from the options; for other questions you type it.
+3. **What should the rule do?**: **Show pages or questions**, **Fill in an answer** or **Clear answers**.
+4. Set up the condition:
+   - **Question**: the earlier question it depends on. Questions are grouped by task.
+   - **The answer**: how to compare it. The choices depend on the question (see the table below).
+   - The **Answer**, **Answers**, **Number** or **Date** to compare with, if one is needed. For radios, checkboxes and dropdowns you pick from the options.
+5. To depend on more than one answer, select **Add another condition** and set it up the same way. Then choose **Which conditions must be met?**: **All of them** or **Any of them**. **Remove this condition** takes one away.
 
-   ![Adding a rule: name, question, condition and answer](images/ts-25-rule-builder.png)
+   ![Adding a rule with two conditions](images/ts-25-rule-builder.png)
 
-6. **Which task are the pages and questions in?**: it starts with the task the question is in. Change it to show pages in another task.
-7. Tick the **Pages to show** and **Questions to show**.
+6. Choose what the rule affects:
+   - **Show pages or questions**: tick the **Pages to show** and **Questions to show**. **Which task are they in?** starts with the task the first question is in; change it to show pages in another task.
+   - **Fill in an answer**: choose the **Question to fill in** and the **Answer to fill in**.
+   - **Clear answers**: tick the **Questions to clear**.
 
    ![Choosing the pages and questions the rule shows](images/ts-26-rule-builder-targets.png)
 
-8. Select **Save rule**.
+7. Select **Save rule**.
 
 If something is missing, Template Studio tells you what to fix:
 
@@ -494,28 +508,45 @@ If something is missing, Template Studio tells you what to fix:
 
 Pages and questions the rule shows get a **Shown by a rule** tag in the structure.
 
+**Comparisons you can use**
+
+| Question type | The answer… |
+|---|---|
+| Radios and dropdowns | is, is not, is one of, is not one of, has been given, has not been given |
+| Checkboxes | includes, does not include, has been given, has not been given |
+| Dates | is before, is after, has been given, has not been given |
+| Short and long answers, email | is, is not, is more than (a number), is less than (a number), has been given, has not been given |
+| Search and upload | has been given, has not been given |
+
+Enter dates as year, month and day, for example 2024-09-30. Numbers can have a decimal point, for example 2.5.
+
 ### 12.3 Rules in this template
 
 ![The list of rules](images/ts-27-rules-list.png)
 
-Each rule shows whether it is **On** or **Off**, **When** it applies and what it **Shows**.
+Each rule shows whether it is **On** or **Off**, **When** it applies, and what it **Shows**, **Fills in** or **Clears**.
 
-- **Change**: opens the rule in the rule builder. Only for rules made with the builder.
-- **Turn off** or **Turn on**: keeps the rule but stops it working. While it is off, the pages and questions it shows are shown to everyone.
+- **Change**: opens the rule in the rule builder. Only for rules made with the builder. You can change what the rule does, too.
+- **Turn off** or **Turn on**: keeps the rule but stops it working. While a rule that shows things is off, the pages and questions it shows are shown to everyone.
 - **Delete**: asks you to confirm.
 
 ### 12.4 Rules written in JSON
 
-Rules written by hand (for example in older templates) say "Written in JSON". You can turn them on or off and delete them here. To change them, use the [JSON tab](#15-the-json-advanced-tab).
+The rule builder opens most rules, including ones written by hand or in older templates, whatever their ids. That includes a rule that shows pages and questions together with the rule that hides the same ones. When you change one of these, it keeps its id, priority and any settings the builder doesn't show.
+
+A rule says "Written in JSON" when the builder can't show it without changing what it does. For example, it uses a comparison the builder doesn't offer, groups conditions inside other conditions, or hides more than its show rule shows. You can turn these rules on or off and delete them here. To change them, use the [JSON tab](#15-the-json-advanced-tab).
+
+Changes you make in the JSON tab, including to rules, appear on the Rules and Design tabs as soon as you leave the JSON tab.
 
 ### 12.5 What rules can't do
 
 - Questions inside repeatable lists can't decide a rule, and the builder can't show pages or questions inside lists.
 - Whether a question must be answered can't depend on a rule. Show or hide the question instead.
+- A rule can't make a question read-only or show a message. The form doesn't act on those settings, so the builder doesn't offer them.
 
 ### 12.6 Branching pages
 
-A page set to **Go to the next page a rule shows** branches: applicants go to whichever following page a rule shows. Those pages only follow rules that use **is**. The rule builder reminds you when you choose another option.
+A page set to **Go to the next page a rule shows** branches: applicants go to whichever following page a rule shows. Branching follows rules that compare answers with **is**, **is not**, **is one of**, **is not one of**, **includes**, **has been given** and **has not been given**. It doesn't follow rules that compare numbers or dates; the rule builder reminds you when you use one.
 
 ---
 
@@ -544,7 +575,7 @@ If you change the answer id of a question applications have answered, Template S
 - keeps the old reporting key on the question, so reports carry on in the same column;
 - updates rules to use the new id.
 
-A message under the answer id confirms this. If you change it back, all of that is undone.
+A message under the answer id confirms this. If you change it back, all of that is undone. If an event mapping reads the old id, the message says so; see [13.6](#136-event-mappings).
 
 ### 13.4 Changing what a question stores
 
@@ -555,6 +586,18 @@ Changing a question's type to one that stores a different kind of answer (for ex
 ### 13.5 Before you save
 
 **Check for problems** and **Save new version** list anything reports would reject, for example a question removed without being retired. Saving is blocked until they are fixed. These checks compare with the version you opened; saving still checks every earlier version too.
+
+### 13.6 Event mappings
+
+Event mappings (set up on the **Event mappings** admin page) send answers to other services when, for example, an application is submitted. They find answers by answer id, so removing a question or changing its answer id can leave a mapping reading an answer that no longer exists. The event would then be sent without it.
+
+Template Studio warns you:
+
+- **Deleting**: the confirmation lists the answers event mappings read from what you're deleting.
+- **Renaming an answer id**: the message under the answer id names the mappings that still read the old id.
+- **Saving**: above the save button, a warning lists every answer a mapping reads that isn't in this version. **Check for problems** points you to it.
+
+These warnings don't stop you saving. After you save, update the mappings on the Event mappings page.
 
 ---
 
@@ -599,12 +642,23 @@ Select a problem to go straight to the item it is about. If there are none, you'
 
 ### 16.2 Previewing a task
 
-Select **Preview task** to see the task you are working on (or the first task) in a new tab, using your unsaved changes.
+Select **Preview task** to open your unsaved changes in a new tab and use them as an applicant would. It opens the task you are working on, or the task list if you haven't chosen one.
 
-- Nothing you enter in the preview is saved, and its buttons don't do anything.
-- Rules aren't run, so every page and question is shown. Ones that a rule shows are marked.
-- Search and upload questions are shown as placeholders, because they call other services. Use the full preview on the Admin page after saving.
-- Choose **Task to preview** and select **Preview task** to look at another task.
+The preview works like the real form:
+
+- **Answer pages and select Save and continue.** The template's checks run, with its error messages. Rules run as well: pages are skipped and questions hidden or shown according to your answers. Answers are filled in or cleared, and each page's navigation setting is followed.
+- **Check your answers.** At the end of a task you see its summary, with **Change** links back to each page.
+- **Repeatable lists.** Add, change and remove items, shown as cards or a list with the columns and messages you set. The fewest and most items apply.
+- **Repeated pages.** Items come from the answer they repeat for, and each one can be completed.
+- **Mark a section as complete.** Choose **Yes, I've completed this section** and select **Continue**. If something is missing, you see the same messages applicants would, for example "Add at least 1 item(s) to Trusts".
+- **The task list** shows every task's status. Tasks hidden from applicants' task list are marked.
+
+A few things are different:
+
+- Search and upload questions aren't connected to other services. Type a sample answer instead: the result you'd pick, or the names of the files you'd upload. Lists and repeated pages built from them work with your sample answers.
+- Answers are kept only for this preview. Nothing is sent to applications, reports or event mappings. **Clear answers and start again** on the task list empties them.
+- The preview ends when you sign out, or after 45 minutes without using it. Select **Preview task** in Template Studio again to start a new one with your latest changes.
+- **See every page of … at once** shows all the task's pages on one page, including ones a rule would skip. Pages and questions a rule shows are marked.
 
 ### 16.3 Saving a new version
 
@@ -616,6 +670,13 @@ Select **Preview task** to see the task you are working on (or the first task) i
 4. Select **Save new version**.
 
 If the save is rejected, Template Studio keeps your changes and lists the problems at the top. If it succeeds, you'll see "Version … saved" and can carry on editing.
+
+**If someone else saved while you were working.** Template Studio remembers the latest version when you opened it. If someone saves a newer version before you do, your save stops with "Version … was saved after you opened Template Studio". Your version is based on the copy you opened, so it won't include their changes. Either:
+
+- look at their version in Template Manager and make your changes to it instead; or
+- tick **Save my version anyway** and save again, if you're sure their changes can be left out.
+
+Your unsaved changes are kept while you decide.
 
 New applications use the latest saved version. Applications already started keep the version they started on. To make the template available to applicants, make it live on the Admin hub.
 
@@ -630,8 +691,9 @@ New applications use the latest saved version. Applications already started keep
 3. Under **Add a question**, choose **Choose one option (radios)**, leave the question blank to use the page heading, and select **Add question**. It has the options Yes and No.
 4. Go back to the task (use the breadcrumbs) and add another page called "Tell us about your concerns", with a **Long answer** question.
 5. On that question, select **Add a rule that shows this question**.
-6. Choose "Do you have any concerns?" as the question, **is**, and the answer **Yes**. Also tick the page "Tell us about your concerns". Select **Save rule**.
-7. Select **Preview task** to check the pages, then **Check for problems**, then save a new version.
+6. Leave **Show pages or questions** chosen. Choose "Do you have any concerns?" as the **Question**, **is** as **The answer**, and **Yes**. Also tick the page "Tell us about your concerns". Select **Save rule**.
+7. Select **Preview task**. Answer **No** and check the follow-up question isn't on the task's summary. Then select **Change**, answer **Yes**, and check it appears.
+8. Select **Check for problems**, then save a new version.
 
 ### 17.2 Add a repeatable list of contacts
 
@@ -677,7 +739,11 @@ New applications use the latest saved version. Applications already started keep
 | A radios question can't be saved | It needs at least one option, and every option needs a saved value. |
 | "No search field called … is set up" | Choose another, or ask an administrator to add it in Tenant settings under `FormEngine:ComplexFields`. |
 | Save is blocked with reporting problems | Follow the message: usually retire the question rather than deleting it, or give it back its reporting key. See [section 13](#13-when-applications-already-use-the-template). |
-| A rule's pages don't appear after a branching page | Branching pages only follow rules that use **is**. |
+| A rule's pages don't appear after a branching page | Branching pages don't follow rules that compare numbers or dates. See [12.6](#126-branching-pages). |
+| "Version … was saved after you opened Template Studio" | Someone else saved first. See **If someone else saved while you were working** in [16.3](#163-saving-a-new-version). |
+| "Event mappings read answers that aren't in this version" | Update the mappings on the Event mappings page after you save. See [13.6](#136-event-mappings). |
+| The preview says "There's nothing to preview" | The preview ended. Select **Preview task** in Template Studio again. |
+| A search question in the preview has a text box | The preview doesn't search other services. Type the result you'd pick. |
 | A page I didn't expect is hidden | Look for **Shown by a rule** on it, and check the rule on the Rules tab. |
 | Version number rejected | Use three numbers, for example 1.2.1, that haven't been used before. |
 | I made a mistake | Use **Undo**, or leave without saving to discard all your changes. |

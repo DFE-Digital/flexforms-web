@@ -71,6 +71,7 @@ namespace GovUK.Dfe.FlexForms.Web.Extensions
             services.AddScoped<ISubmitFormApplication, SubmitFormApplicationService>();
             services.AddScoped<IPrepareFormEngineGet, PrepareFormEngineGetService>();
             services.AddScoped<ISaveFormPage, SaveFormPageService>();
+            services.AddScoped<IDraftFormPreview, DraftFormPreviewService>();
             services.AddScoped<IRemoveCollectionItem, RemoveCollectionItemService>();
             services.AddScoped<IUploadFormFile, UploadFormFileService>();
             services.AddScoped<IDeleteFormFile, DeleteFormFileService>();

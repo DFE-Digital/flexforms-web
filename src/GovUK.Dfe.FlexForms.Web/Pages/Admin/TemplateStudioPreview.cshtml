@@ -1,11 +1,14 @@
 @page "/admin/template-studio/preview"
 @model GovUK.Dfe.FlexForms.Web.Pages.Admin.TemplateStudioPreviewModel
+@using GovUK.Dfe.FlexForms.Domain.FormEngine
 @using GovUK.Dfe.FlexForms.Web.Pages.FormEngine
 @using GovUK.Dfe.FlexForms.Web.Utilities
 @using Microsoft.AspNetCore.Html
+@using PreviewView = GovUK.Dfe.FlexForms.Web.Pages.Admin.TemplateStudioPreviewModel.PreviewView
 @inject GovUK.Dfe.FlexForms.Web.Services.IFieldRendererService FieldRenderer
 @{
     ViewData["Title"] = "Draft preview";
+    var previewPage = "/Admin/TemplateStudioPreview";
 }
 
 <div class="govuk-notification-banner" role="region" aria-labelledby="tpl-preview-banner-title" data-module="govuk-notification-banner">
@@ -13,8 +16,18 @@
         <h2 class="govuk-notification-banner__title" id="tpl-preview-banner-title">Draft preview</h2>
     </div>
     <div class="govuk-notification-banner__content">
-        <p class="govuk-notification-banner__heading">This shows your unsaved changes.</p>
-        <p class="govuk-body">Nothing you enter here is saved and the buttons don't do anything. Rules aren't run, so every page and question is shown. Ones that a rule shows are marked.</p>
+        <p class="govuk-notification-banner__heading">This is your unsaved template, working as applicants will use it.</p>
+        <p class="govuk-body">Answers are kept only for this preview and aren't sent anywhere. Search and upload questions aren't connected, so type a sample answer instead.</p>
+        @if (Model.Template is not null)
+        {
+            <ul class="govuk-list govuk-!-margin-bottom-0">
+                <li><a class="govuk-notification-banner__link" asp-page="@previewPage" asp-route-task="">Task list</a></li>
+                @if (Model.Task is not null)
+                {
+                    <li><a class="govuk-notification-banner__link" asp-page="@previewPage" asp-route-task="@Model.Task.TaskId" asp-route-view="all">See every page of @Model.Task.TaskName at once</a></li>
+                }
+            </ul>
+        }
     </div>
 </div>
 
@@ -29,6 +42,14 @@
     return;
 }
 
+@if (Model.Template is null)
+{
+    <h1 class="govuk-heading-l">There's nothing to preview</h1>
+    <p class="govuk-body">Open the preview from Template Studio with <strong>Preview task</strong>. The preview ends when you sign out or after 45 minutes without using it.</p>
+    <p class="govuk-body"><a class="govuk-link" asp-page="/Admin/TemplateStudio">Go to Template Studio</a></p>
+    return;
+}
+
 @if (Model.Problems.Count > 0)
 {
     <div class="govuk-warning-text">
@@ -40,152 +61,528 @@
     </div>
 }
 
-<form method="post" class="govuk-!-margin-bottom-6">
-    <input type="hidden" name="Schema" value="@Model.Schema" />
-    <div class="govuk-form-group">
-        <label class="govuk-label govuk-label--s" for="TaskId">Task to preview</label>
-        <select class="govuk-select" id="TaskId" name="TaskId">
-            @foreach (var group in Model.Template!.TaskGroups ?? [])
-            {
-                <optgroup label="@group.GroupName">
-                    @foreach (var task in group.Tasks ?? [])
-                    {
-                        <option value="@task.TaskId" selected="@(task.TaskId == Model.TaskId)">@task.TaskName</option>
-                    }
-                </optgroup>
-            }
-        </select>
-    </div>
-    <button type="submit" class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0">Preview task</button>
-</form>
-
-@if (Model.Task is null)
+@if (!string.IsNullOrEmpty(Model.Message))
 {
-    <p class="govuk-body">This template has no tasks yet.</p>
-    return;
+    <div class="govuk-notification-banner govuk-notification-banner--success" role="alert" aria-labelledby="tpl-preview-message-title" data-module="govuk-notification-banner">
+        <div class="govuk-notification-banner__header">
+            <h2 class="govuk-notification-banner__title" id="tpl-preview-message-title">Success</h2>
+        </div>
+        <div class="govuk-notification-banner__content">
+            <p class="govuk-notification-banner__heading">@Model.Message</p>
+        </div>
+    </div>
 }
 
-<details class="govuk-details">
-    <summary class="govuk-details__summary">
-        <span class="govuk-details__summary-text">Show the task list</span>
-    </summary>
-    <div class="govuk-details__text">
-        @foreach (var group in Model.Template!.TaskGroups ?? [])
+@switch (Model.View)
+{
+    case PreviewView.TaskList:
+        <h1 class="govuk-heading-xl">@Model.Template.TemplateName</h1>
+        @foreach (var group in Model.Template.TaskGroups ?? [])
         {
             <h2 class="govuk-heading-m">@group.GroupName</h2>
             <ul class="govuk-task-list">
                 @foreach (var task in group.Tasks ?? [])
                 {
-                    var isShown = task.TaskId == Model.TaskId;
-                    <li class="govuk-task-list__item">
+                    var (statusText, statusClass) = Model.IsCompleted(task.TaskId)
+                        ? ("Completed", "govuk-tag--green")
+                        : Model.HasAnswers(task) ? ("In progress", "govuk-tag--blue") : ("Not started", "govuk-tag--grey");
+                    <li class="govuk-task-list__item govuk-task-list__item--with-link">
                         <div class="govuk-task-list__name-and-hint">
-                            <div>@task.TaskName</div>
+                            <a class="govuk-link govuk-task-list__link" asp-page="@previewPage" asp-route-task="@task.TaskId" aria-describedby="tpl-status-@task.TaskId">@task.TaskName</a>
+                            @if (task.VisibleInTaskList == false)
+                            {
+                                <div class="govuk-task-list__hint">Hidden from applicants' task list</div>
+                            }
                         </div>
-                        @if (isShown)
-                        {
-                            <div class="govuk-task-list__status"><strong class="govuk-tag govuk-tag--green">Shown below</strong></div>
-                        }
-                        else
-                        {
-                            <div class="govuk-task-list__status govuk-task-list__status--cannot-start-yet">Not shown</div>
-                        }
+                        <div class="govuk-task-list__status" id="tpl-status-@task.TaskId"><strong class="govuk-tag @statusClass">@statusText</strong></div>
                     </li>
                 }
             </ul>
         }
-    </div>
-</details>
+        <form method="post" asp-page-handler="Restart">
+            <button type="submit" class="govuk-button govuk-button--secondary" data-module="govuk-button">Clear answers and start again</button>
+        </form>
+        break;
 
-<h1 class="govuk-heading-xl">@Model.Task.TaskName</h1>
+    case PreviewView.TaskSummary:
+        await RenderSummary();
+        break;
 
-@if (Model.PageSets.Count == 0)
-{
-    <p class="govuk-body">This task has no pages yet.</p>
+    case PreviewView.Page:
+        await RenderPage();
+        break;
+
+    case PreviewView.AllPages:
+        await RenderAllPages();
+        break;
 }
 
-@foreach (var set in Model.PageSets)
-{
-    @if (set.Title is not null)
-    {
-        <h2 class="govuk-heading-l">@set.Title</h2>
-    }
+@functions {
+    private static string ErrorId(string fieldId) => $"Data_{fieldId}";
+}
 
-    @for (var index = 0; index < set.Pages.Count; index++)
+@{
+    async Task RenderSummary()
     {
-        var screen = set.Pages[index];
-        var fields = (screen.Fields ?? []).OrderBy(field => field.Order).ToList();
-        var hideFieldLabel = Model.Template!.HideFieldLabelWhenOnlyOneField && fields.Count == 1 && fields[0].Type != "complexField";
-        var caption = Model.Task.Caption is null ? Model.Task.TaskName : DisplayHelpers.InterpolateMessage(Model.Task.Caption, null);
+        var task = Model.Task!;
+        var summary = task.Summary;
+        var visibility = Model.Visibility;
+        <a class="govuk-back-link" asp-page="/Admin/TemplateStudioPreview" asp-route-task="">Back to task list</a>
 
-        <hr class="govuk-section-break govuk-section-break--xl govuk-section-break--visible" />
-        <div>
-            <p class="govuk-body-s govuk-!-margin-bottom-4">
-                Page @(index + 1) of @set.Pages.Count, page id @screen.PageId
-                @if (Model.RuleTargets.Contains(screen.PageId))
+        @if (Model.CompletionProblems.Count > 0)
+        {
+            <div class="govuk-error-summary" data-module="govuk-error-summary">
+                <div role="alert">
+                    <h2 class="govuk-error-summary__title">There is a problem</h2>
+                    <div class="govuk-error-summary__body">
+                        <p class="govuk-body">You cannot mark this section as complete:</p>
+                        <ul class="govuk-list govuk-error-summary__list">
+                            @foreach (var problem in Model.CompletionProblems)
+                            {
+                                <li><a href="#SectionComplete">@problem</a></li>
+                            }
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <span class="govuk-caption-l">@Model.Template!.TemplateName</span>
+        <h1 class="govuk-heading-l">@(string.IsNullOrWhiteSpace(summary?.Title) ? task.TaskName : summary.Title)</h1>
+        @if (!string.IsNullOrWhiteSpace(summary?.Description))
+        {
+            <p class="govuk-body">@summary.Description</p>
+        }
+
+        var visiblePages = (task.Pages ?? []).Where(page => visibility?.IsPageHidden(page.PageId) != true).ToList();
+        @if (visiblePages.Count > 0)
+        {
+            <dl class="govuk-summary-list">
+                @foreach (var screen in visiblePages)
                 {
-                    <strong class="govuk-tag govuk-tag--yellow">Shown by a rule</strong>
+                    var fields = (screen.Fields ?? []).OrderBy(field => field.Order).Where(field => visibility?.IsFieldHidden(field.FieldId) != true).ToList();
+                    foreach (var field in fields)
+                    {
+                        Model.Answers.TryGetValue(field.FieldId, out var value);
+                        var lines = Model.FormatAnswer(field, value);
+                        var key = fields.Count == 1 && field.Label?.IsVisible != true ? screen.Title : TemplateStudioPreviewModel.QuestionText(field);
+                        <div class="govuk-summary-list__row">
+                            <dt class="govuk-summary-list__key">@key</dt>
+                            <dd class="govuk-summary-list__value">
+                                @if (lines.Count == 0)
+                                {
+                                    <span class="govuk-hint govuk-!-margin-bottom-0">Not answered</span>
+                                }
+                                else
+                                {
+                                    for (var i = 0; i < lines.Count; i++)
+                                    {
+                                        @lines[i]
+                                        if (i < lines.Count - 1) { <br /> }
+                                    }
+                                }
+                            </dd>
+                            <dd class="govuk-summary-list__actions">
+                                <a class="govuk-link" asp-page="/Admin/TemplateStudioPreview" asp-route-task="@task.TaskId" asp-route-pageId="@screen.PageId">@(lines.Count == 0 ? "Answer" : "Change")<span class="govuk-visually-hidden"> @key</span></a>
+                            </dd>
+                        </div>
+                    }
                 }
-            </p>
-            <span class="govuk-caption-l">@caption</span>
-            <h2 class="govuk-heading-l">@screen.Title</h2>
+            </dl>
+        }
 
-            @if (!string.IsNullOrEmpty(screen.Description))
+        @foreach (var flow in summary?.Flows ?? [])
+        {
+            var items = Model.ItemsOf(flow);
+            var firstPage = Model.FirstVisiblePageId(flow.Pages, isTaskPages: false);
+            var canAdd = firstPage is not null && (!flow.MaxItems.HasValue || items.Count < flow.MaxItems.Value);
+            <h2 class="govuk-heading-m">@flow.Title</h2>
+            @if (!string.IsNullOrWhiteSpace(flow.Description))
             {
-                var (descriptionHtml, _) = MarkdownSafe.RenderHintWithClass(screen.Description);
-                <div class="govuk-body">@Html.Raw(descriptionHtml)</div>
+                <p class="govuk-body">@flow.Description</p>
             }
 
-            @if (fields.Count == 0)
+            @if (items.Count == 0)
             {
-                <p class="govuk-body govuk-hint">This page has no questions yet.</p>
+                <p class="govuk-body">No @(string.IsNullOrWhiteSpace(flow.ItemKindPlural) ? "items" : flow.ItemKindPlural) added yet.</p>
             }
-
-            @foreach (var field in fields)
+            else if (flow.TableType == "list")
             {
-                if (hideFieldLabel && field.Label is not null)
+                <dl class="govuk-summary-list">
+                    @for (var index = 0; index < items.Count; index++)
+                    {
+                        var item = items[index];
+                        var title = Model.ItemTitle(flow, item, index);
+                        var itemId = item.TryGetValue("id", out var id) ? id?.ToString() : null;
+                        <div class="govuk-summary-list__row">
+                            <dt class="govuk-summary-list__key">@title</dt>
+                            <dd class="govuk-summary-list__value">
+                                @foreach (var row in Model.ItemRows(flow, item))
+                                {
+                                    <p class="govuk-body govuk-!-margin-bottom-1"><span class="govuk-!-font-weight-bold">@row.Label:</span> @string.Join(", ", row.Lines)</p>
+                                }
+                            </dd>
+                            <dd class="govuk-summary-list__actions">
+                                <ul class="govuk-summary-list__actions-list">
+                                    <li class="govuk-summary-list__actions-list-item">
+                                        <a class="govuk-link" asp-page="/Admin/TemplateStudioPreview" asp-route-task="@task.TaskId" asp-route-pageId="@firstPage" asp-route-list="@flow.FlowId" asp-route-item="@itemId">Change<span class="govuk-visually-hidden"> @title</span></a>
+                                    </li>
+                                    <li class="govuk-summary-list__actions-list-item">
+                                        <form method="post" asp-page-handler="Remove" asp-route-task="@task.TaskId" asp-route-list="@flow.FlowId" asp-route-item="@itemId" class="govuk-!-display-inline">
+                                            <button type="submit" class="govuk-button govuk-button--warning govuk-!-margin-bottom-0" data-module="govuk-button">Remove<span class="govuk-visually-hidden"> @title</span></button>
+                                        </form>
+                                    </li>
+                                </ul>
+                            </dd>
+                        </div>
+                    }
+                </dl>
+            }
+            else
+            {
+                @for (var index = 0; index < items.Count; index++)
                 {
-                    field.Label.IsVisible = false;
-                }
-
-                @if (Model.RuleTargets.Contains(field.FieldId))
-                {
-                    <strong class="govuk-tag govuk-tag--yellow govuk-!-margin-bottom-2">Shown by a rule</strong>
-                }
-
-                @if (field.Type == "complexField")
-                {
-                    <div class="govuk-inset-text">
-                        <p class="govuk-body govuk-!-font-weight-bold">@field.Label?.Value</p>
-                        <p class="govuk-body">Search and upload questions (@field.ComplexField?.Id) call other services, so they're only shown in a full preview from the Admin page after you save.</p>
+                    var item = items[index];
+                    var title = Model.ItemTitle(flow, item, index);
+                    var itemId = item.TryGetValue("id", out var id) ? id?.ToString() : null;
+                    <div class="govuk-summary-card">
+                        <div class="govuk-summary-card__title-wrapper">
+                            <h3 class="govuk-summary-card__title">@title</h3>
+                            <ul class="govuk-summary-card__actions">
+                                <li class="govuk-summary-card__action">
+                                    <a class="govuk-link" asp-page="/Admin/TemplateStudioPreview" asp-route-task="@task.TaskId" asp-route-pageId="@firstPage" asp-route-list="@flow.FlowId" asp-route-item="@itemId">Change<span class="govuk-visually-hidden"> @title</span></a>
+                                </li>
+                                <li class="govuk-summary-card__action">
+                                    <form method="post" asp-page-handler="Remove" asp-route-task="@task.TaskId" asp-route-list="@flow.FlowId" asp-route-item="@itemId">
+                                        <button type="submit" class="govuk-button govuk-button--warning govuk-!-margin-bottom-0" data-module="govuk-button">Remove<span class="govuk-visually-hidden"> @title</span></button>
+                                    </form>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="govuk-summary-card__content">
+                            <dl class="govuk-summary-list">
+                                @foreach (var row in Model.ItemRows(flow, item))
+                                {
+                                    <div class="govuk-summary-list__row">
+                                        <dt class="govuk-summary-list__key">@row.Label</dt>
+                                        <dd class="govuk-summary-list__value">
+                                            @for (var i = 0; i < row.Lines.Count; i++)
+                                            {
+                                                @row.Lines[i]
+                                                if (i < row.Lines.Count - 1) { <br /> }
+                                            }
+                                        </dd>
+                                    </div>
+                                }
+                            </dl>
+                        </div>
                     </div>
                 }
-                else
-                {
-                    IHtmlContent? rendered = null;
-                    string? renderError = null;
-                    try
-                    {
-                        rendered = await FieldRenderer.RenderFieldAsync(field, "Data", string.Empty, Array.Empty<string>(), string.Empty, Model.Task, screen);
-                    }
-                    catch (Exception ex)
-                    {
-                        renderError = $"The question \"{field.FieldId}\" can't be shown: {ex.Message}";
-                    }
-
-                    @if (renderError is not null)
-                    {
-                        <p class="govuk-error-message">@renderError</p>
-                    }
-                    else
-                    {
-                        @rendered
-                    }
-                }
             }
 
-            <button type="button" class="govuk-button" disabled aria-disabled="true">
-                @(string.IsNullOrWhiteSpace(screen.SaveButtonLabel) ? "Save and continue" : screen.SaveButtonLabel)
-            </button>
+            @if (canAdd)
+            {
+                <a class="govuk-button govuk-button--secondary" data-module="govuk-button" role="button" draggable="false"
+                   asp-page="/Admin/TemplateStudioPreview" asp-route-task="@task.TaskId" asp-route-pageId="@firstPage" asp-route-list="@flow.FlowId"
+                   asp-route-item="@Guid.NewGuid().ToString("N")[..12]" asp-route-new="true">@(string.IsNullOrWhiteSpace(flow.AddButtonLabel) ? "Add item" : flow.AddButtonLabel)</a>
+            }
+            else if (flow.MaxItems.HasValue && items.Count >= flow.MaxItems.Value)
+            {
+                <div class="govuk-inset-text">You can add up to @flow.MaxItems @(string.IsNullOrWhiteSpace(flow.ItemKindPlural) ? "items" : flow.ItemKindPlural).</div>
+            }
+        }
+
+        @foreach (var flow in (summary?.DerivedFlows ?? []).OrderBy(flow => flow.SectionOrder))
+        {
+            var items = Model.DerivedItemsOf(flow);
+            var firstPage = Model.FirstVisiblePageId(flow.Pages, isTaskPages: false);
+            <h2 class="govuk-heading-m">@flow.Title</h2>
+            @if (!string.IsNullOrWhiteSpace(flow.Description))
+            {
+                <p class="govuk-body">@flow.Description</p>
+            }
+
+            @if (items.Count == 0)
+            {
+                <p class="govuk-body">@(string.IsNullOrWhiteSpace(flow.EmptyStateMessage) ? "No items to display" : flow.EmptyStateMessage)</p>
+                <p class="govuk-hint">Items come from the answer to "@flow.SourceFieldId". Answer that question first.</p>
+            }
+            else
+            {
+                <dl class="govuk-summary-list">
+                    @foreach (var item in items)
+                    {
+                        var status = Model.DerivedStatus(flow, item);
+                        var isSigned = status == "Signed";
+                        <div class="govuk-summary-list__row">
+                            <dt class="govuk-summary-list__key">@item.DisplayName</dt>
+                            <dd class="govuk-summary-list__value"><strong class="govuk-tag @(isSigned ? "govuk-tag--green" : "govuk-tag--grey")">@status</strong></dd>
+                            <dd class="govuk-summary-list__actions">
+                                @if (firstPage is not null)
+                                {
+                                    <a class="govuk-link" asp-page="/Admin/TemplateStudioPreview" asp-route-task="@task.TaskId" asp-route-pageId="@firstPage" asp-route-derived="@flow.FlowId" asp-route-item="@item.Id">@(isSigned ? "Change" : "Start")<span class="govuk-visually-hidden"> @item.DisplayName</span></a>
+                                }
+                            </dd>
+                        </div>
+                    }
+                </dl>
+            }
+        }
+
+        @if (visiblePages.Count > 0 && !Model.HasAnswers(task))
+        {
+            <a class="govuk-button" data-module="govuk-button" role="button" draggable="false" asp-page="/Admin/TemplateStudioPreview" asp-route-task="@task.TaskId" asp-route-pageId="@visiblePages[0].PageId">Start</a>
+        }
+
+        <form method="post" asp-page-handler="Complete" asp-route-task="@task.TaskId" novalidate>
+            <div class="govuk-form-group @(Model.CompletionProblems.Count > 0 ? "govuk-form-group--error" : "")">
+                <fieldset class="govuk-fieldset">
+                    <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Have you completed this section?</legend>
+                    <div class="govuk-radios" data-module="govuk-radios">
+                        <div class="govuk-radios__item">
+                            <input class="govuk-radios__input" id="SectionComplete" name="SectionComplete" type="radio" value="yes" @(Model.IsCompleted(task.TaskId) ? "checked" : null) />
+                            <label class="govuk-label govuk-radios__label" for="SectionComplete">Yes, I've completed this section</label>
+                        </div>
+                        <div class="govuk-radios__item">
+                            <input class="govuk-radios__input" id="SectionComplete-no" name="SectionComplete" type="radio" value="no" @(Model.IsCompleted(task.TaskId) ? null : "checked") />
+                            <label class="govuk-label govuk-radios__label" for="SectionComplete-no">No, I'll come back to it later</label>
+                        </div>
+                    </div>
+                </fieldset>
+            </div>
+            <button type="submit" class="govuk-button" data-module="govuk-button">Continue</button>
+        </form>
+    }
+
+    async Task RenderPage()
+    {
+        var task = Model.Task!;
+        var screen = Model.CurrentPage!;
+        var visibility = Model.Visibility;
+        var fields = (screen.Fields ?? []).OrderBy(field => field.Order).Where(field => visibility?.IsFieldHidden(field.FieldId) != true).ToList();
+        var hideFieldLabel = Model.Template!.HideFieldLabelWhenOnlyOneField && fields.Count == 1 && fields[0].Type != "complexField";
+        var caption = Model.List?.Title ?? Model.Derived?.Title
+            ?? (task.Caption is null ? task.TaskName : DisplayHelpers.InterpolateMessage(task.Caption, null));
+        var fieldErrors = Model.Errors.Where(error => !string.IsNullOrEmpty(error.FieldKey))
+            .GroupBy(error => error.FieldKey)
+            .ToDictionary(group => group.Key, group => group.First().Message);
+        <a class="govuk-back-link" href="@Model.BackUrl()">Back</a>
+
+        @if (Model.Errors.Count > 0)
+        {
+            <div class="govuk-error-summary" data-module="govuk-error-summary">
+                <div role="alert">
+                    <h2 class="govuk-error-summary__title">There is a problem</h2>
+                    <div class="govuk-error-summary__body">
+                        <ul class="govuk-list govuk-error-summary__list">
+                            @foreach (var error in Model.Errors)
+                            {
+                                <li><a href="#@(string.IsNullOrEmpty(error.FieldKey) ? "page-title" : ErrorId(error.FieldKey))">@error.Message</a></li>
+                            }
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (Model.List is null && Model.Derived is null && visibility?.IsPageHidden(screen.PageId) == true)
+        {
+            <div class="govuk-inset-text">With the answers so far, a rule skips this page. Applicants wouldn't see it.</div>
+        }
+
+        <div class="govuk-grid-row">
+            <div class="govuk-grid-column-two-thirds">
+                <form method="post" asp-page-handler="Answer" novalidate>
+                    <input type="hidden" name="task" value="@task.TaskId" />
+                    <input type="hidden" name="pageId" value="@screen.PageId" />
+                    <input type="hidden" name="list" value="@Model.ListId" />
+                    <input type="hidden" name="derived" value="@Model.DerivedId" />
+                    <input type="hidden" name="item" value="@Model.ItemId" />
+                    <input type="hidden" name="new" value="@(Model.IsNewItem ? "true" : "false")" />
+
+                    <h1 class="govuk-heading-l" id="page-title" tabindex="-1">
+                        <span class="govuk-caption-l">@caption</span>
+                        @screen.Title
+                    </h1>
+
+                    @if (!string.IsNullOrEmpty(screen.Description))
+                    {
+                        var (descriptionHtml, _) = MarkdownSafe.RenderHintWithClass(screen.Description);
+                        <div class="govuk-body">@Html.Raw(descriptionHtml)</div>
+                    }
+
+                    @foreach (var field in fields)
+                    {
+                        if (hideFieldLabel && field.Label is not null)
+                        {
+                            field.Label.IsVisible = false;
+                        }
+
+                        var errorMessage = fieldErrors.TryGetValue(field.FieldId, out var message) ? message : string.Empty;
+
+                        @if (Model.RuleTargets.Contains(field.FieldId))
+                        {
+                            <strong class="govuk-tag govuk-tag--yellow govuk-!-margin-bottom-2">Shown by a rule</strong>
+                        }
+
+                        @if (field.Type == "complexField")
+                        {
+                            var isUpload = Model.IsUpload(field);
+                            var multiple = Model.AllowsMultiple(field);
+                            var id = ErrorId(field.FieldId);
+                            <div class="govuk-form-group @(errorMessage.Length > 0 ? "govuk-form-group--error" : "")">
+                                <label class="govuk-label govuk-label--m" for="@id">@TemplateStudioPreviewModel.QuestionText(field)</label>
+                                <div class="govuk-hint" id="@id-hint">
+                                    @(isUpload ? "Uploads aren't stored in the preview. Type the names of the files you'd upload" : "Search isn't connected in the preview. Type the result you'd pick")@(multiple ? ", one per line." : ".")
+                                </div>
+                                @if (errorMessage.Length > 0)
+                                {
+                                    <p class="govuk-error-message" id="@id-error"><span class="govuk-visually-hidden">Error:</span> @errorMessage</p>
+                                }
+                                @if (multiple)
+                                {
+                                    <textarea class="govuk-textarea @(errorMessage.Length > 0 ? "govuk-textarea--error" : "")" id="@id" name="Data[@field.FieldId]" rows="4"
+                                              aria-describedby="@id-hint @(errorMessage.Length > 0 ? id + "-error" : "")">@Model.SampleText(field)</textarea>
+                                }
+                                else
+                                {
+                                    <input class="govuk-input @(errorMessage.Length > 0 ? "govuk-input--error" : "")" id="@id" name="Data[@field.FieldId]" type="text"
+                                           value="@Model.SampleText(field)" aria-describedby="@id-hint @(errorMessage.Length > 0 ? id + "-error" : "")" />
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            var hasData = Model.Data.TryGetValue(field.FieldId, out var value);
+                            var selectedValues = field.Type == "checkboxes" ? CheckboxValueNormalizer.Normalize(hasData ? value : null) : Array.Empty<string>();
+                            var currentValue = hasData ? value?.ToString() ?? string.Empty : string.Empty;
+                            IHtmlContent? rendered = null;
+                            string? renderError = null;
+                            try
+                            {
+                                rendered = await FieldRenderer.RenderFieldAsync(field, "Data", currentValue, selectedValues, errorMessage, task, screen);
+                            }
+                            catch (Exception ex)
+                            {
+                                renderError = $"The question \"{field.FieldId}\" can't be shown: {ex.Message}";
+                            }
+
+                            @if (renderError is not null)
+                            {
+                                <p class="govuk-error-message">@renderError</p>
+                            }
+                            else
+                            {
+                                @rendered
+                            }
+                        }
+                    }
+
+                    <button type="submit" class="govuk-button" data-module="govuk-button" id="save-and-continue-button">
+                        @(string.IsNullOrWhiteSpace(screen.SaveButtonLabel) ? "Save and continue" : screen.SaveButtonLabel)
+                    </button>
+                </form>
+            </div>
         </div>
+    }
+
+    async Task RenderAllPages()
+    {
+        var task = Model.Task!;
+        <a class="govuk-back-link" asp-page="/Admin/TemplateStudioPreview" asp-route-task="@task.TaskId">Back to @task.TaskName</a>
+        <h1 class="govuk-heading-xl">@task.TaskName</h1>
+        <p class="govuk-body">Every page of this task, including ones a rule would skip. Pages and questions a rule shows are marked.</p>
+
+        @if (Model.PageSets.Count == 0)
+        {
+            <p class="govuk-body">This task has no pages yet.</p>
+        }
+
+        @foreach (var set in Model.PageSets)
+        {
+            @if (set.Title is not null)
+            {
+                <h2 class="govuk-heading-l">@set.Title</h2>
+            }
+
+            @for (var index = 0; index < set.Pages.Count; index++)
+            {
+                var screen = set.Pages[index];
+                var fields = (screen.Fields ?? []).OrderBy(field => field.Order).ToList();
+                var hideFieldLabel = Model.Template!.HideFieldLabelWhenOnlyOneField && fields.Count == 1 && fields[0].Type != "complexField";
+                var caption = task.Caption is null ? task.TaskName : DisplayHelpers.InterpolateMessage(task.Caption, null);
+
+                <hr class="govuk-section-break govuk-section-break--xl govuk-section-break--visible" />
+                <div>
+                    <p class="govuk-body-s govuk-!-margin-bottom-4">
+                        Page @(index + 1) of @set.Pages.Count, page id @screen.PageId
+                        @if (Model.RuleTargets.Contains(screen.PageId))
+                        {
+                            <strong class="govuk-tag govuk-tag--yellow">Shown by a rule</strong>
+                        }
+                    </p>
+                    <span class="govuk-caption-l">@caption</span>
+                    <h2 class="govuk-heading-l">@screen.Title</h2>
+
+                    @if (!string.IsNullOrEmpty(screen.Description))
+                    {
+                        var (descriptionHtml, _) = MarkdownSafe.RenderHintWithClass(screen.Description);
+                        <div class="govuk-body">@Html.Raw(descriptionHtml)</div>
+                    }
+
+                    @if (fields.Count == 0)
+                    {
+                        <p class="govuk-body govuk-hint">This page has no questions yet.</p>
+                    }
+
+                    @foreach (var field in fields)
+                    {
+                        if (hideFieldLabel && field.Label is not null)
+                        {
+                            field.Label.IsVisible = false;
+                        }
+
+                        @if (Model.RuleTargets.Contains(field.FieldId))
+                        {
+                            <strong class="govuk-tag govuk-tag--yellow govuk-!-margin-bottom-2">Shown by a rule</strong>
+                        }
+
+                        @if (field.Type == "complexField")
+                        {
+                            <div class="govuk-inset-text">
+                                <p class="govuk-body govuk-!-font-weight-bold">@field.Label?.Value</p>
+                                <p class="govuk-body">@(Model.IsUpload(field) ? "File upload" : "Search") (@field.ComplexField?.Id). Answer this page in the preview to try it with a sample answer.</p>
+                            </div>
+                        }
+                        else
+                        {
+                            IHtmlContent? rendered = null;
+                            string? renderError = null;
+                            try
+                            {
+                                rendered = await FieldRenderer.RenderFieldAsync(field, "Data", string.Empty, Array.Empty<string>(), string.Empty, task, screen);
+                            }
+                            catch (Exception ex)
+                            {
+                                renderError = $"The question \"{field.FieldId}\" can't be shown: {ex.Message}";
+                            }
+
+                            @if (renderError is not null)
+                            {
+                                <p class="govuk-error-message">@renderError</p>
+                            }
+                            else
+                            {
+                                @rendered
+                            }
+                        }
+                    }
+
+                    <button type="button" class="govuk-button" disabled aria-disabled="true">
+                        @(string.IsNullOrWhiteSpace(screen.SaveButtonLabel) ? "Save and continue" : screen.SaveButtonLabel)
+                    </button>
+                </div>
+            }
+        }
     }
 }
