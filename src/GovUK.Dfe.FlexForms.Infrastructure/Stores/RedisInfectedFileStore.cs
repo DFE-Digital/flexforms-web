@@ -1,3 +1,4 @@
+using GovUK.Dfe.FlexForms.Application.Diagnostics;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.Caching;
 using Microsoft.Extensions.Logging;
@@ -17,7 +18,8 @@ public sealed class RedisInfectedFileStore(
         try
         {
             var key = $"{FlexFormsCacheKeys.InfectedFilePrefix}{fileId}";
-            return redis.GetDatabase().KeyExists(key);
+            using (RequestTimings.Measure("redis infected-file check"))
+                return redis.GetDatabase().KeyExists(key);
         }
         catch (Exception ex)
         {
@@ -34,7 +36,8 @@ public sealed class RedisInfectedFileStore(
         try
         {
             var key = $"{FlexFormsCacheKeys.InfectedFileNamePrefix}{applicationId}:{originalFileName}";
-            return redis.GetDatabase().KeyExists(key);
+            using (RequestTimings.Measure("redis infected-file check"))
+                return redis.GetDatabase().KeyExists(key);
         }
         catch (Exception ex)
         {

@@ -1,4 +1,5 @@
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
+using GovUK.Dfe.FlexForms.Application.Diagnostics;
 using GovUK.Dfe.FlexForms.Application.Exceptions;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.Caching;
@@ -35,11 +36,17 @@ public class ApplicationResponseService(
             
             var taskStatusData = GetTaskStatusFromSession(applicationId);
 
-            var template = await TryGetTemplateFromSessionAsync(cancellationToken);
-            
-            var responseJson = TransformToResponseJson(allFormData, taskStatusData, template);
-            
-            var encodedResponse = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(responseJson));
+            FormTemplate? template;
+            using (RequestTimings.Measure("get template for save"))
+                template = await TryGetTemplateFromSessionAsync(cancellationToken);
+
+            string encodedResponse;
+            using (RequestTimings.Measure("build save body"))
+            {
+                var responseJson = TransformToResponseJson(allFormData, taskStatusData, template);
+                encodedResponse = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(responseJson));
+            }
+            RequestTimings.Count("save body KB", encodedResponse.Length / 1024);
 
             var request = new AddApplicationResponseRequest { ResponseBody = encodedResponse };
             await applicationsClient.AddApplicationResponseAsync(applicationId, request, cancellationToken);
@@ -108,6 +115,8 @@ public class ApplicationResponseService(
 
     public void AccumulateFormData(Dictionary<string, object> newData)
     {
+        using var timing = RequestTimings.Measure("write session answers");
+
         // Get existing data (infected files will be filtered by blacklist)
         var existingData = GetAccumulatedFormData();
         
@@ -161,6 +170,7 @@ public class ApplicationResponseService(
     /// </summary>
     public Dictionary<string, object> GetAccumulatedFormData()
     {
+        using var timing = RequestTimings.Measure("read session answers");
         var jsonString = sessionStore.GetString(SessionKeyFormData);
         
         if (string.IsNullOrEmpty(jsonString))
