@@ -1,6 +1,7 @@
 using System.Text.Json;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
+using GovUK.Dfe.FlexForms.Application.Diagnostics;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.Caching;
 using GovUK.Dfe.FlexForms.Domain.FormEngine;
@@ -81,7 +82,8 @@ public sealed class PrepareFormEngineGetService(
         }
 
         PopulateUploadFieldsFromSession(state);
-        await OverlayFileValidationFromDatabaseAsync(state, cancellationToken);
+        using (RequestTimings.Measure("file status"))
+            await OverlayFileValidationFromDatabaseAsync(state, cancellationToken);
 
         state.ConditionalState = await FormEngineConditionalLogic.ApplyAsync(
             state.Template,

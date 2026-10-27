@@ -1,3 +1,4 @@
+using GovUK.Dfe.FlexForms.Application.Diagnostics;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
@@ -48,7 +49,8 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                 using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(templateSchema));
                 
                 // Use the same parser that's used for API templates to ensure consistency
-                return await templateParser.ParseAsync(stream);
+                using (RequestTimings.Measure("parse template"))
+                    return await templateParser.ParseAsync(stream);
             }
             catch (Exception ex)
             {

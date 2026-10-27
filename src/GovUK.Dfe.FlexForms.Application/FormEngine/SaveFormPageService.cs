@@ -1,4 +1,5 @@
 using System.Text.Json;
+using GovUK.Dfe.FlexForms.Application.Diagnostics;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Application.Validation;
 using GovUK.Dfe.FlexForms.Domain.Caching;
@@ -72,7 +73,9 @@ public sealed class SaveFormPageService(
         var isDerivedFlowRoute = FormRouteParser.TryParseDerivedFlow(state.CurrentPageId, out _);
         if (!isDerivedFlowRoute && state.CurrentPage != null)
         {
-            var validation = formValidationOrchestrator.ValidatePage(state.CurrentPage, state.Data, state.Template);
+            FormValidationResult validation;
+            using (RequestTimings.Measure("validate page"))
+                validation = formValidationOrchestrator.ValidatePage(state.CurrentPage, state.Data, state.Template);
             if (!validation.IsValid)
                 return await InvalidPageOutcomeAsync(state, validation);
         }

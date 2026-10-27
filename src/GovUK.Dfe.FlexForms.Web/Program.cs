@@ -224,6 +224,7 @@ builder.Services.AddScoped<ExternalApiPageExceptionFilter>();
 builder.Services.Configure<Microsoft.AspNetCore.Mvc.MvcOptions>(options =>
 {
     options.Filters.AddService<ExternalApiPageExceptionFilter>();
+    options.Filters.Add<RequestTimingResultFilter>();
 });
 
 builder.Services.AddRazorPages(options =>
@@ -565,8 +566,10 @@ builder.Services.AddTokenRefreshWithOidc(configuration, "DfESignIn", "TokenRefre
 // Add HttpClient for API calls
 builder.Services.AddHttpClient();
 builder.Services.AddTransient<CorrelationIdForwardingHandler>();
+builder.Services.AddTransient<RequestTimingHandler>();
 builder.Services.ConfigureHttpClientDefaults(http =>
 {
+    http.AddHttpMessageHandler<RequestTimingHandler>();
     http.AddHttpMessageHandler<CorrelationIdForwardingHandler>();
 });
 
@@ -739,7 +742,9 @@ app.UseStaticFiles(new StaticFileOptions
 app.UseRouting();
 app.UseCookiePolicy();
 
+app.UseRequestTiming();
 app.UseSession();
+app.UseRequestTimingSession();
 
 app.UseStatusCodePages(ctx =>
 {
