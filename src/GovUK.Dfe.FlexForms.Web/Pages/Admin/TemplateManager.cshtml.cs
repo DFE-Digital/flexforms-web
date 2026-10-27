@@ -18,7 +18,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 [RequestSizeLimit(52_428_800)]
 [RequestFormLimits(ValueLengthLimit = 52_428_800, ValueCountLimit = 1000)]
 public class TemplateManagerModel(
-    IFormTemplateProvider formTemplateProvider,
+    ITemplateCacheInvalidator templateCacheInvalidator,
     ITemplateManagerAdmin templateManagerAdmin,
     ITemplateSelectionService templateSelectionService,
     ICacheService<IMemoryCacheType> cacheService,
@@ -132,7 +132,7 @@ public class TemplateManagerModel(
         if (created.Kind == AdminPageOutcomeKind.StayOnPage || created.Errors.Count > 0)
             return await RedisplayAddVersionFormAsync(state, templateId.Value, created);
 
-        await InvalidateTemplateCacheAsync(templateId.Value.ToString());
+        await templateCacheInvalidator.InvalidateAsync(templateId.Value.ToString());
 
         HttpContext.Session.SetString(TemplateVersionSessionKey, NewVersion!);
         await HttpContext.Session.CommitAsync();
@@ -365,33 +365,5 @@ public class TemplateManagerModel(
         SelectedTemplateId = firstTemplate.TemplateId;
         SelectedTemplate = firstTemplate;
         return firstTemplate.TemplateId;
-    }
-
-    private async Task InvalidateTemplateCacheAsync(string templateId)
-    {
-        try
-        {
-            var cacheKey = $"FormTemplate_{CacheKeyHelper.GenerateHashedCacheKey(templateId)}";
-            logger.LogInformation("Attempting to invalidate cache for template {TemplateId} with key {CacheKey}",
-                templateId, cacheKey);
-
-            cacheService.Remove(cacheKey);
-            logger.LogInformation("Successfully invalidated cache for template {TemplateId} with key {CacheKey}",
-                templateId, cacheKey);
-
-            try
-            {
-                await formTemplateProvider.GetTemplateAsync(templateId);
-                logger.LogDebug("Successfully verified new template version is available for {TemplateId}", templateId);
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "Failed to verify new template version for {TemplateId}", templateId);
-            }
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Failed to invalidate cache for template {TemplateId}", templateId);
-        }
     }
 }

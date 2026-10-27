@@ -102,6 +102,16 @@ A common slip when copying an example is leaving a trailing comma after the last
 
 In **Template Manager** you paste or edit this text in the **JSON Schema** box and save a version. If a quote or comma is wrong, save is rejected and you see **There is a problem** with the parse error — usually “missing comma” or “unexpected character”. Fix the punctuation and save again. The rest of this manual is the **meaning** of each key once the text is valid JSON.
 
+You don't have to write the JSON by hand. **Template Studio** (Template Manager → **Open in Template Studio**, see the [Template Studio User Manual](Template-Studio-User-Manual.md)) builds sections, tasks, pages, questions, options and checks with forms and writes this JSON for you. Its **JSON (advanced)** tab shows the result, and anything it has no form for is kept as you wrote it.
+
+Saving also rejects a version when:
+
+- two sections or two tasks share an id, two pages in the same task or list share a `pageId`, or two questions whose answers are stored at the top level share a `fieldId`. Questions in different repeatable lists can share a `fieldId`;
+- a field `type` can't be shown (anything other than those in [§8](#8-field-types-with-examples), including plain `autocomplete`);
+- a `radios`, `checkboxes` or `select` question has no options, or an option without a `value`;
+- a `complexField` question has no `complexField.id`;
+- a conditional logic rule's `triggerField`, or a `field` or `page` it affects, isn't in the template.
+
 ---
 
 ## 2. Big picture hierarchy
@@ -564,9 +574,9 @@ Renders day / month / year. Engine checks completeness and that the date is real
 
 ---
 
-### 8.9 `autocomplete` (simple)
+### 8.9 `autocomplete` (not supported)
 
-A built-in autocomplete control. For Trusts/Academies search, Transfer uses **`complexField`** instead (API-backed). Prefer complex fields when search hits an external API.
+Plain `autocomplete` can't be shown to applicants, so saving rejects it. Use **`complexField`** with a search complex field instead, as Transfer does for trusts and academies.
 
 ---
 

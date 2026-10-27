@@ -67,6 +67,13 @@ public sealed record TemplateDto(
     string? LatestVersionNumber,
     bool IsLive);
 
+public sealed record CreateTemplateRequest(string Name);
+
+/// <summary>The API expects <see cref="JsonSchema"/> to be base64-encoded JSON.</summary>
+public sealed record CreateTemplateVersionRequest(string VersionNumber, string JsonSchema);
+
+public sealed record TemplateSchemaDto(string TemplateId, string VersionNumber, string JsonSchema);
+
 public sealed record TenantUserDto(string UserId, string? Email, string? Name);
 
 public sealed record TenantUsersResult(IReadOnlyList<TenantUserDto>? Items);

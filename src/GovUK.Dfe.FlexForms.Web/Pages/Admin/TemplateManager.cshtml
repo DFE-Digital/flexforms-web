@@ -188,18 +188,21 @@
                 </form>
             }
 
+            @* The buttons sit directly in the button group so GOV.UK lines them up; each submits its form by id. *@
+            <form method="post" asp-page-handler="ShowAddForm" id="add-new-template-version-form"></form>
+            <form method="post" asp-page-handler="GrantToAllUsers" id="grant-template-to-all-users-form"></form>
             <div class="govuk-button-group govuk-!-margin-bottom-6">
-                <form method="post" asp-page-handler="ShowAddForm">
-                    <button class="govuk-button" type="submit" id="add-new-template-version-button">Add New Template Version</button>
-                </form>
-                <form method="post" asp-page-handler="GrantToAllUsers">
-                    <button class="govuk-button govuk-button--secondary"
-                            type="submit"
-                            id="grant-template-to-all-users-button"
-                            data-confirm="Grant read and write access for this template to every active user in this tenant?">
-                        Grant to all users
-                    </button>
-                </form>
+                <feature name="@FeatureFlags.TemplateStudio">
+                    <a asp-page="/Admin/TemplateStudio" class="govuk-button" data-module="govuk-button" id="open-template-studio-button">Open in Template Studio</a>
+                </feature>
+                <button class="govuk-button govuk-button--secondary" type="submit" form="add-new-template-version-form" id="add-new-template-version-button">Add New Template Version (JSON)</button>
+                <button class="govuk-button govuk-button--secondary"
+                        type="submit"
+                        form="grant-template-to-all-users-form"
+                        id="grant-template-to-all-users-button"
+                        data-confirm="Grant read and write access for this template to every active user in this tenant?">
+                    Grant to all users
+                </button>
             </div>
             
             @if (Model.CurrentTemplateJson != null)
@@ -245,7 +248,7 @@
                         New Version Number
                     </label>
                     <div id="version-hint" class="govuk-hint">
-                        For example: 1.1, 2.0, 1.2.1
+                        Three numbers separated by full stops, for example 1.2.1
                     </div>
                     @if (ViewData.ModelState["NewVersion"]?.Errors.Any() == true)
                     {

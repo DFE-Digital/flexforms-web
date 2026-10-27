@@ -6,5 +6,10 @@ namespace GovUK.Dfe.FlexForms.Application.Interfaces
     {
         ComplexFieldConfiguration GetConfiguration(string complexFieldId);
         bool HasConfiguration(string complexFieldId);
+
+        /// <summary>
+        /// Every complex field configured for the current tenant, one per id.
+        /// </summary>
+        IReadOnlyList<ComplexFieldConfiguration> GetAllConfigurations();
     }
 } 

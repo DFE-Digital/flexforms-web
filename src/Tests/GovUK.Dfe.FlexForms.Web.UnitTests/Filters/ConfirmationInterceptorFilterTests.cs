@@ -156,6 +156,24 @@ public class ConfirmationInterceptorFilterTests
     }
 
     [Fact]
+    public async Task OnPageHandlerExecutionAsync_ShouldRunTheHandler_ForJsonPosts()
+    {
+        var page = CreatePageModel();
+        var executing = PageExecutingContext(page, "POST");
+        page.HttpContext.Request.ContentType = "application/json";
+        PageHandlerExecutedContext? executed = null;
+
+        await _filter.OnPageHandlerExecutionAsync(executing, () =>
+        {
+            executed = CreateExecutedContext(executing, new JsonResult(new { isValid = true }));
+            return Task.FromResult(executed);
+        });
+
+        Assert.IsType<JsonResult>(executed!.Result);
+        _confirmations.DidNotReceive().CreateConfirmation(Arg.Any<ConfirmationRequest>());
+    }
+
+    [Fact]
     public async Task OnPageHandlerExecutionAsync_ShouldSkipInterception_WhenConfirmedQueryIsTrue()
     {
         var page = CreatePageModel();

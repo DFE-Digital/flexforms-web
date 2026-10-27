@@ -124,6 +124,164 @@ public class TemplateValidationService(ILogger<TemplateValidationService> logger
         }
 
         ValidateApplicationMetaData(template, errors);
+        ValidateStructure(template, errors);
+    }
+
+    /// <summary>
+    /// Field types that <c>FieldRendererService</c> can render.
+    /// </summary>
+    public static readonly IReadOnlySet<string> SupportedFieldTypes = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "text", "email", "text-area", "character-count", "radios", "checkboxes", "select", "date", "complexField"
+    };
+
+    private static readonly HashSet<string> ChoiceFieldTypes = new(StringComparer.Ordinal) { "radios", "checkboxes", "select" };
+
+    /// <summary>
+    /// Catches problems that only show up when the form is used: duplicate ids, field types that can't be rendered,
+    /// choice questions without options, and conditional logic that points at nothing.
+    /// </summary>
+    private static void ValidateStructure(FormTemplate template, List<string> errors)
+    {
+        AddDuplicateErrors(template.TaskGroups.Select(group => group.GroupId), "groupId", "the template", errors);
+
+        var tasks = template.TaskGroups.SelectMany(group => group.Tasks ?? []).ToList();
+        AddDuplicateErrors(tasks.Select(task => task.TaskId), "taskId", "the template", errors);
+
+        // Answers to task pages, and each collection as a whole, are stored by fieldId at the top level of the application.
+        var topLevelFieldIds = new List<string>();
+        var knownFieldIds = new HashSet<string>(StringComparer.Ordinal);
+        var knownPageIds = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var task in tasks)
+        {
+            if (task.Pages is { Count: > 0 } pages)
+            {
+                ValidatePageSet(pages, $"task '{task.TaskId}'", errors, knownFieldIds, knownPageIds);
+                topLevelFieldIds.AddRange(pages.SelectMany(page => page.Fields ?? []).Select(field => field.FieldId));
+            }
+
+            foreach (var flow in task.Summary?.Flows ?? [])
+            {
+                topLevelFieldIds.Add(flow.FieldId);
+                knownFieldIds.Add(flow.FieldId);
+                ValidatePageSet(flow.Pages ?? [], $"collection '{flow.FlowId}' in task '{task.TaskId}'", errors, knownFieldIds, knownPageIds);
+                AddDuplicateErrors(
+                    (flow.Pages ?? []).SelectMany(page => page.Fields ?? []).Select(field => field.FieldId),
+                    "fieldId",
+                    $"collection '{flow.FlowId}'",
+                    errors);
+            }
+
+            foreach (var flow in task.Summary?.DerivedFlows ?? [])
+            {
+                topLevelFieldIds.Add(flow.FieldId);
+                knownFieldIds.Add(flow.FieldId);
+                ValidatePageSet(flow.Pages ?? [], $"derived list '{flow.FlowId}' in task '{task.TaskId}'", errors, knownFieldIds, knownPageIds);
+                AddDuplicateErrors(
+                    (flow.Pages ?? []).SelectMany(page => page.Fields ?? []).Select(field => field.FieldId),
+                    "fieldId",
+                    $"derived list '{flow.FlowId}'",
+                    errors);
+            }
+        }
+
+        AddDuplicateErrors(topLevelFieldIds, "fieldId", "task pages and collections", errors);
+
+        foreach (var rule in template.ConditionalLogic ?? [])
+        {
+            var ruleContext = $"Conditional logic rule '{(string.IsNullOrWhiteSpace(rule.Id) ? rule.Name : rule.Id)}'";
+
+            foreach (var trigger in TriggerFields(rule.ConditionGroup?.Conditions))
+            {
+                if (!knownFieldIds.Contains(trigger))
+                    errors.Add($"{ruleContext}: triggerField '{trigger}' is not a field in this template");
+            }
+
+            foreach (var element in rule.AffectedElements ?? [])
+            {
+                var known = element.ElementType switch
+                {
+                    "field" => knownFieldIds,
+                    "page" => knownPageIds,
+                    _ => null
+                };
+
+                if (known is not null && !string.IsNullOrWhiteSpace(element.ElementId) && !known.Contains(element.ElementId))
+                    errors.Add($"{ruleContext}: {element.ElementType} '{element.ElementId}' is not in this template");
+            }
+        }
+    }
+
+    private static void ValidatePageSet(
+        IReadOnlyList<Page> pages,
+        string context,
+        List<string> errors,
+        HashSet<string> knownFieldIds,
+        HashSet<string> knownPageIds)
+    {
+        AddDuplicateErrors(pages.Select(page => page.PageId), "pageId", context, errors);
+
+        foreach (var page in pages)
+        {
+            if (!string.IsNullOrWhiteSpace(page.PageId))
+                knownPageIds.Add(page.PageId);
+
+            foreach (var field in page.Fields ?? [])
+            {
+                if (!string.IsNullOrWhiteSpace(field.FieldId))
+                    knownFieldIds.Add(field.FieldId);
+
+                var fieldContext = $"Field '{field.FieldId}' on page '{page.PageId}' in {context}";
+
+                if (string.IsNullOrWhiteSpace(field.Type))
+                    continue;
+
+                if (field.Type == "autocomplete")
+                {
+                    errors.Add($"{fieldContext}: type 'autocomplete' can't be shown to users. Use 'complexField' with a search complex field instead");
+                }
+                else if (!SupportedFieldTypes.Contains(field.Type))
+                {
+                    errors.Add($"{fieldContext}: type '{field.Type}' isn't supported. Use one of: {string.Join(", ", SupportedFieldTypes)}");
+                }
+
+                if (ChoiceFieldTypes.Contains(field.Type))
+                {
+                    if (field.Options is not { Count: > 0 })
+                        errors.Add($"{fieldContext}: a '{field.Type}' question needs at least one option");
+                    else if (field.Options.Any(option => string.IsNullOrWhiteSpace(option.Value)))
+                        errors.Add($"{fieldContext}: every option needs a 'value'");
+                }
+
+                if (field.Type == "complexField" && string.IsNullOrWhiteSpace(field.ComplexField?.Id))
+                    errors.Add($"{fieldContext}: 'complexField.id' is required");
+            }
+        }
+    }
+
+    private static IEnumerable<string> TriggerFields(IEnumerable<Condition>? conditions)
+    {
+        foreach (var condition in conditions ?? [])
+        {
+            if (!string.IsNullOrWhiteSpace(condition.TriggerField))
+                yield return condition.TriggerField;
+
+            foreach (var nested in TriggerFields(condition.Conditions))
+                yield return nested;
+        }
+    }
+
+    private static void AddDuplicateErrors(IEnumerable<string?> ids, string idName, string scope, List<string> errors)
+    {
+        var duplicates = ids
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .GroupBy(id => id!, StringComparer.Ordinal)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key);
+
+        foreach (var duplicate in duplicates)
+            errors.Add($"{idName} '{duplicate}' is used more than once in {scope}. Each {idName} must be unique");
     }
 
     private static void ValidateApplicationMetaData(FormTemplate template, List<string> errors)

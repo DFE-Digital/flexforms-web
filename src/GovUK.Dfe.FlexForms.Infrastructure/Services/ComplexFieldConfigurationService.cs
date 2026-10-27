@@ -123,6 +123,25 @@ public sealed class ComplexFieldConfigurationService(
         return configSection.Exists();
     }
 
+    /// <inheritdoc />
+    public IReadOnlyList<ComplexFieldConfiguration> GetAllConfigurations()
+    {
+        var complexFieldsSection = requestConfiguration.Current.GetSection("FormEngine:ComplexFields");
+        if (!complexFieldsSection.Exists())
+        {
+            return [];
+        }
+
+        // Array entries carry an Id; the older structure uses the id as the section key.
+        var ids = complexFieldsSection.GetChildren()
+            .Select(child => child["Id"] ?? (int.TryParse(child.Key, out _) ? null : child.Key))
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.OrdinalIgnoreCase);
+
+        return [.. ids.Select(id => GetConfiguration(id!))];
+    }
+
     /// <summary>
     /// Host + tenant configuration merge can leave the same complex-field Id at multiple indexes
     /// (e.g. tenant entry without FieldType and host baseline with FieldType=upload). Prefer the

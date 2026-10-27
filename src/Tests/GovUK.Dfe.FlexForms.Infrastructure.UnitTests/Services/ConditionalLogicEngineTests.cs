@@ -139,10 +139,22 @@ public class ConditionalLogicEngineTests
     }
 
     [Fact]
-    public void EvaluateCondition_NotEquals_DoesNotMatchLowercasedSwitchCase()
+    public void EvaluateCondition_NotEquals_MatchesWhenTheAnswerIsDifferent()
     {
         var condition = SimpleCondition("field", ConditionalLogicConstants.Operators.NotEquals, "world");
-        Assert.False(_engine.EvaluateCondition(condition, new Dictionary<string, object> { ["field"] = "hello" }));
+        Assert.True(_engine.EvaluateCondition(condition, new Dictionary<string, object> { ["field"] = "hello" }));
+        Assert.False(_engine.EvaluateCondition(condition, new Dictionary<string, object> { ["field"] = "World" }));
+    }
+
+    [Theory]
+    [InlineData("notEquals")]
+    [InlineData("NOTEQUALS")]
+    [InlineData("notequals")]
+    public void EvaluateCondition_ShouldMatchOperatorNames_WhateverTheirCase(string @operator)
+    {
+        Assert.True(_engine.EvaluateCondition(
+            SimpleCondition("field", @operator, "world"),
+            new Dictionary<string, object> { ["field"] = "hello" }));
     }
 
     [Fact]
@@ -267,11 +279,27 @@ public class ConditionalLogicEngineTests
     }
 
     [Fact]
-    public void EvaluateCondition_IsEmpty_ReturnsFalseForCamelCaseOperator()
+    public void EvaluateCondition_IsEmptyAndIsNotEmpty_CheckWhetherThereIsAnAnswer()
     {
+        var empty = new Dictionary<string, object> { ["field"] = string.Empty };
+        var answered = new Dictionary<string, object> { ["field"] = "yes" };
+        Assert.True(_engine.EvaluateCondition(SimpleCondition("field", ConditionalLogicConstants.Operators.IsEmpty, string.Empty), empty));
+        Assert.False(_engine.EvaluateCondition(SimpleCondition("field", ConditionalLogicConstants.Operators.IsEmpty, string.Empty), answered));
+        Assert.True(_engine.EvaluateCondition(SimpleCondition("field", ConditionalLogicConstants.Operators.IsNotEmpty, string.Empty), answered));
+    }
+
+    [Fact]
+    public void EvaluateCondition_GreaterAndLessThan_CompareNumbersAndDates()
+    {
+        Assert.True(_engine.EvaluateCondition(
+            SimpleCondition("pupils", ConditionalLogicConstants.Operators.GreaterThan, "10", ConditionalLogicConstants.DataTypes.Number),
+            new Dictionary<string, object> { ["pupils"] = "11" }));
         Assert.False(_engine.EvaluateCondition(
-            SimpleCondition("field", ConditionalLogicConstants.Operators.IsEmpty, string.Empty),
-            new Dictionary<string, object> { ["field"] = string.Empty }));
+            SimpleCondition("pupils", ConditionalLogicConstants.Operators.LessThanOrEqual, "10", ConditionalLogicConstants.DataTypes.Number),
+            new Dictionary<string, object> { ["pupils"] = "11" }));
+        Assert.True(_engine.EvaluateCondition(
+            SimpleCondition("opened", ConditionalLogicConstants.Operators.LessThan, "2024-09-01", ConditionalLogicConstants.DataTypes.Date),
+            new Dictionary<string, object> { ["opened"] = "2023-01-31" }));
     }
 
     [Fact]
@@ -305,10 +333,12 @@ public class ConditionalLogicEngineTests
     }
 
     [Fact]
-    public void EvaluateCondition_IsTrueAndIsFalse_ReturnFalseForCamelCaseOperators()
+    public void EvaluateCondition_IsTrueAndIsFalse_ReadYesAndNoAnswers()
     {
         var isTrue = SimpleCondition("flag", ConditionalLogicConstants.Operators.IsTrue, string.Empty);
-        Assert.False(_engine.EvaluateCondition(isTrue, new Dictionary<string, object> { ["flag"] = "yes" }));
+        var isFalse = SimpleCondition("flag", ConditionalLogicConstants.Operators.IsFalse, string.Empty);
+        Assert.True(_engine.EvaluateCondition(isTrue, new Dictionary<string, object> { ["flag"] = "yes" }));
+        Assert.True(_engine.EvaluateCondition(isFalse, new Dictionary<string, object> { ["flag"] = "no" }));
     }
 
     [Fact]
@@ -342,16 +372,19 @@ public class ConditionalLogicEngineTests
     }
 
     [Fact]
-    public void EvaluateCondition_NotIn_ReturnsFalseForCamelCaseOperator()
+    public void EvaluateCondition_NotIn_MatchesAnswersOutsideTheList()
     {
         var condition = SimpleCondition(
             "status",
             ConditionalLogicConstants.Operators.NotIn,
             "draft,pending");
 
-        Assert.False(_engine.EvaluateCondition(
+        Assert.True(_engine.EvaluateCondition(
             condition,
             new Dictionary<string, object> { ["status"] = "approved" }));
+        Assert.False(_engine.EvaluateCondition(
+            condition,
+            new Dictionary<string, object> { ["status"] = "pending" }));
     }
 
     [Fact]
@@ -373,43 +406,39 @@ public class ConditionalLogicEngineTests
     }
 
     [Fact]
-    public void EvaluateCondition_HasLength_ReturnsFalseForCamelCaseOperator()
+    public void EvaluateCondition_HasLength_ComparesTheNumberOfCharacters()
     {
         var condition = SimpleCondition("code", ConditionalLogicConstants.Operators.HasLength, "5");
 
-        Assert.False(_engine.EvaluateCondition(
-            condition,
-            new Dictionary<string, object> { ["code"] = "abcde" }));
+        Assert.True(_engine.EvaluateCondition(condition, new Dictionary<string, object> { ["code"] = "abcde" }));
+        Assert.False(_engine.EvaluateCondition(condition, new Dictionary<string, object> { ["code"] = "abcd" }));
     }
 
     [Fact]
-    public void EvaluateCondition_MatchesPattern_ReturnsFalseForCamelCaseOperator()
+    public void EvaluateCondition_MatchesPattern_UsesTheRegularExpression()
     {
         var condition = SimpleCondition("ref", ConditionalLogicConstants.Operators.MatchesPattern, "^REF-\\d+$");
 
-        Assert.False(_engine.EvaluateCondition(
-            condition,
-            new Dictionary<string, object> { ["ref"] = "REF-123" }));
+        Assert.True(_engine.EvaluateCondition(condition, new Dictionary<string, object> { ["ref"] = "REF-123" }));
+        Assert.False(_engine.EvaluateCondition(condition, new Dictionary<string, object> { ["ref"] = "123" }));
     }
 
     [Fact]
-    public void EvaluateCondition_IsValidEmail_ReturnsFalseForCamelCaseOperator()
+    public void EvaluateCondition_IsValidEmail_ChecksTheAddressShape()
     {
         var condition = SimpleCondition("email", ConditionalLogicConstants.Operators.IsValidEmail, string.Empty);
 
-        Assert.False(_engine.EvaluateCondition(
-            condition,
-            new Dictionary<string, object> { ["email"] = "user@example.com" }));
+        Assert.True(_engine.EvaluateCondition(condition, new Dictionary<string, object> { ["email"] = "user@example.com" }));
+        Assert.False(_engine.EvaluateCondition(condition, new Dictionary<string, object> { ["email"] = "user" }));
     }
 
     [Fact]
-    public void EvaluateCondition_IsValidPhone_ReturnsFalseForCamelCaseOperator()
+    public void EvaluateCondition_IsValidPhone_ChecksTheNumberShape()
     {
         var condition = SimpleCondition("phone", ConditionalLogicConstants.Operators.IsValidPhone, string.Empty);
 
-        Assert.False(_engine.EvaluateCondition(
-            condition,
-            new Dictionary<string, object> { ["phone"] = "7123456789" }));
+        Assert.True(_engine.EvaluateCondition(condition, new Dictionary<string, object> { ["phone"] = "7123456789" }));
+        Assert.False(_engine.EvaluateCondition(condition, new Dictionary<string, object> { ["phone"] = "phone" }));
     }
 
     [Fact]
