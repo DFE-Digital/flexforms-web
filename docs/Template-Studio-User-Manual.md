@@ -48,16 +48,20 @@ Template Studio lets you change all of that with forms and buttons. Behind the s
 
 ### 1.2 Who can use it
 
-You need permission to manage templates: the **Admin** or **SuperAdmin** role, or a role that includes a template **Manage** permission (for example the **Template Manager** role). If you can open **Template Manager**, you can open Template Studio.
+You need permission to manage templates: the **Admin** or **SuperAdmin** role, or a role that includes a template **Manage** permission (for example the **Template Manager** role).
+
+Template Studio is switched on for each organisation in **Tenant Settings**, with the `FeatureManagement` category set to `{"TemplateStudio": true}`. When it's on, the Admin hub shows **Template Studio** instead of **Template Manager**.
 
 ### 1.3 Opening Template Studio
 
 1. Go to **Admin**.
-2. In **Template Management**, select **Template Manager**.
-3. Choose the template and, if you need to, the version you want to start from. Select **Open template** or **Open version**.
-4. Select **Open in Template Studio**.
+2. In **Template Management**, select **Template Studio**. It opens the template you last worked on, or the first template if you haven't chosen one.
+3. To edit a different template, choose it in **Choose a template to edit** and select **Open template**.
+4. To start from an earlier version, choose it in **Choose a version to start from** and select **Open version**. Your new version is still numbered after the latest one.
 
-You can also select **Template Studio** on the Admin hub. It opens whichever template you last chose in Template Manager. To edit a different template, choose it in Template Manager first.
+If you have unsaved changes, your browser asks you to confirm before it opens another template or version.
+
+After you create a template, Template Studio opens it straight away.
 
 ### 1.4 What you are editing
 
@@ -733,8 +737,8 @@ New applications use the latest saved version. Applications already started keep
 
 | Problem | What to do |
 |---|---|
-| I can't find Template Studio | Check you can open Template Manager. If you can't, ask an administrator for template Manage permission. |
-| Template Studio opened the wrong template | Choose the template in Template Manager first, then open Template Studio. |
+| I can't find Template Studio | Ask an administrator to switch it on in Tenant Settings (`FeatureManagement`, `{"TemplateStudio": true}`) and to give you template Manage permission. |
+| Template Studio opened the wrong template | Choose the template in **Choose a template to edit** and select **Open template**. |
 | "There was an error loading the template data" | Reload the page. If it keeps happening, the template's latest version may not be readable; check it in Template Manager. |
 | I can't leave the JSON tab | The JSON has a mistake. Fix it using the error message, or use **Undo**. |
 | A section can't be saved | Every section needs at least one task. |

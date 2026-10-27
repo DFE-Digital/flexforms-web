@@ -7,10 +7,9 @@ public sealed class TemplateStudio(IPage page) : BasePage(page)
 {
     public async Task OpenAsync(string templateId)
     {
-        await Page.GotoAsync("/admin/template-manager");
+        await Page.GotoAsync("/admin/template-studio");
         await ById("SelectedTemplateId").SelectOptionAsync(templateId.ToLowerInvariant());
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Open template" }).ClickAsync();
-        await ById("open-template-studio-button").ClickAsync();
     }
 
     public async Task ExpectOpenAsync(string templateName)

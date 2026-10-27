@@ -5,7 +5,28 @@
     bool HasError(string key) => ViewData.ModelState[key]?.Errors.Any() == true;
 }
 
-<a asp-page="/Admin/TemplateManager" class="govuk-back-link">Back to Template Manager</a>
+<a asp-page="/Admin/Admin" class="govuk-back-link">Back to Admin</a>
+
+@if (Model.SelectedTemplate is null)
+{
+    <h1 class="govuk-heading-l">Template Studio</h1>
+    <p class="govuk-body">There are no templates to edit yet.</p>
+    <a asp-page="/Admin/CreateTemplate" class="govuk-button" data-module="govuk-button" id="tpl-create-template">Create a new template</a>
+    return;
+}
+
+@if (Model.ShowCreated)
+{
+    <div class="govuk-notification-banner govuk-notification-banner--success" role="alert" aria-labelledby="template-studio-created-title" data-module="govuk-notification-banner">
+        <div class="govuk-notification-banner__header">
+            <h2 class="govuk-notification-banner__title" id="template-studio-created-title">Success</h2>
+        </div>
+        <div class="govuk-notification-banner__content">
+            <h3 class="govuk-notification-banner__heading">Template created</h3>
+            <p class="govuk-body">It starts with a sample task, page and question, and it isn't live yet. Edit it here and save a new version.</p>
+        </div>
+    </div>
+}
 
 @if (Model.SavedVersion is not null)
 {
@@ -47,22 +68,8 @@
     </div>
 }
 
-@if (Model.LoadError is not null)
-{
-    <div class="govuk-error-summary" data-module="govuk-error-summary">
-        <div role="alert">
-            <h2 class="govuk-error-summary__title">There is a problem</h2>
-            <div class="govuk-error-summary__body">
-                <p class="govuk-body">@Model.LoadError</p>
-                <p class="govuk-body">Template Studio won't open until the template loads, so a saved version can't be replaced by mistake.</p>
-            </div>
-        </div>
-    </div>
-    return;
-}
-
 <span class="govuk-caption-l">Template Studio</span>
-<h1 class="govuk-heading-l govuk-!-margin-bottom-2">@Model.SelectedTemplate!.Name</h1>
+<h1 class="govuk-heading-l govuk-!-margin-bottom-2">@Model.SelectedTemplate.Name</h1>
 <p class="govuk-body govuk-!-margin-bottom-6">
     @if (Model.SelectedTemplate.IsLive)
     {
@@ -77,11 +84,58 @@
         var latestSuffix = string.Equals(Model.CurrentVersionNumber, Model.LatestVersionNumber, StringComparison.OrdinalIgnoreCase) ? " (latest)" : "";
         <span class="govuk-!-margin-left-2">Editing a copy of version @(Model.CurrentVersionNumber + latestSuffix)</span>
     }
-    else
+    else if (Model.LoadError is null)
     {
         <span class="govuk-!-margin-left-2">No versions yet. You're starting from the starter template.</span>
     }
 </p>
+
+@* Switching navigates away, so the browser warns first if there are unsaved changes. *@
+<div class="govuk-grid-row govuk-!-margin-bottom-4">
+    <form method="post" asp-page-handler="SelectTemplate" class="govuk-grid-column-one-half" id="tpl-select-template-form">
+        <div class="govuk-form-group govuk-!-margin-bottom-3">
+            <label class="govuk-label govuk-label--s" asp-for="SelectedTemplateId">Choose a template to edit</label>
+            <select class="govuk-select govuk-!-width-full" asp-for="SelectedTemplateId">
+                @foreach (var template in Model.TenantTemplates)
+                {
+                    <option value="@template.TemplateId">@template.Name (@(template.IsLive ? "Live" : "Not live"))</option>
+                }
+            </select>
+        </div>
+        <button class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" data-module="govuk-button" type="submit">Open template</button>
+    </form>
+
+    @if (Model.AvailableVersions.Count > 0)
+    {
+        <form method="post" asp-page-handler="SelectVersion" class="govuk-grid-column-one-half" id="tpl-select-version-form">
+            <div class="govuk-form-group govuk-!-margin-bottom-3">
+                <label class="govuk-label govuk-label--s" asp-for="SelectedVersionNumber">Choose a version to start from</label>
+                <select class="govuk-select govuk-!-width-full" asp-for="SelectedVersionNumber">
+                    @foreach (var version in Model.AvailableVersions)
+                    {
+                        var isLatest = string.Equals(version.VersionNumber, Model.LatestVersionNumber, StringComparison.OrdinalIgnoreCase);
+                        <option value="@version.VersionNumber">@(version.VersionNumber + (isLatest ? " (latest)" : ""))</option>
+                    }
+                </select>
+            </div>
+            <button class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" data-module="govuk-button" type="submit">Open version</button>
+        </form>
+    }
+</div>
+
+@if (Model.LoadError is not null)
+{
+    <div class="govuk-error-summary" data-module="govuk-error-summary">
+        <div role="alert">
+            <h2 class="govuk-error-summary__title">There is a problem</h2>
+            <div class="govuk-error-summary__body">
+                <p class="govuk-body">@Model.LoadError</p>
+                <p class="govuk-body">Template Studio won't open until the template loads, so a saved version can't be replaced by mistake.</p>
+            </div>
+        </div>
+    </div>
+    return;
+}
 
 <noscript>
     <div class="govuk-inset-text">
