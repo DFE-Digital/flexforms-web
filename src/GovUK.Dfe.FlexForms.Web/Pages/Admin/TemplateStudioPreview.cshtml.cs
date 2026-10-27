@@ -7,11 +7,13 @@ using GovUK.Dfe.FlexForms.Application.Validation;
 using GovUK.Dfe.FlexForms.Domain.FormEngine;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using GovUK.Dfe.FlexForms.Web.Extensions;
+using GovUK.Dfe.FlexForms.Web.Features;
 using GovUK.Dfe.FlexForms.Web.Pages.FormEngine;
 using GovUK.Dfe.FlexForms.Web.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.FeatureManagement.Mvc;
 using TaskModel = GovUK.Dfe.FlexForms.Domain.Models.Task;
 using TemplatePage = GovUK.Dfe.FlexForms.Domain.Models.Page;
 
@@ -22,6 +24,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 /// The template and answers live in the session for this preview only; nothing is sent to the API.
 /// </summary>
 [Authorize(Policy = AdminAccessHelper.CanManageTemplatesPolicy)]
+[FeatureGate(FeatureFlags.TemplateStudio)]
 [RequestSizeLimit(52_428_800)]
 [RequestFormLimits(ValueLengthLimit = 52_428_800, ValueCountLimit = 1000)]
 public partial class TemplateStudioPreviewModel(

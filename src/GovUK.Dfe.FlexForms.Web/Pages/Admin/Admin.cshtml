@@ -131,9 +131,11 @@
                         <a asp-page="/Admin/TemplateManager" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="go-to-template-manager-button">
                             Template Manager
                         </a>
-                        <a asp-page="/Admin/TemplateStudio" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="go-to-template-studio-button">
-                            Template Studio
-                        </a>
+                        <feature name="@FeatureFlags.TemplateStudio">
+                            <a asp-page="/Admin/TemplateStudio" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="go-to-template-studio-button">
+                                Template Studio
+                            </a>
+                        </feature>
                         <a href="/templates" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="go-to-templates-button">
                             Choose / preview templates
                         </a>

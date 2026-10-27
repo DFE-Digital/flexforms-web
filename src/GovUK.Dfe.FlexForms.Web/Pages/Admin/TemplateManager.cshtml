@@ -192,7 +192,9 @@
             <form method="post" asp-page-handler="ShowAddForm" id="add-new-template-version-form"></form>
             <form method="post" asp-page-handler="GrantToAllUsers" id="grant-template-to-all-users-form"></form>
             <div class="govuk-button-group govuk-!-margin-bottom-6">
-                <a asp-page="/Admin/TemplateStudio" role="button" draggable="false" class="govuk-button" data-module="govuk-button" id="open-template-studio-button">Open in Template Studio</a>
+                <feature name="@FeatureFlags.TemplateStudio">
+                    <a asp-page="/Admin/TemplateStudio" role="button" draggable="false" class="govuk-button" data-module="govuk-button" id="open-template-studio-button">Open in Template Studio</a>
+                </feature>
                 <button class="govuk-button govuk-button--secondary" type="submit" form="add-new-template-version-form" id="add-new-template-version-button">Add New Template Version (JSON)</button>
                 <button class="govuk-button govuk-button--secondary"
                         type="submit"

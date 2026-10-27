@@ -4,11 +4,13 @@ using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Application.Admin;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.Templates;
+using GovUK.Dfe.FlexForms.Web.Features;
 using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.FlexForms.Web.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.FeatureManagement.Mvc;
 
 namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 
@@ -17,6 +19,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 /// back as a new version through the same validation and save path as the JSON textarea.
 /// </summary>
 [Authorize(Policy = AdminAccessHelper.CanManageTemplatesPolicy)]
+[FeatureGate(FeatureFlags.TemplateStudio)]
 [RequestSizeLimit(52_428_800)]
 [RequestFormLimits(ValueLengthLimit = 52_428_800, ValueCountLimit = 1000)]
 public class TemplateStudioModel(
