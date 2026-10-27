@@ -567,6 +567,73 @@ public class ApplicationResponseServiceTests
             Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public void GetAccumulatedFormData_ShouldRemoveInfectedUploads_AndCheckOnlyUploadsInOneCall()
+    {
+        var infectedId = Guid.NewGuid();
+        var cleanId = Guid.NewGuid();
+        var listItemId = Guid.NewGuid();
+        var answers = new Dictionary<string, object>
+        {
+            ["evidence"] = JsonSerializer.Serialize(new object[]
+            {
+                new { id = infectedId, originalFileName = "bad.pdf", fileSize = 10 },
+                new { id = cleanId, originalFileName = "good.pdf", fileSize = 10 }
+            }),
+            ["people"] = JsonSerializer.Serialize(new object[] { new { id = listItemId, name = "Ann" } }),
+            ["colours"] = new[] { "red", "blue" }
+        };
+        var session = CreateSessionStore(store =>
+        {
+            store.SetString(FormSessionKeys.AccumulatedFormData, JsonSerializer.Serialize(answers));
+            store.SetString(FormSessionKeys.ApplicationId, "app-1");
+        });
+        var infectedFiles = Substitute.For<IInfectedFileStore>();
+        infectedFiles.FindInfectedFiles(Arg.Any<string?>(), Arg.Any<IReadOnlyCollection<InfectedFileCandidate>>())
+            .Returns(new HashSet<Guid> { infectedId });
+        var service = CreateService(session, infectedFileStore: infectedFiles);
+
+        var data = service.GetAccumulatedFormData();
+
+        var evidence = data["evidence"].ToString()!;
+        Assert.DoesNotContain(infectedId.ToString(), evidence);
+        Assert.Contains(cleanId.ToString(), evidence);
+        Assert.Contains(listItemId.ToString(), data["people"].ToString());
+        Assert.Equal(new[] { "red", "blue" }, Assert.IsType<string[]>(data["colours"]));
+        infectedFiles.Received(1).FindInfectedFiles(
+            "app-1",
+            Arg.Is<IReadOnlyCollection<InfectedFileCandidate>>(c =>
+                c.Count == 2 && c.All(f => f.FileId == infectedId || f.FileId == cleanId)));
+        infectedFiles.DidNotReceive().IsFileInfected(Arg.Any<Guid>());
+    }
+
+    [Fact]
+    public void GetAccumulatedFormData_ShouldReuseFilteredAnswers_UntilSessionAnswersChange()
+    {
+        var upload = JsonSerializer.Serialize(new object[] { new { id = Guid.NewGuid(), originalFileName = "a.pdf" } });
+        var session = CreateSessionStore(store =>
+            store.SetString(
+                FormSessionKeys.AccumulatedFormData,
+                JsonSerializer.Serialize(new Dictionary<string, object> { ["evidence"] = upload })));
+        var infectedFiles = Substitute.For<IInfectedFileStore>();
+        infectedFiles.FindInfectedFiles(Arg.Any<string?>(), Arg.Any<IReadOnlyCollection<InfectedFileCandidate>>())
+            .Returns(new HashSet<Guid>());
+        var service = CreateService(session, infectedFileStore: infectedFiles);
+
+        var first = service.GetAccumulatedFormData();
+        first["evidence"] = "changed by caller";
+        var second = service.GetAccumulatedFormData();
+
+        Assert.NotEqual("changed by caller", second["evidence"]);
+        infectedFiles.ReceivedWithAnyArgs(1).FindInfectedFiles(default, default!);
+
+        service.AccumulateFormData(new Dictionary<string, object> { ["name"] = "Ann" });
+        var third = service.GetAccumulatedFormData();
+
+        Assert.Equal("Ann", third["name"]);
+        infectedFiles.ReceivedWithAnyArgs(2).FindInfectedFiles(default, default!);
+    }
+
     private static string ReadStoredFieldValue(string responseJson, string fieldId)
     {
         using var doc = JsonDocument.Parse(responseJson);
@@ -575,11 +642,15 @@ public class ApplicationResponseServiceTests
 
     private static ApplicationResponseService CreateService(
         IFormSessionStore? sessionStore = null,
-        IApplicationsClient? applicationsClient = null)
+        IApplicationsClient? applicationsClient = null,
+        IInfectedFileStore? infectedFileStore = null)
     {
-        var infectedFiles = Substitute.For<IInfectedFileStore>();
-        infectedFiles.IsFileInfected(Arg.Any<Guid>()).Returns(false);
-        infectedFiles.IsFileNameInfected(Arg.Any<string>(), Arg.Any<string>()).Returns(false);
+        var infectedFiles = infectedFileStore ?? Substitute.For<IInfectedFileStore>();
+        if (infectedFileStore is null)
+        {
+            infectedFiles.FindInfectedFiles(Arg.Any<string?>(), Arg.Any<IReadOnlyCollection<InfectedFileCandidate>>())
+                .Returns(new HashSet<Guid>());
+        }
 
         return new ApplicationResponseService(
             applicationsClient ?? Substitute.For<IApplicationsClient>(),

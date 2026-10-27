@@ -1,3 +1,4 @@
+using GovUK.Dfe.FlexForms.Application.Diagnostics;
 using GovUK.Dfe.FlexForms.Application.Exceptions;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.Caching;
@@ -59,7 +60,8 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
             }
 
             PersistApplicationToSession(application, referenceNumber);
-            await LoadResponseDataIntoSessionAsync(application);
+            using (RequestTimings.Measure("copy saved answers into session"))
+                await LoadResponseDataIntoSessionAsync(application);
 
             logger.LogDebug(
                 "Loaded application {ApplicationId} from API for reference {ReferenceNumber}",
