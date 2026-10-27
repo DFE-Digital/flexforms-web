@@ -1718,7 +1718,7 @@ Prefer the dedicated screens first. If you must use this page, these categories 
 | **SchemaEvents** | Shared | Tenant event shapes | Event mappings |
 | **EventTriggers** | Shared | Submit / upload publish bindings | Event mappings |
 | **EmailPlaceholderMappings** | Shared | Extra GOV.UK Notify personalisation from form answers | This page (JSON) — see [Email placeholder mappings](#13-email-placeholder-mappings) |
-| **Layout** | Web | Service name in the header, phase banner text and links | This page (JSON) — there is no separate form |
+| **Layout** | Web | Service name in the header, phase banner text and links, footer links | This page (JSON) — there is no separate form |
 | **FileValidation** | Shared | Whether submit is blocked until a tenant function validates eligible files | This page (JSON) — see [14.7](#147-file-validation-tenant-function) |
 | **FormEngine** | Web | Search APIs behind autocomplete questions (endpoint, API key or client credentials, dropdown/confirmation labels) | This page (JSON) — see [14.8](#148-autocomplete-search-formengine-complex-fields) |
 | **SelfRegistration** | Shared | Which live forms new users get automatically when several forms are live (`DefaultTemplateIds`) | This page (JSON) — see [8.6](#86-grant-to-all-vs-user-manager) |
@@ -1731,13 +1731,25 @@ Prefer the dedicated screens first. If you must use this page, these categories 
   "PhaseBanner": {
     "PhaseText": "Beta",
     "Links": [
-      { "Text": "Feedback", "Url": "/feedback" }
+      { "Text": "Feedback", "Url": "/feedback" },
+      { "Text": "Give feedback (survey)", "Url": "https://forms.office.com/your-survey" }
     ]
-  }
+  },
+  "FooterLinks": [
+    { "Text": "Privacy", "Url": "/privacy" },
+    { "Text": "Accessibility statement", "Url": "https://www.gov.uk/help/accessibility-statement" }
+  ]
 }
 ```
 
 `ServiceName` is the product name in the GOV.UK header and the browser title on the dashboard.
+
+**Phase banner links** (`PhaseBanner.Links`, first 2 shown) open in a new tab. A `Url` can be either:
+
+- a full external address starting with `https://` or `http://`, used as-is; or
+- the path of a page in this service (for example `/feedback`). It must match an existing page, otherwise the link will be blank.
+
+**Footer links** (`FooterLinks`, first 6 shown) can be any internal path or full external address, and open in the same tab.
 
 ### 14.3 What to leave for SuperAdmin / platform
 
