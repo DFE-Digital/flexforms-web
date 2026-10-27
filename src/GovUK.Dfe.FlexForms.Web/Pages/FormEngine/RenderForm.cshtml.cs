@@ -1,3 +1,4 @@
+using GovUK.Dfe.FlexForms.Application.Diagnostics;
 using GovUK.Dfe.FlexForms.Application.Exceptions;
 using GovUK.Dfe.FlexForms.Application.FormEngine;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
@@ -123,7 +124,9 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             var isPreview = Request.Query.ContainsKey("preview");
             var isBackNav = Request.Query.ContainsKey("nav")
                 && string.Equals(Request.Query["nav"], "back", StringComparison.OrdinalIgnoreCase);
-            var outcome = await _prepareFormEngineGet.ExecuteAsync(state, isPreview, isBackNav, IsApplicationEditable());
+            FormEngineOutcome outcome;
+            using (RequestTimings.Measure("prepare page"))
+                outcome = await _prepareFormEngineGet.ExecuteAsync(state, isPreview, isBackNav, IsApplicationEditable());
             ApplyWorkState(state);
 
             if (outcome.Kind is FormEngineOutcomeKind.Redirect or FormEngineOutcomeKind.RedirectToPage)
@@ -196,10 +199,12 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
                 CurrentPageId = System.Web.HttpUtility.UrlDecode(CurrentPageId);
 
             var state = CaptureWorkState();
-            var outcome = await _saveFormPage.ExecuteAsync(
-                state,
-                Request.Form.ToPostedFields(),
-                Request.Form["IsTaskCompleted"].ToString());
+            FormEngineOutcome outcome;
+            using (RequestTimings.Measure("save page"))
+                outcome = await _saveFormPage.ExecuteAsync(
+                    state,
+                    Request.Form.ToPostedFields(),
+                    Request.Form["IsTaskCompleted"].ToString());
             ApplyWorkState(state);
             return MapOutcome(outcome);
         }
