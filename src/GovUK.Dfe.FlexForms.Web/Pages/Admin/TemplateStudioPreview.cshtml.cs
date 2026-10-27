@@ -25,8 +25,8 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 /// </summary>
 [Authorize(Policy = AdminAccessHelper.CanManageTemplatesPolicy)]
 [FeatureGate(FeatureFlags.TemplateStudio)]
-[RequestSizeLimit(52_428_800)]
-[RequestFormLimits(ValueLengthLimit = 52_428_800, ValueCountLimit = 1000)]
+[RequestSizeLimit(TemplateStudioRequestLimits.MaxBytes)]
+[RequestFormLimits(ValueLengthLimit = TemplateStudioRequestLimits.MaxBytes, ValueCountLimit = 1000)]
 public partial class TemplateStudioPreviewModel(
     ITemplateValidationService templateValidationService,
     IDraftFormPreview draftFormPreview,

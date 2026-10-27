@@ -282,7 +282,7 @@
 
             @if (canAdd)
             {
-                <a class="govuk-button govuk-button--secondary" data-module="govuk-button" role="button" draggable="false"
+                <a class="govuk-button govuk-button--secondary" data-module="govuk-button"
                    asp-page="/Admin/TemplateStudioPreview" asp-route-task="@task.TaskId" asp-route-pageId="@firstPage" asp-route-list="@flow.FlowId"
                    asp-route-item="@Guid.NewGuid().ToString("N")[..12]" asp-route-new="true">@(string.IsNullOrWhiteSpace(flow.AddButtonLabel) ? "Add item" : flow.AddButtonLabel)</a>
             }
@@ -331,7 +331,7 @@
 
         @if (visiblePages.Count > 0 && !Model.HasAnswers(task))
         {
-            <a class="govuk-button" data-module="govuk-button" role="button" draggable="false" asp-page="/Admin/TemplateStudioPreview" asp-route-task="@task.TaskId" asp-route-pageId="@visiblePages[0].PageId">Start</a>
+            <a class="govuk-button" data-module="govuk-button" asp-page="/Admin/TemplateStudioPreview" asp-route-task="@task.TaskId" asp-route-pageId="@visiblePages[0].PageId">Start</a>
         }
 
         <form method="post" asp-page-handler="Complete" asp-route-task="@task.TaskId" novalidate>

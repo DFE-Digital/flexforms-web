@@ -17,7 +17,7 @@ public sealed class TemplateStudioPreview(IPage page) : BasePage(page)
         await Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = taskName, Exact = true }).ClickAsync();
 
     public async Task StartAsync() =>
-        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Start", Exact = true }).ClickAsync();
+        await Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = "Start", Exact = true }).ClickAsync();
 
     public async Task ExpectPageAsync(string title) =>
         await Assertions.Expect(ById("page-title")).ToContainTextAsync(title);
@@ -42,7 +42,7 @@ public sealed class TemplateStudioPreview(IPage page) : BasePage(page)
         await Assertions.Expect(SummaryRow(question)).ToHaveCountAsync(0);
 
     public async Task AddItemAsync(string buttonText) =>
-        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = buttonText, Exact = true }).ClickAsync();
+        await Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = buttonText, Exact = true }).ClickAsync();
 
     public async Task ExpectItemAsync(string title) =>
         await Assertions.Expect(ItemCard(title)).ToBeVisibleAsync();

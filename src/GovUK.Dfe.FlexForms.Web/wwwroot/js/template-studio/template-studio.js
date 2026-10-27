@@ -3475,7 +3475,8 @@
     renderUsage();
 
     // If GOV.UK Frontend didn't load, show every panel rather than leaving two of them unreachable.
-    govukReady.then(function () {
+    // govukReady never rejects: a failed import resolves to null.
+    void govukReady.then(function () {
         window.setTimeout(function () {
             if (tabsElement.querySelector('[role="tablist"]')) return;
             Object.keys(panels).forEach(function (name) { panels[name].classList.remove('govuk-tabs__panel--hidden'); });
