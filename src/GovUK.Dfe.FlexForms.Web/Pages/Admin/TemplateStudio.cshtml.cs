@@ -80,6 +80,7 @@ public class TemplateStudioModel(
 
     public async Task<IActionResult> OnPostSaveAsync(CancellationToken cancellationToken)
     {
+        NewSchema = TemplateStudioSchemaTransport.Decode(NewSchema);
         var state = await LoadSelectedTemplateAsync(cancellationToken);
         if (state is null)
             return RedirectToPage("/Admin/TemplateManager");
@@ -127,7 +128,8 @@ public class TemplateStudioModel(
     /// </summary>
     public IActionResult OnPostValidate([FromBody] TemplateStudioValidateRequest? request)
     {
-        var (isValid, errors) = templateValidationService.ValidateTemplateJson(request?.Schema ?? string.Empty);
+        var schema = TemplateStudioSchemaTransport.Decode(request?.Schema);
+        var (isValid, errors) = templateValidationService.ValidateTemplateJson(schema ?? string.Empty);
         return new JsonResult(new { isValid, errors });
     }
 

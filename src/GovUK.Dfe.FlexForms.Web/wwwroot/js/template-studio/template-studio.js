@@ -86,6 +86,17 @@
     var schemaInput = document.getElementById('NewSchema');
     var previewForm = document.getElementById('tpl-preview-form');
     var tokenInput = saveForm.querySelector('input[name="__RequestVerificationToken"]');
+
+    // Raw template JSON trips the Azure WAF's injection rules, so it's sent as base64 (TemplateStudioSchemaTransport).
+    function encodeSchema(text) {
+        var bytes = new TextEncoder().encode(text);
+        var binary = '';
+        for (var i = 0; i < bytes.length; i += 0x8000) {
+            binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        }
+        return 'b64:' + window.btoa(binary);
+    }
+
     var panels = {
         design: document.getElementById('tpl-panel-design'),
         rules: document.getElementById('tpl-panel-rules'),
@@ -3373,7 +3384,7 @@
                 'Content-Type': 'application/json',
                 'RequestVerificationToken': tokenInput ? tokenInput.value : ''
             },
-            body: JSON.stringify({ schema: schema })
+            body: JSON.stringify({ schema: encodeSchema(schema) })
         })
             .then(function (response) {
                 if (!response.ok) throw new Error('Status ' + response.status);
@@ -3391,7 +3402,7 @@
         if (schema == null) return;
         var taskPath = selected.length ? doc.ancestorPath(selected, 'task') : null;
         var taskId = taskPath ? doc.get(taskPath).taskId : '';
-        document.getElementById('tpl-preview-schema').value = schema;
+        document.getElementById('tpl-preview-schema').value = encodeSchema(schema);
         document.getElementById('tpl-preview-task').value = taskId || '';
         previewForm.submit();
     });
@@ -3416,7 +3427,7 @@
             problems.scrollIntoView();
             return;
         }
-        schemaInput.value = schema;
+        schemaInput.value = encodeSchema(schema);
         submitting = true;
     });
 

@@ -104,6 +104,7 @@ public partial class TemplateStudioPreviewModel(
 
     public IActionResult OnPost()
     {
+        Schema = TemplateStudioSchemaTransport.Decode(Schema);
         if (string.IsNullOrWhiteSpace(Schema))
         {
             ParseError = "There's no template to preview. Go back to Template Studio and try again.";

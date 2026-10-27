@@ -331,6 +331,37 @@ public class TemplateStudioModelTests
         Assert.Equal("""{"isValid":false,"errors":["Template must have a \u0027templateId\u0027"]}""", json);
     }
 
+    [Fact]
+    public void OnPostValidate_ShouldDecodeABase64Schema()
+    {
+        const string schema = """{ "templateName": "Trust's -- select <form>" }""";
+        _validation.ValidateTemplateJson(schema).Returns((true, new List<string>()));
+
+        var result = Assert.IsType<JsonResult>(_model.OnPostValidate(new TemplateStudioValidateRequest(Encoded(schema))));
+
+        Assert.Equal("""{"isValid":true,"errors":[]}""", JsonSerializer.Serialize(result.Value));
+    }
+
+    [Fact]
+    public async Task OnPostSaveAsync_ShouldSaveTheDecodedSchema_WhenItIsSentAsBase64()
+    {
+        GivenStoredVersion("1.0.3");
+        _model.StartedFromLatestVersion = "1.0.3";
+        _model.NewVersion = "1.0.4";
+        _model.NewSchema = Encoded(StoredSchema);
+        GivenSaveSucceeds();
+
+        await _model.OnPostSaveAsync(CancellationToken.None);
+
+        await _admin.Received(1).CreateVersionAsync(
+            Arg.Is<TemplateManagerWorkState>(state => state.NewSchema == StoredSchema),
+            _template.TemplateId,
+            Arg.Any<CancellationToken>());
+    }
+
+    private static string Encoded(string schema) =>
+        TemplateStudioSchemaTransport.Prefix + Convert.ToBase64String(Encoding.UTF8.GetBytes(schema));
+
     private void GivenStoredVersion(string version) =>
         _admin.LoadTemplateDataAsync(Arg.Any<TemplateManagerWorkState>(), _template.TemplateId, Arg.Any<CancellationToken>())
             .Returns(call =>
