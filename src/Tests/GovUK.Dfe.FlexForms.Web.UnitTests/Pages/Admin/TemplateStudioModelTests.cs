@@ -68,13 +68,93 @@ public class TemplateStudioModelTests
     }
 
     [Fact]
-    public async Task OnGetAsync_ShouldRedirectToTemplateManager_WhenNoTemplateIsSelected()
+    public async Task OnGetAsync_ShouldOpenTheFirstTemplate_WhenNoneIsSelected()
     {
         _selection.GetSelectedTemplateId(Arg.Any<HttpContext>()).Returns((string?)null);
+        _session.SetString("TemplateVersionNumber", "9.9.9");
+        GivenStoredVersion("1.0.3");
 
-        var result = await _model.OnGetAsync(null, CancellationToken.None);
+        var result = await _model.OnGetAsync(null, false, CancellationToken.None);
 
-        Assert.Equal("/Admin/TemplateManager", Assert.IsType<RedirectToPageResult>(result).PageName);
+        Assert.IsType<PageResult>(result);
+        await _selection.Received(1).SelectTemplateAsync(Arg.Any<HttpContext>(), _template, Arg.Any<CancellationToken>());
+        Assert.Equal(_template.TemplateId, _model.SelectedTemplateId);
+        Assert.Equal("1.0.3", _model.SelectedVersionNumber);
+        Assert.Single(_model.AvailableVersions);
+        Assert.Null(_session.GetString("TemplateVersionNumber"));
+    }
+
+    [Fact]
+    public async Task OnGetAsync_ShouldShowThePage_WhenThereAreNoTemplates()
+    {
+        _selection.GetSelectableTemplatesAsync(Arg.Any<CancellationToken>()).Returns(new List<TemplateDto>());
+        _selection.GetSelectedTemplateId(Arg.Any<HttpContext>()).Returns((string?)null);
+
+        var result = await _model.OnGetAsync(null, false, CancellationToken.None);
+
+        Assert.IsType<PageResult>(result);
+        Assert.Null(_model.SelectedTemplate);
+        await _admin.DidNotReceiveWithAnyArgs().LoadTemplateDataAsync(default!, default, default);
+    }
+
+    [Fact]
+    public async Task OnGetAsync_ShouldShowTheCreatedBanner_WhenTheTemplateWasJustCreated()
+    {
+        GivenStoredVersion("1.0.0");
+
+        await _model.OnGetAsync(null, true, CancellationToken.None);
+
+        Assert.True(_model.ShowCreated);
+    }
+
+    [Fact]
+    public async Task OnPostSelectTemplateAsync_ShouldOpenTheChosenTemplateAtItsLatestVersion()
+    {
+        var other = new TemplateDto { TemplateId = Guid.NewGuid(), Name = "Visits", CreatedOn = DateTime.UtcNow };
+        _selection.GetSelectableTemplatesAsync(Arg.Any<CancellationToken>()).Returns([_template, other]);
+        _session.SetString("TemplateVersionNumber", "1.0.3");
+        _model.SelectedTemplateId = other.TemplateId;
+
+        var result = await _model.OnPostSelectTemplateAsync(CancellationToken.None);
+
+        Assert.Null(Assert.IsType<RedirectToPageResult>(result).PageName);
+        await _selection.Received(1).SelectTemplateAsync(Arg.Any<HttpContext>(), other, Arg.Any<CancellationToken>());
+        Assert.Null(_session.GetString("TemplateVersionNumber"));
+    }
+
+    [Fact]
+    public async Task OnPostSelectTemplateAsync_ShouldIgnoreATemplateFromAnotherTenant()
+    {
+        _model.SelectedTemplateId = Guid.NewGuid();
+
+        await _model.OnPostSelectTemplateAsync(CancellationToken.None);
+
+        await _selection.DidNotReceiveWithAnyArgs().SelectTemplateAsync(default!, default!, default);
+    }
+
+    [Fact]
+    public async Task OnPostSelectVersionAsync_ShouldRememberTheChosenVersion()
+    {
+        _model.SelectedVersionNumber = " 1.0.2 ";
+
+        var result = await _model.OnPostSelectVersionAsync(CancellationToken.None);
+
+        Assert.IsType<RedirectToPageResult>(result);
+        Assert.Equal("1.0.2", _session.GetString("TemplateVersionNumber"));
+    }
+
+    [Fact]
+    public async Task OnPostSaveAsync_ShouldNotSaveToAnotherTemplate_WhenNoneIsSelected()
+    {
+        _selection.GetSelectedTemplateId(Arg.Any<HttpContext>()).Returns((string?)null);
+        _model.NewVersion = "1.0.4";
+        _model.NewSchema = StoredSchema;
+
+        var result = await _model.OnPostSaveAsync(CancellationToken.None);
+
+        Assert.IsType<RedirectToPageResult>(result);
+        await _selection.DidNotReceiveWithAnyArgs().SelectTemplateAsync(default!, default!, default);
+        await _admin.DidNotReceiveWithAnyArgs().CreateVersionAsync(default!, default, default);
     }
 
     [Fact]
@@ -82,7 +162,7 @@ public class TemplateStudioModelTests
     {
         GivenStoredVersion("1.0.3");
 
-        var result = await _model.OnGetAsync(null, CancellationToken.None);
+        var result = await _model.OnGetAsync(null, false, CancellationToken.None);
 
         Assert.IsType<PageResult>(result);
         Assert.Equal("1.0.4", _model.NewVersion);
@@ -97,7 +177,7 @@ public class TemplateStudioModelTests
     [Fact]
     public async Task OnGetAsync_ShouldStartFromTheStarterTemplate_WhenThereAreNoVersions()
     {
-        await _model.OnGetAsync(null, CancellationToken.None);
+        await _model.OnGetAsync(null, false, CancellationToken.None);
 
         Assert.Equal("1.0.0", _model.NewVersion);
         using var data = JsonDocument.Parse(_model.StudioDataJson);
@@ -113,7 +193,7 @@ public class TemplateStudioModelTests
     {
         GivenStoredVersion("1.0.3");
 
-        await _model.OnGetAsync(null, CancellationToken.None);
+        await _model.OnGetAsync(null, false, CancellationToken.None);
 
         using var data = JsonDocument.Parse(_model.StudioDataJson);
         Assert.Equal(4, data.RootElement.GetProperty("applicationCount").GetInt32());
@@ -129,7 +209,7 @@ public class TemplateStudioModelTests
         GivenStoredVersion("1.0.3");
         GivenApplicationCount(Task.FromException<PagedResultOfApplicationDto>(new HttpRequestException("forbidden")));
 
-        await _model.OnGetAsync(null, CancellationToken.None);
+        await _model.OnGetAsync(null, false, CancellationToken.None);
 
         using var data = JsonDocument.Parse(_model.StudioDataJson);
         Assert.Equal(JsonValueKind.Null, data.RootElement.GetProperty("applicationCount").ValueKind);
@@ -169,7 +249,7 @@ public class TemplateStudioModelTests
                 return Task.CompletedTask;
             });
 
-        await _model.OnGetAsync(null, CancellationToken.None);
+        await _model.OnGetAsync(null, false, CancellationToken.None);
 
         Assert.Equal(TemplateManagerMessages.LoadFailed, _model.LoadError);
         Assert.Equal("{}", _model.StudioDataJson);
@@ -225,7 +305,7 @@ public class TemplateStudioModelTests
     {
         GivenStoredVersion("1.0.3");
 
-        await _model.OnGetAsync(null, CancellationToken.None);
+        await _model.OnGetAsync(null, false, CancellationToken.None);
 
         Assert.Equal("1.0.3", _model.StartedFromLatestVersion);
         Assert.False(_model.HasNewerVersion);
@@ -289,7 +369,7 @@ public class TemplateStudioModelTests
         _eventMappings.GetFieldReferences(Arg.Any<IEnumerable<string>>())
             .Returns([new EventMappingFieldReference("trustName", "TransferSubmittedEvent", "transfer-v1")]);
 
-        await _model.OnGetAsync(null, CancellationToken.None);
+        await _model.OnGetAsync(null, false, CancellationToken.None);
 
         _eventMappings.Received(1).GetFieldReferences(Arg.Is<IEnumerable<string>>(keys =>
             keys.Contains(_template.TemplateId.ToString()) && keys.Contains("tpl")));
@@ -306,7 +386,7 @@ public class TemplateStudioModelTests
         GivenStoredVersion("1.0.3");
         _eventMappings.GetFieldReferences(Arg.Any<IEnumerable<string>>()).Returns(_ => throw new InvalidOperationException("bad config"));
 
-        var result = await _model.OnGetAsync(null, CancellationToken.None);
+        var result = await _model.OnGetAsync(null, false, CancellationToken.None);
 
         Assert.IsType<PageResult>(result);
         using var data = JsonDocument.Parse(_model.StudioDataJson);

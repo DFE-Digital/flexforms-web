@@ -35,9 +35,18 @@ public class TemplateStudioModel(
     private const string TemplateVersionSessionKey = "TemplateVersionNumber";
 
     public TemplateDto? SelectedTemplate { get; private set; }
+    public IReadOnlyList<TemplateDto> TenantTemplates { get; private set; } = [];
+    public IReadOnlyList<TemplateVersionSummaryDto> AvailableVersions { get; private set; } = [];
     public string? CurrentVersionNumber { get; private set; }
     public string? LatestVersionNumber { get; private set; }
     public string? SavedVersion { get; private set; }
+    public bool ShowCreated { get; private set; }
+
+    [BindProperty]
+    public Guid? SelectedTemplateId { get; set; }
+
+    [BindProperty]
+    public string? SelectedVersionNumber { get; set; }
     public string? LoadError { get; private set; }
     public string StudioDataJson { get; private set; } = "{}";
 
@@ -62,13 +71,14 @@ public class TemplateStudioModel(
 
     public bool HasNewerVersion { get; private set; }
 
-    public async Task<IActionResult> OnGetAsync(string? saved, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetAsync(string? saved, bool created, CancellationToken cancellationToken)
     {
-        var state = await LoadSelectedTemplateAsync(cancellationToken);
+        var state = await LoadSelectedTemplateAsync(cancellationToken, selectFirstWhenNone: true);
         if (state is null)
-            return RedirectToPage("/Admin/TemplateManager");
+            return Page();
 
         SavedVersion = saved;
+        ShowCreated = created;
         if (LoadError is not null)
             return Page();
 
@@ -81,9 +91,10 @@ public class TemplateStudioModel(
     public async Task<IActionResult> OnPostSaveAsync(CancellationToken cancellationToken)
     {
         NewSchema = TemplateStudioSchemaTransport.Decode(NewSchema);
-        var state = await LoadSelectedTemplateAsync(cancellationToken);
+        // Never fall back to another template here: the posted schema belongs to the one that was open.
+        var state = await LoadSelectedTemplateAsync(cancellationToken, selectFirstWhenNone: false);
         if (state is null)
-            return RedirectToPage("/Admin/TemplateManager");
+            return RedirectToPage();
 
         // The posted JSON is the designer's work, so keep Template Studio open with it even if reloading the stored version failed.
         if (!string.IsNullOrWhiteSpace(NewSchema))
@@ -133,30 +144,73 @@ public class TemplateStudioModel(
         return new JsonResult(new { isValid, errors });
     }
 
-    private async Task<TemplateManagerWorkState?> LoadSelectedTemplateAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Opens another template. Any unsaved changes are lost, which the browser warns about before the form submits.
+    /// </summary>
+    public async Task<IActionResult> OnPostSelectTemplateAsync(CancellationToken cancellationToken)
     {
         var templates = await templateSelectionService.GetSelectableTemplatesAsync(cancellationToken);
-        var sessionTemplateId = templateSelectionService.GetSelectedTemplateId(HttpContext);
-        if (!Guid.TryParse(sessionTemplateId, out var templateId)
-            || templates.FirstOrDefault(template => template.TemplateId == templateId) is not { } template)
+        if (templates.FirstOrDefault(template => template.TemplateId == SelectedTemplateId) is { } template)
         {
-            return null;
+            await templateSelectionService.SelectTemplateAsync(HttpContext, template, cancellationToken);
+            HttpContext.Session.Remove(TemplateVersionSessionKey);
+            await HttpContext.Session.CommitAsync(cancellationToken);
         }
 
+        return RedirectToPage();
+    }
+
+    /// <summary>
+    /// Opens another version of the current template as the starting point for the next version.
+    /// </summary>
+    public async Task<IActionResult> OnPostSelectVersionAsync(CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(SelectedVersionNumber))
+        {
+            HttpContext.Session.SetString(TemplateVersionSessionKey, SelectedVersionNumber.Trim());
+            await HttpContext.Session.CommitAsync(cancellationToken);
+        }
+
+        return RedirectToPage();
+    }
+
+    private async Task<TemplateManagerWorkState?> LoadSelectedTemplateAsync(
+        CancellationToken cancellationToken,
+        bool selectFirstWhenNone)
+    {
+        TenantTemplates = await templateSelectionService.GetSelectableTemplatesAsync(cancellationToken);
+        var sessionTemplateId = templateSelectionService.GetSelectedTemplateId(HttpContext);
+        var template = Guid.TryParse(sessionTemplateId, out var sessionId)
+            ? TenantTemplates.FirstOrDefault(item => item.TemplateId == sessionId)
+            : null;
+
+        if (template is null && selectFirstWhenNone && TenantTemplates.FirstOrDefault() is { } first)
+        {
+            await templateSelectionService.SelectTemplateAsync(HttpContext, first, cancellationToken);
+            HttpContext.Session.Remove(TemplateVersionSessionKey);
+            template = first;
+        }
+
+        if (template is null)
+            return null;
+
         SelectedTemplate = template;
+        SelectedTemplateId = template.TemplateId;
 
         var state = new TemplateManagerWorkState
         {
-            TenantTemplates = templates,
+            TenantTemplates = TenantTemplates,
             SessionVersionNumber = HttpContext.Session.GetString(TemplateVersionSessionKey)
         };
-        await templateManagerAdmin.LoadTemplateDataAsync(state, templateId, cancellationToken);
+        await templateManagerAdmin.LoadTemplateDataAsync(state, template.TemplateId, cancellationToken);
 
         if (state.HasError)
             LoadError = state.ErrorMessage;
 
+        AvailableVersions = state.AvailableVersions;
         CurrentVersionNumber = state.CurrentVersionNumber;
         LatestVersionNumber = state.LatestVersionNumber;
+        SelectedVersionNumber = state.CurrentVersionNumber;
         return state;
     }
 
