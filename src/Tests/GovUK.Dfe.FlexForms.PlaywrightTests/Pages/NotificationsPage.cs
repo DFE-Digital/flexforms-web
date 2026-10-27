@@ -31,7 +31,7 @@ public sealed class NotificationsPage(IPage page) : BasePage(page)
     {
         var notificationRow = NotificationRow(message);
         await notificationRow
-            .GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = "Dismiss  this notification" })
+            .GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = $"Dismiss notification: {message}", Exact = true })
             .ClickAsync();
     }
 

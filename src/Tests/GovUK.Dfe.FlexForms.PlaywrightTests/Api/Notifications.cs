@@ -11,7 +11,8 @@ public static class Notifications
         ApiBase.ApiRequestAsync<NotificationDto>(request, "/v1/notifications", method: "POST",
             data: new AddNotificationRequest(
                 message,
-                type));
+                type,
+                AutoDismiss: false));
 
     public static Task ClearAllNotificationsAsync(IAPIRequestContext request) =>
         ApiBase.ApiRequestAsync(request, "/v1/notifications/clear-all", method: "DELETE");
