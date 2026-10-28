@@ -10,6 +10,8 @@ using GovUK.Dfe.FlexForms.Web.Extensions;
 using GovUK.Dfe.FlexForms.Web.Features;
 using GovUK.Dfe.FlexForms.Web.Filters;
 using GovUK.Dfe.FlexForms.Web.Middleware;
+using GovUK.Dfe.FlexForms.Web.Tenancy;
+using System.Security.Claims;
 using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.FlexForms.Web.Services;
 using GovUk.Frontend.AspNetCore;
@@ -160,8 +162,22 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor
         | ForwardedHeaders.XForwardedProto
         | ForwardedHeaders.XForwardedHost;
-    options.KnownIPNetworks.Clear();
-    options.KnownProxies.Clear();
+
+    var proxies = configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [];
+    var networks = configuration.GetSection("ForwardedHeaders:KnownNetworks").Get<string[]>() ?? [];
+    if (proxies.Length == 0 && networks.Length == 0)
+    {
+        // Ingress (App Gateway / Container Apps) must be the only path to this container.
+        options.KnownIPNetworks.Clear();
+        options.KnownProxies.Clear();
+        return;
+    }
+
+    foreach (var proxy in proxies)
+    {
+        if (System.Net.IPAddress.TryParse(proxy, out var ip))
+            options.KnownProxies.Add(ip);
+    }
 });
 
 // Same Data Protection rules as the API: Local key ring unless UseAzure (Azure Blob + Key Vault / SAS).
@@ -234,7 +250,7 @@ builder.Services.AddRazorPages(options =>
     options.Conventions.AuthorizeFolder("/", "OpenIdConnectPolicy");
     options.Conventions.AllowAnonymousToPage("/Logout");
 
-    options.Conventions.AuthorizePage("/Diagnostics");
+    options.Conventions.AuthorizePage("/Diagnostics", AdminAccessHelper.CanManageTenantSettingsPolicy);
     
     // Allow anonymous access to feedback pages
     options.Conventions.AllowAnonymousToPage("/Feedback/Index");
@@ -368,6 +384,12 @@ OpenIdConnectEvents CreateEntraSsoEvents() => new()
         DfESignInOidcPublicUrls.ApplyPostLogoutRedirectUri(context);
     },
 
+    OnTokenValidated = context =>
+    {
+        StampTenantIdClaim(context);
+        return Task.CompletedTask;
+    },
+
     OnRemoteFailure = async context =>
     {
         var error = context.Failure?.Message ?? "Unknown error";
@@ -381,12 +403,7 @@ OpenIdConnectEvents CreateEntraSsoEvents() => new()
         }
     },
 
-    OnAuthenticationFailed = context =>
-    {
-        context.HandleResponse();
-        context.Response.Redirect("/error?message=" + Uri.EscapeDataString(context.Exception.Message));
-        return Task.CompletedTask;
-    },
+    OnAuthenticationFailed = context => RedirectOnOidcAuthenticationFailed(context),
 
     OnSignedOutCallbackRedirect = async context =>
     {
@@ -421,6 +438,12 @@ var authenticationBuilder = builder.Services
             }
         },
 
+        OnTokenValidated = context =>
+        {
+            StampTenantIdClaim(context);
+            return Task.CompletedTask;
+        },
+
         OnRemoteFailure = async context =>
         {
             var error = context.Failure?.Message ?? "Unknown error";
@@ -434,12 +457,7 @@ var authenticationBuilder = builder.Services
             }
         },
 
-        OnAuthenticationFailed = context =>
-        {
-            context.HandleResponse();
-            context.Response.Redirect("/error?message=" + Uri.EscapeDataString(context.Exception.Message));
-            return Task.CompletedTask;
-        },
+        OnAuthenticationFailed = context => RedirectOnOidcAuthenticationFailed(context),
 
         OnRedirectToIdentityProviderForSignOut = async context =>
         {
@@ -612,7 +630,7 @@ builder.Services.AddScoped<ITestAuthenticationService, TestAuthenticationService
 builder.Services.Configure<InternalServiceAuthOptions>(
     builder.Configuration.GetSection("InternalServiceAuth"));
 
-// Add internal service authentication service (always available)
+// Internal service authentication is gated per environment (off by default in Production).
 builder.Services.AddScoped<IInternalServiceAuthenticationService, InternalServiceAuthenticationService>();
 
 builder.Services.AddServiceCaching(configuration);
@@ -770,6 +788,7 @@ app.UseStatusCodePages(ctx =>
 });
 
 app.UseAuthentication();
+app.UseMiddleware<TenantSessionBindingMiddleware>();
 app.UseTokenManagementMiddleware();
 app.UseActivityBasedTokenRefresh(); // Session management: idle timeout 30min, absolute timeout 8hr, token refresh at 30min remaining
 app.UsePermissionsCache();
@@ -813,6 +832,32 @@ public static partial class Program
     {
         await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         httpContext.Session.Clear();
+    }
+
+    /// <summary>
+    /// Logs the IdP failure on the server and sends the browser to the generic error page.
+    /// Exception text must not appear on the query string (logs, history, Referer).
+    /// </summary>
+    internal static void StampTenantIdClaim(TokenValidatedContext context)
+    {
+        var tenantId = context.HttpContext.RequestServices.GetService<ITenantRequestContext>()?.TenantId;
+        if (tenantId is Guid id
+            && context.Principal?.Identity is ClaimsIdentity identity
+            && !identity.HasClaim(c => c.Type == TenantSessionBindingMiddleware.TenantIdClaimType))
+        {
+            identity.AddClaim(new Claim(TenantSessionBindingMiddleware.TenantIdClaimType, id.ToString()));
+        }
+    }
+
+    internal static Task RedirectOnOidcAuthenticationFailed(AuthenticationFailedContext context)
+    {
+        var logger = context.HttpContext.RequestServices
+            .GetService<ILoggerFactory>()
+            ?.CreateLogger("OidcAuthentication");
+        logger?.LogError(context.Exception, "OIDC authentication failed.");
+        context.HandleResponse();
+        context.Response.Redirect("/Error/ServerError");
+        return Task.CompletedTask;
     }
 
     /// <summary>

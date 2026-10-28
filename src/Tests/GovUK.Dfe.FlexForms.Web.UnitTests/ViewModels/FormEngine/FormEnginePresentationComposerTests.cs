@@ -57,6 +57,25 @@ public class FormEnginePresentationComposerTests
     }
 
     [Fact]
+    public void BuildPreview_encodes_raw_script_in_stored_text_answer()
+    {
+        var text = Field("notes", "text", "Notes");
+        var task = Task("t1", "About you", pages: [Page("p1", [text])]);
+        var formData = new Dictionary<string, object>
+        {
+            ["notes"] = "<script>alert(1)</script>"
+        };
+
+        _formatting.GetFieldValue("notes", formData).Returns("<script>alert(1)</script>");
+        _formatting.HasFieldValue("notes", formData).Returns(true);
+
+        var preview = _composer.BuildPreview(Context(formData, Template(task)));
+        var html = preview.Groups.Single().Tasks.Single().Rows.Single().Value.Html;
+
+        Assert.Equal("&lt;script&gt;alert(1)&lt;/script&gt;", html);
+    }
+
+    [Fact]
     public void BuildPreview_renders_upload_json_as_download_links()
     {
         var fileId = Guid.NewGuid();

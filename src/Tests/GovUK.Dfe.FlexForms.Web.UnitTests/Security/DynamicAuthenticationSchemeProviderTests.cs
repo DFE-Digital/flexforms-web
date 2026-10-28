@@ -8,8 +8,11 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using NSubstitute;
 using System.Security.Claims;
 
 namespace GovUK.Dfe.FlexForms.Web.UnitTests.Security;
@@ -38,7 +41,19 @@ public class DynamicAuthenticationSchemeProviderTests
         Assert.Equal(OpenIdConnectDefaults.AuthenticationScheme, scheme!.Name);
     }
 
-    private static DynamicAuthenticationSchemeProvider CreateProvider()
+    [Fact]
+    public async Task GetDefaultAuthenticateSchemeAsync_IgnoresServiceHeaders_InProduction()
+    {
+        var provider = CreateProvider("Production", serviceEmail: "svc@education.gov.uk");
+
+        var scheme = await provider.GetDefaultAuthenticateSchemeAsync();
+
+        Assert.Equal(CookieAuthenticationDefaults.AuthenticationScheme, scheme!.Name);
+    }
+
+    private static DynamicAuthenticationSchemeProvider CreateProvider(
+        string environmentName = "Development",
+        string? serviceEmail = null)
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -51,6 +66,9 @@ public class DynamicAuthenticationSchemeProviderTests
                 InternalServiceAuthenticationHandler.SchemeName, _ => { });
 
         var httpContext = new DefaultHttpContext();
+        if (serviceEmail is not null)
+            httpContext.Request.Headers["x-service-email"] = serviceEmail;
+
         var sp = services.BuildServiceProvider();
         httpContext.RequestServices = sp;
 
@@ -61,7 +79,16 @@ public class DynamicAuthenticationSchemeProviderTests
             authOptions,
             accessor,
             Options.Create(new TestAuthenticationOptions { Enabled = false }),
-            Options.Create(new EntraSsoOptions { Enabled = false }));
+            Options.Create(new EntraSsoOptions { Enabled = false }),
+            CreateEnvironment(environmentName),
+            new ConfigurationBuilder().Build());
+    }
+
+    private static IHostEnvironment CreateEnvironment(string name)
+    {
+        var environment = Substitute.For<IHostEnvironment>();
+        environment.EnvironmentName.Returns(name);
+        return environment;
     }
 }
 

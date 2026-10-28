@@ -4,6 +4,7 @@ using GovUK.Dfe.FlexForms.Application.Notifications;
 using GovUK.Dfe.FlexForms.Application.Validation;
 using GovUK.Dfe.FlexForms.Web.Extensions;
 using GovUK.Dfe.FlexForms.Web.Interfaces;
+using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
@@ -68,7 +69,7 @@ public class UploadFileModel(
         {
             formErrorStore.Save(FieldId, ModelState);
             if (!string.IsNullOrEmpty(ReturnUrl))
-                context.Result = new RedirectResult(ReturnUrl);
+                context.Result = new RedirectResult(LocalRedirects.OrFallback(ReturnUrl));
         }
     }
 
@@ -118,7 +119,7 @@ public class UploadFileModel(
             if (!string.IsNullOrEmpty(FieldId))
                 formErrorStore.Save(FieldId, ModelState, ErrorMessage);
 
-            return string.IsNullOrEmpty(ReturnUrl) ? Page() : Redirect(ReturnUrl);
+            return string.IsNullOrEmpty(ReturnUrl) ? Page() : Redirect(LocalRedirects.OrFallback(ReturnUrl));
         }
 
         await applicationStateService.EnsureApplicationIdAsync(ReferenceNumber);
@@ -202,7 +203,7 @@ public class UploadFileModel(
         return outcome.Kind switch
         {
             FormEngineOutcomeKind.StayOnPage => Page(),
-            FormEngineOutcomeKind.Redirect => Redirect(outcome.RedirectUrl!),
+            FormEngineOutcomeKind.Redirect => Redirect(LocalRedirects.OrFallback(outcome.RedirectUrl)),
             FormEngineOutcomeKind.RedirectToPage => RedirectToPage(outcome.PageName, outcome.RouteValues),
             FormEngineOutcomeKind.NotFound => NotFound(),
             FormEngineOutcomeKind.BadRequest => BadRequest(outcome.ErrorMessage),

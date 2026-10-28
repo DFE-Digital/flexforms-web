@@ -3,7 +3,9 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using GovUK.Dfe.CoreLibs.Security.Configurations;
+using GovUK.Dfe.FlexForms.Web.Middleware;
 using GovUK.Dfe.FlexForms.Web.Security;
+using GovUK.Dfe.FlexForms.Web.Tenancy;
 using System.Security.Claims;
 using System.Diagnostics.CodeAnalysis;
 
@@ -50,7 +52,7 @@ public class TestAuthenticationService : ITestAuthenticationService
         {
             _logger.LogDebug("Creating claims and identity for {Email}", email);
             
-            var claims = CreateUserClaims(email);
+            var claims = CreateUserClaims(email, httpContext);
             var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
             var principal = new ClaimsPrincipal(identity);
 
@@ -98,15 +100,21 @@ public class TestAuthenticationService : ITestAuthenticationService
         await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
     }
 
-    private static IEnumerable<Claim> CreateUserClaims(string email)
+    private static IEnumerable<Claim> CreateUserClaims(string email, HttpContext httpContext)
     {
-        return new[]
+        var claims = new List<Claim>
         {
-            new Claim(ClaimTypes.Email, email),
-            new Claim(ClaimTypes.NameIdentifier, email),
-            new Claim(ClaimTypes.Name, email),
-            new Claim("sub", email),
-            new Claim("email", email)
+            new(ClaimTypes.Email, email),
+            new(ClaimTypes.NameIdentifier, email),
+            new(ClaimTypes.Name, email),
+            new("sub", email),
+            new("email", email)
         };
+
+        var tenantId = httpContext.RequestServices.GetService<ITenantRequestContext>()?.TenantId;
+        if (tenantId is Guid id)
+            claims.Add(new Claim(TenantSessionBindingMiddleware.TenantIdClaimType, id.ToString()));
+
+        return claims;
     }
 }

@@ -1,7 +1,9 @@
 using System.Net;
 using System.Net.Sockets;
 using GovUK.Dfe.FlexForms.Web.Configuration;
+using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.FlexForms.Web.Services.Platform;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace GovUK.Dfe.FlexForms.Web.Services.Tenant;
@@ -11,7 +13,8 @@ public sealed class TenantIdResolver(
     PlatformConfigurationApiClient apiClient,
     TenantHostnameCache hostnameCache,
     IOptions<PlatformBootstrapOptions> options,
-    ILogger<TenantIdResolver> logger) : ITenantIdResolver
+    ILogger<TenantIdResolver> logger,
+    IHostEnvironment? hostEnvironment = null) : ITenantIdResolver
 {
     public const string TenantIdHeader = "X-Tenant-ID";
 
@@ -27,16 +30,10 @@ public sealed class TenantIdResolver(
         HttpContext httpContext,
         CancellationToken cancellationToken = default)
     {
-        if (httpContext.Request.Headers.TryGetValue(TenantIdHeader, out var headerValue) &&
-            Guid.TryParse(headerValue, out var tenantFromHeader))
+        if (HasConflictingPublicHostnames(httpContext))
         {
-            return tenantFromHeader;
-        }
-
-        if (httpContext.Request.Query.TryGetValue("tenantId", out var queryValue) &&
-            Guid.TryParse(queryValue, out var tenantFromQuery))
-        {
-            return tenantFromQuery;
+            throw new TenantHostnameConflictException(
+                "X-Forwarded-Host and Request.Host are both public hostnames and they differ.");
         }
 
         var forwardedHost = httpContext.Request.Headers["X-Forwarded-Host"].ToString();
@@ -54,16 +51,77 @@ public sealed class TenantIdResolver(
             string.IsNullOrWhiteSpace(requestHostHost) ? "(empty)" : requestHostHost,
             string.IsNullOrWhiteSpace(host) ? "(none)" : host);
 
-        if (string.IsNullOrWhiteSpace(host))
+        Guid? fromHost = null;
+        if (!string.IsNullOrWhiteSpace(host))
         {
-            logger.LogDebug(
-                "Could not resolve a public hostname for tenant lookup (Request.Host={RequestHost}, X-Forwarded-Host={ForwardedHost}, X-Original-Host={OriginalHost})",
-                requestHost,
-                string.IsNullOrWhiteSpace(forwardedHost) ? "(empty)" : forwardedHost,
-                string.IsNullOrWhiteSpace(originalHost) ? "(empty)" : originalHost);
-            return null;
+            fromHost = await ResolveFromHostnameAsync(host, cancellationToken);
         }
 
+        var explicitId = TryReadExplicitTenantId(httpContext);
+
+        if (fromHost is Guid hostId)
+        {
+            if (explicitId is Guid headerId && headerId != hostId)
+            {
+                // Local development uses localhost plus X-Tenant-ID to pick a tenant.
+                if (IsLocalDevelopmentHostname(host) && AllowsExplicitTenantSelection())
+                    return headerId;
+
+                logger.LogWarning(
+                    "Ignoring X-Tenant-ID {HeaderTenant} because hostname {Hostname} resolved tenant {HostTenant}",
+                    headerId,
+                    host,
+                    hostId);
+            }
+
+            return hostId;
+        }
+
+        if (explicitId is Guid id && AllowsExplicitTenantSelection())
+            return id;
+
+        return null;
+    }
+
+    /// <summary>
+    /// Prefers a public tenant hostname over Azure Container Apps / private hosts.
+    /// Order: <c>X-Forwarded-Host</c>, then <c>Request.Host</c>, then <c>X-Original-Host</c>.
+    /// ACA often puts its own FQDN in <c>X-Original-Host</c> while <c>Request.Host</c> is already public.
+    /// </summary>
+    public static string? ResolvePublicHostname(HttpContext httpContext)
+    {
+        foreach (var candidate in EnumerateHostnameCandidates(httpContext))
+        {
+            if (IsUsablePublicHostname(candidate))
+                return candidate;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// True when both <c>X-Forwarded-Host</c> and <c>Request.Host</c> are usable public hostnames and they differ.
+    /// </summary>
+    public static bool HasConflictingPublicHostnames(HttpContext httpContext)
+    {
+        var forwarded = FirstHostFromHeader(httpContext.Request.Headers["X-Forwarded-Host"]);
+        var requestHost = httpContext.Request.Host.Host;
+        return IsUsablePublicHostname(forwarded)
+               && IsUsablePublicHostname(requestHost)
+               && !string.Equals(forwarded, requestHost, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// True when the request arrived on the Container Apps FQDN (or another non-tenant host)
+    /// with no public hostname header. Typical of probes and internal calls, not browsers.
+    /// </summary>
+    public static bool IsNonPublicHostRequest(HttpContext httpContext) =>
+        string.IsNullOrWhiteSpace(ResolvePublicHostname(httpContext));
+
+    private async Task<Guid?> ResolveFromHostnameAsync(
+        string host,
+        CancellationToken cancellationToken)
+    {
         var ttl = TimeSpan.FromMinutes(Math.Max(1, options.Value.TenantConfigurationCacheMinutes));
         var now = DateTimeOffset.UtcNow;
         if (hostnameCache.TryGet(host, now, allowExpired: false, out var cached))
@@ -113,28 +171,31 @@ public sealed class TenantIdResolver(
         }, cancellationToken);
     }
 
-    /// <summary>
-    /// Prefers a public tenant hostname over Azure Container Apps / private hosts.
-    /// Order: <c>X-Forwarded-Host</c>, then <c>Request.Host</c>, then <c>X-Original-Host</c>.
-    /// ACA often puts its own FQDN in <c>X-Original-Host</c> while <c>Request.Host</c> is already public.
-    /// </summary>
-    public static string? ResolvePublicHostname(HttpContext httpContext)
+    private static Guid? TryReadExplicitTenantId(HttpContext httpContext)
     {
-        foreach (var candidate in EnumerateHostnameCandidates(httpContext))
+        if (httpContext.Request.Headers.TryGetValue(TenantIdHeader, out var headerValue) &&
+            Guid.TryParse(headerValue, out var tenantFromHeader))
         {
-            if (IsUsablePublicHostname(candidate))
-                return candidate;
+            return tenantFromHeader;
+        }
+
+        if (httpContext.Request.Query.TryGetValue("tenantId", out var queryValue) &&
+            Guid.TryParse(queryValue, out var tenantFromQuery))
+        {
+            return tenantFromQuery;
         }
 
         return null;
     }
 
-    /// <summary>
-    /// True when the request arrived on the Container Apps FQDN (or another non-tenant host)
-    /// with no public hostname header. Typical of probes and internal calls, not browsers.
-    /// </summary>
-    public static bool IsNonPublicHostRequest(HttpContext httpContext) =>
-        string.IsNullOrWhiteSpace(ResolvePublicHostname(httpContext));
+    private bool AllowsExplicitTenantSelection()
+        => hostEnvironment is not null
+           && TestAuthenticationEnvironmentGate.IsAllowed(hostEnvironment);
+
+    private static bool IsLocalDevelopmentHostname(string? host)
+        => !string.IsNullOrWhiteSpace(host)
+           && (string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)
+               || host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase));
 
     private static IEnumerable<string> EnumerateHostnameCandidates(HttpContext httpContext)
     {

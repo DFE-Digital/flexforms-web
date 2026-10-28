@@ -46,6 +46,16 @@ public class TenantIdResolverHostnameTests
     }
 
     [Fact]
+    public void HasConflictingPublicHostnames_IsTrue_WhenForwardedAndRequestHostDiffer()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Host = new HostString("a.example.gov.uk");
+        context.Request.Headers["X-Forwarded-Host"] = "b.example.gov.uk";
+
+        Assert.True(TenantIdResolver.HasConflictingPublicHostnames(context));
+    }
+
+    [Fact]
     public void IsNonPublicHostRequest_IsFalse_ForPublicTenantHost()
     {
         var context = new DefaultHttpContext();

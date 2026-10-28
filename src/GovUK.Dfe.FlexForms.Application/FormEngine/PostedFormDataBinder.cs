@@ -60,7 +60,10 @@ public sealed class PostedFormDataBinder : IPostedFormDataBinder
 
             var dateFieldId = dateMatch.Groups[1].Value;
             var part = dateMatch.Groups[2].Value.ToLowerInvariant();
-            var formValue = values.Count > 0 ? values[0] : string.Empty;
+            var rawValue = values.Count > 0 ? values[0] : string.Empty;
+            var formValue = rawValue is null
+                ? string.Empty
+                : new string(rawValue.Where(char.IsDigit).ToArray());
 
             if (!dateParts.TryGetValue(dateFieldId, out var parts))
                 parts = (null, null, null);

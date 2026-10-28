@@ -36,6 +36,26 @@ public class TenantIdResolverCacheTests
     }
 
     [Fact]
+    public async Task ResolveTenantIdAsync_IgnoresTenantHeader_WhenPublicHostnameResolves()
+    {
+        var hostnameTenant = Guid.NewGuid();
+        var headerTenant = Guid.NewGuid();
+        var handler = new StubHandler(HttpStatusCode.OK, JsonSerializer.Serialize(new
+        {
+            tenantId = hostnameTenant,
+            tenantName = "Visits",
+            hostname = "visits.example.gov.uk"
+        }));
+        var resolver = CreateResolver(handler, new TenantHostnameCache());
+        var context = PublicHostContext();
+        context.Request.Headers["X-Tenant-ID"] = headerTenant.ToString();
+
+        var resolved = await resolver.ResolveTenantIdAsync(context, CancellationToken.None);
+
+        Assert.Equal(hostnameTenant, resolved);
+    }
+
+    [Fact]
     public async Task ResolveTenantIdAsync_UsesStaleCache_WhenPlatformReturns429()
     {
         var tenantId = Guid.NewGuid();
