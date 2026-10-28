@@ -38,4 +38,11 @@ public class LocalRedirectsTests
     [InlineData("/\\evil.example")]
     public void IsLocal_RejectsBackslashInPath(string url)
         => Assert.False(LocalRedirects.IsLocal(url));
+
+    [Theory]
+    [InlineData("/\t/evil.example")]
+    [InlineData("/\n/evil.example")]
+    [InlineData("/path\rhidden")]
+    public void IsLocal_RejectsEmbeddedControlCharacters(string url)
+        => Assert.False(LocalRedirects.IsLocal(url));
 }

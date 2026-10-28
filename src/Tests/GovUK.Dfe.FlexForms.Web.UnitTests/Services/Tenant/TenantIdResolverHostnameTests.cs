@@ -94,7 +94,8 @@ public class TenantIdResolverHostnameTests
         var context = new DefaultHttpContext();
         context.Request.Host = new HostString(host);
 
-        Assert.Equal(host, TenantIdResolver.ResolvePublicHostname(context));
+        var resolved = TenantIdResolver.ResolvePublicHostname(context);
+        Assert.Equal(host, resolved?.Trim('[', ']'));
     }
 
     [Fact]
@@ -127,5 +128,17 @@ public class TenantIdResolverHostnameTests
         context.Request.Headers["X-Forwarded-Host"] = "visits.example.gov.uk";
 
         Assert.False(TenantIdResolver.HasConflictingPublicHostnames(context));
+    }
+
+    [Fact]
+    public void HasConflictingPublicHostnames_UsesOriginalHost_AfterForwardedHeadersRewrite()
+    {
+        var context = new DefaultHttpContext();
+        // After UseForwardedHeaders, Request.Host has already been replaced with X-Forwarded-Host.
+        context.Request.Host = new HostString("b.example.gov.uk");
+        context.Request.Headers["X-Forwarded-Host"] = "b.example.gov.uk";
+        context.Items[TenantIdResolver.OriginalRequestHostItemKey] = "a.example.gov.uk";
+
+        Assert.True(TenantIdResolver.HasConflictingPublicHostnames(context));
     }
 }

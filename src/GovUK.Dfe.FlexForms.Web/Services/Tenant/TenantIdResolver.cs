@@ -18,6 +18,12 @@ public sealed class TenantIdResolver(
 {
     public const string TenantIdHeader = "X-Tenant-ID";
 
+    /// <summary>
+    /// HttpContext.Items key for <see cref="HttpRequest.Host"/> captured before
+    /// <c>UseForwardedHeaders</c> rewrites it from <c>X-Forwarded-Host</c>.
+    /// </summary>
+    public const string OriginalRequestHostItemKey = "FlexForms.OriginalRequestHost";
+
     /// <inheritdoc />
     public void InvalidateHostnameCache()
     {
@@ -105,10 +111,22 @@ public sealed class TenantIdResolver(
     public static bool HasConflictingPublicHostnames(HttpContext httpContext)
     {
         var forwarded = FirstHostFromHeader(httpContext.Request.Headers["X-Forwarded-Host"]);
-        var requestHost = httpContext.Request.Host.Host;
+        var requestHost = OriginalRequestHost(httpContext);
         return IsUsablePublicHostname(forwarded)
                && IsUsablePublicHostname(requestHost)
                && !string.Equals(forwarded, requestHost, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? OriginalRequestHost(HttpContext httpContext)
+    {
+        if (httpContext.Items.TryGetValue(OriginalRequestHostItemKey, out var stored)
+            && stored is string host
+            && !string.IsNullOrWhiteSpace(host))
+        {
+            return host;
+        }
+
+        return httpContext.Request.Host.Host;
     }
 
     /// <summary>

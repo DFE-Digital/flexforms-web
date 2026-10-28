@@ -60,10 +60,11 @@ public sealed class PostedFormDataBinder : IPostedFormDataBinder
 
             var dateFieldId = dateMatch.Groups[1].Value;
             var part = dateMatch.Groups[2].Value.ToLowerInvariant();
-            var rawValue = values.Count > 0 ? values[0] : string.Empty;
-            var formValue = rawValue is null
-                ? string.Empty
-                : new string(rawValue.Where(char.IsDigit).ToArray());
+            var rawValue = values.Count > 0 ? values[0] ?? string.Empty : string.Empty;
+            // Keep non-digit characters so "1.5" cannot become day 15. HTML is encoded, not stripped.
+            var formValue = IsAllDigits(rawValue)
+                ? rawValue.Trim()
+                : HtmlInputSanitiser.Sanitise(rawValue);
 
             if (!dateParts.TryGetValue(dateFieldId, out var parts))
                 parts = (null, null, null);
@@ -119,5 +120,20 @@ public sealed class PostedFormDataBinder : IPostedFormDataBinder
             if (!string.Equals(fieldId, normalisedFieldId, StringComparison.Ordinal))
                 data[normalisedFieldId] = composed;
         }
+    }
+
+    private static bool IsAllDigits(string value)
+    {
+        var trimmed = value.Trim();
+        if (trimmed.Length == 0)
+            return true;
+
+        foreach (var c in trimmed)
+        {
+            if (!char.IsDigit(c))
+                return false;
+        }
+
+        return true;
     }
 }

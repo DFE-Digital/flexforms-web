@@ -10,7 +10,7 @@ public static class LocalRedirects
 
     public static bool IsLocal(string? url)
     {
-        if (string.IsNullOrEmpty(url))
+        if (string.IsNullOrEmpty(url) || url.Any(char.IsControl))
             return false;
 
         // "/path" is local; "//evil" and "/\\evil" are not.

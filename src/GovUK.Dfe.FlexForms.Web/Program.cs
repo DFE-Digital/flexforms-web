@@ -14,6 +14,7 @@ using GovUK.Dfe.FlexForms.Web.Tenancy;
 using System.Security.Claims;
 using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.FlexForms.Web.Services;
+using GovUK.Dfe.FlexForms.Web.Services.Tenant;
 using GovUk.Frontend.AspNetCore;
 using GovUK.Dfe.FlexForms.Api.Client.Extensions;
 using GovUK.Dfe.FlexForms.Api.Client.Security;
@@ -177,6 +178,12 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     {
         if (System.Net.IPAddress.TryParse(proxy, out var ip))
             options.KnownProxies.Add(ip);
+    }
+
+    foreach (var network in networks)
+    {
+        if (System.Net.IPNetwork.TryParse(network, out var ipNetwork))
+            options.KnownIPNetworks.Add(ipNetwork);
     }
 });
 
@@ -722,6 +729,12 @@ if (telemetryConfig is not null)
         .CreateLogger();
 }
 
+// Capture Request.Host before forwarding rewrites it from X-Forwarded-Host.
+app.Use((context, next) =>
+{
+    context.Items[TenantIdResolver.OriginalRequestHostItemKey] = context.Request.Host.Host;
+    return next();
+});
 app.UseForwardedHeaders();
 app.UseCorrelationId();
 app.UsePlatformTenantConfiguration();
