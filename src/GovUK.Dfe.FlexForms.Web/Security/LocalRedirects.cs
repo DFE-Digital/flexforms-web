@@ -17,7 +17,10 @@ public static class LocalRedirects
         if (url[0] == '/' && (url.Length == 1 || (url[1] != '/' && url[1] != '\\')))
             return !url.Contains('\\');
 
-        return url.StartsWith("~/", StringComparison.Ordinal);
+        // "~/path" is local; "~//evil" and "~/\\evil" are not.
+        return url.StartsWith("~/", StringComparison.Ordinal)
+               && (url.Length == 2 || (url[2] != '/' && url[2] != '\\'))
+               && !url.Contains('\\');
     }
 
     public static string OrFallback(string? url, string fallback = FallbackPath)

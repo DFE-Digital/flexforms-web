@@ -90,19 +90,14 @@ public sealed class TenantIdResolver(
     }
 
     /// <summary>
-    /// Prefers a public tenant hostname over Azure Container Apps / private hosts.
-    /// Order: <c>X-Forwarded-Host</c>, then <c>Request.Host</c>, then <c>X-Original-Host</c>.
-    /// ACA often puts its own FQDN in <c>X-Original-Host</c> while <c>Request.Host</c> is already public.
+    /// Uses <see cref="HttpRequest.Host"/> after <c>UseForwardedHeaders</c> has applied
+    /// the trusted-proxy policy. Raw <c>X-Forwarded-Host</c> / <c>X-Original-Host</c> are
+    /// not read here so an untrusted client cannot pick a tenant by header.
     /// </summary>
     public static string? ResolvePublicHostname(HttpContext httpContext)
     {
-        foreach (var candidate in EnumerateHostnameCandidates(httpContext))
-        {
-            if (IsUsablePublicHostname(candidate))
-                return candidate;
-        }
-
-        return null;
+        var host = UnbracketIpv6(httpContext.Request.Host.Host);
+        return IsUsablePublicHostname(host) ? host : null;
     }
 
     /// <summary>
@@ -123,10 +118,10 @@ public sealed class TenantIdResolver(
             && stored is string host
             && !string.IsNullOrWhiteSpace(host))
         {
-            return host;
+            return UnbracketIpv6(host);
         }
 
-        return httpContext.Request.Host.Host;
+        return UnbracketIpv6(httpContext.Request.Host.Host);
     }
 
     /// <summary>
@@ -215,19 +210,6 @@ public sealed class TenantIdResolver(
            && (string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)
                || host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase));
 
-    private static IEnumerable<string> EnumerateHostnameCandidates(HttpContext httpContext)
-    {
-        // 1) X-Forwarded-Host — correct when App Gateway rewrite sets the public host.
-        yield return FirstHostFromHeader(httpContext.Request.Headers["X-Forwarded-Host"]);
-
-        // 2) Request.Host — often already the public hostname after AGW / ACA (e.g. visits.dev-flexforms...).
-        // Prefer this over X-Original-Host: Azure commonly sets X-Original-Host to the ACA backend FQDN.
-        yield return httpContext.Request.Host.Host;
-
-        // 3) X-Original-Host — last resort (may be the container app hostname).
-        yield return FirstHostFromHeader(httpContext.Request.Headers["X-Original-Host"]);
-    }
-
     private static string? FirstHostFromHeader(string? headerValue)
     {
         if (string.IsNullOrWhiteSpace(headerValue))
@@ -240,8 +222,16 @@ public sealed class TenantIdResolver(
             return null;
 
         // Strip optional port
-        var hostOnly = first.Split(':', 2)[0].Trim();
+        var hostOnly = UnbracketIpv6(first.Split(':', 2)[0].Trim());
         return string.IsNullOrWhiteSpace(hostOnly) ? null : hostOnly;
+    }
+
+    private static string? UnbracketIpv6(string? host)
+    {
+        if (string.IsNullOrEmpty(host) || host.Length < 2 || host[0] != '[' || host[^1] != ']')
+            return host;
+
+        return host[1..^1];
     }
 
     private static bool IsUsablePublicHostname(string? host)

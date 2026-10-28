@@ -8,6 +8,7 @@ public class LocalRedirectsTests
     [InlineData("/applications/dashboard")]
     [InlineData("/")]
     [InlineData("~/applications/dashboard")]
+    [InlineData("~/")]
     public void IsLocal_AcceptsRootedPaths(string url)
         => Assert.True(LocalRedirects.IsLocal(url));
 
@@ -36,7 +37,14 @@ public class LocalRedirectsTests
     [Theory]
     [InlineData("/path\\to")]
     [InlineData("/\\evil.example")]
+    [InlineData("~/path\\to")]
     public void IsLocal_RejectsBackslashInPath(string url)
+        => Assert.False(LocalRedirects.IsLocal(url));
+
+    [Theory]
+    [InlineData("~//evil.example/phish")]
+    [InlineData("~/\\evil.example")]
+    public void IsLocal_RejectsTildeProtocolRelative(string url)
         => Assert.False(LocalRedirects.IsLocal(url));
 
     [Theory]

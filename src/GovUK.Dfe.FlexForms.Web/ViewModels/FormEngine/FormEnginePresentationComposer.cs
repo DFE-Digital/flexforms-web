@@ -281,7 +281,7 @@ public sealed class FormEnginePresentationComposer(
         }
 
         if (!isUploadField)
-            return SummaryValueViewModel.FromHtmlList(formattedValues);
+            return FromStoredList(formattedValues);
 
         return TryBuildUploadValue(
             value,
@@ -291,7 +291,7 @@ public sealed class FormEnginePresentationComposer(
             pageId: null,
             filterInfected: false,
             showAllFiles: true,
-            fallbackWhenEmpty: SummaryValueViewModel.FromHtmlList(formattedValues));
+            fallbackWhenEmpty: FromStoredList(formattedValues));
     }
 
     private List<SummaryRowViewModel> BuildRegularPreviewRows(
@@ -669,7 +669,7 @@ public sealed class FormEnginePresentationComposer(
                 pageId,
                 filterInfected: true,
                 showAllFiles: true,
-                fallbackWhenEmpty: SummaryValueViewModel.FromHtmlList(formattedValues));
+                fallbackWhenEmpty: FromStoredList(formattedValues));
         }
 
         if (isAutocompleteField)
@@ -679,7 +679,7 @@ public sealed class FormEnginePresentationComposer(
                 return SummaryValueViewModel.FromHtmlList(items);
         }
 
-        return SummaryValueViewModel.FromHtmlList(formattedValues);
+        return FromStoredList(formattedValues);
     }
 
     private static bool TryRenderAutocompleteItems(

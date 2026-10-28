@@ -19,17 +19,18 @@ public class TenantIdResolverHostnameTests
     }
 
     [Fact]
-    public void ResolvePublicHostname_PrefersForwardedHost_WhenPresent()
+    public void ResolvePublicHostname_IgnoresForwardedAndOriginalHostHeaders()
     {
         var context = new DefaultHttpContext();
-        context.Request.Host = new HostString("s184d01-extapp-flexformsweb.agreeabledune-8224bf9e.westeurope.azurecontainerapps.io");
+        context.Request.Host = new HostString(
+            "s184d01-extapp-flexformsweb.agreeabledune-8224bf9e.westeurope.azurecontainerapps.io");
         context.Request.Headers["X-Forwarded-Host"] = "visits.dev-flexforms.rsd.education.gov.uk";
-        context.Request.Headers["X-Original-Host"] =
-            "s184d01-extapp-flexformsweb.agreeabledune-8224bf9e.westeurope.azurecontainerapps.io";
+        context.Request.Headers["X-Original-Host"] = "visits.dev-flexforms.rsd.education.gov.uk";
 
         var host = TenantIdResolver.ResolvePublicHostname(context);
 
-        Assert.Equal("visits.dev-flexforms.rsd.education.gov.uk", host);
+        Assert.Null(host);
+        Assert.True(TenantIdResolver.IsNonPublicHostRequest(context));
     }
 
     [Fact]
@@ -94,8 +95,7 @@ public class TenantIdResolverHostnameTests
         var context = new DefaultHttpContext();
         context.Request.Host = new HostString(host);
 
-        var resolved = TenantIdResolver.ResolvePublicHostname(context);
-        Assert.Equal(host, resolved?.Trim('[', ']'));
+        Assert.Equal(host, TenantIdResolver.ResolvePublicHostname(context));
     }
 
     [Fact]
@@ -111,13 +111,13 @@ public class TenantIdResolverHostnameTests
     }
 
     [Fact]
-    public void ResolvePublicHostname_UsesLeftmostForwardedHost_AndStripsPort()
+    public void HasConflictingPublicHostnames_UsesLeftmostForwardedHost_AndStripsPort()
     {
         var context = new DefaultHttpContext();
-        context.Request.Host = new HostString("backend.azurecontainerapps.io");
+        context.Request.Host = new HostString("other.example.gov.uk");
         context.Request.Headers["X-Forwarded-Host"] = "visits.example.gov.uk:443, proxy.internal";
 
-        Assert.Equal("visits.example.gov.uk", TenantIdResolver.ResolvePublicHostname(context));
+        Assert.True(TenantIdResolver.HasConflictingPublicHostnames(context));
     }
 
     [Fact]
