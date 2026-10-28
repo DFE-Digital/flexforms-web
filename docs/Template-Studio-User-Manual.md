@@ -1,5 +1,7 @@
 # Template Studio User Manual
 
+![FlexForms Studio](images/FlexForms-Template-Studio-Logo.png)
+
 A step-by-step guide to designing application forms with **Template Studio**, the visual way to build and change FlexForms templates without writing JSON.
 
 It is written for anyone who designs or maintains a form: content designers, service owners, tenant administrators and developers. You do not need to know JSON.

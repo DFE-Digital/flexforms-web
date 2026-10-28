@@ -1,5 +1,7 @@
 # FlexForms Web
 
+![FlexForms Studio](docs/images/Glossy-FlexForms-SaaS-Logo.png)
+
 Multi-tenant Razor Pages frontend for **FlexForms** — a SaaS form platform that turns JSON templates into GOV.UK task-list applications.
 
 Each tenant (Transfers, Visits, LSRP, …) is resolved from hostname or `X-Tenant-ID`. Configuration is loaded from **flexforms-api** TenantConfig (not from per-product folders). Persistence and business rules live in the API; this repo owns UI, auth cookies, form orchestration, and admin tools.
