@@ -229,10 +229,35 @@ If the tenant has no templates, you see “There are no templates for this tenan
 
 Adding a new version **starts from the version you currently have open**, not necessarily the latest. The suggested version number still increments from the **latest**.
 
+#### Template Studio
+
+Select **Open in Template Studio** (or **Template Studio** on the Admin hub). Page: `/admin/template-studio`. It opens a copy of the version you have open, or the starter template if there are no versions yet.
+
+For a full step-by-step guide with screenshots, see the [Template Studio User Manual](Template-Studio-User-Manual.md). In short:
+
+- **Design** — the left side shows the template's structure: sections, tasks, repeatable lists and pages that open and close, with the questions on each page. Select **Edit** (or a question) to change it on the right, where you can also move, duplicate or delete it. **Move to another page** (or task, section or list) moves a question, page, task or list anywhere it can go. With a mouse you can also drag items in the structure: drop one on another of the same kind to put it before or after, or drop a question on a page (a page on a task, a task on a section) to add it at the end.
+- **Undo** and **Redo** step back and forward through your changes, including moves, deletes and JSON edits. Typing in one box counts as one change. Outside text boxes you can also press Ctrl+Z and Ctrl+Y (Cmd on a Mac). Undoing back to where you started clears **Unsaved changes**. The breadcrumbs above the heading take you back up the structure. Each item lists what's inside it, with a **Change** link for each, and has an **Add …** form for adding more. Ids are made from names as you type, until you change an id yourself.
+- **Questions** — choose the question type, wording, hint, whether it must be answered and the error message, options for radios, checkboxes and dropdowns, a length limit, and format checks such as a UK telephone number. Search and upload questions list the complex fields set up for the tenant. Changing the text of an existing option keeps its saved value, because saved answers and rules use it.
+- **Rules** — **Add a rule** to show pages and questions only when an answer is, isn't, or is one of the values you choose, or has or hasn't been given. Template Studio saves each rule as the pair the form needs: one rule that skips and hides them, and one that shows them. You can also start a rule from a page or question (**Add a rule that shows this page**). Rules made this way can be changed later; rules written in JSON can be turned on and off or deleted, and changed in the JSON tab. Pages and questions that a rule shows are marked **Shown by a rule** in the structure. Pages set to "Go to the next page a rule shows" only follow rules that use "is".
+- **Template settings** — also set the **Dashboard columns** (up to 3 answers alongside built-in columns) and the **Details on the task list** (up to 10 rows, from application details or answers). **Use the default columns** or **Use the default details** goes back to the platform defaults.
+- **Tasks and lists** — a task can be questions on pages, a repeatable list, or pages repeated for each item in another list (for example a declaration for each trust). You can change the type while the task has no pages. Repeatable lists also have the columns shown for each added item and the added, changed and removed messages.
+- **Checks only when another answer matches** — a length limit or format check can apply only when another answer is, or isn't, a value. Whether a question must be answered can't depend on another answer; use a rule to show the question instead.
+- **Once applications use the template** — Template Studio checks how many applications use the template. If there are any, or it can't check:
+  - deleting a question, list or anything containing them **retires** the questions applications have answered (adds them to `retiredFields`), and you can say which question replaces it;
+  - changing an answer id retires the old id, names the new one as its replacement, and keeps the old reporting key (`semanticKey`), so reports keep one column;
+  - changing what a question stores (for example text to radios) shows a warning with **Give it a new answer id**;
+  - **Check for problems** and **Save new version** list anything the API would reject for reporting, before you save. These checks compare with the version you opened; saving still checks every earlier version.
+- **JSON (advanced)** — the JSON Template Studio generates. You can edit it directly; your edits are applied when you leave the tab, and you can't leave while the JSON is invalid. Anything Template Studio doesn't show, such as `semanticKey`, `retiredFields`, dashboard columns and task list details, is kept as it is.
+- **Check for problems** runs the same checks as saving, without saving. Each problem links to the item it is about.
+- **Preview task** opens the task you are working on in a new tab, using your unsaved changes. Nothing is saved, rules aren't run, and search and upload questions are shown as placeholders.
+- **Save new version** works like the JSON route below: version number, reporting confirmation, then save. If the save is rejected, Template Studio keeps your changes and lists the problems.
+
+Template Studio warns you before you leave the page with unsaved changes. Unsaved changes are not kept if your session ends, so save versions as you go.
+
 #### Add a new version
 
-1. Select **Add New Template Version**.
-2. **New Version Number** — for example `1.1`, `2.0`, `1.2.1`.
+1. Select **Add New Template Version (JSON)**.
+2. **New Version Number** — three numbers separated by full stops, for example `1.2.1`.
 3. **JSON Schema** — prefilled from the version you opened. Edit it, or paste a schema produced with the [designer manual](Form-Template-Designer-Manual.md). If the curly braces and quotes are unfamiliar, start with [JSON in plain English](Form-Template-Designer-Manual.md#11-json-in-plain-english).
 4. Read the reporting warning (shown in red). Tick:
 
@@ -1693,7 +1718,7 @@ Prefer the dedicated screens first. If you must use this page, these categories 
 | **SchemaEvents** | Shared | Tenant event shapes | Event mappings |
 | **EventTriggers** | Shared | Submit / upload publish bindings | Event mappings |
 | **EmailPlaceholderMappings** | Shared | Extra GOV.UK Notify personalisation from form answers | This page (JSON) — see [Email placeholder mappings](#13-email-placeholder-mappings) |
-| **Layout** | Web | Service name in the header, phase banner text and links | This page (JSON) — there is no separate form |
+| **Layout** | Web | Service name in the header, phase banner text and links, footer links | This page (JSON) — there is no separate form |
 | **FileValidation** | Shared | Whether submit is blocked until a tenant function validates eligible files | This page (JSON) — see [14.7](#147-file-validation-tenant-function) |
 | **FormEngine** | Web | Search APIs behind autocomplete questions (endpoint, API key or client credentials, dropdown/confirmation labels) | This page (JSON) — see [14.8](#148-autocomplete-search-formengine-complex-fields) |
 | **SelfRegistration** | Shared | Which live forms new users get automatically when several forms are live (`DefaultTemplateIds`) | This page (JSON) — see [8.6](#86-grant-to-all-vs-user-manager) |
@@ -1706,13 +1731,25 @@ Prefer the dedicated screens first. If you must use this page, these categories 
   "PhaseBanner": {
     "PhaseText": "Beta",
     "Links": [
-      { "Text": "Feedback", "Url": "/feedback" }
+      { "Text": "Feedback", "Url": "/feedback" },
+      { "Text": "Give feedback (survey)", "Url": "https://forms.office.com/your-survey" }
     ]
-  }
+  },
+  "FooterLinks": [
+    { "Text": "Privacy", "Url": "/privacy" },
+    { "Text": "Accessibility statement", "Url": "https://www.gov.uk/help/accessibility-statement" }
+  ]
 }
 ```
 
 `ServiceName` is the product name in the GOV.UK header and the browser title on the dashboard.
+
+**Phase banner links** (`PhaseBanner.Links`, first 2 shown) open in a new tab. A `Url` can be either:
+
+- a full external address starting with `https://` or `http://`, used as-is; or
+- the path of a page in this service (for example `/feedback`). It must match an existing page, otherwise the link will be blank.
+
+**Footer links** (`FooterLinks`, first 6 shown) can be any internal path or full external address, and open in the same tab.
 
 ### 14.3 What to leave for SuperAdmin / platform
 

@@ -1,3 +1,4 @@
+using GovUK.Dfe.FlexForms.Application.Diagnostics;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using GovUK.Dfe.FlexForms.Web.Authentication;
@@ -318,8 +319,8 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Shared
             
             try
             {
-                await EnsureApplicationIdAsync();
-                
+                using (RequestTimings.Measure("load application"))
+                    await EnsureApplicationIdAsync();
             }
             catch (Exception ex)
             {
@@ -329,8 +330,8 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Shared
             
             try
             {
-                await LoadTemplateAsync();
-                
+                using (RequestTimings.Measure("load template"))
+                    await LoadTemplateAsync();
             }
             catch (Exception ex)
             {

@@ -1,9 +1,32 @@
+using System.Text;
 using Microsoft.Playwright;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Api;
 
 public static class Templates
 {
+    public static Task<TemplateDto> CreateTemplateAsync(IAPIRequestContext request, string name) =>
+        ApiBase.ApiRequestAsync<TemplateDto>(request, "/v1/Templates", method: "POST", data: new CreateTemplateRequest(name));
+
+    public static Task<TemplateSchemaDto> CreateTemplateVersionAsync(
+        IAPIRequestContext request,
+        string templateId,
+        string versionNumber,
+        string schemaJson) =>
+        ApiBase.ApiRequestAsync<TemplateSchemaDto>(request, $"/v1/Templates/{templateId}/versions", method: "POST",
+            data: new CreateTemplateVersionRequest(versionNumber, ApiBase.EncodeJson(schemaJson)));
+
+    /// <summary>The latest version's template JSON. Stored schemas may be base64-encoded.</summary>
+    public static async Task<string> GetLatestSchemaJsonAsync(IAPIRequestContext request, string templateId)
+    {
+        var schema = await ApiBase.ApiRequestAsync<TemplateSchemaDto>(request, $"/v1/Templates/{templateId}/schema");
+        var text = schema.JsonSchema.Trim();
+        return text.StartsWith('{') ? text : Encoding.UTF8.GetString(Convert.FromBase64String(text));
+    }
+
+    public static async Task<TemplateDto?> FindTemplateByNameAsync(IAPIRequestContext request, string name) =>
+        (await GetTemplatesAsync(request)).FirstOrDefault(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase));
+
     public static Task<IReadOnlyList<TemplateDto>> GetTemplatesAsync(IAPIRequestContext request) =>
         ApiBase.ApiRequestAsync<IReadOnlyList<TemplateDto>>(request, "/v1/Templates");
 

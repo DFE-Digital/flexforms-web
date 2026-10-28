@@ -235,19 +235,31 @@
                 </strong>
                 @foreach (var link in AppConfig.GetSection("Layout:PhaseBanner:Links").GetChildren().Take(2))
                 {
+                    var linkUrl = link["Url"];
+                    var isExternalLink = Uri.TryCreate(linkUrl, UriKind.Absolute, out var externalUri)
+                                         && (externalUri.Scheme == Uri.UriSchemeHttps || externalUri.Scheme == Uri.UriSchemeHttp);
                     <span class="govuk-phase-banner__text">
-                        @try
+                        @if (isExternalLink)
                         {
-                            var referenceNumber = Model.ReferenceNumber;
-                            <a class="govuk-link" asp-page="@link["Url"]" asp-route-referenceNumber="@referenceNumber" target="_blank" rel="noreferrer">
+                            <a class="govuk-link" href="@linkUrl" target="_blank" rel="noopener noreferrer">
                                 @link["Text"]
                             </a>
                         }
-                        catch
+                        else
                         {
-                            <a class="govuk-link" asp-page="@link["Url"]" target="_blank" rel="noreferrer">
-                                @link["Text"]
-                            </a>
+                            try
+                            {
+                                var referenceNumber = Model.ReferenceNumber;
+                                <a class="govuk-link" asp-page="@linkUrl" asp-route-referenceNumber="@referenceNumber" target="_blank" rel="noreferrer">
+                                    @link["Text"]
+                                </a>
+                            }
+                            catch
+                            {
+                                <a class="govuk-link" asp-page="@linkUrl" target="_blank" rel="noreferrer">
+                                    @link["Text"]
+                                </a>
+                            }
                         }
                     </span>
                 }

@@ -1,3 +1,4 @@
+using GovUK.Dfe.FlexForms.Application.Diagnostics;
 using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.FlexForms.Web.Tenancy;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
@@ -36,6 +37,7 @@ public class PermissionsCacheMiddleware(
             {
                 try
                 {
+                    using var timing = RequestTimings.Measure("permissions refresh");
                     var tenantId = context.RequestServices.GetService<ITenantRequestContext>()?.TenantId;
                     await UserPermissionsCache.RefreshAsync(
                         cache,

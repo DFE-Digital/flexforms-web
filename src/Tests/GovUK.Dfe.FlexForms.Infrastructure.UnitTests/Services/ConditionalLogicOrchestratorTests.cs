@@ -951,17 +951,8 @@ public class ConditionalLogicOrchestratorTests
         Assert.False(state.FieldEnabled["field-b"]);
     }
 
-    [Theory]
-    [InlineData(ConditionalLogicConstants.Actions.MakeOptional)]
-    [InlineData(ConditionalLogicConstants.Actions.SetValue)]
-    [InlineData(ConditionalLogicConstants.Actions.ClearValue)]
-    [InlineData(ConditionalLogicConstants.Actions.AddValidation)]
-    [InlineData(ConditionalLogicConstants.Actions.RemoveValidation)]
-    [InlineData(ConditionalLogicConstants.Actions.ShowMessage)]
-    public async Task ApplyConditionalLogicAsync_ShouldLeaveStateUnchanged_ForCamelCasedActionNames(string action)
+    private async Task<FormConditionalState> ApplyFieldAction(string action)
     {
-        // The action switch compares a lower-cased action name against the camelCased action
-        // constants, so these actions never match and are treated as unknown.
         var engine = EngineReturningActions(
             CreateAction(
                 "required-field",
@@ -977,12 +968,35 @@ public class ConditionalLogicOrchestratorTests
         template.TaskGroups[0].Tasks[0].Pages![0].Fields[0].Required = true;
         template.ConditionalLogic = [PlaceholderRule()];
 
-        var state = await CreateOrchestrator(engine).ApplyConditionalLogicAsync(template, []);
+        return await CreateOrchestrator(engine).ApplyConditionalLogicAsync(template, []);
+    }
 
-        Assert.True(state.FieldRequired["required-field"]);
-        Assert.Empty(state.FieldValues);
-        Assert.Empty(state.AdditionalValidations);
-        Assert.Empty(state.Messages);
+    [Theory]
+    [InlineData("makeOptional")]
+    [InlineData("MAKEOPTIONAL")]
+    [InlineData("makeoptional")]
+    public async Task ApplyConditionalLogicAsync_ShouldApplyActions_WhateverTheCaseOfTheirName(string action)
+    {
+        var state = await ApplyFieldAction(action);
+
+        Assert.False(state.FieldRequired["required-field"]);
+    }
+
+    [Fact]
+    public async Task ApplyConditionalLogicAsync_ShouldSetAndClearValues()
+    {
+        Assert.Equal("preset", (await ApplyFieldAction(ConditionalLogicConstants.Actions.SetValue)).FieldValues["required-field"]);
+        Assert.Equal(string.Empty, (await ApplyFieldAction(ConditionalLogicConstants.Actions.ClearValue)).FieldValues["required-field"]);
+    }
+
+    [Fact]
+    public async Task ApplyConditionalLogicAsync_ShouldAddValidationsAndMessages()
+    {
+        var withValidation = await ApplyFieldAction(ConditionalLogicConstants.Actions.AddValidation);
+        var withMessage = await ApplyFieldAction(ConditionalLogicConstants.Actions.ShowMessage);
+
+        Assert.Equal("required", Assert.Single(withValidation.AdditionalValidations["required-field"]).Type);
+        Assert.Equal("Now required", Assert.Single(withMessage.Messages).Text);
     }
 
     [Fact]

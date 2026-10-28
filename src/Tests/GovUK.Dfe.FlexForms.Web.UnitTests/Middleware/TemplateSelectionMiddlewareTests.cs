@@ -152,6 +152,43 @@ public sealed class TemplateSelectionMiddlewareTests
         Assert.StartsWith("/templates?liveOnly=true", context.Response.Headers.Location.ToString());
     }
 
+    [Fact]
+    public async Task InvokeAsync_DoesNotSwallowExceptionsFromDownstreamPage()
+    {
+        var one = CreateTemplate("One", isLive: true);
+        var two = CreateTemplate("Two", isLive: true);
+        var service = CreateService(one, two);
+        service.GetSelectedTemplateId(Arg.Any<HttpContext>())
+            .Returns(one.TemplateId.ToString());
+
+        var middleware = CreateMiddleware(() => throw new InvalidOperationException("dashboard broke"));
+        var context = CreateAuthenticatedContext("/applications/dashboard");
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => middleware.InvokeAsync(context, service));
+
+        Assert.Equal("dashboard broke", ex.Message);
+        Assert.False(context.Response.Headers.ContainsKey("Location"));
+    }
+
+    [Fact]
+    public async Task InvokeAsync_RedirectsToChooser_WhenGateItselfFails()
+    {
+        var service = Substitute.For<ITemplateSelectionService>();
+        service.GetSelectableTemplatesAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<IReadOnlyList<TemplateDto>>(new HttpRequestException("api down")));
+
+        var nextCalled = false;
+        var middleware = CreateMiddleware(() => nextCalled = true);
+        var context = CreateAuthenticatedContext("/applications/dashboard");
+
+        await middleware.InvokeAsync(context, service);
+
+        Assert.False(nextCalled);
+        Assert.Equal(StatusCodes.Status302Found, context.Response.StatusCode);
+        Assert.Equal("/templates", context.Response.Headers.Location.ToString());
+    }
+
     private static TemplateSelectionMiddleware CreateMiddleware(Action? onNext = null)
         => new(
             _ =>

@@ -7,6 +7,7 @@ using GovUK.Dfe.CoreLibs.Security.OpenIdConnect;
 using GovUK.Dfe.FlexForms.Application.Options;
 using GovUK.Dfe.FlexForms.Web.Authentication;
 using GovUK.Dfe.FlexForms.Web.Extensions;
+using GovUK.Dfe.FlexForms.Web.Features;
 using GovUK.Dfe.FlexForms.Web.Filters;
 using GovUK.Dfe.FlexForms.Web.Middleware;
 using GovUK.Dfe.FlexForms.Web.Security;
@@ -23,6 +24,7 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.AspNetCore.Session;
+using Microsoft.FeatureManagement;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Diagnostics.CodeAnalysis;
 using GovUK.Dfe.CoreLibs.Security.EntraSso;
@@ -224,6 +226,7 @@ builder.Services.AddScoped<ExternalApiPageExceptionFilter>();
 builder.Services.Configure<Microsoft.AspNetCore.Mvc.MvcOptions>(options =>
 {
     options.Filters.AddService<ExternalApiPageExceptionFilter>();
+    options.Filters.Add<RequestTimingResultFilter>();
 });
 
 builder.Services.AddRazorPages(options =>
@@ -565,8 +568,10 @@ builder.Services.AddTokenRefreshWithOidc(configuration, "DfESignIn", "TokenRefre
 // Add HttpClient for API calls
 builder.Services.AddHttpClient();
 builder.Services.AddTransient<CorrelationIdForwardingHandler>();
+builder.Services.AddTransient<RequestTimingHandler>();
 builder.Services.ConfigureHttpClientDefaults(http =>
 {
+    http.AddHttpMessageHandler<RequestTimingHandler>();
     http.AddHttpMessageHandler<CorrelationIdForwardingHandler>();
 });
 
@@ -623,6 +628,11 @@ builder.Services.Configure<DashboardOptions>(configuration.GetSection("Dashboard
 builder.Services.Configure<ApplicationPreviewOptions>(configuration.GetSection("ApplicationPreview"));
 
 builder.Services.AddTenantAwareOptionsAccessors(configuration);
+
+// Feature flags come from the tenant's FeatureManagement setting, then appsettings. Registered before
+// AddFeatureManagement so it replaces the default appsettings-only provider.
+builder.Services.AddSingleton<IFeatureDefinitionProvider, TenantFeatureDefinitionProvider>();
+builder.Services.AddFeatureManagement();
 
 builder.Services.AddDfEMassTransit(
     configuration,
@@ -739,7 +749,9 @@ app.UseStaticFiles(new StaticFileOptions
 app.UseRouting();
 app.UseCookiePolicy();
 
+app.UseRequestTiming();
 app.UseSession();
+app.UseRequestTimingSession();
 
 app.UseStatusCodePages(ctx =>
 {

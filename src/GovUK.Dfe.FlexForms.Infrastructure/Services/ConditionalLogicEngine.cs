@@ -143,7 +143,7 @@ public class ConditionalLogicEngine(ILogger<ConditionalLogicEngine> logger) : IC
             }
 
             // Perform the comparison based on operator
-            return condition.Operator.ToLowerInvariant() switch
+            return ConditionalLogicConstants.Canonical(condition.Operator) switch
             {
                 ConditionalLogicConstants.Operators.Equals => CompareEquals(fieldValue, condition.Value, condition.DataType),
                 ConditionalLogicConstants.Operators.NotEquals => !CompareEquals(fieldValue, condition.Value, condition.DataType),

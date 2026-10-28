@@ -102,6 +102,16 @@ A common slip when copying an example is leaving a trailing comma after the last
 
 In **Template Manager** you paste or edit this text in the **JSON Schema** box and save a version. If a quote or comma is wrong, save is rejected and you see **There is a problem** with the parse error — usually “missing comma” or “unexpected character”. Fix the punctuation and save again. The rest of this manual is the **meaning** of each key once the text is valid JSON.
 
+You don't have to write the JSON by hand. **Template Studio** (Template Manager → **Open in Template Studio**, see the [Template Studio User Manual](Template-Studio-User-Manual.md)) builds sections, tasks, pages, questions, options and checks with forms and writes this JSON for you. Its **JSON (advanced)** tab shows the result, and anything it has no form for is kept as you wrote it.
+
+Saving also rejects a version when:
+
+- two sections or two tasks share an id, two pages in the same task or list share a `pageId`, or two questions whose answers are stored at the top level share a `fieldId`. Questions in different repeatable lists can share a `fieldId`;
+- a field `type` can't be shown (anything other than those in [§8](#8-field-types-with-examples), including plain `autocomplete`);
+- a `radios`, `checkboxes` or `select` question has no options, or an option without a `value`;
+- a `complexField` question has no `complexField.id`;
+- a conditional logic rule's `triggerField`, or a `field` or `page` it affects, isn't in the template.
+
 ---
 
 ## 2. Big picture hierarchy
@@ -148,6 +158,9 @@ In Transfer: “Trust details” uses a collection; “Reason and benefits” us
   "contributorPattern": true,
   "dashboard": {
     "columns": [ ]
+  },
+  "applicationMetaData": {
+    "items": [ ]
   }
 }
 ```
@@ -163,6 +176,7 @@ In Transfer: “Trust details” uses a collection; “Reason and benefits” us
 | `hideFieldLabelWhenOnlyOneField` | When `true` (default), a page with **exactly one** normal field hides that field’s label so the **page title** is the question. Complex fields are excluded from this behaviour. |
 | `contributorPattern` | When `true` (default), invite-contributor features are available. Set `false` to hide them. |
 | `dashboard` | Optional. Configures applications-dashboard columns (see §3.1). |
+| `applicationMetaData` | Optional. Configures the metadata block on the application task list (see §3.2). |
 
 ### 3.1 Dashboard columns (`dashboard`)
 
@@ -224,6 +238,58 @@ Example (trust search inside “Trust details” flow):
   ]
 }
 ```
+
+### 3.2 Application task list metadata (`applicationMetaData`)
+
+The block under **Your application** (grey left border) can list up to **10** label/value rows. When `applicationMetaData` is omitted or `null`, the platform shows the default rows: application reference, application version, and lead applicant. New starter templates include `"applicationMetaData": null` alongside `"dashboard": null`.
+
+```json
+"applicationMetaData": {
+  "items": [
+    { "label": "Application reference", "fieldId": "application.reference", "order": 10 },
+    { "label": "Application version", "fieldId": "application.version", "order": 20 },
+    { "label": "Lead applicant", "fieldId": "application.leadApplicant", "order": 30 }
+  ]
+}
+```
+
+| Property | Purpose |
+|----------|---------|
+| `items` | Ordered list of rows. Maximum **10** entries. |
+| `label` | Text shown before the value (for example `Application reference`). |
+| `fieldId` | Binding path resolved at runtime (see below). |
+| `order` | Lower first. If omitted, array order is used (`10`, `20`, …). |
+
+**Binding paths (`fieldId`)**
+
+| Path | Resolved value |
+|------|----------------|
+| `application.reference` | Application reference number |
+| `application.version` | Template version used by the application |
+| `application.leadApplicant` or `application.leadApplicantName` | Lead applicant display name |
+| `application.leadApplicantEmail` | Lead applicant email |
+| `field.{fieldId}` | Plain-text answer for a top-level form field (same lookup rules as dashboard field columns) |
+| `{fieldId}` | Shorthand for a top-level field answer |
+
+**Collection-flow fields** (same rules as dashboard §3.1): answers inside a `multiCollectionFlow` are stored under the flow `fieldId` as an array of items. Use dotted paths and **`[index]`** (zero-based) to read a specific item instead of joining every item with `, `.
+
+| `fieldId` | Result |
+|-----------|--------|
+| `incomingTrustsSearch-field-flow` | Each collection item; complex values use `.name` (or title/label). Multiple items joined with `, `. |
+| `incomingTrustsSearch-field-flow.name` | Nested property on each item (UKPRN, code, etc.). |
+| `detailsOfIncomingTrust.incomingTrustsSearch-field-flow` | Explicit path: collection → nested field. |
+| `detailsOfIncomingTrust[0].incomingTrustsSearch-field-flow.name` | **Indexed:** only the first collection item (`[1]` is the second, and so on). |
+| `trusts-field-flow[1].name` | Second item’s `name` only. |
+
+Property names are **case-sensitive** in template JSON (`label` and `fieldId`, lowercase).
+
+**Validation on save:** Template Manager won't save a version whose `applicationMetaData` paths don't match the template, because those rows would show blank on the task list. Each problem is listed with the item index, label and a suggested fix. A version is rejected when:
+
+- an `application.*` value isn't one of those listed above;
+- a field or collection ID isn't defined on any task page or flow page (the closest match is suggested);
+- a collection path names a field that isn't on that collection's pages (the collection's fields are listed);
+- a child property (`.name`) or index (`[0]`) is used on a plain-value field such as text, email, radios, select, checkboxes or date. Child properties of lookup (`autocomplete` / `complexField`) and upload fields come from external data, so only the field itself is checked;
+- the path is malformed, for example `a..b` or `items[x]`.
 
 ---
 
@@ -508,9 +574,9 @@ Renders day / month / year. Engine checks completeness and that the date is real
 
 ---
 
-### 8.9 `autocomplete` (simple)
+### 8.9 `autocomplete` (not supported)
 
-A built-in autocomplete control. For Trusts/Academies search, Transfer uses **`complexField`** instead (API-backed). Prefer complex fields when search hits an external API.
+Plain `autocomplete` can't be shown to applicants, so saving rejects it. Use **`complexField`** with a search complex field instead, as Transfer does for trusts and academies.
 
 ---
 

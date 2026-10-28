@@ -163,9 +163,10 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
             }
 
             var request = context.HttpContext.Request;
-            var form = request.HasFormContentType ? await request.ReadFormAsync() : default;
+            // JSON posts, such as Template Studio's problem check, have no form to inspect.
+            var form = request.HasFormContentType ? await request.ReadFormAsync() : null;
 
-            if (form.Count == 0)
+            if (form is null || form.Count == 0)
             {
                 await next();
                 return;

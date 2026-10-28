@@ -40,6 +40,24 @@ public class StarterFormTemplateSchemaTests
     }
 
     [Fact]
+    public void CreateJson_ShouldIncludeNullDashboardAndApplicationMetaData()
+    {
+        var json = StarterFormTemplateSchema.CreateJson("tpl-1", "Starter");
+
+        Assert.Contains("\"dashboard\":null", json);
+        Assert.Contains("\"applicationMetaData\":null", json);
+    }
+
+    [Fact]
+    public void Create_ShouldSetOptionalSectionsToNull()
+    {
+        var template = StarterFormTemplateSchema.Create("tpl-1", "Starter");
+
+        Assert.Null(template.Dashboard);
+        Assert.Null(template.ApplicationMetaData);
+    }
+
+    [Fact]
     public void CreateBase64Json_ShouldDecodeToSameJson()
     {
         var json = StarterFormTemplateSchema.CreateJson("tpl-1", "Starter");

@@ -1,0 +1,485 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Text;
+using System.Text.Json;
+using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums;
+using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
+using GovUK.Dfe.FlexForms.Api.Client.Contracts;
+using GovUK.Dfe.FlexForms.Application.Admin;
+using GovUK.Dfe.FlexForms.Application.Interfaces;
+using GovUK.Dfe.FlexForms.Application.Validation;
+using GovUK.Dfe.FlexForms.Domain.Models;
+using GovUK.Dfe.FlexForms.Web.Pages.Admin;
+using GovUK.Dfe.FlexForms.Web.Services;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Abstractions;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.Mvc.Routing;
+using Microsoft.AspNetCore.Mvc.ViewFeatures;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
+using Task = System.Threading.Tasks.Task;
+
+namespace GovUK.Dfe.FlexForms.Web.UnitTests.Pages.Admin;
+
+public class TemplateStudioModelTests
+{
+    private const string StoredSchema = """{ "templateId": "tpl", "templateName": "Transfers", "semanticKeyKeptHere": true }""";
+
+    private readonly ITemplateManagerAdmin _admin = Substitute.For<ITemplateManagerAdmin>();
+    private readonly ITemplateSelectionService _selection = Substitute.For<ITemplateSelectionService>();
+    private readonly ITemplateValidationService _validation = Substitute.For<ITemplateValidationService>();
+    private readonly ITemplateCacheInvalidator _cacheInvalidator = Substitute.For<ITemplateCacheInvalidator>();
+    private readonly IComplexFieldConfigurationService _complexFields = Substitute.For<IComplexFieldConfigurationService>();
+    private readonly IEventMappingReferenceReader _eventMappings = Substitute.For<IEventMappingReferenceReader>();
+    private readonly IApplicationsClient _applications = Substitute.For<IApplicationsClient>();
+    private readonly InMemorySession _session = new();
+    private readonly TemplateDto _template = new() { TemplateId = Guid.NewGuid(), Name = "Transfers", CreatedOn = DateTime.UtcNow };
+    private readonly TemplateStudioModel _model;
+
+    public TemplateStudioModelTests()
+    {
+        _model = new TemplateStudioModel(
+            _admin, _selection, _validation, _cacheInvalidator, _complexFields, _eventMappings, _applications, NullLogger<TemplateStudioModel>.Instance);
+        GivenApplicationCount(Task.FromResult(new PagedResultOfApplicationDto { TotalCount = 4 }));
+
+        var httpContext = new DefaultHttpContext();
+        httpContext.Features.Set<ISessionFeature>(new StubSessionFeature { Session = _session });
+        _model.PageContext = new PageContext
+        {
+            HttpContext = httpContext,
+            ViewData = new ViewDataDictionary(new EmptyModelMetadataProvider(), new ModelStateDictionary())
+        };
+        var url = Substitute.For<IUrlHelper>();
+        url.ActionContext.Returns(new ActionContext(httpContext, new RouteData(), new ActionDescriptor()));
+        url.RouteUrl(Arg.Any<UrlRouteContext>()).Returns("/admin/template-studio?handler=Validate");
+        _model.Url = url;
+
+        _selection.GetSelectableTemplatesAsync(Arg.Any<CancellationToken>()).Returns([_template]);
+        _selection.GetSelectedTemplateId(Arg.Any<HttpContext>()).Returns(_template.TemplateId.ToString());
+        _admin.SuggestNextVersion("1.0.3", "1.0.3").Returns("1.0.4");
+        _complexFields.GetAllConfigurations().Returns(
+        [
+            new ComplexFieldConfiguration { Id = "TrustComplexField", FieldType = "autocomplete", ApiKey = "api-key-value", ClientSecret = "client-secret-value" }
+        ]);
+    }
+
+    [Fact]
+    public async Task OnGetAsync_ShouldOpenTheFirstTemplate_WhenNoneIsSelected()
+    {
+        _selection.GetSelectedTemplateId(Arg.Any<HttpContext>()).Returns((string?)null);
+        _session.SetString("TemplateVersionNumber", "9.9.9");
+        GivenStoredVersion("1.0.3");
+
+        var result = await _model.OnGetAsync(null, false, CancellationToken.None);
+
+        Assert.IsType<PageResult>(result);
+        await _selection.Received(1).SelectTemplateAsync(Arg.Any<HttpContext>(), _template, Arg.Any<CancellationToken>());
+        Assert.Equal(_template.TemplateId, _model.SelectedTemplateId);
+        Assert.Equal("1.0.3", _model.SelectedVersionNumber);
+        Assert.Single(_model.AvailableVersions);
+        Assert.Null(_session.GetString("TemplateVersionNumber"));
+    }
+
+    [Fact]
+    public async Task OnGetAsync_ShouldShowThePage_WhenThereAreNoTemplates()
+    {
+        _selection.GetSelectableTemplatesAsync(Arg.Any<CancellationToken>()).Returns(new List<TemplateDto>());
+        _selection.GetSelectedTemplateId(Arg.Any<HttpContext>()).Returns((string?)null);
+
+        var result = await _model.OnGetAsync(null, false, CancellationToken.None);
+
+        Assert.IsType<PageResult>(result);
+        Assert.Null(_model.SelectedTemplate);
+        await _admin.DidNotReceiveWithAnyArgs().LoadTemplateDataAsync(default!, default, default);
+    }
+
+    [Fact]
+    public async Task OnGetAsync_ShouldShowTheCreatedBanner_WhenTheTemplateWasJustCreated()
+    {
+        GivenStoredVersion("1.0.0");
+
+        await _model.OnGetAsync(null, true, CancellationToken.None);
+
+        Assert.True(_model.ShowCreated);
+    }
+
+    [Fact]
+    public async Task OnPostSelectTemplateAsync_ShouldOpenTheChosenTemplateAtItsLatestVersion()
+    {
+        var other = new TemplateDto { TemplateId = Guid.NewGuid(), Name = "Visits", CreatedOn = DateTime.UtcNow };
+        _selection.GetSelectableTemplatesAsync(Arg.Any<CancellationToken>()).Returns([_template, other]);
+        _session.SetString("TemplateVersionNumber", "1.0.3");
+        _model.SelectedTemplateId = other.TemplateId;
+
+        var result = await _model.OnPostSelectTemplateAsync(CancellationToken.None);
+
+        Assert.Null(Assert.IsType<RedirectToPageResult>(result).PageName);
+        await _selection.Received(1).SelectTemplateAsync(Arg.Any<HttpContext>(), other, Arg.Any<CancellationToken>());
+        Assert.Null(_session.GetString("TemplateVersionNumber"));
+    }
+
+    [Fact]
+    public async Task OnPostSelectTemplateAsync_ShouldIgnoreATemplateFromAnotherTenant()
+    {
+        _model.SelectedTemplateId = Guid.NewGuid();
+
+        await _model.OnPostSelectTemplateAsync(CancellationToken.None);
+
+        await _selection.DidNotReceiveWithAnyArgs().SelectTemplateAsync(default!, default!, default);
+    }
+
+    [Fact]
+    public async Task OnPostSelectVersionAsync_ShouldRememberTheChosenVersion()
+    {
+        _model.SelectedVersionNumber = " 1.0.2 ";
+
+        var result = await _model.OnPostSelectVersionAsync(CancellationToken.None);
+
+        Assert.IsType<RedirectToPageResult>(result);
+        Assert.Equal("1.0.2", _session.GetString("TemplateVersionNumber"));
+    }
+
+    [Fact]
+    public async Task OnPostSaveAsync_ShouldNotSaveToAnotherTemplate_WhenNoneIsSelected()
+    {
+        _selection.GetSelectedTemplateId(Arg.Any<HttpContext>()).Returns((string?)null);
+        _model.NewVersion = "1.0.4";
+        _model.NewSchema = StoredSchema;
+
+        var result = await _model.OnPostSaveAsync(CancellationToken.None);
+
+        Assert.IsType<RedirectToPageResult>(result);
+        await _selection.DidNotReceiveWithAnyArgs().SelectTemplateAsync(default!, default!, default);
+        await _admin.DidNotReceiveWithAnyArgs().CreateVersionAsync(default!, default, default);
+    }
+
+    [Fact]
+    public async Task OnGetAsync_ShouldEmbedTheStoredSchemaAndSuggestTheNextVersion_WithoutComplexFieldSecrets()
+    {
+        GivenStoredVersion("1.0.3");
+
+        var result = await _model.OnGetAsync(null, false, CancellationToken.None);
+
+        Assert.IsType<PageResult>(result);
+        Assert.Equal("1.0.4", _model.NewVersion);
+        using var data = JsonDocument.Parse(_model.StudioDataJson);
+        Assert.Equal(StoredSchema, data.RootElement.GetProperty("schemaJson").GetString());
+        Assert.False(data.RootElement.GetProperty("isStarter").GetBoolean());
+        Assert.Equal("TrustComplexField", data.RootElement.GetProperty("complexFields")[0].GetProperty("id").GetString());
+        Assert.DoesNotContain("api-key-value", _model.StudioDataJson);
+        Assert.DoesNotContain("client-secret-value", _model.StudioDataJson);
+    }
+
+    [Fact]
+    public async Task OnGetAsync_ShouldStartFromTheStarterTemplate_WhenThereAreNoVersions()
+    {
+        await _model.OnGetAsync(null, false, CancellationToken.None);
+
+        Assert.Equal("1.0.0", _model.NewVersion);
+        using var data = JsonDocument.Parse(_model.StudioDataJson);
+        Assert.True(data.RootElement.GetProperty("isStarter").GetBoolean());
+        Assert.Contains("starter-group", data.RootElement.GetProperty("schemaJson").GetString());
+        Assert.Equal(0, data.RootElement.GetProperty("applicationCount").GetInt32());
+        Assert.Equal(JsonValueKind.Null, data.RootElement.GetProperty("baselineSchemaJson").ValueKind);
+        await _applications.DidNotReceiveWithAnyArgs().GetApplicationsByTemplateAsync(default);
+    }
+
+    [Fact]
+    public async Task OnGetAsync_ShouldTellTemplateStudioHowManyApplicationsUseTheTemplate_AndWhatTheyWereSavedAgainst()
+    {
+        GivenStoredVersion("1.0.3");
+
+        await _model.OnGetAsync(null, false, CancellationToken.None);
+
+        using var data = JsonDocument.Parse(_model.StudioDataJson);
+        Assert.Equal(4, data.RootElement.GetProperty("applicationCount").GetInt32());
+        Assert.Equal(StoredSchema, data.RootElement.GetProperty("baselineSchemaJson").GetString());
+        await _applications.Received(1).GetApplicationsByTemplateAsync(
+            _template.TemplateId, false, 1, 1, Arg.Any<string?>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(),
+            Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Arg.Any<ApplicationStatus?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task OnGetAsync_ShouldLeaveTheApplicationCountUnknown_WhenItCannotBeChecked()
+    {
+        GivenStoredVersion("1.0.3");
+        GivenApplicationCount(Task.FromException<PagedResultOfApplicationDto>(new HttpRequestException("forbidden")));
+
+        await _model.OnGetAsync(null, false, CancellationToken.None);
+
+        using var data = JsonDocument.Parse(_model.StudioDataJson);
+        Assert.Equal(JsonValueKind.Null, data.RootElement.GetProperty("applicationCount").ValueKind);
+    }
+
+    [Fact]
+    public async Task OnPostSaveAsync_ShouldCompareWithTheStoredVersion_NotTheEditedOne_WhenRedisplaying()
+    {
+        GivenStoredVersion("1.0.3");
+        _model.NewVersion = "1.0.4";
+        _model.NewSchema = """{ "edited": true }""";
+        _admin.ValidateNewVersion(Arg.Any<TemplateManagerWorkState>())
+            .Returns(AdminPageOutcome.Stay(errors: [new FormValidationError("NewSchema", "problem")]));
+
+        await _model.OnPostSaveAsync(CancellationToken.None);
+
+        using var data = JsonDocument.Parse(_model.StudioDataJson);
+        Assert.Equal(StoredSchema, data.RootElement.GetProperty("baselineSchemaJson").GetString());
+    }
+
+    private void GivenApplicationCount(Task<PagedResultOfApplicationDto> result) =>
+        _applications.GetApplicationsByTemplateAsync(
+                Arg.Any<Guid>(), Arg.Any<bool?>(), Arg.Any<int?>(), Arg.Any<int?>(), Arg.Any<string?>(),
+                Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(),
+                Arg.Any<ApplicationStatus?>(), Arg.Any<CancellationToken>())
+            .Returns(result);
+
+    [Fact]
+    public async Task OnGetAsync_ShouldNotOfferTheStarterTemplate_WhenTheTemplateFailedToLoad()
+    {
+        _admin.LoadTemplateDataAsync(Arg.Any<TemplateManagerWorkState>(), _template.TemplateId, Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                var state = call.Arg<TemplateManagerWorkState>();
+                state.HasError = true;
+                state.ErrorMessage = TemplateManagerMessages.LoadFailed;
+                return Task.CompletedTask;
+            });
+
+        await _model.OnGetAsync(null, false, CancellationToken.None);
+
+        Assert.Equal(TemplateManagerMessages.LoadFailed, _model.LoadError);
+        Assert.Equal("{}", _model.StudioDataJson);
+    }
+
+    [Fact]
+    public async Task OnPostSaveAsync_ShouldKeepTheEditedSchemaAndShowErrors_WhenValidationFails()
+    {
+        GivenStoredVersion("1.0.3");
+        _model.NewVersion = "1.0.4";
+        _model.NewSchema = """{ "edited": true }""";
+        _admin.ValidateNewVersion(Arg.Any<TemplateManagerWorkState>())
+            .Returns(AdminPageOutcome.Stay(errors: [new FormValidationError("NewSchema", "Template must have a 'templateId'")]));
+
+        var result = await _model.OnPostSaveAsync(CancellationToken.None);
+
+        Assert.IsType<PageResult>(result);
+        Assert.Equal("Template must have a 'templateId'", _model.ModelState["NewSchema"]!.Errors.Single().ErrorMessage);
+        using var data = JsonDocument.Parse(_model.StudioDataJson);
+        Assert.Equal("""{ "edited": true }""", data.RootElement.GetProperty("schemaJson").GetString());
+        Assert.True(data.RootElement.GetProperty("hasUnsavedChanges").GetBoolean());
+        await _admin.DidNotReceiveWithAnyArgs().CreateVersionAsync(default!, default, default);
+    }
+
+    [Fact]
+    public async Task OnPostSaveAsync_ShouldCreateTheVersionClearTheCacheAndRememberTheVersion()
+    {
+        GivenStoredVersion("1.0.3");
+        _model.StartedFromLatestVersion = "1.0.3";
+        _model.NewVersion = " 1.0.4 ";
+        _model.NewSchema = StoredSchema;
+        _model.AcknowledgeReportingImpact = true;
+        _admin.ValidateNewVersion(Arg.Any<TemplateManagerWorkState>()).Returns(AdminPageOutcome.Stay());
+        _admin.CreateVersionAsync(Arg.Any<TemplateManagerWorkState>(), _template.TemplateId, Arg.Any<CancellationToken>())
+            .Returns(AdminPageOutcome.Redirect());
+
+        var result = await _model.OnPostSaveAsync(CancellationToken.None);
+
+        var redirect = Assert.IsType<RedirectToPageResult>(result);
+        Assert.Equal("1.0.4", redirect.RouteValues!["saved"]);
+        await _admin.Received(1).CreateVersionAsync(
+            Arg.Is<TemplateManagerWorkState>(state =>
+                state.NewVersion == "1.0.4" && state.NewSchema == StoredSchema && state.AcknowledgeReportingImpact),
+            _template.TemplateId,
+            Arg.Any<CancellationToken>());
+        await _cacheInvalidator.Received(1).InvalidateAsync(_template.TemplateId.ToString());
+        Assert.True(_session.TryGetValue("TemplateVersionNumber", out var stored));
+        Assert.Equal("1.0.4", Encoding.UTF8.GetString(stored));
+    }
+
+    [Fact]
+    public async Task OnGetAsync_ShouldRememberTheLatestVersion_SoASaveCanTellIfSomeoneSavedSince()
+    {
+        GivenStoredVersion("1.0.3");
+
+        await _model.OnGetAsync(null, false, CancellationToken.None);
+
+        Assert.Equal("1.0.3", _model.StartedFromLatestVersion);
+        Assert.False(_model.HasNewerVersion);
+    }
+
+    [Fact]
+    public async Task OnPostSaveAsync_ShouldNotSave_WhenSomeoneSavedANewerVersionSinceStudioOpened()
+    {
+        GivenStoredVersion("1.0.4");
+        GivenSaveSucceeds();
+        _model.StartedFromLatestVersion = "1.0.3";
+        _model.NewVersion = "1.0.5";
+        _model.NewSchema = """{ "edited": true }""";
+
+        var result = await _model.OnPostSaveAsync(CancellationToken.None);
+
+        Assert.IsType<PageResult>(result);
+        Assert.True(_model.HasNewerVersion);
+        Assert.Contains("Version 1.0.4 was saved after you opened Template Studio",
+            _model.ModelState[nameof(TemplateStudioModel.SaveOverNewerVersion)]!.Errors.Single().ErrorMessage);
+        using var data = JsonDocument.Parse(_model.StudioDataJson);
+        Assert.Equal("""{ "edited": true }""", data.RootElement.GetProperty("schemaJson").GetString());
+        await _admin.DidNotReceiveWithAnyArgs().CreateVersionAsync(default!, default, default);
+    }
+
+    [Fact]
+    public async Task OnPostSaveAsync_ShouldSave_WhenTheDesignerChoosesToSaveOverTheNewerVersion()
+    {
+        GivenStoredVersion("1.0.4");
+        GivenSaveSucceeds();
+        _model.StartedFromLatestVersion = "1.0.3";
+        _model.SaveOverNewerVersion = true;
+        _model.NewVersion = "1.0.5";
+        _model.NewSchema = StoredSchema;
+
+        var result = await _model.OnPostSaveAsync(CancellationToken.None);
+
+        Assert.IsType<RedirectToPageResult>(result);
+        await _admin.Received(1).CreateVersionAsync(Arg.Any<TemplateManagerWorkState>(), _template.TemplateId, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task OnPostSaveAsync_ShouldTreatTheFirstVersionAsAConflict_WhenSomeoneElseSavedItFirst()
+    {
+        GivenStoredVersion("1.0.0");
+        GivenSaveSucceeds();
+        _model.StartedFromLatestVersion = null;
+        _model.NewVersion = "1.0.1";
+        _model.NewSchema = StoredSchema;
+
+        await _model.OnPostSaveAsync(CancellationToken.None);
+
+        Assert.True(_model.HasNewerVersion);
+        await _admin.DidNotReceiveWithAnyArgs().CreateVersionAsync(default!, default, default);
+    }
+
+    [Fact]
+    public async Task OnGetAsync_ShouldListTheAnswersEventMappingsRead_UnderTheTemplateGuidAndItsJsonId()
+    {
+        GivenStoredVersion("1.0.3");
+        _eventMappings.GetFieldReferences(Arg.Any<IEnumerable<string>>())
+            .Returns([new EventMappingFieldReference("trustName", "TransferSubmittedEvent", "transfer-v1")]);
+
+        await _model.OnGetAsync(null, false, CancellationToken.None);
+
+        _eventMappings.Received(1).GetFieldReferences(Arg.Is<IEnumerable<string>>(keys =>
+            keys.Contains(_template.TemplateId.ToString()) && keys.Contains("tpl")));
+        using var data = JsonDocument.Parse(_model.StudioDataJson);
+        var reference = data.RootElement.GetProperty("eventMappings")[0];
+        Assert.Equal("trustName", reference.GetProperty("fieldId").GetString());
+        Assert.Equal("TransferSubmittedEvent", reference.GetProperty("eventType").GetString());
+        Assert.Equal("transfer-v1", reference.GetProperty("mappingId").GetString());
+    }
+
+    [Fact]
+    public async Task OnGetAsync_ShouldStillOpen_WhenEventMappingsCannotBeRead()
+    {
+        GivenStoredVersion("1.0.3");
+        _eventMappings.GetFieldReferences(Arg.Any<IEnumerable<string>>()).Returns(_ => throw new InvalidOperationException("bad config"));
+
+        var result = await _model.OnGetAsync(null, false, CancellationToken.None);
+
+        Assert.IsType<PageResult>(result);
+        using var data = JsonDocument.Parse(_model.StudioDataJson);
+        Assert.Equal(0, data.RootElement.GetProperty("eventMappings").GetArrayLength());
+    }
+
+    private void GivenSaveSucceeds()
+    {
+        _admin.ValidateNewVersion(Arg.Any<TemplateManagerWorkState>()).Returns(AdminPageOutcome.Stay());
+        _admin.CreateVersionAsync(Arg.Any<TemplateManagerWorkState>(), _template.TemplateId, Arg.Any<CancellationToken>())
+            .Returns(AdminPageOutcome.Redirect());
+    }
+
+    [Fact]
+    public void OnPostValidate_ShouldReturnTheSaveTimeChecks()
+    {
+        _validation.ValidateTemplateJson("{}").Returns((false, new List<string> { "Template must have a 'templateId'" }));
+
+        var result = Assert.IsType<JsonResult>(_model.OnPostValidate(new TemplateStudioValidateRequest("{}")));
+
+        var json = JsonSerializer.Serialize(result.Value);
+        Assert.Equal("""{"isValid":false,"errors":["Template must have a \u0027templateId\u0027"]}""", json);
+    }
+
+    [Fact]
+    public void OnPostValidate_ShouldDecodeABase64Schema()
+    {
+        const string schema = """{ "templateName": "Trust's -- select <form>" }""";
+        _validation.ValidateTemplateJson(schema).Returns((true, new List<string>()));
+
+        var result = Assert.IsType<JsonResult>(_model.OnPostValidate(new TemplateStudioValidateRequest(Encoded(schema))));
+
+        Assert.Equal("""{"isValid":true,"errors":[]}""", JsonSerializer.Serialize(result.Value));
+    }
+
+    [Fact]
+    public async Task OnPostSaveAsync_ShouldSaveTheDecodedSchema_WhenItIsSentAsBase64()
+    {
+        GivenStoredVersion("1.0.3");
+        _model.StartedFromLatestVersion = "1.0.3";
+        _model.NewVersion = "1.0.4";
+        _model.NewSchema = Encoded(StoredSchema);
+        GivenSaveSucceeds();
+
+        await _model.OnPostSaveAsync(CancellationToken.None);
+
+        await _admin.Received(1).CreateVersionAsync(
+            Arg.Is<TemplateManagerWorkState>(state => state.NewSchema == StoredSchema),
+            _template.TemplateId,
+            Arg.Any<CancellationToken>());
+    }
+
+    private static string Encoded(string schema) =>
+        TemplateStudioSchemaTransport.Prefix + Convert.ToBase64String(Encoding.UTF8.GetBytes(schema));
+
+    private void GivenStoredVersion(string version) =>
+        _admin.LoadTemplateDataAsync(Arg.Any<TemplateManagerWorkState>(), _template.TemplateId, Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                var state = call.Arg<TemplateManagerWorkState>();
+                state.AvailableVersions = [new TemplateVersionSummaryDto { TemplateId = _template.TemplateId, TemplateVersionId = Guid.NewGuid(), VersionNumber = version, CreatedOn = DateTime.UtcNow }];
+                state.CurrentVersionNumber = version;
+                state.LatestVersionNumber = version;
+                state.CurrentTemplateJson = StoredSchema;
+                return Task.CompletedTask;
+            });
+
+    private sealed class StubSessionFeature : ISessionFeature
+    {
+        public ISession Session { get; set; } = new InMemorySession();
+    }
+
+    private sealed class InMemorySession : ISession
+    {
+        private readonly Dictionary<string, byte[]> _store = [];
+
+        public bool IsAvailable => true;
+
+        public string Id => "test-session";
+
+        public IEnumerable<string> Keys => _store.Keys;
+
+        public void Clear() => _store.Clear();
+
+        public Task CommitAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task LoadAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public void Remove(string key) => _store.Remove(key);
+
+        public void Set(string key, byte[] value) => _store[key] = value;
+
+        public bool TryGetValue(string key, [NotNullWhen(true)] out byte[]? value)
+            => _store.TryGetValue(key, out value);
+    }
+}

@@ -479,7 +479,7 @@ public class ConditionalLogicOrchestrator(
     {
         var element = action.Element;
 
-        switch (element.Action.ToLowerInvariant())
+        switch (ConditionalLogicConstants.Canonical(element.Action))
         {
             case ConditionalLogicConstants.Actions.Show:
                 ApplyShowAction(element, state);

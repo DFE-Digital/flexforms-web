@@ -301,9 +301,13 @@ public sealed class FormEngineVisibilityEvaluator(
             var conditionMet = condition.Operator.ToLowerInvariant() switch
             {
                 "equals" => EvaluateEquals(rawValue, conditionValue),
-                "not_equals" => !EvaluateEquals(rawValue, conditionValue),
+                "not_equals" or "notequals" => !EvaluateEquals(rawValue, conditionValue),
                 "contains" => EvaluateContains(rawValue, conditionValue),
                 "not_contains" => !EvaluateContains(rawValue, conditionValue),
+                "in" => ConditionValues(condition.Value).Any(value => EvaluateEquals(rawValue, value)),
+                "notin" => !ConditionValues(condition.Value).Any(value => EvaluateEquals(rawValue, value)),
+                "isempty" => CheckboxValueNormalizer.Normalize(rawValue).All(string.IsNullOrWhiteSpace),
+                "isnotempty" => CheckboxValueNormalizer.Normalize(rawValue).Any(value => !string.IsNullOrWhiteSpace(value)),
                 _ => false
             };
             results.Add(conditionMet);
@@ -316,6 +320,8 @@ public sealed class FormEngineVisibilityEvaluator(
             _ => results.All(r => r)
         };
     }
+
+    private static IReadOnlyCollection<string> ConditionValues(object? value) => CheckboxValueNormalizer.Normalize(value);
 
     private static bool EvaluateEquals(object? fieldValue, string conditionValue) =>
         CheckboxValueNormalizer.Normalize(fieldValue).Any(v =>

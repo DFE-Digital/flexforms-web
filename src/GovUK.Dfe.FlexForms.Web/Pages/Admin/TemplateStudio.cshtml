@@ -1,0 +1,279 @@
+@page "/admin/template-studio"
+@model GovUK.Dfe.FlexForms.Web.Pages.Admin.TemplateStudioModel
+@{
+    ViewData["Title"] = "Template Studio";
+    bool HasError(string key) => ViewData.ModelState[key]?.Errors.Any() == true;
+}
+
+<a asp-page="/Admin/Admin" class="govuk-back-link">Back to Admin</a>
+
+@if (Model.SelectedTemplate is null)
+{
+    <h1 class="govuk-heading-l">Template Studio</h1>
+    <p class="govuk-body">There are no templates to edit yet.</p>
+    <a asp-page="/Admin/CreateTemplate" class="govuk-button" data-module="govuk-button" id="tpl-create-template">Create a new template</a>
+    return;
+}
+
+@if (Model.ShowCreated)
+{
+    <div class="govuk-notification-banner govuk-notification-banner--success" role="alert" aria-labelledby="template-studio-created-title" data-module="govuk-notification-banner">
+        <div class="govuk-notification-banner__header">
+            <h2 class="govuk-notification-banner__title" id="template-studio-created-title">Success</h2>
+        </div>
+        <div class="govuk-notification-banner__content">
+            <h3 class="govuk-notification-banner__heading">Template created</h3>
+            <p class="govuk-body">It starts with a sample task, page and question, and it isn't live yet. Edit it here and save a new version.</p>
+        </div>
+    </div>
+}
+
+@if (Model.SavedVersion is not null)
+{
+    <div class="govuk-notification-banner govuk-notification-banner--success" role="alert" aria-labelledby="template-studio-saved-title" data-module="govuk-notification-banner">
+        <div class="govuk-notification-banner__header">
+            <h2 class="govuk-notification-banner__title" id="template-studio-saved-title">Success</h2>
+        </div>
+        <div class="govuk-notification-banner__content">
+            <h3 class="govuk-notification-banner__heading">Version @Model.SavedVersion saved</h3>
+            <p class="govuk-body">New applications will use this version. You can keep editing and save another version.</p>
+        </div>
+    </div>
+}
+
+@if (!ViewData.ModelState.IsValid)
+{
+    <div class="govuk-error-summary" data-module="govuk-error-summary">
+        <div role="alert">
+            <h2 class="govuk-error-summary__title">There is a problem</h2>
+            <div class="govuk-error-summary__body">
+                <ul class="govuk-list govuk-error-summary__list">
+                    @foreach (var entry in ViewData.ModelState.Where(item => item.Value?.Errors.Count > 0))
+                    {
+                        var href = entry.Key switch
+                        {
+                            nameof(Model.NewVersion) => "#NewVersion",
+                            nameof(Model.AcknowledgeReportingImpact) => "#AcknowledgeReportingImpact",
+                            nameof(Model.SaveOverNewerVersion) => "#SaveOverNewerVersion",
+                            _ => "#template-studio-tabs"
+                        };
+                        foreach (var error in entry.Value!.Errors)
+                        {
+                            <li><a href="@href">@error.ErrorMessage</a></li>
+                        }
+                    }
+                </ul>
+            </div>
+        </div>
+    </div>
+}
+
+<span class="govuk-caption-l">Template Studio</span>
+<h1 class="govuk-heading-l govuk-!-margin-bottom-2">@Model.SelectedTemplate.Name</h1>
+<p class="govuk-body govuk-!-margin-bottom-6">
+    @if (Model.SelectedTemplate.IsLive)
+    {
+        <strong class="govuk-tag govuk-tag--green">Live</strong>
+    }
+    else
+    {
+        <strong class="govuk-tag govuk-tag--grey">Not live</strong>
+    }
+    @if (Model.CurrentVersionNumber is not null)
+    {
+        var latestSuffix = string.Equals(Model.CurrentVersionNumber, Model.LatestVersionNumber, StringComparison.OrdinalIgnoreCase) ? " (latest)" : "";
+        <span class="govuk-!-margin-left-2">Editing a copy of version @(Model.CurrentVersionNumber + latestSuffix)</span>
+    }
+    else if (Model.LoadError is null)
+    {
+        <span class="govuk-!-margin-left-2">No versions yet. You're starting from the starter template.</span>
+    }
+</p>
+
+@* Switching navigates away, so the browser warns first if there are unsaved changes. *@
+<div class="govuk-grid-row govuk-!-margin-bottom-4">
+    <form method="post" asp-page-handler="SelectTemplate" class="govuk-grid-column-one-half" id="tpl-select-template-form">
+        <div class="govuk-form-group govuk-!-margin-bottom-3">
+            <label class="govuk-label govuk-label--s" asp-for="SelectedTemplateId">Choose a template to edit</label>
+            <select class="govuk-select govuk-!-width-full" asp-for="SelectedTemplateId">
+                @foreach (var template in Model.TenantTemplates)
+                {
+                    <option value="@template.TemplateId">@template.Name (@(template.IsLive ? "Live" : "Not live"))</option>
+                }
+            </select>
+        </div>
+        <button class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" data-module="govuk-button" type="submit">Open template</button>
+    </form>
+
+    @if (Model.AvailableVersions.Count > 0)
+    {
+        <form method="post" asp-page-handler="SelectVersion" class="govuk-grid-column-one-half" id="tpl-select-version-form">
+            <div class="govuk-form-group govuk-!-margin-bottom-3">
+                <label class="govuk-label govuk-label--s" asp-for="SelectedVersionNumber">Choose a version to start from</label>
+                <select class="govuk-select govuk-!-width-full" asp-for="SelectedVersionNumber">
+                    @foreach (var version in Model.AvailableVersions)
+                    {
+                        var isLatest = string.Equals(version.VersionNumber, Model.LatestVersionNumber, StringComparison.OrdinalIgnoreCase);
+                        <option value="@version.VersionNumber">@(version.VersionNumber + (isLatest ? " (latest)" : ""))</option>
+                    }
+                </select>
+            </div>
+            <button class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" data-module="govuk-button" type="submit">Open version</button>
+        </form>
+    }
+</div>
+
+@if (Model.LoadError is not null)
+{
+    <div class="govuk-error-summary" data-module="govuk-error-summary">
+        <div role="alert">
+            <h2 class="govuk-error-summary__title">There is a problem</h2>
+            <div class="govuk-error-summary__body">
+                <p class="govuk-body">@Model.LoadError</p>
+                <p class="govuk-body">Template Studio won't open until the template loads, so a saved version can't be replaced by mistake.</p>
+            </div>
+        </div>
+    </div>
+    return;
+}
+
+<noscript>
+    <div class="govuk-inset-text">
+        Template Studio needs JavaScript. You can still edit the JSON in <a asp-page="/Admin/TemplateManager" class="govuk-link">Template Manager</a>.
+    </div>
+</noscript>
+
+<div id="template-studio" hidden>
+    <p class="govuk-body" id="tpl-status" role="status">No unsaved changes</p>
+    <div class="govuk-button-group">
+        <button type="button" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="tpl-undo" disabled aria-disabled="true">Undo</button>
+        <button type="button" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="tpl-redo" disabled aria-disabled="true">Redo</button>
+        <button type="button" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="tpl-check-button">Check for problems</button>
+        <button type="button" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="tpl-preview-button">Preview task</button>
+        <a href="#tpl-save" class="govuk-button" data-module="govuk-button" id="tpl-go-to-save">Save new version</a>
+    </div>
+
+    <div id="tpl-problems" tabindex="-1"></div>
+
+    <div class="govuk-tabs" data-module="govuk-tabs" id="template-studio-tabs">
+        <h2 class="govuk-tabs__title">Template Studio</h2>
+        <ul class="govuk-tabs__list">
+            <li class="govuk-tabs__list-item govuk-tabs__list-item--selected">
+                <a class="govuk-tabs__tab" href="#tpl-panel-design">Design</a>
+            </li>
+            <li class="govuk-tabs__list-item">
+                <a class="govuk-tabs__tab" href="#tpl-panel-rules">Rules</a>
+            </li>
+            <li class="govuk-tabs__list-item">
+                <a class="govuk-tabs__tab" href="#tpl-panel-json">JSON (advanced)</a>
+            </li>
+        </ul>
+
+        <div class="govuk-tabs__panel" id="tpl-panel-design">
+            <div class="govuk-grid-row">
+                <nav class="govuk-grid-column-one-third" id="tpl-tree" aria-label="Template structure"></nav>
+                <div class="govuk-grid-column-two-thirds" id="tpl-inspector"></div>
+            </div>
+        </div>
+
+        <div class="govuk-tabs__panel govuk-tabs__panel--hidden" id="tpl-panel-rules">
+            <div id="tpl-rules"></div>
+        </div>
+
+        <div class="govuk-tabs__panel govuk-tabs__panel--hidden" id="tpl-panel-json">
+            <div class="govuk-form-group" id="tpl-json-group">
+                <h2 class="govuk-label-wrapper">
+                    <label class="govuk-label govuk-label--m" for="tpl-json">Template JSON</label>
+                </h2>
+                <div class="govuk-hint" id="tpl-json-hint">
+                    This is the JSON Template Studio generates. Changes you make here are applied when you leave this tab, check for problems, preview or save.
+                </div>
+                <p class="govuk-error-message" id="tpl-json-error" hidden></p>
+                <textarea class="govuk-textarea" id="tpl-json" rows="30" spellcheck="false" aria-describedby="tpl-json-hint tpl-json-error"></textarea>
+            </div>
+            <button type="button" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="tpl-json-format">Format JSON</button>
+        </div>
+    </div>
+
+    <h2 class="govuk-heading-l govuk-!-margin-top-8" id="tpl-save" tabindex="-1">Save a new version</h2>
+    <form method="post" asp-page-handler="Save" id="tpl-save-form">
+        <input type="hidden" asp-for="NewSchema" id="NewSchema" />
+        <input type="hidden" asp-for="StartedFromLatestVersion" />
+
+        @if (Model.HasNewerVersion)
+        {
+            <div class="govuk-form-group @(HasError(nameof(Model.SaveOverNewerVersion)) ? "govuk-form-group--error" : "")">
+                <fieldset class="govuk-fieldset" aria-describedby="SaveOverNewerVersion-hint">
+                    <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Someone saved a newer version</legend>
+                    <div id="SaveOverNewerVersion-hint" class="govuk-hint">
+                        Version @Model.LatestVersionNumber was saved after you opened Template Studio. Your version is based on @(Model.CurrentVersionNumber ?? "the starter template"), so it won't include the changes in version @Model.LatestVersionNumber.
+                    </div>
+                    @if (ViewData.ModelState[nameof(Model.SaveOverNewerVersion)]?.Errors.FirstOrDefault() is { } newerError)
+                    {
+                        <p id="SaveOverNewerVersion-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @newerError.ErrorMessage</p>
+                    }
+                    <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+                        <div class="govuk-checkboxes__item">
+                            <input class="govuk-checkboxes__input" asp-for="SaveOverNewerVersion" type="checkbox"
+                                   aria-describedby="@(HasError(nameof(Model.SaveOverNewerVersion)) ? "SaveOverNewerVersion-error" : null)" />
+                            <label class="govuk-label govuk-checkboxes__label" asp-for="SaveOverNewerVersion">
+                                Save my version anyway
+                            </label>
+                        </div>
+                    </div>
+                </fieldset>
+            </div>
+        }
+
+        <div id="tpl-mapping-warnings"></div>
+
+        <div class="govuk-form-group @(HasError(nameof(Model.NewVersion)) ? "govuk-form-group--error" : "")">
+            <label class="govuk-label govuk-label--s" asp-for="NewVersion">Version number</label>
+            <div id="NewVersion-hint" class="govuk-hint">Three numbers separated by full stops, for example 1.2.1. Each version number can only be used once.</div>
+            @if (ViewData.ModelState[nameof(Model.NewVersion)]?.Errors.FirstOrDefault() is { } versionError)
+            {
+                <p id="NewVersion-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @versionError.ErrorMessage</p>
+            }
+            <input class="govuk-input govuk-input--width-10 @(HasError(nameof(Model.NewVersion)) ? "govuk-input--error" : "")"
+                   asp-for="NewVersion" type="text" spellcheck="false"
+                   aria-describedby="NewVersion-hint @(HasError(nameof(Model.NewVersion)) ? "NewVersion-error" : "")" />
+        </div>
+
+        <div class="govuk-form-group @(HasError(nameof(Model.AcknowledgeReportingImpact)) ? "govuk-form-group--error" : "")">
+            <div class="govuk-warning-text">
+                <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+                <strong class="govuk-warning-text__text">
+                    <span class="govuk-visually-hidden">Warning</span>
+                    Changing a template can break reporting in downstream services, or leave answers out of reported data. Discuss changes with the relevant data team before you save.
+                </strong>
+            </div>
+            @if (ViewData.ModelState[nameof(Model.AcknowledgeReportingImpact)]?.Errors.FirstOrDefault() is { } acknowledgeError)
+            {
+                <p id="AcknowledgeReportingImpact-error" class="govuk-error-message"><span class="govuk-visually-hidden">Error:</span> @acknowledgeError.ErrorMessage</p>
+            }
+            <div class="govuk-checkboxes govuk-checkboxes--small" data-module="govuk-checkboxes">
+                <div class="govuk-checkboxes__item">
+                    <input class="govuk-checkboxes__input" asp-for="AcknowledgeReportingImpact" type="checkbox"
+                           aria-describedby="@(HasError(nameof(Model.AcknowledgeReportingImpact)) ? "AcknowledgeReportingImpact-error" : null)" />
+                    <label class="govuk-label govuk-checkboxes__label" asp-for="AcknowledgeReportingImpact">
+                        I have discussed these changes with the relevant data team
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <button type="submit" class="govuk-button" id="tpl-save-button">Save new version</button>
+    </form>
+
+    <form method="post" asp-page="/Admin/TemplateStudioPreview" target="_blank" id="tpl-preview-form" hidden>
+        <input type="hidden" name="Schema" id="tpl-preview-schema" />
+        <input type="hidden" name="TaskId" id="tpl-preview-task" />
+    </form>
+</div>
+
+<script type="application/json" id="template-studio-data">@Html.Raw(Model.StudioDataJson)</script>
+
+@section Scripts {
+    <script src="~/js/template-studio/template-document.js" asp-append-version="true"></script>
+    <script src="~/js/template-studio/template-studio.js" asp-append-version="true"></script>
+}

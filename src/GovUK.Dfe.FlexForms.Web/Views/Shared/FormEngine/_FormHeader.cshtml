@@ -1,16 +1,32 @@
 @model GovUK.Dfe.FlexForms.Web.Pages.FormEngine.RenderFormModel
+@using GovUK.Dfe.FlexForms.Application.FormEngine
 @using GovUK.Dfe.FlexForms.Web.Tenancy
 @inject ITenantAppConfiguration AppConfig
+@inject IApplicationMetadataResolver ApplicationMetadataResolver
 
 @{
     var applicationId = Context.Session.GetString("ApplicationId");
     var leadApplicantName = Context.Session.GetString($"ApplicationLeadApplicantName_{applicationId}");
     var leadApplicantEmail = Context.Session.GetString($"ApplicationLeadApplicantEmail_{applicationId}");
     var applicationFormVersion = Context.Session.GetString($"ApplicationFormVersion_{applicationId}");
+
+    var metadataContext = new ApplicationMetadataResolveContext(
+        Model.ReferenceNumber,
+        applicationFormVersion,
+        leadApplicantName,
+        leadApplicantEmail,
+        AppConfig["Layout:LeadApplicant"] ?? "Lead applicant",
+        AppTerminology.SingularCapitalised,
+        Model.Data);
+
+    var metadataRows = ApplicationMetadataResolver.Resolve(Model.Template, metadataContext);
 }
 
 <div class="govuk-!-margin-bottom-6" style="border-left: 4px solid #b1b4b6; padding-left: 15px;">
-    <p class="govuk-body govuk-!-margin-bottom-1">@AppTerminology.SingularCapitalised reference: <strong>@Model.ReferenceNumber</strong></p>
-    <p class="govuk-body govuk-!-margin-bottom-0">@AppTerminology.SingularCapitalised version: <strong>@applicationFormVersion</strong></p>
-    <p class="govuk-body govuk-!-margin-bottom-0">@AppConfig["Layout:LeadApplicant"]: <strong>@leadApplicantName</strong></p>
+    @for (var i = 0; i < metadataRows.Count; i++)
+    {
+        var row = metadataRows[i];
+        var marginClass = i == metadataRows.Count - 1 ? "govuk-!-margin-bottom-0" : "govuk-!-margin-bottom-1";
+        <p class="govuk-body @marginClass">@row.Label: <strong>@row.DisplayValue</strong></p>
+    }
 </div>

@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using GovUK.Dfe.FlexForms.Domain.Templates;
+using GovUK.Dfe.FlexForms.Web.Features;
 using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.FlexForms.Web.Services;
 using GovUK.Dfe.FlexForms.Web.Tenancy;
@@ -9,6 +10,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.FeatureManagement;
 
 namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 
@@ -21,6 +23,7 @@ public sealed class CreateTemplateModel(
     ITemplateSelectionService templateSelectionService,
     IUsersClient usersClient,
     IMemoryCache memoryCache,
+    IFeatureManager featureManager,
     ILogger<CreateTemplateModel> logger) : PageModel
 {
     /// <summary>
@@ -75,6 +78,9 @@ public sealed class CreateTemplateModel(
                 cancellationToken,
                 forceRefresh: true,
                 tenantId: HttpContext.RequestServices.GetService<ITenantRequestContext>()?.TenantId);
+
+            if (await featureManager.IsEnabledAsync(FeatureFlags.TemplateStudio))
+                return RedirectToPage("/Admin/TemplateStudio", new { created = true });
 
             return RedirectToPage(
                 "/Admin/TemplateManager",

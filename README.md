@@ -1,5 +1,7 @@
 # FlexForms Web
 
+![FlexForms Studio](docs/images/Glossy-FlexForms-SaaS-Logo.png)
+
 Multi-tenant Razor Pages frontend for **FlexForms** — a SaaS form platform that turns JSON templates into GOV.UK task-list applications.
 
 Each tenant (Transfers, Visits, LSRP, …) is resolved from hostname or `X-Tenant-ID`. Configuration is loaded from **flexforms-api** TenantConfig (not from per-product folders). Persistence and business rules live in the API; this repo owns UI, auth cookies, form orchestration, and admin tools.
@@ -892,6 +894,7 @@ sequenceDiagram
 ## Related documentation
 
 - [`docs/release-process.md`](docs/release-process.md) — branching, release candidates, promoting to production, hotfixes
+- [`docs/FlexForms-Process-Map.md`](docs/FlexForms-Process-Map.md) — end-to-end process map from the user and technical perspectives
 - [`docs/Form-Template-Designer-Manual.md`](docs/Form-Template-Designer-Manual.md) — JSON template authoring
 - [`docs/Tenant-Admin-User-Manual.md`](docs/Tenant-Admin-User-Manual.md) — tenant Admin UI, including [event mappings §12](docs/Tenant-Admin-User-Manual.md#12-event-mappings) and [email placeholders §13](docs/Tenant-Admin-User-Manual.md#13-email-placeholder-mappings)
 - [Event mapping (HLD)](#event-mapping-high-level-design) — Web vs API vs Azure Service Bus

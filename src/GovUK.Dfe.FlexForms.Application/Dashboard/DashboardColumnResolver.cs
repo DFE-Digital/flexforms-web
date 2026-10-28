@@ -58,6 +58,9 @@ public static class DashboardColumnResolver
             return DefaultColumns;
 
         var resolved = new List<DashboardColumn>();
+        // Column keys are used as dictionary keys when rendering rows, so a column listed twice in
+        // the template (same field or system id) must only appear once. First definition wins.
+        var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var customFieldCount = 0;
 
         for (var index = 0; index < configured.Count; index++)
@@ -74,23 +77,29 @@ public static class DashboardColumnResolver
                 if (customFieldCount >= DashboardConfiguration.MaxCustomFieldColumns)
                     continue;
 
+                var fieldId = definition.FieldId.Trim();
+                var fieldKey = $"field:{fieldId}";
+                if (!seenKeys.Add(fieldKey))
+                    continue;
+
                 customFieldCount++;
                 var header = string.IsNullOrWhiteSpace(definition.Header)
-                    ? definition.FieldId.Trim()
+                    ? fieldId
                     : definition.Header.Trim();
 
                 resolved.Add(new DashboardColumn(
-                    Key: $"field:{definition.FieldId.Trim()}",
+                    Key: fieldKey,
                     Header: header,
                     Kind: DashboardColumnKind.Field,
-                    FieldId: definition.FieldId.Trim(),
+                    FieldId: fieldId,
                     Order: order));
                 continue;
             }
 
             var systemId = definition.Id?.Trim();
             if (string.IsNullOrWhiteSpace(systemId)
-                || !DefaultSystemHeaders.TryGetValue(systemId, out var defaultHeader))
+                || !DefaultSystemHeaders.TryGetValue(systemId, out var defaultHeader)
+                || !seenKeys.Add(systemId))
             {
                 continue;
             }

@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 
 namespace GovUK.Dfe.FlexForms.Domain.Models;
 
@@ -8,6 +9,18 @@ namespace GovUK.Dfe.FlexForms.Domain.Models;
 [ExcludeFromCodeCoverage]
 public static class ConditionalLogicConstants
 {
+    private static readonly Dictionary<string, string> CanonicalNames = new[] { typeof(Operators), typeof(Actions) }
+        .SelectMany(type => type.GetFields(BindingFlags.Public | BindingFlags.Static))
+        .Where(field => field.IsLiteral && field.FieldType == typeof(string))
+        .Select(field => (string)field.GetRawConstantValue()!)
+        .ToDictionary(name => name, name => name, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The spelling of an operator or action as declared below, whatever case a template uses. Unknown names are returned as they are.
+    /// </summary>
+    public static string Canonical(string? name) =>
+        name is not null && CanonicalNames.TryGetValue(name, out var known) ? known : name ?? string.Empty;
+
     /// <summary>
     /// Supported comparison operators
     /// </summary>

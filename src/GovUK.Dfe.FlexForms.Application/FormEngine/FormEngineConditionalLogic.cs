@@ -1,3 +1,4 @@
+using GovUK.Dfe.FlexForms.Application.Diagnostics;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using Microsoft.Extensions.Logging;
@@ -66,10 +67,12 @@ internal static class FormEngineConditionalLogic
                 Trigger = trigger
             };
 
-            var conditionalState = await orchestrator.ApplyConditionalLogicAsync(
-                template,
-                dataForConditionalLogic,
-                context);
+            FormConditionalState conditionalState;
+            using (RequestTimings.Measure("rules"))
+                conditionalState = await orchestrator.ApplyConditionalLogicAsync(
+                    template,
+                    dataForConditionalLogic,
+                    context);
 
             if (conditionalState.FieldValues.Any())
             {
