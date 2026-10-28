@@ -492,6 +492,60 @@ public class ExternalApiExceptionFilterTests
     }
 
     [Fact]
+    public async Task OnPageHandlerExecutionAsync_ShouldUseLocalReferer_WhenFileValidationReturnUrlIsExternal()
+    {
+        var formErrorStore = Substitute.For<IFormErrorStore>();
+        var services = new ServiceCollection();
+        services.AddSingleton(formErrorStore);
+        var page = CreatePageModel(services.BuildServiceProvider());
+        var form = UploadForm(fieldId: "uploadField", returnUrl: "https://evil.example/phish");
+        var executingContext = CreateExecutingContext(
+            page,
+            method: "POST",
+            path: "/applications/REF-1/t1",
+            form: form,
+            handlerMethod: new HandlerMethodDescriptor { Name = "OnPostUploadFileAsync" });
+        executingContext.HttpContext.Request.Headers.Referer = "/applications/REF-1/t1?pageId=p1";
+        var response = new ExceptionResponse
+        {
+            StatusCode = 400,
+            Message = "File type not allowed",
+            ErrorId = "121212"
+        };
+        var executedContext = CreateExecutedContext(executingContext, CreateTypedApiException(response));
+
+        await _pageFilter.OnPageHandlerExecutionAsync(executingContext, () => Task.FromResult(executedContext));
+
+        var redirect = Assert.IsType<RedirectResult>(executedContext.Result);
+        Assert.Equal("/applications/REF-1/t1?pageId=p1", redirect.Url);
+    }
+
+    [Fact]
+    public async Task OnPageHandlerExecutionAsync_ShouldIgnoreExternalReferer_WhenFileValidationReturnUrlIsExternal()
+    {
+        var page = CreatePageModel();
+        var form = UploadForm(fieldId: "uploadField", returnUrl: "//evil.example");
+        var executingContext = CreateExecutingContext(
+            page,
+            method: "POST",
+            path: "/applications/REF-1/t1",
+            form: form,
+            handlerMethod: new HandlerMethodDescriptor { Name = "OnPostUploadFileAsync" });
+        executingContext.HttpContext.Request.Headers.Referer = "https://evil.example/phish";
+        var response = new ExceptionResponse
+        {
+            StatusCode = 422,
+            Message = "Virus detected",
+            ErrorId = "131313"
+        };
+        var executedContext = CreateExecutedContext(executingContext, CreateTypedApiException(response));
+
+        await _pageFilter.OnPageHandlerExecutionAsync(executingContext, () => Task.FromResult(executedContext));
+
+        Assert.IsType<PageResult>(executedContext.Result);
+    }
+
+    [Fact]
     public async Task OnPageHandlerExecutionAsync_ShouldHandleApplicationWriteAccessDenied_OnMutating403()
     {
         var page = CreatePageModel();

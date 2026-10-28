@@ -24,4 +24,18 @@ public class LocalRedirectsTests
     [Fact]
     public void OrFallback_UsesFallback_WhenUrlIsNotLocal()
         => Assert.Equal(LocalRedirects.FallbackPath, LocalRedirects.OrFallback("https://evil.example"));
+
+    [Fact]
+    public void OrFallback_KeepsLocalUrl()
+        => Assert.Equal("/applications/REF-1", LocalRedirects.OrFallback("/applications/REF-1"));
+
+    [Fact]
+    public void OrFallback_UsesCustomFallback_WhenUrlIsNotLocal()
+        => Assert.Equal("/safe", LocalRedirects.OrFallback("//evil.example", "/safe"));
+
+    [Theory]
+    [InlineData("/path\\to")]
+    [InlineData("/\\evil.example")]
+    public void IsLocal_RejectsBackslashInPath(string url)
+        => Assert.False(LocalRedirects.IsLocal(url));
 }

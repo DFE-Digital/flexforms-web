@@ -29,4 +29,10 @@ public class StoredAnswerHtmlTests
         Assert.Equal("Line1<br/>&lt;script&gt;", html);
         Assert.DoesNotContain("<script>", html);
     }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void ToSafeLineBreaks_ReturnsEmpty_WhenValueIsMissing(string? value)
+        => Assert.Equal(string.Empty, StoredAnswerHtml.ToSafeLineBreaks(value));
 }

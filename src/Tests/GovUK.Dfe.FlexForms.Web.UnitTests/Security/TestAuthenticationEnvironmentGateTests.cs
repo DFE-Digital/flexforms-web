@@ -35,4 +35,26 @@ public class TestAuthenticationEnvironmentGateTests
         Assert.True(TestAuthenticationEnvironmentGate.IsProduction(env));
         Assert.False(TestAuthenticationEnvironmentGate.IsAllowed(env));
     }
+
+    [Fact]
+    public void IsProduction_ReturnsTrue_ForProdAlias()
+    {
+        var env = Substitute.For<IHostEnvironment>();
+        env.EnvironmentName.Returns("Prod");
+
+        Assert.True(TestAuthenticationEnvironmentGate.IsProduction(env));
+    }
+
+    [Fact]
+    public void IsProduction_ReturnsFalse_WhenHostEnvironmentIsNull()
+        => Assert.False(TestAuthenticationEnvironmentGate.IsProduction(null));
+
+    [Fact]
+    public void IsProduction_ReturnsFalse_WhenEnvironmentNameIsMissing()
+    {
+        var env = Substitute.For<IHostEnvironment>();
+        env.EnvironmentName.Returns((string?)null);
+
+        Assert.False(TestAuthenticationEnvironmentGate.IsProduction(env));
+    }
 }

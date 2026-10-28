@@ -41,6 +41,23 @@ public class InternalServiceAuthEnvironmentGateTests
         Assert.True(InternalServiceAuthEnvironmentGate.IsAllowed(Env("Production"), configuration));
     }
 
+    [Fact]
+    public void IsAllowed_DefaultsOn_WhenEnvironmentIsNull()
+        => Assert.True(InternalServiceAuthEnvironmentGate.IsAllowed(null, new ConfigurationBuilder().Build()));
+
+    [Fact]
+    public void IsAllowed_CanDisableOutsideProduction_ViaConfiguration()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [InternalServiceAuthEnvironmentGate.WebEdgeEnabledKey] = "false"
+            })
+            .Build();
+
+        Assert.False(InternalServiceAuthEnvironmentGate.IsAllowed(Env("Development"), configuration));
+    }
+
     private static IHostEnvironment Env(string name)
     {
         var environment = Substitute.For<IHostEnvironment>();
