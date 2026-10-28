@@ -52,8 +52,6 @@ Template Studio lets you change all of that with forms and buttons. Behind the s
 
 You need permission to manage templates: the **Admin** or **SuperAdmin** role, or a role that includes a template **Manage** permission (for example the **Template Manager** role).
 
-Template Studio is switched on for each organisation in **Tenant Settings**, with the `FeatureManagement` category set to `{"TemplateStudio": true}`. When it's on, the Admin hub shows **Template Studio** instead of **Template Manager**.
-
 ### 1.3 Opening Template Studio
 
 1. Go to **Admin**.
