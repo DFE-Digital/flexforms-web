@@ -131,6 +131,16 @@ public class TenantIdResolverHostnameTests
     }
 
     [Fact]
+    public void HasConflictingPublicHostnames_TreatsIpv6ForwardedHostWithPort_AsSameHost()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Host = new HostString("[2001:4860:4860::8888]");
+        context.Request.Headers["X-Forwarded-Host"] = "[2001:4860:4860::8888]:443";
+
+        Assert.False(TenantIdResolver.HasConflictingPublicHostnames(context));
+    }
+
+    [Fact]
     public void HasConflictingPublicHostnames_UsesOriginalHost_AfterForwardedHeadersRewrite()
     {
         var context = new DefaultHttpContext();

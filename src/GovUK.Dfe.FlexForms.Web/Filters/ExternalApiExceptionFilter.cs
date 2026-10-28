@@ -214,6 +214,24 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
 
         private static bool IsSafeLocalUrl(string? url) => LocalRedirects.IsLocal(url);
 
+        private static string ResolveSafeReturnUrl(HttpContext httpContext)
+        {
+            var returnUrl = httpContext.Request.HasFormContentType
+                ? httpContext.Request.Form["ReturnUrl"].ToString()
+                : string.Empty;
+            if (IsSafeLocalUrl(returnUrl))
+                return returnUrl;
+
+            var referer = httpContext.Request.Headers.Referer.ToString();
+            return IsSafeLocalUrl(referer) ? referer : string.Empty;
+        }
+
+        private static void ApplySafeReturnUrl(PageModel page, string returnUrl)
+        {
+            if (page is UploadFileModel upload)
+                upload.ReturnUrl = returnUrl;
+        }
+
         private void LogApiException(
             HttpContext httpContext,
             ExceptionResponse? response,
@@ -402,14 +420,8 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
 
             AddNonFieldError(page, apiMessage);
 
-            var returnUrl = httpContext.Request.HasFormContentType
-                ? httpContext.Request.Form["ReturnUrl"].ToString()
-                : string.Empty;
-            if (!IsSafeLocalUrl(returnUrl))
-            {
-                var referer = httpContext.Request.Headers.Referer.ToString();
-                returnUrl = IsSafeLocalUrl(referer) ? referer : string.Empty;
-            }
+            var returnUrl = ResolveSafeReturnUrl(httpContext);
+            ApplySafeReturnUrl(page, returnUrl);
 
             var errorKey = !string.IsNullOrEmpty(fileOpInfo.Item3) ? fileOpInfo.Item3 : "Error";
             try
@@ -484,21 +496,15 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
 
             if (fileOpInfo.Item2 is "upload" or "delete")
             {
-                var returnUrl = httpContext.Request.HasFormContentType
-                    ? httpContext.Request.Form["ReturnUrl"].ToString()
-                    : string.Empty;
-                if (!IsSafeLocalUrl(returnUrl))
-                {
-                    var referer = httpContext.Request.Headers.Referer.ToString();
-                    returnUrl = IsSafeLocalUrl(referer) ? referer : string.Empty;
-                }
+                var returnUrl = ResolveSafeReturnUrl(httpContext);
+                ApplySafeReturnUrl(page, returnUrl);
 
                 var errorKey = !string.IsNullOrEmpty(fileOpInfo.Item3) ? fileOpInfo.Item3 : "Error";
                 try
                 {
                     var formErrorStore = httpContext.RequestServices.GetService<IFormErrorStore>();
                     formErrorStore?.Save(errorKey, page.ModelState);
-                    if (!string.IsNullOrEmpty(returnUrl))
+                    if (IsSafeLocalUrl(returnUrl))
                     {
                         result = new RedirectResult(returnUrl);
                         return true;

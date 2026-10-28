@@ -221,8 +221,17 @@ public sealed class TenantIdResolver(
         if (string.IsNullOrWhiteSpace(first))
             return null;
 
-        // Strip optional port
-        var hostOnly = UnbracketIpv6(first.Split(':', 2)[0].Trim());
+        HostString hostString;
+        try
+        {
+            hostString = HostString.FromUriComponent(first);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+
+        var hostOnly = UnbracketIpv6(hostString.Host);
         return string.IsNullOrWhiteSpace(hostOnly) ? null : hostOnly;
     }
 

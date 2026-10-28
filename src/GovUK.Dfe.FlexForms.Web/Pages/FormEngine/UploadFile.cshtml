@@ -10,11 +10,11 @@
     This page handles form submissions and redirects back to the original page.
 *@
 
-@if (!string.IsNullOrEmpty(Model.ReturnUrl))
+@if (GovUK.Dfe.FlexForms.Web.Security.LocalRedirects.IsLocal(Model.ReturnUrl))
 {
     <script nonce="@ViewContext.HttpContext.GetNonce()">
         // If there's a return URL but we're still on this page (shouldn't happen), redirect
-        window.location.href = '@Model.ReturnUrl';
+        window.location.href = @System.Text.Json.JsonSerializer.Serialize(Model.ReturnUrl);
     </script>
 }
 else
