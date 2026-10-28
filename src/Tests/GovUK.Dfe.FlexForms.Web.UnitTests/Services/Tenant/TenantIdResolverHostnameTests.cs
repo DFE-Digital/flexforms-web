@@ -151,4 +151,14 @@ public class TenantIdResolverHostnameTests
 
         Assert.True(TenantIdResolver.HasConflictingPublicHostnames(context));
     }
+
+    [Fact]
+    public void HasConflictingPublicHostnames_DetectsConflict_WhenForwardedHostHeaderWasConsumed()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Host = new HostString("b.example.gov.uk");
+        context.Items[TenantIdResolver.OriginalRequestHostItemKey] = "a.example.gov.uk";
+
+        Assert.True(TenantIdResolver.HasConflictingPublicHostnames(context));
+    }
 }

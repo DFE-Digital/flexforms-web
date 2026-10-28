@@ -101,15 +101,37 @@ public sealed class TenantIdResolver(
     }
 
     /// <summary>
-    /// True when both <c>X-Forwarded-Host</c> and <c>Request.Host</c> are usable public hostnames and they differ.
+    /// True when the request presents more than one distinct usable public hostname.
+    /// Compares the pre-forward <see cref="HttpRequest.Host"/>, the current host
+    /// (after <c>UseForwardedHeaders</c> may have rewritten it), and <c>X-Forwarded-Host</c>
+    /// if that header is still present.
     /// </summary>
     public static bool HasConflictingPublicHostnames(HttpContext httpContext)
     {
-        var forwarded = FirstHostFromHeader(httpContext.Request.Headers["X-Forwarded-Host"]);
-        var requestHost = OriginalRequestHost(httpContext);
-        return IsUsablePublicHostname(forwarded)
-               && IsUsablePublicHostname(requestHost)
-               && !string.Equals(forwarded, requestHost, StringComparison.OrdinalIgnoreCase);
+        string?[] candidates =
+        [
+            OriginalRequestHost(httpContext),
+            UnbracketIpv6(httpContext.Request.Host.Host),
+            FirstHostFromHeader(httpContext.Request.Headers["X-Forwarded-Host"])
+        ];
+
+        string? seen = null;
+        foreach (var candidate in candidates)
+        {
+            if (!IsUsablePublicHostname(candidate))
+                continue;
+
+            if (seen is null)
+            {
+                seen = candidate;
+                continue;
+            }
+
+            if (!string.Equals(seen, candidate, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
     }
 
     private static string? OriginalRequestHost(HttpContext httpContext)

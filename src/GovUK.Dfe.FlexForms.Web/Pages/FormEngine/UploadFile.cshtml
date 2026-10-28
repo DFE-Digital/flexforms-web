@@ -14,7 +14,7 @@
 {
     <script nonce="@ViewContext.HttpContext.GetNonce()">
         // If there's a return URL but we're still on this page (shouldn't happen), redirect
-        window.location.href = @System.Text.Json.JsonSerializer.Serialize(Model.ReturnUrl);
+        window.location.href = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.ReturnUrl));
     </script>
 }
 else
