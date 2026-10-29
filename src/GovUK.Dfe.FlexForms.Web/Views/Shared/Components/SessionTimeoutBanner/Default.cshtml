@@ -97,9 +97,14 @@
                 }
             }
 
+            function allowUnload() {
+                window.__flexformsAllowUnload = true;
+            }
+
             function postTimeoutSignOut() {
                 if (signingOut) return;
                 signingOut = true;
+                allowUnload();
                 clearTimers();
 
                 var token = getAntiForgeryToken();
@@ -178,6 +183,13 @@
 
                 var returnUrlInput = form.querySelector('input[name="returnUrl"]');
                 var returnUrl = (returnUrlInput && returnUrlInput.value) ? returnUrlInput.value : '/applications/dashboard';
+                var dest = stayUrl + '?returnUrl=' + encodeURIComponent(returnUrl);
+
+                function goToKeepAlive() {
+                    allowUnload();
+                    stayBtn.disabled = false;
+                    window.location.assign(dest);
+                }
 
                 var body = new URLSearchParams();
                 body.set('__RequestVerificationToken', getAntiForgeryToken());
@@ -198,14 +210,17 @@
                     if (response.type === 'opaqueredirect' || response.status === 0) {
                         throw new Error('redirect');
                     }
+                    if (response.status === 401 || response.status === 403) {
+                        goToKeepAlive();
+                        return;
+                    }
                     if (!response.ok) throw new Error('Stay signed in failed');
                     stayBtn.disabled = false;
                     hideWarning();
                     armTimers();
                 }).catch(function () {
                     // Prefer GET keep-alive so Entra/OIDC post-login redirects do not 405 on POST-only.
-                    var dest = stayUrl + '?returnUrl=' + encodeURIComponent(returnUrl);
-                    window.location.assign(dest);
+                    goToKeepAlive();
                 });
             });
 
@@ -218,6 +233,7 @@
                 e.preventDefault();
                 if (signingOut) return;
                 signingOut = true;
+                allowUnload();
                 clearTimers();
 
                 var submitSignOut = function () { form.submit(); };

@@ -28,6 +28,19 @@
     </div>
 }
 
+@if (Model.GrantToAllUsersSummary is not null)
+{
+    <div class="govuk-notification-banner govuk-notification-banner--success" role="alert" aria-labelledby="template-studio-grant-title" data-module="govuk-notification-banner">
+        <div class="govuk-notification-banner__header">
+            <h2 class="govuk-notification-banner__title" id="template-studio-grant-title">Success</h2>
+        </div>
+        <div class="govuk-notification-banner__content">
+            <h3 class="govuk-notification-banner__heading">Template access granted</h3>
+            <p class="govuk-body">@Model.GrantToAllUsersSummary</p>
+        </div>
+    </div>
+}
+
 @if (Model.SavedVersion is not null)
 {
     <div class="govuk-notification-banner govuk-notification-banner--success" role="alert" aria-labelledby="template-studio-saved-title" data-module="govuk-notification-banner">
@@ -102,12 +115,23 @@
                 }
             </select>
         </div>
-        <button class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" data-module="govuk-button" type="submit">Open template</button>
+        <div class="govuk-button-group govuk-!-margin-bottom-0">
+            <button class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0" data-module="govuk-button" type="submit">Open template</button>
+            <button class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0"
+                    data-module="govuk-button"
+                    type="submit"
+                    form="grant-template-to-all-users-form"
+                    id="grant-template-to-all-users-button"
+                    data-confirm="Grant read and write access for this template to every active user in this tenant?">
+                Grant to all users
+            </button>
+        </div>
     </form>
 
     @if (Model.AvailableVersions.Count > 0)
     {
         <form method="post" asp-page-handler="SelectVersion" class="govuk-grid-column-one-half" id="tpl-select-version-form">
+            <input type="hidden" name="SelectedTemplateId" value="@Model.SelectedTemplate.TemplateId" />
             <div class="govuk-form-group govuk-!-margin-bottom-3">
                 <label class="govuk-label govuk-label--s" asp-for="SelectedVersionNumber">Choose a version to start from</label>
                 <select class="govuk-select govuk-!-width-full" asp-for="SelectedVersionNumber">
@@ -122,6 +146,9 @@
         </form>
     }
 </div>
+<form method="post" asp-page-handler="GrantToAllUsers" id="grant-template-to-all-users-form">
+    <input type="hidden" name="SelectedTemplateId" value="@Model.SelectedTemplate.TemplateId" />
+</form>
 
 @if (Model.LoadError is not null)
 {
@@ -199,6 +226,8 @@
     <form method="post" asp-page-handler="Save" id="tpl-save-form">
         <input type="hidden" asp-for="NewSchema" id="NewSchema" />
         <input type="hidden" asp-for="StartedFromLatestVersion" />
+        <input type="hidden" name="SelectedTemplateId" value="@Model.SelectedTemplate.TemplateId" />
+        <input type="hidden" name="SelectedVersionNumber" value="@Model.CurrentVersionNumber" />
 
         @if (Model.HasNewerVersion)
         {

@@ -902,7 +902,7 @@
             if (after.fields.has(fieldKey(entry.parentFieldId, entry.fieldId))) {
                 issues.push({
                     fieldId: entry.fieldId,
-                    message: 'Question ' + describeField({ fieldId: entry.fieldId, parentFieldId: entry.parentFieldId }) + ' is retired but is still in the template. Remove it from the retired list, or delete the question.'
+                    message: 'Question ' + describeField({ fieldId: entry.fieldId, parentFieldId: entry.parentFieldId }) + ' is already retired. Choose another answer id.'
                 });
             }
             (entry.replacedBy || []).forEach(function (replacement) {

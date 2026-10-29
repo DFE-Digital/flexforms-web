@@ -41,6 +41,7 @@ public class TemplateStudioModel(
     public string? LatestVersionNumber { get; private set; }
     public string? SavedVersion { get; private set; }
     public bool ShowCreated { get; private set; }
+    public string? GrantToAllUsersSummary { get; private set; }
 
     [BindProperty]
     public Guid? SelectedTemplateId { get; set; }
@@ -71,9 +72,21 @@ public class TemplateStudioModel(
 
     public bool HasNewerVersion { get; private set; }
 
-    public async Task<IActionResult> OnGetAsync(string? saved, bool created, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnGetAsync(
+        string? saved,
+        bool created,
+        CancellationToken cancellationToken,
+        Guid? templateId = null,
+        string? version = null)
     {
-        var state = await LoadSelectedTemplateAsync(cancellationToken, selectFirstWhenNone: true);
+        if (TempData?["TemplateStudioGrantSummary"] is string grantSummary)
+            GrantToAllUsersSummary = grantSummary;
+
+        var state = await LoadSelectedTemplateAsync(
+            cancellationToken,
+            selectFirstWhenNone: true,
+            requestedTemplateId: templateId,
+            requestedVersion: version);
         if (state is null)
             return Page();
 
@@ -91,8 +104,12 @@ public class TemplateStudioModel(
     public async Task<IActionResult> OnPostSaveAsync(CancellationToken cancellationToken)
     {
         NewSchema = TemplateStudioSchemaTransport.Decode(NewSchema);
-        // Never fall back to another template here: the posted schema belongs to the one that was open.
-        var state = await LoadSelectedTemplateAsync(cancellationToken, selectFirstWhenNone: false);
+        // The posted template id is this tab's template. Session may belong to another tab.
+        var state = await LoadSelectedTemplateAsync(
+            cancellationToken,
+            selectFirstWhenNone: false,
+            requestedTemplateId: SelectedTemplateId,
+            requestedVersion: SelectedVersionNumber);
         if (state is null)
             return RedirectToPage();
 
@@ -128,10 +145,41 @@ public class TemplateStudioModel(
             state.NewVersion, SelectedTemplate!.TemplateId);
 
         await templateCacheInvalidator.InvalidateAsync(SelectedTemplate.TemplateId.ToString());
+        await templateSelectionService.SelectTemplateAsync(HttpContext, SelectedTemplate, cancellationToken);
         HttpContext.Session.SetString(TemplateVersionSessionKey, state.NewVersion!);
         await HttpContext.Session.CommitAsync(cancellationToken);
 
-        return RedirectToPage(new { saved = state.NewVersion });
+        return RedirectToStudio(saved: state.NewVersion);
+    }
+
+    /// <summary>
+    /// Grants read and write access for the template open in this tab to every active user in the tenant.
+    /// </summary>
+    public async Task<IActionResult> OnPostGrantToAllUsersAsync(CancellationToken cancellationToken)
+    {
+        var state = await LoadSelectedTemplateAsync(
+            cancellationToken,
+            selectFirstWhenNone: false,
+            requestedTemplateId: SelectedTemplateId);
+        if (state is null || SelectedTemplate is null)
+        {
+            ModelState.AddModelError(string.Empty, TemplateManagerMessages.GrantRequiresTemplate);
+            return Page();
+        }
+
+        var outcome = await templateManagerAdmin.GrantToAllUsersAsync(state, SelectedTemplate.TemplateId, cancellationToken);
+        if (outcome.Kind == AdminPageOutcomeKind.StayOnPage)
+        {
+            ModelState.AddModelError(string.Empty, outcome.ErrorMessage ?? TemplateManagerMessages.GrantFailed);
+            StartedFromLatestVersion = LatestVersionNumber;
+            NewVersion = SuggestVersion(state);
+            await BuildStudioDataAsync(state, schemaJson: null, hasUnsavedChanges: false, cancellationToken);
+            return Page();
+        }
+
+        TempData["TemplateStudioGrantSummary"] = state.GrantToAllUsersSummary ?? outcome.SuccessMessage;
+        await templateSelectionService.SelectTemplateAsync(HttpContext, SelectedTemplate, cancellationToken);
+        return RedirectToStudio();
     }
 
     /// <summary>
@@ -155,9 +203,12 @@ public class TemplateStudioModel(
             await templateSelectionService.SelectTemplateAsync(HttpContext, template, cancellationToken);
             HttpContext.Session.Remove(TemplateVersionSessionKey);
             await HttpContext.Session.CommitAsync(cancellationToken);
+            SelectedTemplate = template;
+            SelectedTemplateId = template.TemplateId;
+            CurrentVersionNumber = null;
         }
 
-        return RedirectToPage();
+        return RedirectToStudio();
     }
 
     /// <summary>
@@ -169,20 +220,42 @@ public class TemplateStudioModel(
         {
             HttpContext.Session.SetString(TemplateVersionSessionKey, SelectedVersionNumber.Trim());
             await HttpContext.Session.CommitAsync(cancellationToken);
+            CurrentVersionNumber = SelectedVersionNumber.Trim();
         }
 
-        return RedirectToPage();
+        return RedirectToStudio();
+    }
+
+    private RedirectToPageResult RedirectToStudio(string? saved = null)
+    {
+        var templateId = SelectedTemplate?.TemplateId ?? SelectedTemplateId;
+        return RedirectToPage(new
+        {
+            saved,
+            templateId,
+            version = CurrentVersionNumber
+        });
     }
 
     private async Task<TemplateManagerWorkState?> LoadSelectedTemplateAsync(
         CancellationToken cancellationToken,
-        bool selectFirstWhenNone)
+        bool selectFirstWhenNone,
+        Guid? requestedTemplateId = null,
+        string? requestedVersion = null)
     {
         TenantTemplates = await templateSelectionService.GetSelectableTemplatesAsync(cancellationToken);
-        var sessionTemplateId = templateSelectionService.GetSelectedTemplateId(HttpContext);
-        var template = Guid.TryParse(sessionTemplateId, out var sessionId)
-            ? TenantTemplates.FirstOrDefault(item => item.TemplateId == sessionId)
-            : null;
+        TemplateDto? template;
+        if (requestedTemplateId is Guid requested)
+        {
+            template = TenantTemplates.FirstOrDefault(item => item.TemplateId == requested);
+        }
+        else
+        {
+            var sessionTemplateId = templateSelectionService.GetSelectedTemplateId(HttpContext);
+            template = Guid.TryParse(sessionTemplateId, out var sessionId)
+                ? TenantTemplates.FirstOrDefault(item => item.TemplateId == sessionId)
+                : null;
+        }
 
         if (template is null && selectFirstWhenNone && TenantTemplates.FirstOrDefault() is { } first)
         {
@@ -200,7 +273,9 @@ public class TemplateStudioModel(
         var state = new TemplateManagerWorkState
         {
             TenantTemplates = TenantTemplates,
-            SessionVersionNumber = HttpContext.Session.GetString(TemplateVersionSessionKey)
+            SessionVersionNumber = !string.IsNullOrWhiteSpace(requestedVersion)
+                ? requestedVersion.Trim()
+                : HttpContext.Session.GetString(TemplateVersionSessionKey)
         };
         await templateManagerAdmin.LoadTemplateDataAsync(state, template.TemplateId, cancellationToken);
 
@@ -278,7 +353,8 @@ public class TemplateStudioModel(
 
         StudioDataJson = JsonSerializer.Serialize(new
         {
-            templateName = SelectedTemplate!.Name,
+            templateId = SelectedTemplate!.TemplateId,
+            templateName = SelectedTemplate.Name,
             versionNumber = CurrentVersionNumber,
             schemaJson,
             // The stored version is what reporting compares a new version with.

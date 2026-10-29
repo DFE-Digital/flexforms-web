@@ -5,18 +5,15 @@
     var isRequired = Model.Field.Required ?? true;
     var validationAttributes = new HtmlString(Model.ValidationAttributes);
     var labelClasses = Model.Field.Label.IsVisible ? "govuk-label govuk-label--m" : "govuk-visually-hidden";
+    var (hintHtml, hintClass) = MarkdownSafe.RenderHintWithClass(Model.Field.Tooltip);
 }
 
-<govuk-error-message for="@Model.Id"><span class="govuk-visually-hidden">Error: </span>@Model.ErrorMessage</govuk-error-message>
 <govuk-textarea
              id="@Model.Id"
              name="Data[@Model.Field.FieldId]"
              value="@Model.CurrentValue"
              data-field-id="@Model.Field.FieldId">
     <govuk-textarea-label class="@labelClasses">@Model.Field.Label.Value</govuk-textarea-label>
-    @{
-        var (hintHtml, hintClass) = MarkdownSafe.RenderHintWithClass(Model.Field.Tooltip);
-    }
     <govuk-textarea-hint class="@hintClass">
         @Html.Raw(hintHtml)
     </govuk-textarea-hint>

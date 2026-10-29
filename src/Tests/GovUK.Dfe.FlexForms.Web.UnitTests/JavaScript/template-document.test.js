@@ -250,6 +250,26 @@ test('reports a changed reporting key', () => {
     assert.match(issue.message, /different reporting key/);
 });
 
+test('tells the author a retired answer id cannot be put back on a question', () => {
+    const baseline = template();
+    const doc = load();
+    doc.remove(TRUST_PAGES.concat([1]));
+    doc.retire({ fieldId: 'trustName', parentFieldId: '' });
+    doc.get(TRUST_PAGES.concat([0, 'fields', 0])).fieldId = 'trustName';
+    const issues = doc.reportingIssues(baseline);
+    assert.match(issues.map(issue => issue.message).join('\n'), /"trustName" is already retired/);
+});
+
+test('does not treat swapped answer ids as a removal', () => {
+    const baseline = template();
+    const doc = load();
+    doc.get(TRUST_PAGES.concat([0, 'fields', 0])).fieldId = 'trustName';
+    doc.get(TRUST_PAGES.concat([1, 'fields', 0])).fieldId = 'hasTrust';
+    const issues = doc.reportingIssues(baseline);
+    assert.equal(issues.some(issue => /removed but isn't retired/.test(issue.message)), false);
+    assert.equal(issues.some(issue => /already retired/.test(issue.message)), false);
+});
+
 test('treats questions in a repeatable list as belonging to the list', () => {
     const doc = load();
     const flowPath = ['taskGroups', 0, 'tasks', 1, 'summary', 'flows', 0];

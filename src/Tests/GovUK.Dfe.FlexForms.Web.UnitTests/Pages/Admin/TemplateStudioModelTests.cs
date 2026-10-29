@@ -275,6 +275,67 @@ public class TemplateStudioModelTests
     }
 
     [Fact]
+    public async Task OnPostSaveAsync_ShouldSaveToThePostedTemplate_WhenSessionHasADifferentTemplate()
+    {
+        var other = new TemplateDto { TemplateId = Guid.NewGuid(), Name = "Visits", CreatedOn = DateTime.UtcNow };
+        _selection.GetSelectableTemplatesAsync(Arg.Any<CancellationToken>()).Returns([_template, other]);
+        _selection.GetSelectedTemplateId(Arg.Any<HttpContext>()).Returns(other.TemplateId.ToString());
+        GivenStoredVersion("1.0.3");
+        GivenSaveSucceeds();
+        _model.SelectedTemplateId = _template.TemplateId;
+        _model.StartedFromLatestVersion = "1.0.3";
+        _model.NewVersion = "1.0.4";
+        _model.NewSchema = StoredSchema;
+
+        var result = await _model.OnPostSaveAsync(CancellationToken.None);
+
+        var redirect = Assert.IsType<RedirectToPageResult>(result);
+        Assert.Equal(_template.TemplateId, redirect.RouteValues!["templateId"]);
+        await _admin.Received(1).CreateVersionAsync(Arg.Any<TemplateManagerWorkState>(), _template.TemplateId, Arg.Any<CancellationToken>());
+        await _admin.DidNotReceive().CreateVersionAsync(Arg.Any<TemplateManagerWorkState>(), other.TemplateId, Arg.Any<CancellationToken>());
+        await _selection.Received().SelectTemplateAsync(Arg.Any<HttpContext>(), _template, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task OnGetAsync_ShouldOpenTheTemplateInTheQueryString_WhenSessionHasADifferentTemplate()
+    {
+        var other = new TemplateDto { TemplateId = Guid.NewGuid(), Name = "Visits", CreatedOn = DateTime.UtcNow };
+        _selection.GetSelectableTemplatesAsync(Arg.Any<CancellationToken>()).Returns([_template, other]);
+        _selection.GetSelectedTemplateId(Arg.Any<HttpContext>()).Returns(other.TemplateId.ToString());
+        GivenStoredVersion("1.0.3");
+
+        var result = await _model.OnGetAsync(null, false, CancellationToken.None, _template.TemplateId);
+
+        Assert.IsType<PageResult>(result);
+        Assert.Equal(_template.TemplateId, _model.SelectedTemplateId);
+        using var data = JsonDocument.Parse(_model.StudioDataJson);
+        Assert.Equal(_template.TemplateId.ToString(), data.RootElement.GetProperty("templateId").GetString());
+    }
+
+    [Fact]
+    public async Task OnPostGrantToAllUsersAsync_ShouldGrantThePostedTemplate()
+    {
+        GivenStoredVersion("1.0.3");
+        _model.SelectedTemplateId = _template.TemplateId;
+        _model.TempData = new TempDataDictionary(_model.HttpContext, Substitute.For<ITempDataProvider>());
+        _admin.GrantToAllUsersAsync(Arg.Any<TemplateManagerWorkState>(), _template.TemplateId, Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                call.Arg<TemplateManagerWorkState>().GrantToAllUsersSummary = "Granted to 3 user(s). 2 already had access. Total tenant users checked: 5.";
+                return AdminPageOutcome.Redirect(successMessage: "Granted to 3 user(s). 2 already had access. Total tenant users checked: 5.");
+            });
+
+        var result = await _model.OnPostGrantToAllUsersAsync(CancellationToken.None);
+
+        var redirect = Assert.IsType<RedirectToPageResult>(result);
+        Assert.Equal(_template.TemplateId, redirect.RouteValues!["templateId"]);
+        Assert.Equal(
+            "Granted to 3 user(s). 2 already had access. Total tenant users checked: 5.",
+            _model.TempData["TemplateStudioGrantSummary"]);
+        await _admin.Received(1).GrantToAllUsersAsync(Arg.Any<TemplateManagerWorkState>(), _template.TemplateId, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task OnPostSaveAsync_ShouldCreateTheVersionClearTheCacheAndRememberTheVersion()
     {
         GivenStoredVersion("1.0.3");
