@@ -136,17 +136,9 @@
     var baselineFields = lib.inventory(baselineRoot).fields;
     var applicationCount = typeof data.applicationCount === 'number' ? data.applicationCount : null;
 
-    function isStarterPlaceholderBaseline() {
-        if (data.isStarter || baselineFields.size === 0) return !!data.isStarter;
-        if (baselineFields.size !== 1) return false;
-        var only = baselineFields.values().next().value;
-        return only && only.fieldId === 'starter-text' && !only.parentFieldId;
-    }
-
-    // Unknown counts are treated as in use, except for a starter template that nothing has used yet.
+    // Unknown counts are treated as in use. Known-unused templates are isStarter or a zero application count.
     function inUse() {
         if (data.isStarter || applicationCount === 0) return false;
-        if (applicationCount == null && isStarterPlaceholderBaseline()) return false;
         return baselineFields.size > 0 && applicationCount !== 0;
     }
 

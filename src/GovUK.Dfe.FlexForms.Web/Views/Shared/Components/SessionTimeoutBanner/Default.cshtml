@@ -82,6 +82,14 @@
                 return input ? input.value : '';
             }
 
+            // Template Studio (and similar pages) may add query params with history.replaceState after render.
+            function currentReturnUrl() {
+                var here = (window.location.pathname || '') + (window.location.search || '');
+                var returnUrlInput = form.querySelector('input[name="returnUrl"]');
+                if (returnUrlInput && here) returnUrlInput.value = here;
+                return here || (returnUrlInput && returnUrlInput.value) || '/applications/dashboard';
+            }
+
             function clearTimers() {
                 if (warnTimer) { clearTimeout(warnTimer); warnTimer = null; }
                 if (countdownTimer) { clearTimeout(countdownTimer); countdownTimer = null; }
@@ -132,6 +140,7 @@
                 if (warningVisible || signingOut) return;
                 warningVisible = true;
                 overlay.hidden = false;
+                currentReturnUrl();
 
                 var remaining = Math.ceil(warningMs / 1000);
                 if (countEl) countEl.textContent = format(remaining);
@@ -181,8 +190,7 @@
                 stayBtn.disabled = true;
                 clearTimers();
 
-                var returnUrlInput = form.querySelector('input[name="returnUrl"]');
-                var returnUrl = (returnUrlInput && returnUrlInput.value) ? returnUrlInput.value : '/applications/dashboard';
+                var returnUrl = currentReturnUrl();
                 var dest = stayUrl + '?returnUrl=' + encodeURIComponent(returnUrl);
 
                 function goToKeepAlive() {

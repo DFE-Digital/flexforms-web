@@ -123,6 +123,16 @@ test('rejects renaming onto a retired answer id and restores the field id', () =
     assert.equal(doc.get(path).fieldId, 'trustName');
 });
 
+test('rejects a retired answer id even when the previous id was empty', () => {
+    const doc = load();
+    const path = TRUST_PAGES.concat([1, 'fields', 0]);
+    doc.retire({ fieldId: 'oldName', parentFieldId: '' });
+    doc.get(path).fieldId = 'oldName';
+    const message = doc.applyAnswerIdRename(path, '', 'oldName', { inUse: true, baselineRoot: template() });
+    assert.match(message, /already retired/);
+    assert.equal(doc.get(path).fieldId, '');
+});
+
 test('renameReferences rewrites every matching id, including page targets that already used the new id', () => {
     const doc = load();
     doc.saveBuilderRule({

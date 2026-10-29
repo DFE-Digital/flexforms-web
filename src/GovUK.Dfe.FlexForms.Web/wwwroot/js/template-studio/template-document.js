@@ -995,7 +995,7 @@
     // metadata. Returns an error the inspector should revert, a note, or an empty string.
     TemplateDocument.prototype.applyAnswerIdRename = function (path, before, after, options) {
         options = options || {};
-        if (!before || before === after) return '';
+        if (before === after) return '';
         var node = this.get(path);
         if (!node) return '';
         var parentFieldId = this.fieldKeyOf(path).parentFieldId;
@@ -1003,7 +1003,7 @@
         var retirementOfAfter = retired.find(function (entry) {
             return fieldKey(entry.parentFieldId, entry.fieldId) === fieldKey(parentFieldId, after);
         });
-        var renamingBack = !!(retirementOfAfter && (retirementOfAfter.replacedBy || []).some(function (id) {
+        var renamingBack = !!(retirementOfAfter && before && (retirementOfAfter.replacedBy || []).some(function (id) {
             return String(id).toLowerCase() === String(before).toLowerCase();
         }));
 
@@ -1011,6 +1011,8 @@
             node.fieldId = before;
             return '"' + after + '" is already retired, choose another id';
         }
+
+        if (!before) return '';
 
         // Swapping two live ids (a → b while b is still on another question, then that question b → a) must not
         // retire or rewrite reporting keys for an id that is still in use.
