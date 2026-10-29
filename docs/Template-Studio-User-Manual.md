@@ -129,10 +129,25 @@ Select the template name at the top of the structure.
 | **Do applicants have to answer questions unless you say otherwise?** | The default for questions that don't say whether they must be answered. |
 | **Use the page heading as the question when a page has one question** | Hides the question label on single-question pages so it isn't repeated under the heading. |
 | **Let applicants invite contributors** | Turns contributor invitations on or off. |
+| **Role for invited contributors** | Shown when invitations are on. **User** can edit the application. Any other role can only view it. |
+| **Wording for this template** | Optional headings, hints and buttons for this form. A blank field keeps the organisation setting, then the built-in sentence. |
 
 Below these you'll find the list of **Sections** with **Add a section**, then the dashboard columns, task list details and retired questions.
 
-### 4.1 Dashboard columns
+### 4.1 Role for invited contributors
+
+This is shown only when **Let applicants invite contributors** is ticked.
+
+Leave **Role for invited contributors** on **User** when invited people should be able to edit the application. That is the same access they get today.
+
+Choose a custom role from Role Manager when they should only view the application and its files. Admin, SuperAdmin and Administrator are not in the list.
+
+- People invited after you save a new version get that role, if they do not already belong to the tenant.
+- Someone who is already in the tenant keeps their current role. They still get view-only access to that application when the chosen role is not User.
+- People who were invited before the change keep the access they already have.
+- If the saved role is later deleted, the list shows **Saved role (no longer available)**. New invitations are rejected until you choose another role. They are not given the User role instead.
+
+### 4.2 Dashboard columns
 
 The applications dashboard shows default columns until you choose your own.
 
@@ -140,7 +155,7 @@ The applications dashboard shows default columns until you choose your own.
 2. Use **Change**, **Move up**, **Move down** and **Remove** on each column.
 3. Select **Add a column** to add one, then choose:
    - **An answer**: pick the answer and give the column a heading; or
-   - **Something built in**: reference, date started, date submitted, status or action.
+   - **Something built in**: reference, date started, date submitted, status or action. **Lead applicant name** and **Lead applicant email** are also available. They are not added when you select **Choose the columns**.
 4. Select **Done**.
 
 Answers are grouped by task, in the order applicants see them. Each repeatable list has its own group with the questions inside it. You can't choose a whole list, because it would show as raw data. If a column already shows a whole list, Template Studio warns you; choose one of the list's questions instead.
@@ -149,7 +164,7 @@ Answers are grouped by task, in the order applicants see them. Each repeatable l
 
 Up to 3 columns can show answers; any more are ignored, and Template Studio warns you. **Use the default columns** goes back to the platform defaults.
 
-### 4.2 Details on the task list
+### 4.3 Details on the task list
 
 The block under "Your application" on the task list shows default details (reference, version and lead applicant) until you choose your own.
 
@@ -162,7 +177,25 @@ The block under "Your application" on the task list shows default details (refer
 
 You can have up to 10. **Use the default details** goes back to the platform defaults. Saving checks that every path points at a real answer.
 
-### 4.3 Retired questions
+### 4.4 Wording for this template
+
+Use this when one form should read differently from the rest of the service. Each box can stay blank.
+
+A filled box is used for this template. A blank box uses the matching field in Organisation settings, then the built-in sentence. You can use `{singular}`, `{plural}`, `{template_name}` and `{contributor_email}`. `{contributor_email}` is the example email from the service layout.
+
+The boxes cover:
+
+- singular and plural names, such as visit and visits
+- dashboard heading, in-progress heading, start-new heading, hint and button
+- check-your-answers heading, submit heading, hint and button
+- the contributors section on the task list, and the invite contributors page
+- the task list **Review** and **View** buttons
+
+The notification banner, dashboard page size, filters, and whether the submit section is hidden stay in Organisation settings. They are not set here.
+
+Wording is saved with the template version. Applications already started keep the wording of the version they started on. Dashboard headings follow the latest template, in the same way as dashboard column headings.
+
+### 4.5 Retired questions
 
 If any questions have been retired (see [section 13](#13-when-applications-already-use-the-template)), they are listed at the bottom with what replaced them.
 
@@ -751,6 +784,8 @@ New applications use the latest saved version. Applications already started keep
 | The preview says "There's nothing to preview" | The preview ended. Select **Preview task** in Template Studio again. |
 | A search question in the preview has a text box | The preview doesn't search other services. Type the result you'd pick. |
 | A page I didn't expect is hidden | Look for **Shown by a rule** on it, and check the rule on the Rules tab. |
+| Invited contributors can still edit | The role is **User**, or none is chosen. Choose a custom role and save a new version. People invited before that keep the access they already have. |
+| A saved contributor role says it is no longer available | The role was deleted or is not allowed. Choose another role. New invitations are rejected until you do. |
 | Version number rejected | Use three numbers, for example 1.2.1, that haven't been used before. |
 | I made a mistake | Use **Undo**, or leave without saving to discard all your changes. |
 

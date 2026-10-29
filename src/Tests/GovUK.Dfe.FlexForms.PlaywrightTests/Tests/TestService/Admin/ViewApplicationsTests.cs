@@ -38,18 +38,10 @@ public sealed class ViewApplicationsTests : PlaywrightTestBase
         var viewApplications = new ViewApplications(Page);
 
         await viewApplications.SelectATemplateAsync(TestData.DefaultTemplateName);
-        await viewApplications.ApplicationsTable
-            .HasTableHeaders(["Reference", "Application ID", "Date created", "Action"])
-            .WithReference(_application.ApplicationReference)
-            .ColumnHasValue("Reference", _application.ApplicationReference)
-            .ColumnHasValue("Application ID", _application.ApplicationId)
-            .ColumnContainsValue("Date created", ApplicationsTableFormatting.FormatApplicationDisplayDate())
-            .ColumnHasValueWithLink(
-                "Action",
-                "Open",
-                $"/applications/{_application.ApplicationReference}?templateId={ApiConfig.TemplateId}")
-            .ColumnContainsValue("Action", "Delete")
-            .VerifyAsync();
+        await viewApplications.ExpectApplicationListedAsync(
+            _application.ApplicationReference,
+            _application.ApplicationId,
+            $"/applications/{_application.ApplicationReference}?templateId={ApiConfig.TemplateId}");
     }
 
     [TestCase(TestName = "Admin can delete an application and it is removed from the user's dashboard")]
@@ -61,10 +53,7 @@ public sealed class ViewApplicationsTests : PlaywrightTestBase
 
         await viewApplications.SelectATemplateAsync(TestData.DefaultTemplateName);
         await viewApplications.DeleteApplicationAsync(_applicationToDelete.ApplicationReference);
-        await viewApplications.ApplicationsTable
-            .WithReference(_applicationToDelete.ApplicationReference)
-            .ColumnHasValue("Action", "Deleted")
-            .VerifyAsync();
+        await viewApplications.ExpectApplicationDeletedAsync(_applicationToDelete.ApplicationReference);
 
         await dashboardPage.GoToAllApplicationsAsync();
         await dashboardPage.ApplicationsTable

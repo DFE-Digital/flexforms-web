@@ -30,6 +30,7 @@ public class TemplateStudioModel(
     IComplexFieldConfigurationService complexFieldConfigurationService,
     IEventMappingReferenceReader eventMappingReferenceReader,
     IApplicationsClient applicationsClient,
+    IRolesClient rolesClient,
     ILogger<TemplateStudioModel> logger) : PageModel
 {
     private const string TemplateVersionSessionKey = "TemplateVersionNumber";
@@ -369,9 +370,33 @@ public class TemplateStudioModel(
             complexFields,
             eventMappings = ReadEventMappingReferences(schemaJson, state.CurrentTemplateJson)
                 .Select(reference => new { fieldId = reference.FieldId, eventType = reference.EventType, mappingId = reference.MappingId }),
+            contributorRoles = await ContributorRolesAsync(cancellationToken),
             validateUrl = Url.Page("/Admin/TemplateStudio", "Validate")
         });
     }
+
+    private async Task<IReadOnlyList<object>> ContributorRolesAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var roles = await rolesClient.ListAsync(cancellationToken);
+            return (roles ?? [])
+                .Where(role => !IsReservedContributorRole(role.Name))
+                .Select(role => (object)new { roleId = role.RoleId, name = role.Name })
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not load tenant roles for Template Studio");
+            return [];
+        }
+    }
+
+    private static bool IsReservedContributorRole(string? name) =>
+        string.Equals(name, "Admin", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(name, "SuperAdmin", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(name, "Administrator", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(name, "User", StringComparison.OrdinalIgnoreCase);
 
     private IReadOnlyList<EventMappingFieldReference> ReadEventMappingReferences(params string?[] schemas)
     {

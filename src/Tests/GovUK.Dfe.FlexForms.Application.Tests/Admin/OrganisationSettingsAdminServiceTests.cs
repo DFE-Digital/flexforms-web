@@ -119,7 +119,7 @@ public class OrganisationSettingsAdminServiceTests
         Assert.Equal(AdminPageOutcomeKind.RedirectToPage, result.Kind);
         Assert.Equal(OrganisationSettingsMessages.Saved, result.SuccessMessage);
         Assert.True(result.RefreshLocalCaches);
-        await _client.Received(5).UpsertSafeTenantSettingAsync(
+        await _client.Received(7).UpsertSafeTenantSettingAsync(
             _state.TenantId,
             Arg.Any<UpsertTenantSettingRequest>(),
             Arg.Any<CancellationToken>());

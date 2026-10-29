@@ -5,6 +5,7 @@ using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Application.Options;
 using GovUK.Dfe.FlexForms.Web.Pages.Admin;
 using GovUK.Dfe.FlexForms.Web.Services;
+using GovUK.Dfe.FlexForms.Web.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
@@ -20,6 +21,7 @@ public class ApplicationsModelTests
 {
     private readonly IFixture _fixture;
     private readonly IApplicationsClient _applicationsClient;
+    private readonly IApplicationOwnerClient _applicationOwnerClient;
     private readonly ITemplateSelectionService _templateSelectionService;
     private readonly ISession _session = Substitute.For<ISession>();
     private readonly ApplicationsModel _model;
@@ -31,12 +33,15 @@ public class ApplicationsModelTests
         _applicationsClient = Substitute.For<IApplicationsClient>();
         _fixture.Inject(_applicationsClient);
 
+        _applicationOwnerClient = Substitute.For<IApplicationOwnerClient>();
+        _fixture.Inject(_applicationOwnerClient);
+
         _templateSelectionService = Substitute.For<ITemplateSelectionService>();
         _fixture.Inject(_templateSelectionService);
 
         var options = Options.Create(new DashboardOptions { PageSize = 10 });
 
-        _model = new ApplicationsModel(_applicationsClient, _templateSelectionService, options, NullLogger<ApplicationsModel>.Instance);
+        _model = new ApplicationsModel(_applicationsClient, _applicationOwnerClient, _templateSelectionService, options, NullLogger<ApplicationsModel>.Instance);
 
         var httpContext = Substitute.For<HttpContext>();
         httpContext.Session.Returns(_session);
@@ -172,5 +177,21 @@ public class ApplicationsModelTests
         var redirect = Assert.IsType<RedirectToPageResult>(result);
         Assert.Equal(templateId, (Guid)redirect.RouteValues![("selectedTemplateId")!]);
         Assert.Equal(1, redirect.RouteValues![("CurrentPage")!]);
+    }
+
+    [Fact]
+    public async Task OnPostChangeOwnerAsync_when_user_is_not_found_redirects_back_to_the_selected_template()
+    {
+        var templateId = Guid.NewGuid();
+        var applicationId = Guid.NewGuid();
+        _model.CurrentPage = 2;
+        _applicationOwnerClient.ChangeOwnerAsync(applicationId, "missing@example.com", Arg.Any<CancellationToken>())
+            .Returns<Task<ApplicationOwnerChangeResult>>(_ => throw new ExternalApplicationsException("Not found", 404, null!, null!, null!));
+
+        var result = await _model.OnPostChangeOwnerAsync(templateId, applicationId, "missing@example.com", CancellationToken.None);
+
+        var redirect = Assert.IsType<RedirectToPageResult>(result);
+        Assert.Equal(templateId, (Guid)redirect.RouteValues![("selectedTemplateId")!]);
+        Assert.Equal(2, redirect.RouteValues![("CurrentPage")!]);
     }
 }

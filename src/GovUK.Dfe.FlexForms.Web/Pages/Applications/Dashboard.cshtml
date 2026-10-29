@@ -232,6 +232,12 @@
                                                 <span class="govuk-visually-hidden">@app.ApplicationReference</span>
                                             </a>
                                             break;
+                                        case DashboardColumnResolver.SystemLeadApplicantName:
+                                            @app.Application.CreatedBy?.Name
+                                            break;
+                                        case DashboardColumnResolver.SystemLeadApplicantEmail:
+                                            @app.Application.CreatedBy?.Email
+                                            break;
                                         default:
                                             @(app.CustomColumnValues.TryGetValue(column.Key, out var customValue) ? customValue : string.Empty)
                                             break;

@@ -138,6 +138,35 @@ public class DashboardColumnResolverTests
         Assert.Equal("Ref", columns[0].Header);
     }
 
+    [Fact]
+    public void Resolve_LeadApplicantColumns_AreOptionalAndKeepDefaultHeaders()
+    {
+        var template = CreateTemplate(new DashboardConfiguration
+        {
+            Columns =
+            [
+                new DashboardColumnDefinition { Type = "system", Id = "reference", Order = 10 },
+                new DashboardColumnDefinition { Type = "system", Id = "leadApplicantName", Order = 20 },
+                new DashboardColumnDefinition { Type = "system", Id = "leadApplicantEmail", Header = "Email", Order = 30 },
+                new DashboardColumnDefinition { Type = "system", Id = "action", Order = 40 }
+            ]
+        });
+
+        var columns = DashboardColumnResolver.Resolve(template);
+
+        Assert.Equal(
+            [
+                DashboardColumnResolver.SystemReference,
+                DashboardColumnResolver.SystemLeadApplicantName,
+                DashboardColumnResolver.SystemLeadApplicantEmail,
+                DashboardColumnResolver.SystemAction
+            ],
+            columns.Select(c => c.Key));
+        Assert.Equal("Lead applicant", columns[1].Header);
+        Assert.Equal("Email", columns[2].Header);
+        Assert.All(columns, c => Assert.Equal(DashboardColumnKind.System, c.Kind));
+    }
+
     private static FormTemplate CreateTemplate(DashboardConfiguration? dashboard) =>
         new()
         {

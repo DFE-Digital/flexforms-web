@@ -1,5 +1,6 @@
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
+using GovUK.Dfe.FlexForms.Application.DisplayCopy;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Application.Options;
 using GovUK.Dfe.FlexForms.Domain.Models;
@@ -17,11 +18,11 @@ public class ApplicationTerminologyProviderTests
     [Fact]
     public void Properties_ShouldCapitaliseConfiguredTerms()
     {
-        var provider = new ApplicationTerminologyProvider(Options.Create(new ApplicationTerminologyOptions
+        var provider = CreateProvider(new ApplicationTerminologyOptions
         {
             Singular = "reform plan",
             Plural = "reform plans"
-        }));
+        });
 
         Assert.Equal("reform plan", provider.Singular);
         Assert.Equal("Reform plan", provider.SingularCapitalised);
@@ -32,15 +33,25 @@ public class ApplicationTerminologyProviderTests
     [Fact]
     public void Capitalise_ShouldReturnEmpty_WhenValueIsEmpty()
     {
-        var provider = new ApplicationTerminologyProvider(Options.Create(new ApplicationTerminologyOptions
+        var provider = CreateProvider(new ApplicationTerminologyOptions
         {
             Singular = "",
             Plural = ""
-        }));
+        });
 
         Assert.Equal("", provider.SingularCapitalised);
         Assert.Equal("", provider.PluralCapitalised);
     }
+
+    private static ApplicationTerminologyProvider CreateProvider(ApplicationTerminologyOptions options) =>
+        new(new TemplateDisplayCopyResolver(
+            new TemplateCopyContext(),
+            Options.Create(options),
+            Options.Create(new DashboardOptions()),
+            Options.Create(new ApplicationPreviewOptions()),
+            Options.Create(new ContributorsOptions()),
+            Options.Create(new TaskListOptions()),
+            Substitute.For<IRequestAppConfiguration>()));
 }
 
 public class EventTypeRegistryTests

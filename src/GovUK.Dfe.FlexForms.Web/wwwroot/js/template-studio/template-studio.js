@@ -1416,6 +1416,15 @@
         { value: 'action', label: 'Action' }
     ];
 
+    // Optional built-in columns. They are offered in the column editor but are not part of the
+    // default layout that "Choose the columns" starts from.
+    var OPTIONAL_SYSTEM_COLUMNS = [
+        { value: 'leadApplicantName', label: 'Lead applicant name' },
+        { value: 'leadApplicantEmail', label: 'Lead applicant email' }
+    ];
+
+    var BUILT_IN_COLUMNS = SYSTEM_COLUMNS.concat(OPTIONAL_SYSTEM_COLUMNS);
+
     var APPLICATION_BINDINGS = [
         { value: 'application.reference', label: 'Application reference' },
         { value: 'application.version', label: 'Template version the application uses' },
@@ -1542,10 +1551,10 @@
                 emptyText: 'There are no columns.',
                 renumber: function () { columns.forEach(function (column, index) { column.order = (index + 1) * 10; }); },
                 key: function (column) {
-                    return column.header || (isFieldColumn(column) ? column.fieldId || 'Answer not chosen' : choiceLabel(SYSTEM_COLUMNS, column.id));
+                    return column.header || (isFieldColumn(column) ? column.fieldId || 'Answer not chosen' : choiceLabel(BUILT_IN_COLUMNS, column.id));
                 },
                 value: function (column) {
-                    if (!isFieldColumn(column)) return 'Built in: ' + choiceLabel(SYSTEM_COLUMNS, column.id);
+                    if (!isFieldColumn(column)) return 'Built in: ' + choiceLabel(BUILT_IN_COLUMNS, column.id);
                     if (listTitleFor(column.fieldId)) return 'The whole list "' + listTitleFor(column.fieldId) + '": choose a question in it';
                     return 'Answer: ' + (column.fieldId ? choiceLabel(choices, column.fieldId) : 'not chosen');
                 },
@@ -1578,7 +1587,7 @@
                                 onChange: function (value) { column.fieldId = value; markDirty(); renderInspector(); }
                             })
                             : selectInput({
-                                id: 'tpl-column-system', label: 'Built-in column', value: column.id, items: SYSTEM_COLUMNS,
+                                id: 'tpl-column-system', label: 'Built-in column', value: column.id, items: BUILT_IN_COLUMNS,
                                 onChange: function (value) { column.id = value; markDirty(); }
                             }),
                         textInput({
@@ -1686,6 +1695,77 @@
         ]);
     }
 
+    function contributorRoleChoices(root) {
+        var items = [{ value: '', label: 'User (can edit this application)' }];
+        (data.contributorRoles || []).forEach(function (role) {
+            if (role && role.roleId) items.push({ value: role.roleId, label: role.name || role.roleId });
+        });
+        if (root.contributorRoleId && !items.some(function (item) { return item.value === root.contributorRoleId; })) {
+            items.push({ value: root.contributorRoleId, label: 'Saved role (no longer available)' });
+        }
+        return items;
+    }
+
+    function copyValue(section, property) {
+        var copy = (doc.root.displayCopy || {})[section] || {};
+        return copy[property] || '';
+    }
+
+    function bindCopy(path, section, property) {
+        return function (value) {
+            var root = doc.root;
+            root.displayCopy = root.displayCopy || {};
+            root.displayCopy[section] = root.displayCopy[section] || {};
+            if (value) {
+                root.displayCopy[section][property] = value;
+            } else {
+                delete root.displayCopy[section][property];
+                if (!Object.keys(root.displayCopy[section]).length) delete root.displayCopy[section];
+                if (!Object.keys(root.displayCopy).length) delete root.displayCopy;
+            }
+            edited(path);
+        };
+    }
+
+    function displayCopyFields(path) {
+        var hint = 'Leave blank to keep the organisation setting, then the built-in sentence. You can use {singular}, {plural}, {template_name} and {contributor_email}.';
+        function field(section, property, label) {
+            return textInput({
+                id: 'tpl-copy-' + section + '-' + property,
+                label: label,
+                value: copyValue(section, property),
+                onInput: bindCopy(path, section, property)
+            });
+        }
+        return section('Wording for this template', [
+            h('p', { class: 'govuk-hint', text: hint }),
+            field('terminology', 'singular', 'Singular, for example visit'),
+            field('terminology', 'plural', 'Plural, for example visits'),
+            field('dashboard', 'mainHeading', 'Dashboard heading'),
+            field('dashboard', 'inProgressHeading', 'In progress heading'),
+            field('dashboard', 'startNewHeading', 'Start new heading'),
+            field('dashboard', 'startNewHint', 'Start new hint'),
+            field('dashboard', 'startNewButtonText', 'Start new button'),
+            field('preview', 'pageHeading', 'Check your answers heading'),
+            field('preview', 'submitHeading', 'Submit heading'),
+            field('preview', 'submitHint', 'Submit hint'),
+            field('preview', 'submitButtonText', 'Submit button'),
+            field('contributors', 'sectionHeading', 'Contributors heading'),
+            field('contributors', 'sectionBody', 'Contributors text'),
+            field('contributors', 'inviteButtonText', 'Invite button'),
+            field('contributors', 'pageHeading', 'Invite page heading'),
+            field('contributors', 'intro', 'Invite introduction'),
+            field('contributors', 'signInText', 'DfE Sign-in text'),
+            field('contributors', 'onceJoinedText', 'After they join'),
+            field('contributors', 'addLaterText', 'Add later text'),
+            field('contributors', 'addButtonText', 'Add a contributor button'),
+            field('contributors', 'proceedButtonText', 'Go to application button'),
+            field('contributors', 'currentHeading', 'Current contributors heading'),
+            field('taskList', 'reviewButtonText', 'Review button'),
+            field('taskList', 'viewButtonText', 'View button')
+        ]);
+    }
+
     function templateInspector(path) {
         var root = doc.root;
 
@@ -1725,8 +1805,25 @@
                 id: 'tpl-contributors',
                 label: 'Let applicants invite contributors',
                 checked: root.contributorPattern !== false,
-                onChange: function (checked) { root.contributorPattern = checked; edited(path); }
+                onChange: function (checked) {
+                    root.contributorPattern = checked;
+                    if (!checked) delete root.contributorRoleId;
+                    restructured();
+                }
             }),
+            root.contributorPattern !== false ? selectInput({
+                id: 'tpl-contributor-role',
+                label: 'Role for invited contributors',
+                hint: 'User can edit the application. Any other role can only view it.',
+                value: root.contributorRoleId || '',
+                items: contributorRoleChoices(root),
+                onChange: function (value) {
+                    if (value) root.contributorRoleId = value;
+                    else delete root.contributorRoleId;
+                    edited(path);
+                }
+            }) : null,
+            displayCopyFields(path),
             contents(path, 'Sections', 'This template has no sections yet.'),
             addForm({
                 id: 'tpl-new-group',

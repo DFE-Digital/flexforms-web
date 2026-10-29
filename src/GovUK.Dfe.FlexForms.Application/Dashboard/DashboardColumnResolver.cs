@@ -28,6 +28,8 @@ public static class DashboardColumnResolver
     public const string SystemDateSubmitted = "dateSubmitted";
     public const string SystemStatus = "status";
     public const string SystemAction = "action";
+    public const string SystemLeadApplicantName = "leadApplicantName";
+    public const string SystemLeadApplicantEmail = "leadApplicantEmail";
 
     private static readonly IReadOnlyDictionary<string, string> DefaultSystemHeaders =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -36,7 +38,9 @@ public static class DashboardColumnResolver
             [SystemDateStarted] = "Date started",
             [SystemDateSubmitted] = "Date submitted",
             [SystemStatus] = "Status",
-            [SystemAction] = "Action"
+            [SystemAction] = "Action",
+            [SystemLeadApplicantName] = "Lead applicant",
+            [SystemLeadApplicantEmail] = "Lead applicant email"
         };
 
     /// <summary>

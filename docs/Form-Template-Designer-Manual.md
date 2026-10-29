@@ -175,8 +175,10 @@ In Transfer: “Trust details” uses a collection; “Reason and benefits” us
 | `defaultFieldRequirementPolicy` | `"required"` or `"optional"`. If a field has no `required` validation and no `required` flag, this policy applies. Transfer uses `"required"`. |
 | `hideFieldLabelWhenOnlyOneField` | When `true` (default), a page with **exactly one** normal field hides that field’s label so the **page title** is the question. Complex fields are excluded from this behaviour. |
 | `contributorPattern` | When `true` (default), invite-contributor features are available. Set `false` to hide them. |
+| `contributorRoleId` | Optional GUID of a custom tenant role. Omit it, or use the User role, and invited contributors can edit the application. Any other allowed role can only view that application and its files. Admin, SuperAdmin and Administrator are rejected. See §3.3. |
 | `dashboard` | Optional. Configures applications-dashboard columns (see §3.1). |
 | `applicationMetaData` | Optional. Configures the metadata block on the application task list (see §3.2). |
+| `displayCopy` | Optional. Per-template headings and buttons. A blank field falls back to the organisation setting, then the built-in sentence. See §3.4. |
 
 ### 3.1 Dashboard columns (`dashboard`)
 
@@ -200,7 +202,7 @@ The applications dashboard always uses column **headings** from the **latest pub
 |----------|---------|
 | `columns` | Ordered list of columns. When omitted, the default system columns are used. |
 | `type` | `"system"` or `"field"`. If omitted and `fieldId` is set, treated as `"field"`. |
-| `id` | System column id: `reference`, `dateStarted`, `dateSubmitted`, `status`, `action`. |
+| `id` | System column id: `reference`, `dateStarted`, `dateSubmitted`, `status`, `action`. Optional, and not in the default set: `leadApplicantName`, `leadApplicantEmail`. |
 | `fieldId` | Stable answer key for a field column. **Do not rename casually** — it is the contract across versions. |
 | `header` | Column heading. Required for field columns (falls back to `fieldId` if blank). Optional override for system columns. |
 | `order` | Lower first. If omitted, array order is used (`10`, `20`, …). |
@@ -210,6 +212,7 @@ The applications dashboard always uses column **headings** from the **latest pub
 - Maximum **3** `field` columns (extras are ignored).
 - If you only list field columns, default system columns are merged in automatically.
 - An `action` column is always kept so users can open an application.
+- `leadApplicantName` and `leadApplicantEmail` show the current lead applicant. They are allowed only when you list them. They are not part of the default columns. After the lead applicant is changed, the cell shows the new person.
 - Prefer scalar fields (text, date, radios, select). Uploads are a poor fit for a table cell.
 
 **Collection-flow fields**
@@ -290,6 +293,65 @@ Property names are **case-sensitive** in template JSON (`label` and `fieldId`, l
 - a collection path names a field that isn't on that collection's pages (the collection's fields are listed);
 - a child property (`.name`) or index (`[0]`) is used on a plain-value field such as text, email, radios, select, checkboxes or date. Child properties of lookup (`autocomplete` / `complexField`) and upload fields come from external data, so only the field itself is checked;
 - the path is malformed, for example `a..b` or `items[x]`.
+
+### 3.3 Contributor role (`contributorRoleId`)
+
+Optional. Used only when `contributorPattern` is true.
+
+```json
+"contributorRoleId": "8f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
+```
+
+| Value | Access granted to a newly invited contributor |
+|-------|-----------------------------------------------|
+| Omitted, empty, the User role id, or the name User | Application Read and Write, and ApplicationFiles Read, Write and Delete. Same as today. |
+| Any other custom role in this tenant | Application Read and ApplicationFiles Read only. If they are not already in the tenant, their membership is created with that role. |
+
+The API rejects a missing role, a role from another tenant, and Admin, SuperAdmin or Administrator. It does not fall back to User. An existing membership is not changed. Grants already on the user are not removed, so someone who already has Write keeps it.
+
+### 3.4 Per-template wording (`displayCopy`)
+
+Optional object. Each property is a string. An empty or missing property uses the organisation setting for that field, then the built-in sentence. Placeholders: `{singular}`, `{plural}`, `{template_name}`, `{contributor_email}`.
+
+```json
+"displayCopy": {
+  "terminology": { "singular": "visit", "plural": "visits" },
+  "dashboard": {
+    "mainHeading": "Your {plural}",
+    "inProgressHeading": "{plural} in progress",
+    "startNewHeading": "Start a new {singular}",
+    "startNewHint": "",
+    "startNewButtonText": "Start new {singular}"
+  },
+  "preview": {
+    "pageHeading": "Check your answers",
+    "submitHeading": "Submit your {singular}",
+    "submitHint": "",
+    "submitButtonText": "Submit"
+  },
+  "contributors": {
+    "sectionHeading": "Contributors",
+    "sectionBody": "You can invite other people to complete or view parts of this {singular}.",
+    "inviteButtonText": "Invite contributors",
+    "pageHeading": "Invite contributors",
+    "intro": "",
+    "signInText": "",
+    "onceJoinedText": "",
+    "addLaterText": "",
+    "addButtonText": "Add a contributor",
+    "proceedButtonText": "Go to {singular}",
+    "currentHeading": "Current contributors"
+  },
+  "taskList": {
+    "reviewButtonText": "Review {singular}",
+    "viewButtonText": "View {singular}"
+  }
+}
+```
+
+Wording is stored on the template version. Pages for an application in progress use that application's version. Dashboard headings use the latest template, as column headings do.
+
+The notification banner, dashboard page size, filters, and `hideSubmitSection` are not in `displayCopy`. They stay in organisation settings.
 
 ---
 

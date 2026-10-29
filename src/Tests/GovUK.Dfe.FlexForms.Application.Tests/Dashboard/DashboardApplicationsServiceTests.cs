@@ -3,6 +3,7 @@ using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Application.Dashboard;
+using GovUK.Dfe.FlexForms.Application.DisplayCopy;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -24,6 +25,7 @@ public class DashboardApplicationsServiceTests
             _applications,
             _templates,
             _contributors,
+            new TemplateCopyContext(),
             NullLogger<DashboardApplicationsService>.Instance);
     }
 
