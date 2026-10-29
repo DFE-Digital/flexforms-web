@@ -41,6 +41,31 @@ public class PostedFormDataBinderTests
     }
 
     [Fact]
+    public void Bind_clears_checkbox_field_when_only_empty_value_is_posted()
+    {
+        var existing = new Dictionary<string, object>
+        {
+            ["priorities"] = new[] { "Attendance concerns", "Attainment" }
+        };
+        var form = Fields(("Data[priorities]", [""]));
+
+        var data = _binder.Bind(form, existing);
+
+        Assert.Equal(string.Empty, data["priorities"]);
+    }
+
+    [Fact]
+    public void Bind_ignores_empty_sentinel_when_real_checkbox_values_are_posted()
+    {
+        var form = Fields(("Data[choices]", ["", "a", "b"]));
+
+        var data = _binder.Bind(form);
+
+        var values = Assert.IsType<string[]>(data["choices"]);
+        Assert.Equal(["a", "b"], values);
+    }
+
+    [Fact]
     public void ApplyDateParts_composes_iso_date_when_year_is_four_digits()
     {
         var data = new Dictionary<string, object>();

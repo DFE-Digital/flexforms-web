@@ -33,9 +33,9 @@ public sealed class PostedFormDataBinder : IPostedFormDataBinder
 
             object bound = values.Count switch
             {
+                0 => string.Empty,
                 1 => HtmlInputSanitiser.Sanitise(values[0] ?? string.Empty),
-                > 1 => values.Select(v => HtmlInputSanitiser.Sanitise(v ?? string.Empty)).ToArray(),
-                _ => string.Empty
+                _ => BindMultiValue(values)
             };
 
             data[fieldId] = bound;
@@ -44,6 +44,21 @@ public sealed class PostedFormDataBinder : IPostedFormDataBinder
         }
 
         return data;
+    }
+
+    private static object BindMultiValue(IReadOnlyList<string> values)
+    {
+        var sanitised = values
+            .Select(v => HtmlInputSanitiser.Sanitise(v ?? string.Empty))
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .ToArray();
+
+        return sanitised.Length switch
+        {
+            0 => Array.Empty<string>(),
+            1 => sanitised[0],
+            _ => sanitised
+        };
     }
 
     public void ApplyDateParts(
