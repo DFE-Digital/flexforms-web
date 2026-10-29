@@ -80,7 +80,7 @@ public sealed class CreateTemplateModel(
                 tenantId: HttpContext.RequestServices.GetService<ITenantRequestContext>()?.TenantId);
 
             if (await featureManager.IsEnabledAsync(FeatureFlags.TemplateStudio))
-                return RedirectToPage("/Admin/TemplateStudio", new { created = true });
+                return RedirectToPage("/Admin/TemplateStudio", new { created = true, templateId = template.TemplateId });
 
             return RedirectToPage(
                 "/Admin/TemplateManager",

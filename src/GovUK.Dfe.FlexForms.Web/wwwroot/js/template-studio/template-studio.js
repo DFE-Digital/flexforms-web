@@ -136,8 +136,9 @@
     var baselineFields = lib.inventory(baselineRoot).fields;
     var applicationCount = typeof data.applicationCount === 'number' ? data.applicationCount : null;
 
-    // Unknown counts are treated as in use, which is the safe way round.
+    // Unknown counts are treated as in use. Known-unused templates are isStarter or a zero application count.
     function inUse() {
+        if (data.isStarter || applicationCount === 0) return false;
         return baselineFields.size > 0 && applicationCount !== 0;
     }
 
@@ -1293,7 +1294,7 @@
                 autoIds.delete(node);
                 edited(path);
             },
-            onChange: function (value) {
+            onChange: function (value, input) {
                 var trimmed = value.trim();
                 var text = '';
                 var isError = true;
@@ -1306,21 +1307,35 @@
                     text = 'Something else in this template already uses this id';
                 } else {
                     var notes = [];
-                    if (doc.kindOf(path) === 'field' || doc.kindOf(path) === 'page') {
-                        var updated = doc.renameReferences(before, trimmed);
-                        if (updated) notes.push('Updated ' + updated + (updated === 1 ? ' rule' : ' rules') + ' to use the new id.');
-                    }
+                    var updated = 0;
+                    var rejected = false;
                     if (key === 'fieldId') {
                         var retired = answerIdRenamed(path, before, trimmed);
-                        if (retired) notes.push(retired);
-                        var mapped = before && before !== trimmed ? mappingsReading([before]) : [];
-                        if (mapped.length) {
-                            notes.push(mapped.map(function (reference) { return describeMapping(reference).replace(/^t/, 'T'); }).join(', ')
-                                + ' still read' + (mapped.length === 1 ? 's' : '') + ' "' + before + '". Update ' + (mapped.length === 1 ? 'it' : 'them') + ' in Event mappings after you save.');
+                        if (retired && retired.indexOf('already retired') !== -1) {
+                            rejected = true;
+                            text = retired;
+                            if (input) input.value = before;
+                            node[key] = before;
+                            trimmed = before;
+                        } else if (retired) {
+                            notes.push(retired);
                         }
                     }
-                    text = notes.join(' ');
-                    isError = false;
+                    if (!rejected) {
+                        if (doc.kindOf(path) === 'field' || doc.kindOf(path) === 'page') {
+                            updated = doc.renameReferences(before, trimmed);
+                        }
+                        if (updated) notes.push('Updated ' + updated + (updated === 1 ? ' rule' : ' rules') + ' to use the new id.');
+                        if (key === 'fieldId') {
+                            var mapped = before && before !== trimmed ? mappingsReading([before]) : [];
+                            if (mapped.length) {
+                                notes.push(mapped.map(function (reference) { return describeMapping(reference).replace(/^t/, 'T'); }).join(', ')
+                                    + ' still read' + (mapped.length === 1 ? 's' : '') + ' "' + before + '". Update ' + (mapped.length === 1 ? 'it' : 'them') + ' in Event mappings after you save.');
+                            }
+                        }
+                        text = notes.join(' ');
+                        isError = false;
+                    }
                 }
                 message.className = isError ? 'govuk-error-message' : 'govuk-hint';
                 message.textContent = '';
@@ -1335,27 +1350,9 @@
     }
 
     // Once applications have answers saved under an id, renaming it is a retirement plus a replacement that keeps
-    // the old reporting key. Renaming back undoes that.
+    // the old reporting key. Renaming a replacement back undoes that. Reusing some other retired id is not allowed.
     function answerIdRenamed(path, before, after) {
-        if (!before || before === after) return '';
-        (doc.root.retiredFields || []).forEach(function (entry) {
-            if (entry.replacedBy) entry.replacedBy = entry.replacedBy.map(function (id) { return id === before ? after : id; });
-        });
-
-        var node = doc.get(path);
-        var parentFieldId = doc.fieldKeyOf(path).parentFieldId;
-        var original = baselineFor({ fieldId: after, parentFieldId: parentFieldId });
-        if (original) {
-            doc.unretire({ fieldId: after, parentFieldId: parentFieldId });
-            if (node.semanticKey === original.semanticKey && original.semanticKey === after) delete node.semanticKey;
-            return '';
-        }
-
-        var previous = inUse() ? baselineFor({ fieldId: before, parentFieldId: parentFieldId }) : null;
-        if (!previous) return '';
-        doc.retire({ fieldId: before, parentFieldId: parentFieldId }, [after]);
-        if (!node.semanticKey) node.semanticKey = previous.semanticKey;
-        return 'Applications already have answers saved as "' + before + '", so it is retired and replaced by "' + after + '", which keeps its reporting key.';
+        return doc.applyAnswerIdRename(path, before, after, { inUse: inUse(), baselineRoot: baselineRoot });
     }
 
     function addForm(options) {
@@ -3473,11 +3470,31 @@
     });
 
     window.addEventListener('beforeunload', function (e) {
+        if (window.__flexformsAllowUnload) return;
         if (dirty && !submitting) {
             e.preventDefault();
             e.returnValue = '';
         }
     });
+
+    var grantForm = document.getElementById('grant-template-to-all-users-form');
+    if (grantForm) {
+        grantForm.addEventListener('submit', function (e) {
+            if (dirty && !window.confirm('You have unsaved changes. Granting access does not save this version. Continue?')) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                return;
+            }
+            window.__flexformsAllowUnload = true;
+        });
+    }
+
+    if (data.templateId && window.history.replaceState) {
+        var studioUrl = new URL(window.location.href);
+        studioUrl.searchParams.set('templateId', data.templateId);
+        if (data.versionNumber) studioUrl.searchParams.set('version', data.versionNumber);
+        window.history.replaceState(null, '', studioUrl);
+    }
 
     // ---- Start -------------------------------------------------------------------------------------------------
 

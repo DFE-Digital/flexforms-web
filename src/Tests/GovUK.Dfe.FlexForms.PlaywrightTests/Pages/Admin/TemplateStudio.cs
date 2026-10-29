@@ -14,7 +14,7 @@ public sealed class TemplateStudio(IPage page) : BasePage(page)
 
     public async Task ExpectOpenAsync(string templateName)
     {
-        await Assertions.Expect(Page).ToHaveURLAsync(new Regex("/admin/template-studio$"));
+        await Assertions.Expect(Page).ToHaveURLAsync(new Regex("/admin/template-studio(\\?.*)?$"));
         await Assertions.Expect(Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = templateName, Level = 1 }))
             .ToBeVisibleAsync();
         await Assertions.Expect(Status()).ToHaveTextAsync("No unsaved changes");

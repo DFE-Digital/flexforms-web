@@ -113,6 +113,40 @@ test('renames rule references when an id changes', () => {
     assert.equal(doc.rulesReferencing('isThereATrust').length, 2);
 });
 
+test('rejects renaming onto a retired answer id and restores the field id', () => {
+    const doc = load();
+    const path = TRUST_PAGES.concat([1, 'fields', 0]);
+    doc.retire({ fieldId: 'oldName', parentFieldId: '' });
+    doc.get(path).fieldId = 'oldName';
+    const message = doc.applyAnswerIdRename(path, 'trustName', 'oldName', { inUse: true, baselineRoot: template() });
+    assert.match(message, /already retired/);
+    assert.equal(doc.get(path).fieldId, 'trustName');
+});
+
+test('rejects a retired answer id even when the previous id was empty', () => {
+    const doc = load();
+    const path = TRUST_PAGES.concat([1, 'fields', 0]);
+    doc.retire({ fieldId: 'oldName', parentFieldId: '' });
+    doc.get(path).fieldId = 'oldName';
+    const message = doc.applyAnswerIdRename(path, '', 'oldName', { inUse: true, baselineRoot: template() });
+    assert.match(message, /already retired/);
+    assert.equal(doc.get(path).fieldId, '');
+});
+
+test('renameReferences rewrites every matching id, including page targets that already used the new id', () => {
+    const doc = load();
+    doc.saveBuilderRule({
+        kind: 'show', name: 'Ask', match: 'all',
+        conditions: [{ triggerField: 'hasTrust', operator: 'equals', value: 'yes' }],
+        pages: ['trust-name'], fields: []
+    });
+    doc.renameReferences('hasTrust', 'trust-name');
+    doc.renameReferences('trust-name', 'hasTrust');
+    const show = doc.root.conditionalLogic.find(rule => rule.affectedElements.some(element => element.action === 'show'));
+    assert.equal(show.conditionGroup.conditions[0].triggerField, 'hasTrust');
+    assert.equal(show.affectedElements[0].elementId, 'hasTrust');
+});
+
 test('writes a show rule as a hide and show pair that the builder can open again', () => {
     const doc = load();
     const base = doc.saveBuilderRule({ kind: 'show', name: 'Ask for the trust name', match: 'all', conditions: [{ triggerField: 'hasTrust', operator: 'equals', value: 'yes' }], pages: ['trust-name'], fields: [] });
@@ -248,6 +282,75 @@ test('reports a changed reporting key', () => {
     doc.get(TRUST_PAGES.concat([1, 'fields', 0])).semanticKey = 'Name';
     const [issue] = doc.reportingIssues(baseline);
     assert.match(issue.message, /different reporting key/);
+});
+
+test('tells the author a retired answer id cannot be put back on a question', () => {
+    const baseline = template();
+    const doc = load();
+    doc.remove(TRUST_PAGES.concat([1]));
+    doc.retire({ fieldId: 'trustName', parentFieldId: '' });
+    doc.get(TRUST_PAGES.concat([0, 'fields', 0])).fieldId = 'trustName';
+    const issues = doc.reportingIssues(baseline);
+    assert.match(issues.map(issue => issue.message).join('\n'), /"trustName" is already retired/);
+});
+
+test('does not treat swapped answer ids as a removal', () => {
+    const baseline = template();
+    const doc = load();
+    doc.get(TRUST_PAGES.concat([0, 'fields', 0])).fieldId = 'trustName';
+    doc.get(TRUST_PAGES.concat([1, 'fields', 0])).fieldId = 'hasTrust';
+    const issues = doc.reportingIssues(baseline);
+    assert.equal(issues.some(issue => /removed but isn't retired/.test(issue.message)), false);
+    assert.equal(issues.some(issue => /already retired/.test(issue.message)), false);
+});
+
+test('does not retire an answer id that is still live on another question', () => {
+    const baseline = template();
+    const doc = load();
+    const hasTrustPath = TRUST_PAGES.concat([0, 'fields', 0]);
+    const trustNamePath = TRUST_PAGES.concat([1, 'fields', 0]);
+    doc.get(hasTrustPath).fieldId = 'trustName';
+    doc.get(trustNamePath).fieldId = 'hasTrust';
+    const note = doc.applyAnswerIdRename(trustNamePath, 'trustName', 'hasTrust', { inUse: true, baselineRoot: baseline });
+    assert.equal(note, '');
+    assert.deepEqual(doc.root.retiredFields || [], []);
+    assert.equal(doc.get(trustNamePath).semanticKey, 'TrustName');
+});
+
+test('retires an answer id that is no longer live once applications use the template', () => {
+    const baseline = template();
+    const doc = load();
+    const path = TRUST_PAGES.concat([1, 'fields', 0]);
+    doc.get(path).fieldId = 'trustTitle';
+    const note = doc.applyAnswerIdRename(path, 'trustName', 'trustTitle', { inUse: true, baselineRoot: baseline });
+    assert.match(note, /retired and replaced by "trustTitle"/);
+    assert.deepEqual(doc.root.retiredFields, [{ fieldId: 'trustName', replacedBy: ['trustTitle'] }]);
+    assert.equal(doc.get(path).semanticKey, 'TrustName');
+});
+
+test('keeps a custom reporting key when an answer is renamed back to its original id', () => {
+    const baseline = template();
+    const doc = load();
+    const path = TRUST_PAGES.concat([1, 'fields', 0]);
+    doc.get(path).fieldId = 'trustTitle';
+    doc.applyAnswerIdRename(path, 'trustName', 'trustTitle', { inUse: true, baselineRoot: baseline });
+    doc.get(path).fieldId = 'trustName';
+    doc.applyAnswerIdRename(path, 'trustTitle', 'trustName', { inUse: true, baselineRoot: baseline });
+    assert.equal(doc.get(path).semanticKey, 'TrustName');
+    assert.deepEqual(doc.root.retiredFields, []);
+});
+
+test('drops a reporting key that only repeated the restored answer id', () => {
+    const baseline = template();
+    const doc = load();
+    const path = TRUST_PAGES.concat([0, 'fields', 0]);
+    doc.get(path).fieldId = 'hasTrustNow';
+    doc.applyAnswerIdRename(path, 'hasTrust', 'hasTrustNow', { inUse: true, baselineRoot: baseline });
+    assert.equal(doc.get(path).semanticKey, 'hasTrust');
+    doc.get(path).fieldId = 'hasTrust';
+    doc.applyAnswerIdRename(path, 'hasTrustNow', 'hasTrust', { inUse: true, baselineRoot: baseline });
+    assert.equal(doc.get(path).semanticKey, undefined);
+    assert.deepEqual(doc.root.retiredFields, []);
 });
 
 test('treats questions in a repeatable list as belonging to the list', () => {

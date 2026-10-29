@@ -363,19 +363,23 @@
         var hideFieldLabel = Model.Template!.HideFieldLabelWhenOnlyOneField && fields.Count == 1 && fields[0].Type != "complexField";
         var caption = Model.List?.Title ?? Model.Derived?.Title
             ?? (task.Caption is null ? task.TaskName : DisplayHelpers.InterpolateMessage(task.Caption, null));
-        var fieldErrors = Model.Errors.Where(error => !string.IsNullOrEmpty(error.FieldKey))
+        var pageErrors = Model.Errors
+            .GroupBy(error => (error.FieldKey, error.Message))
+            .Select(group => group.First())
+            .ToList();
+        var fieldErrors = pageErrors.Where(error => !string.IsNullOrEmpty(error.FieldKey))
             .GroupBy(error => error.FieldKey)
             .ToDictionary(group => group.Key, group => group.First().Message);
         <a class="govuk-back-link" href="@Model.BackUrl()">Back</a>
 
-        @if (Model.Errors.Count > 0)
+        @if (pageErrors.Count > 0)
         {
             <div class="govuk-error-summary" data-module="govuk-error-summary">
                 <div role="alert">
                     <h2 class="govuk-error-summary__title">There is a problem</h2>
                     <div class="govuk-error-summary__body">
                         <ul class="govuk-list govuk-error-summary__list">
-                            @foreach (var error in Model.Errors)
+                            @foreach (var error in pageErrors)
                             {
                                 <li><a href="#@(string.IsNullOrEmpty(error.FieldKey) ? "page-title" : ErrorId(error.FieldKey))">@error.Message</a></li>
                             }
