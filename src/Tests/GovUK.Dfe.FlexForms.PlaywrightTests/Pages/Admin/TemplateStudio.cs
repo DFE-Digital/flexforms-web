@@ -39,6 +39,7 @@ public sealed class TemplateStudio(IPage page) : BasePage(page)
     /// <summary>Selects a section, task, page or list. <paramref name="kind"/> is how the structure names it, for example "page".</summary>
     public async Task SelectAsync(string kind, string title)
     {
+        await ExpandAsync(title);
         await Structure().GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = $"Edit {kind} {title}", Exact = true }).ClickAsync();
         await ExpectSelectedAsync(title);
     }
