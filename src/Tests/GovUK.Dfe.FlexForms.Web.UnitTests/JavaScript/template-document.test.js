@@ -113,6 +113,30 @@ test('renames rule references when an id changes', () => {
     assert.equal(doc.rulesReferencing('isThereATrust').length, 2);
 });
 
+test('rejects renaming onto a retired answer id and restores the field id', () => {
+    const doc = load();
+    const path = TRUST_PAGES.concat([1, 'fields', 0]);
+    doc.retire({ fieldId: 'oldName', parentFieldId: '' });
+    doc.get(path).fieldId = 'oldName';
+    const message = doc.applyAnswerIdRename(path, 'trustName', 'oldName', { inUse: true, baselineRoot: template() });
+    assert.match(message, /already retired/);
+    assert.equal(doc.get(path).fieldId, 'trustName');
+});
+
+test('renameReferences rewrites every matching id, including page targets that already used the new id', () => {
+    const doc = load();
+    doc.saveBuilderRule({
+        kind: 'show', name: 'Ask', match: 'all',
+        conditions: [{ triggerField: 'hasTrust', operator: 'equals', value: 'yes' }],
+        pages: ['trust-name'], fields: []
+    });
+    doc.renameReferences('hasTrust', 'trust-name');
+    doc.renameReferences('trust-name', 'hasTrust');
+    const show = doc.root.conditionalLogic.find(rule => rule.affectedElements.some(element => element.action === 'show'));
+    assert.equal(show.conditionGroup.conditions[0].triggerField, 'hasTrust');
+    assert.equal(show.affectedElements[0].elementId, 'hasTrust');
+});
+
 test('writes a show rule as a hide and show pair that the builder can open again', () => {
     const doc = load();
     const base = doc.saveBuilderRule({ kind: 'show', name: 'Ask for the trust name', match: 'all', conditions: [{ triggerField: 'hasTrust', operator: 'equals', value: 'yes' }], pages: ['trust-name'], fields: [] });

@@ -277,7 +277,9 @@ public class TemplateStudioModel(
             TenantTemplates = TenantTemplates,
             SessionVersionNumber = !string.IsNullOrWhiteSpace(requestedVersion)
                 ? requestedVersion.Trim()
-                : HttpContext.Session.GetString(TemplateVersionSessionKey)
+                : requestedTemplateId is null
+                    ? HttpContext.Session.GetString(TemplateVersionSessionKey)
+                    : null
         };
         await templateManagerAdmin.LoadTemplateDataAsync(state, template.TemplateId, cancellationToken);
 

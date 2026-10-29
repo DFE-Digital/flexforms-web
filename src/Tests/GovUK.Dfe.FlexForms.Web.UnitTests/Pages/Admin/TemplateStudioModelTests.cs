@@ -314,6 +314,39 @@ public class TemplateStudioModelTests
     }
 
     [Fact]
+    public async Task OnGetAsync_ShouldOpenTheLatestVersion_WhenATemplateIsRequestedWithoutAVersion()
+    {
+        var other = new TemplateDto { TemplateId = Guid.NewGuid(), Name = "Visits", CreatedOn = DateTime.UtcNow };
+        _selection.GetSelectableTemplatesAsync(Arg.Any<CancellationToken>()).Returns([_template, other]);
+        _selection.GetSelectedTemplateId(Arg.Any<HttpContext>()).Returns(other.TemplateId.ToString());
+        GivenStoredVersion("1.0.4");
+        _session.SetString("TemplateVersionNumber", "1.0.2");
+
+        var result = await _model.OnGetAsync(null, false, CancellationToken.None, _template.TemplateId);
+
+        Assert.IsType<PageResult>(result);
+        Assert.Equal(_template.TemplateId, _model.SelectedTemplateId);
+        Assert.Equal("1.0.4", _model.CurrentVersionNumber);
+        Assert.Equal("1.0.4", _model.StartedFromLatestVersion);
+        await _admin.Received().LoadTemplateDataAsync(
+            Arg.Is<TemplateManagerWorkState>(state => state.SessionVersionNumber == null),
+            _template.TemplateId,
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task OnGetAsync_ShouldKeepTheSessionVersion_WhenNoTemplateIsInTheQuery()
+    {
+        GivenStoredVersion("1.0.4");
+        _session.SetString("TemplateVersionNumber", "1.0.2");
+
+        var result = await _model.OnGetAsync(null, false, CancellationToken.None);
+
+        Assert.IsType<PageResult>(result);
+        Assert.Equal("1.0.2", _model.CurrentVersionNumber);
+    }
+
+    [Fact]
     public async Task OnPostGrantToAllUsersAsync_ShouldGrantThePostedTemplate()
     {
         GivenStoredVersion("1.0.3");

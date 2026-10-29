@@ -1316,30 +1316,31 @@
                 } else {
                     var notes = [];
                     var updated = 0;
-                    if (doc.kindOf(path) === 'field' || doc.kindOf(path) === 'page') {
-                        updated = doc.renameReferences(before, trimmed);
-                    }
+                    var rejected = false;
                     if (key === 'fieldId') {
                         var retired = answerIdRenamed(path, before, trimmed);
                         if (retired && retired.indexOf('already retired') !== -1) {
-                            if (updated) doc.renameReferences(trimmed, before);
+                            rejected = true;
                             text = retired;
                             if (input) input.value = before;
                             node[key] = before;
                             trimmed = before;
-                        } else {
-                            if (updated) notes.push('Updated ' + updated + (updated === 1 ? ' rule' : ' rules') + ' to use the new id.');
-                            if (retired) notes.push(retired);
+                        } else if (retired) {
+                            notes.push(retired);
+                        }
+                    }
+                    if (!rejected) {
+                        if (doc.kindOf(path) === 'field' || doc.kindOf(path) === 'page') {
+                            updated = doc.renameReferences(before, trimmed);
+                        }
+                        if (updated) notes.push('Updated ' + updated + (updated === 1 ? ' rule' : ' rules') + ' to use the new id.');
+                        if (key === 'fieldId') {
                             var mapped = before && before !== trimmed ? mappingsReading([before]) : [];
                             if (mapped.length) {
                                 notes.push(mapped.map(function (reference) { return describeMapping(reference).replace(/^t/, 'T'); }).join(', ')
                                     + ' still read' + (mapped.length === 1 ? 's' : '') + ' "' + before + '". Update ' + (mapped.length === 1 ? 'it' : 'them') + ' in Event mappings after you save.');
                             }
-                            text = notes.join(' ');
-                            isError = false;
                         }
-                    } else {
-                        if (updated) notes.push('Updated ' + updated + (updated === 1 ? ' rule' : ' rules') + ' to use the new id.');
                         text = notes.join(' ');
                         isError = false;
                     }
