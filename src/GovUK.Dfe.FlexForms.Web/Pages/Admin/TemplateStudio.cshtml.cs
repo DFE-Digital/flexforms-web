@@ -395,8 +395,7 @@ public class TemplateStudioModel(
     private static bool IsReservedContributorRole(string? name) =>
         string.Equals(name, "Admin", StringComparison.OrdinalIgnoreCase)
         || string.Equals(name, "SuperAdmin", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(name, "Administrator", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(name, "User", StringComparison.OrdinalIgnoreCase);
+        || string.Equals(name, "Administrator", StringComparison.OrdinalIgnoreCase);
 
     private IReadOnlyList<EventMappingFieldReference> ReadEventMappingReferences(params string?[] schemas)
     {

@@ -196,6 +196,41 @@ public class ApplicationsModelTests
     }
 
     [Fact]
+    public async Task OnPostChangeOwnerAsync_when_validation_fails_keeps_generic_error_message()
+    {
+        var templateId = Guid.NewGuid();
+        var applicationId = Guid.NewGuid();
+        _applicationOwnerClient.ChangeOwnerAsync(applicationId, string.Empty, Arg.Any<CancellationToken>())
+            .Returns<Task<ApplicationOwnerChangeResult>>(_ =>
+                throw new ExternalApplicationsException("Bad request", 400, "Email is required", null!, null!));
+
+        await _model.OnPostChangeOwnerAsync(templateId, applicationId, string.Empty, CancellationToken.None);
+
+        Assert.Equal(
+            "The lead applicant could not be changed. Please try again.",
+            _model.TempData["OwnerChangeError"]);
+    }
+
+    [Fact]
+    public async Task OnPostChangeOwnerAsync_when_user_is_already_lead_applicant_shows_specific_message()
+    {
+        var templateId = Guid.NewGuid();
+        var applicationId = Guid.NewGuid();
+        _applicationOwnerClient.ChangeOwnerAsync(applicationId, "owner@example.com", Arg.Any<CancellationToken>())
+            .Returns<Task<ApplicationOwnerChangeResult>>(_ =>
+                throw new ExternalApplicationsException(
+                    "Bad request",
+                    400,
+                    "This user is already the lead applicant",
+                    null!,
+                    null!));
+
+        await _model.OnPostChangeOwnerAsync(templateId, applicationId, "owner@example.com", CancellationToken.None);
+
+        Assert.Equal("This user is already the lead applicant.", _model.TempData["OwnerChangeError"]);
+    }
+
+    [Fact]
     public async Task OnPostChangeOwnerAsync_when_successful_sets_success_message_and_redirects()
     {
         var templateId = Guid.NewGuid();

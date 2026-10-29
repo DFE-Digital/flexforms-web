@@ -101,9 +101,8 @@ public class ApplicationsModel(
         }
         catch (ExternalApplicationsException ex) when (ex.StatusCode == 400)
         {
-            message = ex.Response?.Contains("already the lead applicant", StringComparison.OrdinalIgnoreCase) == true
-                ? "This user is already the lead applicant."
-                : "This user is already the lead applicant.";
+            if (ex.Response?.Contains("already the lead applicant", StringComparison.OrdinalIgnoreCase) == true)
+                message = "This user is already the lead applicant.";
         }
         catch (Exception ex)
         {
