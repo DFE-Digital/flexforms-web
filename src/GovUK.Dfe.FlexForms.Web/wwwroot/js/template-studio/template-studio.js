@@ -1359,38 +1359,7 @@
     // Once applications have answers saved under an id, renaming it is a retirement plus a replacement that keeps
     // the old reporting key. Renaming a replacement back undoes that. Reusing some other retired id is not allowed.
     function answerIdRenamed(path, before, after) {
-        if (!before || before === after) return '';
-        var node = doc.get(path);
-        var parentFieldId = doc.fieldKeyOf(path).parentFieldId;
-        var retired = doc.root.retiredFields || [];
-        var retirementOfAfter = retired.find(function (entry) {
-            return lib.fieldKey(entry.parentFieldId, entry.fieldId) === lib.fieldKey(parentFieldId, after);
-        });
-        var renamingBack = !!(retirementOfAfter && (retirementOfAfter.replacedBy || []).some(function (id) {
-            return String(id).toLowerCase() === String(before).toLowerCase();
-        }));
-
-        if (retirementOfAfter && !renamingBack) {
-            node.fieldId = before;
-            return '"' + after + '" is already retired, choose another id';
-        }
-
-        (doc.root.retiredFields || []).forEach(function (entry) {
-            if (entry.replacedBy) entry.replacedBy = entry.replacedBy.map(function (id) { return id === before ? after : id; });
-        });
-
-        if (renamingBack) {
-            doc.unretire({ fieldId: after, parentFieldId: parentFieldId });
-            var original = baselineFor({ fieldId: after, parentFieldId: parentFieldId });
-            if (original && node.semanticKey === original.semanticKey) delete node.semanticKey;
-            return '';
-        }
-
-        var previous = inUse() ? baselineFor({ fieldId: before, parentFieldId: parentFieldId }) : null;
-        if (!previous) return '';
-        doc.retire({ fieldId: before, parentFieldId: parentFieldId }, [after]);
-        if (!node.semanticKey) node.semanticKey = previous.semanticKey;
-        return 'Applications already have answers saved as "' + before + '", so it is retired and replaced by "' + after + '", which keeps its reporting key.';
+        return doc.applyAnswerIdRename(path, before, after, { inUse: inUse(), baselineRoot: baselineRoot });
     }
 
     function addForm(options) {

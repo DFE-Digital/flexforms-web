@@ -148,6 +148,7 @@ public class TemplateStudioModel(
         await templateSelectionService.SelectTemplateAsync(HttpContext, SelectedTemplate, cancellationToken);
         HttpContext.Session.SetString(TemplateVersionSessionKey, state.NewVersion!);
         await HttpContext.Session.CommitAsync(cancellationToken);
+        CurrentVersionNumber = state.NewVersion;
 
         return RedirectToStudio(saved: state.NewVersion);
     }
@@ -160,7 +161,8 @@ public class TemplateStudioModel(
         var state = await LoadSelectedTemplateAsync(
             cancellationToken,
             selectFirstWhenNone: false,
-            requestedTemplateId: SelectedTemplateId);
+            requestedTemplateId: SelectedTemplateId,
+            requestedVersion: SelectedVersionNumber);
         if (state is null || SelectedTemplate is null)
         {
             ModelState.AddModelError(string.Empty, TemplateManagerMessages.GrantRequiresTemplate);

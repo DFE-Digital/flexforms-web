@@ -270,6 +270,55 @@ test('does not treat swapped answer ids as a removal', () => {
     assert.equal(issues.some(issue => /already retired/.test(issue.message)), false);
 });
 
+test('does not retire an answer id that is still live on another question', () => {
+    const baseline = template();
+    const doc = load();
+    const hasTrustPath = TRUST_PAGES.concat([0, 'fields', 0]);
+    const trustNamePath = TRUST_PAGES.concat([1, 'fields', 0]);
+    doc.get(hasTrustPath).fieldId = 'trustName';
+    doc.get(trustNamePath).fieldId = 'hasTrust';
+    const note = doc.applyAnswerIdRename(trustNamePath, 'trustName', 'hasTrust', { inUse: true, baselineRoot: baseline });
+    assert.equal(note, '');
+    assert.deepEqual(doc.root.retiredFields || [], []);
+    assert.equal(doc.get(trustNamePath).semanticKey, 'TrustName');
+});
+
+test('retires an answer id that is no longer live once applications use the template', () => {
+    const baseline = template();
+    const doc = load();
+    const path = TRUST_PAGES.concat([1, 'fields', 0]);
+    doc.get(path).fieldId = 'trustTitle';
+    const note = doc.applyAnswerIdRename(path, 'trustName', 'trustTitle', { inUse: true, baselineRoot: baseline });
+    assert.match(note, /retired and replaced by "trustTitle"/);
+    assert.deepEqual(doc.root.retiredFields, [{ fieldId: 'trustName', replacedBy: ['trustTitle'] }]);
+    assert.equal(doc.get(path).semanticKey, 'TrustName');
+});
+
+test('keeps a custom reporting key when an answer is renamed back to its original id', () => {
+    const baseline = template();
+    const doc = load();
+    const path = TRUST_PAGES.concat([1, 'fields', 0]);
+    doc.get(path).fieldId = 'trustTitle';
+    doc.applyAnswerIdRename(path, 'trustName', 'trustTitle', { inUse: true, baselineRoot: baseline });
+    doc.get(path).fieldId = 'trustName';
+    doc.applyAnswerIdRename(path, 'trustTitle', 'trustName', { inUse: true, baselineRoot: baseline });
+    assert.equal(doc.get(path).semanticKey, 'TrustName');
+    assert.deepEqual(doc.root.retiredFields, []);
+});
+
+test('drops a reporting key that only repeated the restored answer id', () => {
+    const baseline = template();
+    const doc = load();
+    const path = TRUST_PAGES.concat([0, 'fields', 0]);
+    doc.get(path).fieldId = 'hasTrustNow';
+    doc.applyAnswerIdRename(path, 'hasTrust', 'hasTrustNow', { inUse: true, baselineRoot: baseline });
+    assert.equal(doc.get(path).semanticKey, 'hasTrust');
+    doc.get(path).fieldId = 'hasTrust';
+    doc.applyAnswerIdRename(path, 'hasTrustNow', 'hasTrust', { inUse: true, baselineRoot: baseline });
+    assert.equal(doc.get(path).semanticKey, undefined);
+    assert.deepEqual(doc.root.retiredFields, []);
+});
+
 test('treats questions in a repeatable list as belonging to the list', () => {
     const doc = load();
     const flowPath = ['taskGroups', 0, 'tasks', 1, 'summary', 'flows', 0];

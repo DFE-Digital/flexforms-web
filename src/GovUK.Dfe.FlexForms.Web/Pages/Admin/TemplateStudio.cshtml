@@ -148,6 +148,7 @@
 </div>
 <form method="post" asp-page-handler="GrantToAllUsers" id="grant-template-to-all-users-form">
     <input type="hidden" name="SelectedTemplateId" value="@Model.SelectedTemplate.TemplateId" />
+    <input type="hidden" name="SelectedVersionNumber" value="@Model.CurrentVersionNumber" />
 </form>
 
 @if (Model.LoadError is not null)

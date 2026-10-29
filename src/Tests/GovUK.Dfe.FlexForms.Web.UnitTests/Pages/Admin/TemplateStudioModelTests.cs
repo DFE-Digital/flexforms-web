@@ -291,6 +291,7 @@ public class TemplateStudioModelTests
 
         var redirect = Assert.IsType<RedirectToPageResult>(result);
         Assert.Equal(_template.TemplateId, redirect.RouteValues!["templateId"]);
+        Assert.Equal("1.0.4", redirect.RouteValues["version"]);
         await _admin.Received(1).CreateVersionAsync(Arg.Any<TemplateManagerWorkState>(), _template.TemplateId, Arg.Any<CancellationToken>());
         await _admin.DidNotReceive().CreateVersionAsync(Arg.Any<TemplateManagerWorkState>(), other.TemplateId, Arg.Any<CancellationToken>());
         await _selection.Received().SelectTemplateAsync(Arg.Any<HttpContext>(), _template, Arg.Any<CancellationToken>());
@@ -316,7 +317,9 @@ public class TemplateStudioModelTests
     public async Task OnPostGrantToAllUsersAsync_ShouldGrantThePostedTemplate()
     {
         GivenStoredVersion("1.0.3");
+        _session.SetString("TemplateVersionNumber", "9.9.9");
         _model.SelectedTemplateId = _template.TemplateId;
+        _model.SelectedVersionNumber = "1.0.3";
         _model.TempData = new TempDataDictionary(_model.HttpContext, Substitute.For<ITempDataProvider>());
         _admin.GrantToAllUsersAsync(Arg.Any<TemplateManagerWorkState>(), _template.TemplateId, Arg.Any<CancellationToken>())
             .Returns(call =>
@@ -329,6 +332,7 @@ public class TemplateStudioModelTests
 
         var redirect = Assert.IsType<RedirectToPageResult>(result);
         Assert.Equal(_template.TemplateId, redirect.RouteValues!["templateId"]);
+        Assert.Equal("1.0.3", redirect.RouteValues["version"]);
         Assert.Equal(
             "Granted to 3 user(s). 2 already had access. Total tenant users checked: 5.",
             _model.TempData["TemplateStudioGrantSummary"]);
@@ -351,6 +355,7 @@ public class TemplateStudioModelTests
 
         var redirect = Assert.IsType<RedirectToPageResult>(result);
         Assert.Equal("1.0.4", redirect.RouteValues!["saved"]);
+        Assert.Equal("1.0.4", redirect.RouteValues["version"]);
         await _admin.Received(1).CreateVersionAsync(
             Arg.Is<TemplateManagerWorkState>(state =>
                 state.NewVersion == "1.0.4" && state.NewSchema == StoredSchema && state.AcknowledgeReportingImpact),
@@ -508,8 +513,9 @@ public class TemplateStudioModelTests
             .Returns(call =>
             {
                 var state = call.Arg<TemplateManagerWorkState>();
+                var loaded = string.IsNullOrWhiteSpace(state.SessionVersionNumber) ? version : state.SessionVersionNumber.Trim();
                 state.AvailableVersions = [new TemplateVersionSummaryDto { TemplateId = _template.TemplateId, TemplateVersionId = Guid.NewGuid(), VersionNumber = version, CreatedOn = DateTime.UtcNow }];
-                state.CurrentVersionNumber = version;
+                state.CurrentVersionNumber = loaded;
                 state.LatestVersionNumber = version;
                 state.CurrentTemplateJson = StoredSchema;
                 return Task.CompletedTask;
