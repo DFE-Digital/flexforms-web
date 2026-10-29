@@ -82,6 +82,36 @@ public class PostedFormDataBinderTests
         Assert.Equal("2024-2-31", data["dob"]);
     }
 
+    [Fact]
+    public void ApplyDateParts_encodes_html_instead_of_storing_tags()
+    {
+        var data = new Dictionary<string, object>();
+        var form = Fields(
+            ("Data[notes]-day", ["<script>"]),
+            ("Data[notes]-month", ["1"]),
+            ("Data[notes]-year", ["2024"]));
+
+        _binder.ApplyDateParts(form, data);
+
+        Assert.DoesNotContain("<script>", data["notes"].ToString());
+        Assert.Contains("&lt;script&gt;", data["notes"].ToString());
+    }
+
+    [Fact]
+    public void ApplyDateParts_does_not_turn_decimal_day_into_a_valid_date()
+    {
+        var data = new Dictionary<string, object>();
+        var form = Fields(
+            ("Data[dob]-day", ["1.5"]),
+            ("Data[dob]-month", ["1"]),
+            ("Data[dob]-year", ["2024"]));
+
+        _binder.ApplyDateParts(form, data);
+
+        Assert.Equal("2024-1-1.5", data["dob"]);
+        Assert.NotEqual("2024-01-15", data["dob"]);
+    }
+
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> Fields(
         params (string Key, string[] Values)[] items) =>
         items.ToDictionary(i => i.Key, i => (IReadOnlyList<string>)i.Values, StringComparer.Ordinal);

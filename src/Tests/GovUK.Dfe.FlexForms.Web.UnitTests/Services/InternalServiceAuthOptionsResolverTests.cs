@@ -98,6 +98,49 @@ public class InternalServiceAuthOptionsResolverTests
     }
 
     [Fact]
+    public void Resolve_ShouldNotFallBackToHost_WhenTenantIsResolvedWithoutSection()
+    {
+        var hostConfig = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["InternalServiceAuth:SecretKey"] = "host-secret-key-32chars-minimum!!",
+                ["InternalServiceAuth:Services:0:Email"] = "host@service.com",
+                ["InternalServiceAuth:Services:0:ApiKey"] = "host-api-key"
+            })
+            .Build();
+
+        var tenantConfig = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Layout:ServiceName"] = "Transfers"
+            })
+            .Build();
+
+        var tenantContext = Substitute.For<ITenantRequestContext>();
+        tenantContext.TenantId.Returns(Guid.NewGuid());
+        tenantContext.TenantName.Returns("Transfers");
+        tenantContext.TenantConfiguration.Returns(tenantConfig);
+
+        var httpContext = new DefaultHttpContext();
+        var services = new ServiceCollection();
+        services.AddSingleton(tenantContext);
+        httpContext.RequestServices = services.BuildServiceProvider();
+
+        var accessor = Substitute.For<IHttpContextAccessor>();
+        accessor.HttpContext.Returns(httpContext);
+
+        var resolver = new InternalServiceAuthOptionsResolver(
+            accessor,
+            hostConfig,
+            NullLogger<InternalServiceAuthOptionsResolver>.Instance);
+
+        var options = resolver.Resolve();
+
+        Assert.True(string.IsNullOrEmpty(options.SecretKey));
+        Assert.Empty(options.Services);
+    }
+
+    [Fact]
     public void Resolve_ShouldFallBackToHost_WhenTenantContextIsEmptyPlaceholder()
     {
         var hostConfig = new ConfigurationBuilder()

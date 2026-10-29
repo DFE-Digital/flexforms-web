@@ -48,9 +48,8 @@ public sealed class InternalServiceAuthOptionsResolver(
         }
 
         logger.LogWarning(
-            "Tenant '{TenantName}' has no InternalServiceAuth section; falling back to host secrets. " +
-            "Configure a per-tenant InternalServiceAuth setting to isolate service credentials.",
+            "Tenant '{TenantName}' has no InternalServiceAuth section; refusing host secret fallback.",
             tenantContext!.TenantName ?? tenantContext.TenantId!.Value.ToString());
-        return hostOptions;
+        return new InternalServiceAuthOptions();
     }
 }

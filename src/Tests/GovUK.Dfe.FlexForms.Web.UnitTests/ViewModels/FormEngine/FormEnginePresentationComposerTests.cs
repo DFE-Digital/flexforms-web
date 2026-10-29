@@ -57,6 +57,25 @@ public class FormEnginePresentationComposerTests
     }
 
     [Fact]
+    public void BuildPreview_encodes_raw_script_in_stored_text_answer()
+    {
+        var text = Field("notes", "text", "Notes");
+        var task = Task("t1", "About you", pages: [Page("p1", [text])]);
+        var formData = new Dictionary<string, object>
+        {
+            ["notes"] = "<script>alert(1)</script>"
+        };
+
+        _formatting.GetFieldValue("notes", formData).Returns("<script>alert(1)</script>");
+        _formatting.HasFieldValue("notes", formData).Returns(true);
+
+        var preview = _composer.BuildPreview(Context(formData, Template(task)));
+        var html = preview.Groups.Single().Tasks.Single().Rows.Single().Value.Html;
+
+        Assert.Equal("&lt;script&gt;alert(1)&lt;/script&gt;", html);
+    }
+
+    [Fact]
     public void BuildPreview_renders_upload_json_as_download_links()
     {
         var fileId = Guid.NewGuid();
@@ -547,6 +566,43 @@ public class FormEnginePresentationComposerTests
         Assert.Contains("Contoso Trust", rows[0].Value.Html);
         Assert.Equal(SummaryDisplayKind.HtmlList, rows[1].Value.Kind);
         Assert.Contains("Lead", rows[1].Value.HtmlItems[0]);
+    }
+
+    [Fact]
+    public void BuildCollectionFlows_encodes_raw_html_in_multi_value_answers()
+    {
+        var checkboxField = Field("roles", "checkboxes", "Roles", [
+            new Option { Value = "lead", Label = "Lead" }
+        ]);
+        var flow = new MultiCollectionFlowConfiguration
+        {
+            FlowId = "members",
+            FieldId = "memberList",
+            Title = "Members",
+            TableType = "card",
+            SummaryColumns = [new FlowSummaryColumn { Field = "roles", Label = "Roles" }],
+            Pages = [Page("p1", [checkboxField])]
+        };
+        var task = Task("t1", "Team", mode: FormStepPolicy.MultiCollectionFlowMode, flows: [flow]);
+        var items = JsonSerializer.Serialize(new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["id"] = "i1",
+                ["roles"] = new[] { "lead" }
+            }
+        });
+        var formData = new Dictionary<string, object> { ["memberList"] = items };
+
+        _formatting.GetFormattedFieldValues("roles", Arg.Any<Dictionary<string, object>>())
+            .Returns(["<script>alert(1)</script>", "Member"]);
+
+        var value = _composer.BuildCollectionFlows(Context(formData, Template(task), taskId: "t1"), task)
+            .Single().Items.Single().Rows.Single().Value;
+
+        Assert.Equal(SummaryDisplayKind.HtmlList, value.Kind);
+        Assert.Equal("&lt;script&gt;alert(1)&lt;/script&gt;", value.HtmlItems[0]);
+        Assert.DoesNotContain("<script>", value.HtmlItems[0]);
     }
 
     [Fact]
@@ -1338,6 +1394,30 @@ public class FormEnginePresentationComposerTests
 
         Assert.Equal(SummaryDisplayKind.HtmlList, value.Kind);
         Assert.Equal(new[] { "Lead", "Deputy" }, value.HtmlItems.ToArray());
+    }
+
+    [Fact]
+    public void BuildPreview_collection_flow_encodes_raw_html_in_multi_value_answers()
+    {
+        var flow = CollectionFlow(
+            "members",
+            "memberList",
+            "Members",
+            summaryColumns: [new FlowSummaryColumn { Field = "role", Label = "Role" }]);
+        var task = Task("t1", "Team", mode: FormStepPolicy.MultiCollectionFlowMode, flows: [flow]);
+        var formData = ItemsFormData(
+            "memberList",
+            new Dictionary<string, object> { ["id"] = "i1", ["role"] = "Lead" });
+
+        _formatting.GetFormattedFieldValues("role", Arg.Any<Dictionary<string, object>>())
+            .Returns(["<script>alert(1)</script>", "Deputy"]);
+
+        var value = _composer.BuildPreview(Context(formData, Template(task)))
+            .Groups.Single().Tasks.Single().Rows[2].Value;
+
+        Assert.Equal(SummaryDisplayKind.HtmlList, value.Kind);
+        Assert.Equal("&lt;script&gt;alert(1)&lt;/script&gt;", value.HtmlItems[0]);
+        Assert.DoesNotContain("<script>", value.HtmlItems[0]);
     }
 
     [Fact]

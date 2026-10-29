@@ -121,17 +121,17 @@
                                     
                                         if (uploadFiles == null || !uploadFiles.Any())
                                         {
-                                            @Html.Raw(formattedValues.FirstOrDefault())
+                                            @Html.Raw(StoredAnswerHtml.ToSafeLineBreaks(formattedValues.FirstOrDefault()))
                                         }
                                     }
                                     catch
                                     {
-                                        @Html.Raw(formattedValues.FirstOrDefault())
+                                        @Html.Raw(StoredAnswerHtml.ToSafeLineBreaks(formattedValues.FirstOrDefault()))
                                     }
                                 }
                                 else
                                 {
-                                    @Html.Raw(formattedValues.FirstOrDefault())
+                                    @Html.Raw(StoredAnswerHtml.ToSafeLineBreaks(formattedValues.FirstOrDefault()))
                                 }
                             }
                             else if (isAutocompleteField)
@@ -141,7 +141,7 @@
                             }
                             else
                             {
-                                @Html.Raw(formattedValues.FirstOrDefault())
+                                @Html.Raw(StoredAnswerHtml.ToSafeLineBreaks(formattedValues.FirstOrDefault()))
                             }
                         }
                     </dd>
@@ -208,7 +208,7 @@
                                             @itemLabel @(index + 1)
                                         </dt>
                                         <dd class="govuk-summary-list__value">
-                                            @Html.Raw(value)
+                                            @Html.Raw(StoredAnswerHtml.ToSafeLineBreaks(value))
                                         </dd>
                                         <dd class="govuk-summary-list__actions">
                                             @if (Model.IsApplicationEditable())
@@ -277,7 +277,7 @@
                                     @itemLabel @(index + 1)
                                 </dt>
                                 <dd class="govuk-summary-list__value">
-                                    @Html.Raw(value)
+                                    @Html.Raw(StoredAnswerHtml.ToSafeLineBreaks(value))
                                 </dd>
                                 <dd class="govuk-summary-list__actions">
                                     @if (Model.IsApplicationEditable())
@@ -411,7 +411,7 @@
                             else
                             {
                                 var displayVal = string.IsNullOrEmpty(formattedFieldValue) ? fieldValue : formattedFieldValue;
-                                @Html.Raw(displayVal.Replace("\r\n", "<br/>").Replace("\r", "<br/>").Replace("\n", "<br/>"))
+                                @Html.Raw(StoredAnswerHtml.ToSafeLineBreaks(displayVal))
                             }
                         }
                         else

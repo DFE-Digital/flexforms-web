@@ -19,17 +19,18 @@ public class TenantIdResolverHostnameTests
     }
 
     [Fact]
-    public void ResolvePublicHostname_PrefersForwardedHost_WhenPresent()
+    public void ResolvePublicHostname_IgnoresForwardedAndOriginalHostHeaders()
     {
         var context = new DefaultHttpContext();
-        context.Request.Host = new HostString("s184d01-extapp-flexformsweb.agreeabledune-8224bf9e.westeurope.azurecontainerapps.io");
+        context.Request.Host = new HostString(
+            "s184d01-extapp-flexformsweb.agreeabledune-8224bf9e.westeurope.azurecontainerapps.io");
         context.Request.Headers["X-Forwarded-Host"] = "visits.dev-flexforms.rsd.education.gov.uk";
-        context.Request.Headers["X-Original-Host"] =
-            "s184d01-extapp-flexformsweb.agreeabledune-8224bf9e.westeurope.azurecontainerapps.io";
+        context.Request.Headers["X-Original-Host"] = "visits.dev-flexforms.rsd.education.gov.uk";
 
         var host = TenantIdResolver.ResolvePublicHostname(context);
 
-        Assert.Equal("visits.dev-flexforms.rsd.education.gov.uk", host);
+        Assert.Null(host);
+        Assert.True(TenantIdResolver.IsNonPublicHostRequest(context));
     }
 
     [Fact]
@@ -46,11 +47,118 @@ public class TenantIdResolverHostnameTests
     }
 
     [Fact]
+    public void HasConflictingPublicHostnames_IsTrue_WhenForwardedAndRequestHostDiffer()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Host = new HostString("a.example.gov.uk");
+        context.Request.Headers["X-Forwarded-Host"] = "b.example.gov.uk";
+
+        Assert.True(TenantIdResolver.HasConflictingPublicHostnames(context));
+    }
+
+    [Fact]
     public void IsNonPublicHostRequest_IsFalse_ForPublicTenantHost()
     {
         var context = new DefaultHttpContext();
         context.Request.Host = new HostString("visits.flexforms.rsd.education.gov.uk");
 
         Assert.False(TenantIdResolver.IsNonPublicHostRequest(context));
+    }
+
+    [Theory]
+    [InlineData("10.0.0.1")]
+    [InlineData("127.0.0.1")]
+    [InlineData("169.254.1.1")]
+    [InlineData("172.16.0.1")]
+    [InlineData("172.31.255.255")]
+    [InlineData("192.168.1.1")]
+    [InlineData("::1")]
+    [InlineData("fe80::1")]
+    [InlineData("fec0::1")]
+    [InlineData("fd12:3456:789a:1::1")]
+    public void ResolvePublicHostname_RejectsPrivateAndLocalIpHosts(string host)
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Host = new HostString(host);
+
+        Assert.Null(TenantIdResolver.ResolvePublicHostname(context));
+        Assert.True(TenantIdResolver.IsNonPublicHostRequest(context));
+    }
+
+    [Theory]
+    [InlineData("8.8.8.8")]
+    [InlineData("172.15.0.1")]
+    [InlineData("172.32.0.1")]
+    [InlineData("2001:4860:4860::8888")]
+    public void ResolvePublicHostname_AcceptsPublicIpHosts(string host)
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Host = new HostString(host);
+
+        Assert.Equal(host, TenantIdResolver.ResolvePublicHostname(context));
+    }
+
+    [Fact]
+    public void ResolvePublicHostname_AcceptsLocalhostAndDotLocalhost()
+    {
+        var localhost = new DefaultHttpContext();
+        localhost.Request.Host = new HostString("localhost");
+        Assert.Equal("localhost", TenantIdResolver.ResolvePublicHostname(localhost));
+
+        var dotted = new DefaultHttpContext();
+        dotted.Request.Host = new HostString("visits.localhost");
+        Assert.Equal("visits.localhost", TenantIdResolver.ResolvePublicHostname(dotted));
+    }
+
+    [Fact]
+    public void HasConflictingPublicHostnames_UsesLeftmostForwardedHost_AndStripsPort()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Host = new HostString("other.example.gov.uk");
+        context.Request.Headers["X-Forwarded-Host"] = "visits.example.gov.uk:443, proxy.internal";
+
+        Assert.True(TenantIdResolver.HasConflictingPublicHostnames(context));
+    }
+
+    [Fact]
+    public void HasConflictingPublicHostnames_IsFalse_WhenHostsMatchIgnoringCase()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Host = new HostString("Visits.Example.Gov.Uk");
+        context.Request.Headers["X-Forwarded-Host"] = "visits.example.gov.uk";
+
+        Assert.False(TenantIdResolver.HasConflictingPublicHostnames(context));
+    }
+
+    [Fact]
+    public void HasConflictingPublicHostnames_TreatsIpv6ForwardedHostWithPort_AsSameHost()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Host = new HostString("[2001:4860:4860::8888]");
+        context.Request.Headers["X-Forwarded-Host"] = "[2001:4860:4860::8888]:443";
+
+        Assert.False(TenantIdResolver.HasConflictingPublicHostnames(context));
+    }
+
+    [Fact]
+    public void HasConflictingPublicHostnames_UsesOriginalHost_AfterForwardedHeadersRewrite()
+    {
+        var context = new DefaultHttpContext();
+        // After UseForwardedHeaders, Request.Host has already been replaced with X-Forwarded-Host.
+        context.Request.Host = new HostString("b.example.gov.uk");
+        context.Request.Headers["X-Forwarded-Host"] = "b.example.gov.uk";
+        context.Items[TenantIdResolver.OriginalRequestHostItemKey] = "a.example.gov.uk";
+
+        Assert.True(TenantIdResolver.HasConflictingPublicHostnames(context));
+    }
+
+    [Fact]
+    public void HasConflictingPublicHostnames_DetectsConflict_WhenForwardedHostHeaderWasConsumed()
+    {
+        var context = new DefaultHttpContext();
+        context.Request.Host = new HostString("b.example.gov.uk");
+        context.Items[TenantIdResolver.OriginalRequestHostItemKey] = "a.example.gov.uk";
+
+        Assert.True(TenantIdResolver.HasConflictingPublicHostnames(context));
     }
 }

@@ -1,3 +1,5 @@
+using GovUK.Dfe.FlexForms.Web.Middleware;
+using GovUK.Dfe.FlexForms.Web.Tenancy;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 using System.Diagnostics.CodeAnalysis;
@@ -15,6 +17,7 @@ public class TestAuthenticationHandler : AuthenticationHandler<TestAuthenticatio
     {
         public const string Email = "TestAuth:Email";
         public const string Token = "TestAuth:Token";
+        public const string TenantId = "TestAuth:TenantId";
     }
 
     private static class TokenNames
@@ -38,6 +41,7 @@ public class TestAuthenticationHandler : AuthenticationHandler<TestAuthenticatio
 
         var email = Context.Session.GetString(SessionKeys.Email);
         var token = Context.Session.GetString(SessionKeys.Token);
+        var sessionTenant = Context.Session.GetString(SessionKeys.TenantId);
 
         Logger.LogDebug(
             "TestAuth session check for {Path}. HasEmail: {HasEmail}, HasToken: {HasToken}",
@@ -49,7 +53,23 @@ public class TestAuthenticationHandler : AuthenticationHandler<TestAuthenticatio
             return Task.FromResult(AuthenticateResult.NoResult());
         }
 
-        var claims = CreateUserClaims(email);
+        var resolvedTenant = Context.RequestServices.GetService<ITenantRequestContext>()?.TenantId;
+        if (Guid.TryParse(sessionTenant, out var boundTenant)
+            && resolvedTenant is Guid currentTenant
+            && boundTenant != currentTenant)
+        {
+            Logger.LogWarning(
+                "TestAuthentication tenant mismatch for {Email}: session {SessionTenant} vs host {ResolvedTenant}",
+                email,
+                boundTenant,
+                currentTenant);
+            Context.Session.Remove(SessionKeys.Email);
+            Context.Session.Remove(SessionKeys.Token);
+            Context.Session.Remove(SessionKeys.TenantId);
+            return Task.FromResult(AuthenticateResult.Fail("Test authentication tenant mismatch."));
+        }
+
+        var claims = CreateUserClaims(email, sessionTenant);
         var identity = new ClaimsIdentity(claims, SchemeName);
         var principal = new ClaimsPrincipal(identity);
         var ticket = new AuthenticationTicket(principal, CreateAuthenticationProperties(token), SchemeName);
@@ -74,16 +94,21 @@ public class TestAuthenticationHandler : AuthenticationHandler<TestAuthenticatio
         return Task.CompletedTask;
     }
 
-    private static IEnumerable<Claim> CreateUserClaims(string email)
+    private static IEnumerable<Claim> CreateUserClaims(string email, string? sessionTenant)
     {
-        return new[]
+        var claims = new List<Claim>
         {
-            new Claim(ClaimTypes.Name, email),
-            new Claim(ClaimTypes.Email, email),
-            new Claim(ClaimTypes.NameIdentifier, email),
-            new Claim("sub", email),
-            new Claim("email", email)
+            new(ClaimTypes.Name, email),
+            new(ClaimTypes.Email, email),
+            new(ClaimTypes.NameIdentifier, email),
+            new("sub", email),
+            new("email", email)
         };
+
+        if (Guid.TryParse(sessionTenant, out _))
+            claims.Add(new Claim(TenantSessionBindingMiddleware.TenantIdClaimType, sessionTenant!));
+
+        return claims;
     }
 
     private static AuthenticationProperties CreateAuthenticationProperties(string token)

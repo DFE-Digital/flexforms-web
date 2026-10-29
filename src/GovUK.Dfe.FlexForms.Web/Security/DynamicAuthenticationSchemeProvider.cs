@@ -4,6 +4,7 @@ using GovUK.Dfe.CoreLibs.Security.EntraSso;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace GovUK.Dfe.FlexForms.Web.Security;
@@ -19,7 +20,9 @@ public class DynamicAuthenticationSchemeProvider(
     IOptions<AuthenticationOptions> options,
     IHttpContextAccessor httpContextAccessor,
     IOptions<TestAuthenticationOptions> testAuthOptions,
-    IOptions<EntraSsoOptions> entraSsoOptions)
+    IOptions<EntraSsoOptions> entraSsoOptions,
+    IHostEnvironment hostEnvironment,
+    IConfiguration configuration)
     : AuthenticationSchemeProvider(options)
 {
     private InteractiveAuthScheme ResolveInteractiveScheme()
@@ -33,7 +36,8 @@ public class DynamicAuthenticationSchemeProvider(
         var httpContext = httpContextAccessor.HttpContext;
         if (httpContext == null) return false;
 
-        return httpContext.Request.Headers.ContainsKey("x-service-email");
+        return InternalServiceAuthEnvironmentGate.IsAllowed(hostEnvironment, configuration)
+               && httpContext.Request.Headers.ContainsKey("x-service-email");
     }
 
     private string GetDefaultIdpScheme()

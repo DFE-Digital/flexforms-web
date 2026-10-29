@@ -84,6 +84,11 @@ public sealed class TenantConfigurationMiddleware(
                 await next(context);
             }
         }
+        catch (TenantHostnameConflictException ex)
+        {
+            logger.LogWarning(ex, "Rejected tenant resolution for {Method} {Path}", context.Request.Method, context.Request.Path);
+            await WriteErrorAsync(context, "Could not resolve tenant from request.");
+        }
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
         {
             logger.LogDebug(

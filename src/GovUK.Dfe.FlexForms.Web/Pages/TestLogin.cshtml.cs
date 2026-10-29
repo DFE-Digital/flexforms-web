@@ -154,7 +154,9 @@ public class TestLoginModel : PageModel
             return Page();
         }
 
-        var redirectUrl = ReturnUrl ?? result.RedirectUrl ?? "applications/dashboard";
+        var redirectUrl = LocalRedirects.OrFallback(
+            ReturnUrl ?? result.RedirectUrl,
+            "/applications/dashboard");
         return Redirect(redirectUrl);
     }
 
