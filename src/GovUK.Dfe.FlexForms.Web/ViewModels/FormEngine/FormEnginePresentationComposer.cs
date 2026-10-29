@@ -140,7 +140,7 @@ public sealed class FormEnginePresentationComposer(
                         rows.Add(new SummaryRowViewModel
                         {
                             Key = field.Label.Value,
-                            Value = BuildDerivedFieldValue(context, task, field, fieldValue)
+                            Value = BuildDerivedFieldValue(context, task, field, fieldValue, declarationData)
                         });
                     }
                 }
@@ -154,7 +154,8 @@ public sealed class FormEnginePresentationComposer(
         FormEnginePresentationContext context,
         TaskModel task,
         Field field,
-        string fieldValue)
+        string fieldValue,
+        IReadOnlyDictionary<string, object> itemData)
     {
         if (string.IsNullOrEmpty(fieldValue))
             return SummaryValueViewModel.NotAnswered;
@@ -184,17 +185,12 @@ public sealed class FormEnginePresentationComposer(
             return FromStored(selectedOption?.Label ?? fieldValue);
         }
 
-        if (field.Type == "checkboxes" && field.Options != null)
+        if (field.Type == "checkboxes")
         {
-            var selectedValues = fieldFormattingService.GetFormattedFieldValues(field.FieldId, context.FormData);
-            var selectedLabels = field.Options
-                .Where(o => selectedValues.Contains(o.Value))
-                .Select(o => o.Label ?? o.Value)
-                .ToList();
-
-            return selectedLabels.Count > 0
-                ? SummaryValueViewModel.FromCheckboxes(selectedLabels)
-                : SummaryValueViewModel.FromHtml(ToHtmlBreaks(fieldValue));
+            var checkboxData = itemData is Dictionary<string, object> dict
+                ? dict
+                : itemData.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+            return BuildCheckboxSummaryValue(field, checkboxData);
         }
 
         return SummaryValueViewModel.FromHtml(ToHtmlBreaks(fieldValue));
@@ -458,7 +454,35 @@ public sealed class FormEnginePresentationComposer(
             return SummaryValueViewModel.FromText(selectedOption?.Label ?? fieldValue);
         }
 
+        if (field.Type == "checkboxes")
+            return BuildCheckboxSummaryValue(field, context.FormData);
+
         return SummaryValueViewModel.FromHtml(ToHtmlBreaks(fieldValue));
+    }
+
+    private static SummaryValueViewModel BuildCheckboxSummaryValue(
+        Field field,
+        Dictionary<string, object> formData)
+    {
+        var normalized = CheckboxValueNormalizer.Normalize(
+            formData.TryGetValue(field.FieldId, out var raw) ? raw : null);
+        if (normalized.Count == 0)
+            return SummaryValueViewModel.NotAnswered;
+
+        if (field.Options is null || field.Options.Count == 0)
+            return SummaryValueViewModel.FromHtml(ToHtmlBreaks(string.Join("<br />", normalized)));
+
+        var labels = normalized
+            .Select(value =>
+            {
+                var option = field.Options?.FirstOrDefault(o =>
+                    string.Equals(o.Value, value, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(o.Label, value, StringComparison.OrdinalIgnoreCase));
+                return option?.Label ?? option?.Value ?? value;
+            })
+            .ToList();
+
+        return SummaryValueViewModel.FromCheckboxes(labels);
     }
 
     private CollectionFlowSectionViewModel BuildCollectionSection(

@@ -57,6 +57,30 @@ public class FormEnginePresentationComposerTests
     }
 
     [Fact]
+    public void BuildPreview_renders_checkbox_selections_as_bullet_list_not_json()
+    {
+        var priorities = Field("nationalPriorities", "checkboxes", "Priorities", [
+            new Option { Value = "Attendance concerns", Label = "Attendance concerns" },
+            new Option { Value = "Attainment", Label = "Attainment" }
+        ]);
+        var task = Task("t1", "Engagement", pages: [Page("p1", [priorities])]);
+        var formData = new Dictionary<string, object>
+        {
+            ["nationalPriorities"] = new[] { "Attendance concerns", "Attainment" }
+        };
+
+        _formatting.GetFieldValue("nationalPriorities", formData)
+            .Returns("""["Attendance concerns","Attainment"]""");
+        _formatting.HasFieldValue("nationalPriorities", formData).Returns(true);
+
+        var row = _composer.BuildPreview(Context(formData, Template(task)))
+            .Groups.Single().Tasks.Single().Rows.Single();
+
+        Assert.Equal(SummaryDisplayKind.Checkboxes, row.Value.Kind);
+        Assert.Equal(["Attendance concerns", "Attainment"], row.Value.Checkboxes);
+    }
+
+    [Fact]
     public void BuildPreview_encodes_raw_script_in_stored_text_answer()
     {
         var text = Field("notes", "text", "Notes");
@@ -1273,8 +1297,8 @@ public class FormEnginePresentationComposerTests
         var value = _composer.BuildPreview(Context(new Dictionary<string, object>(), Template(task)))
             .Groups.Single().Tasks.Single().Rows[2].Value;
 
-        Assert.Equal(SummaryDisplayKind.Html, value.Kind);
-        Assert.Equal("unknown", value.Html);
+        Assert.Equal(SummaryDisplayKind.Checkboxes, value.Kind);
+        Assert.Equal("unknown", value.Checkboxes.Single());
     }
 
     [Fact]
