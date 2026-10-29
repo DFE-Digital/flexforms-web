@@ -8,8 +8,8 @@ using NUnit.Framework;
 // Opts every fixture into NUnit's parallel executor. ParallelScope.Fixtures parallelises across
 // *fixtures* (classes) only.
 // Any fixture marked [NonParallelizable] runs in isolation
-// [assembly: Parallelizable(ParallelScope.Fixtures)]
-// [assembly: LevelOfParallelism(4)]
+[assembly: Parallelizable(ParallelScope.Fixtures)]
+[assembly: LevelOfParallelism(4)]
 
 /// <summary>
 /// Assembly-wide setup, equivalent to playwright.config.ts's load-env import and the base
