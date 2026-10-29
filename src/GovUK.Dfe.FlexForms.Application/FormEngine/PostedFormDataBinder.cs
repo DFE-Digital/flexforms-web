@@ -89,7 +89,6 @@ public sealed class PostedFormDataBinder : IPostedFormDataBinder
                 "day" => (formValue, parts.Month, parts.Year),
                 "month" => (parts.Day, formValue, parts.Year),
                 "year" => (parts.Day, parts.Month, formValue),
-                _ => parts
             };
 
             dateParts[dateFieldId] = parts;
