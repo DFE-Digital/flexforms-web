@@ -100,6 +100,69 @@ public class OrganisationSettingsAdminServiceTests
     }
 
     [Fact]
+    public async Task LoadAsync_ShouldApplyContributorsAndTaskListSettings()
+    {
+        _client.GetSafeTenantSettingsAsync(_state.TenantId, Arg.Any<CancellationToken>())
+            .Returns(new GetTenantSettingsResponse(
+                _state.TenantId,
+                "Loaded tenant",
+                [
+                    new TenantSettingDto(
+                        Guid.NewGuid(),
+                        "Contributors",
+                        "Web",
+                        """
+                        {
+                          "SectionHeading":"People helping",
+                          "InviteButtonText":"Share access",
+                          "ProceedButtonText":"Back to {singular}"
+                        }
+                        """,
+                        false,
+                        DateTime.UtcNow),
+                    new TenantSettingDto(
+                        Guid.NewGuid(),
+                        "TaskList",
+                        "Web",
+                        """{"ReviewButtonText":"Check answers","ViewButtonText":"View form"}""",
+                        false,
+                        DateTime.UtcNow)
+                ]));
+
+        await _service.LoadAsync(_state);
+
+        Assert.Equal("People helping", _state.ContributorsSectionHeading);
+        Assert.Equal("Share access", _state.ContributorsInviteButtonText);
+        Assert.Equal("Back to {singular}", _state.ContributorsProceedButtonText);
+        Assert.Equal("Check answers", _state.TaskListReviewButtonText);
+        Assert.Equal("View form", _state.TaskListViewButtonText);
+    }
+
+    [Fact]
+    public async Task SaveAsync_ShouldUpsertContributorsAndTaskListCategories()
+    {
+        _state.ContributorsSectionHeading = "Contributors";
+        _state.ContributorsInviteButtonText = "Invite someone";
+        _state.TaskListReviewButtonText = "Review plan";
+        _state.TaskListViewButtonText = "View plan";
+
+        await _service.SaveAsync(_state);
+
+        await _client.Received().UpsertSafeTenantSettingAsync(
+            _state.TenantId,
+            Arg.Is<UpsertTenantSettingRequest>(r =>
+                r.Category == "Contributors"
+                && Decode(r).Contains("Invite someone", StringComparison.Ordinal)),
+            Arg.Any<CancellationToken>());
+        await _client.Received().UpsertSafeTenantSettingAsync(
+            _state.TenantId,
+            Arg.Is<UpsertTenantSettingRequest>(r =>
+                r.Category == "TaskList"
+                && Decode(r).Contains("Review plan", StringComparison.Ordinal)),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task LoadAsync_ShouldSetError_WhenApiFails()
     {
         _client.GetSafeTenantSettingsAsync(_state.TenantId, Arg.Any<CancellationToken>())

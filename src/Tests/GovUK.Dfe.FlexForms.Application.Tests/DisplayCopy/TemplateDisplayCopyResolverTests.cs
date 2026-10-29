@@ -65,12 +65,59 @@ public class TemplateDisplayCopyResolverTests
             copy.ContributorsSectionBody);
     }
 
+    [Fact]
+    public void Resolve_UsesTenantPreviewAndTaskList_WhenTemplateFieldsAreBlank()
+    {
+        var copy = Create(
+            new TemplateCopyContext(),
+            new ApplicationTerminologyOptions { Singular = "plan", Plural = "plans" },
+            dashboard: new DashboardOptions(),
+            contributors: new ContributorsOptions(),
+            taskList: new TaskListOptions
+            {
+                ReviewButtonText = "Check {singular}",
+                ViewButtonText = "Open {singular}"
+            },
+            preview: new ApplicationPreviewOptions
+            {
+                PageHeading = "Review your {singular}",
+                SubmitHeading = "Send {singular}",
+                SubmitHint = "Confirm",
+                SubmitButtonText = "Send now"
+            });
+
+        Assert.Equal("Review your plan", copy.PreviewPageHeading);
+        Assert.Equal("Send plan", copy.PreviewSubmitHeading);
+        Assert.Equal("Confirm", copy.PreviewSubmitHint);
+        Assert.Equal("Send now", copy.PreviewSubmitButtonText);
+        Assert.Equal("Check plan", copy.ReviewButtonText);
+        Assert.Equal("Open plan", copy.ViewButtonText);
+    }
+
+    [Fact]
+    public void Resolve_SubstitutesContributorEmail_InSignInText()
+    {
+        var context = new TemplateCopyContext();
+        context.Use(Template(new TemplateDisplayCopy
+        {
+            Contributors = new TemplateContributorsCopy
+            {
+                SignInText = "Use a business email like {contributor_email}."
+            }
+        }));
+
+        var copy = Create(context, new ApplicationTerminologyOptions());
+
+        Assert.Equal("Use a business email like name@school.sch.uk.", copy.ContributorsSignInText);
+    }
+
     private static TemplateDisplayCopyResolver Create(
         ITemplateCopyContext context,
         ApplicationTerminologyOptions terminology,
         DashboardOptions? dashboard = null,
         ContributorsOptions? contributors = null,
-        TaskListOptions? taskList = null)
+        TaskListOptions? taskList = null,
+        ApplicationPreviewOptions? preview = null)
     {
         var configuration = Substitute.For<IRequestAppConfiguration>();
         configuration["Layout:ContributorEmail"].Returns("name@school.sch.uk");
@@ -78,7 +125,7 @@ public class TemplateDisplayCopyResolverTests
             context,
             Microsoft.Extensions.Options.Options.Create(terminology),
             Microsoft.Extensions.Options.Options.Create(dashboard ?? new DashboardOptions()),
-            Microsoft.Extensions.Options.Options.Create(new ApplicationPreviewOptions()),
+            Microsoft.Extensions.Options.Options.Create(preview ?? new ApplicationPreviewOptions()),
             Microsoft.Extensions.Options.Options.Create(contributors ?? new ContributorsOptions()),
             Microsoft.Extensions.Options.Options.Create(taskList ?? new TaskListOptions()),
             configuration);

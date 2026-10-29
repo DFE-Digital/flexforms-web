@@ -5,7 +5,6 @@ using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Application.Options;
 using GovUK.Dfe.FlexForms.Web.Pages.Admin;
 using GovUK.Dfe.FlexForms.Web.Services;
-using GovUK.Dfe.FlexForms.Web.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
@@ -193,5 +192,38 @@ public class ApplicationsModelTests
         var redirect = Assert.IsType<RedirectToPageResult>(result);
         Assert.Equal(templateId, (Guid)redirect.RouteValues![("selectedTemplateId")!]);
         Assert.Equal(2, redirect.RouteValues![("CurrentPage")!]);
+        Assert.Equal("That user was not found in this tenant.", _model.TempData["OwnerChangeError"]);
+    }
+
+    [Fact]
+    public async Task OnPostChangeOwnerAsync_when_successful_sets_success_message_and_redirects()
+    {
+        var templateId = Guid.NewGuid();
+        var applicationId = Guid.NewGuid();
+        _model.CurrentPage = 3;
+        _applicationOwnerClient.ChangeOwnerAsync(applicationId, "new@example.com", Arg.Any<CancellationToken>())
+            .Returns(new ApplicationOwnerChangeResult { ApplicationId = applicationId, TemplateReadGranted = false });
+
+        var result = await _model.OnPostChangeOwnerAsync(templateId, applicationId, "new@example.com", CancellationToken.None);
+
+        var redirect = Assert.IsType<RedirectToPageResult>(result);
+        Assert.Equal(templateId, (Guid)redirect.RouteValues![("selectedTemplateId")!]);
+        Assert.Equal(3, redirect.RouteValues![("CurrentPage")!]);
+        Assert.Equal("Lead applicant updated.", _model.TempData["OwnerChangeSuccess"]);
+    }
+
+    [Fact]
+    public async Task OnPostChangeOwnerAsync_when_template_read_granted_mentions_template_access()
+    {
+        var templateId = Guid.NewGuid();
+        var applicationId = Guid.NewGuid();
+        _applicationOwnerClient.ChangeOwnerAsync(applicationId, "new@example.com", Arg.Any<CancellationToken>())
+            .Returns(new ApplicationOwnerChangeResult { ApplicationId = applicationId, TemplateReadGranted = true });
+
+        await _model.OnPostChangeOwnerAsync(templateId, applicationId, "new@example.com", CancellationToken.None);
+
+        Assert.Equal(
+            "Lead applicant updated. They were given read access to this template.",
+            _model.TempData["OwnerChangeSuccess"]);
     }
 }
