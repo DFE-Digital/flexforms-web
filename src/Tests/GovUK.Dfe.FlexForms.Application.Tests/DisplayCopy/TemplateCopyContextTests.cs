@@ -1,9 +1,27 @@
 using GovUK.Dfe.FlexForms.Application.DisplayCopy;
+using GovUK.Dfe.FlexForms.Domain.Models;
 
 namespace GovUK.Dfe.FlexForms.Application.Tests.DisplayCopy;
 
 public class TemplateCopyContextTests
 {
+    [Fact]
+    public void Use_SetsTheActiveTemplate()
+    {
+        var context = new TemplateCopyContext();
+        var template = new FormTemplate
+        {
+            TemplateId = "form-001",
+            TemplateName = "Visits",
+            Description = "Visits",
+            TaskGroups = []
+        };
+
+        context.Use(template);
+
+        Assert.Same(template, context.Template);
+    }
+
     [Fact]
     public void TryUseJson_ReturnsFalse_WhenJsonIsBlank()
     {

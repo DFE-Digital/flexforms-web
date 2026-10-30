@@ -111,6 +111,135 @@ public class TemplateDisplayCopyResolverTests
         Assert.Equal("Use a business email like name@school.sch.uk.", copy.ContributorsSignInText);
     }
 
+    [Fact]
+    public void Resolve_ExposesCapitalisedTerminology_FromResolvedSingularAndPlural()
+    {
+        var copy = Create(
+            new TemplateCopyContext(),
+            new ApplicationTerminologyOptions { Singular = "visit", Plural = "visits" });
+
+        Assert.Equal("Visit", copy.SingularCapitalised);
+        Assert.Equal("Visits", copy.PluralCapitalised);
+        Assert.Equal("Visits in progress", copy.DashboardInProgressHeading);
+    }
+
+    [Fact]
+    public void Resolve_UsesTenantDashboardAndContributorDefaults_WhenTemplateCopyIsMissing()
+    {
+        var copy = Create(
+            new TemplateCopyContext(),
+            new ApplicationTerminologyOptions { Singular = "plan", Plural = "plans" },
+            dashboard: new DashboardOptions
+            {
+                MainHeading = "Tenant {plural}",
+                InProgressHeading = "Tenant in progress",
+                StartNewHeading = "Tenant start",
+                StartNewHint = "Tenant hint",
+                StartNewButtonText = "Tenant button"
+            },
+            contributors: new ContributorsOptions
+            {
+                SectionHeading = "Helpers",
+                SectionBody = "Body for {singular}",
+                InviteButtonText = "Invite",
+                PageHeading = "Invite page",
+                Intro = "Intro for {singular}",
+                SignInText = "Sign in",
+                OnceJoinedText = "Joined {singular}",
+                AddLaterText = "Later",
+                AddButtonText = "Add",
+                ProceedButtonText = "Proceed",
+                CurrentHeading = "Current"
+            });
+
+        Assert.Equal("Tenant plans", copy.DashboardMainHeading);
+        Assert.Equal("Tenant in progress", copy.DashboardInProgressHeading);
+        Assert.Equal("Tenant start", copy.DashboardStartNewHeading);
+        Assert.Equal("Tenant hint", copy.DashboardStartNewHint);
+        Assert.Equal("Tenant button", copy.DashboardStartNewButtonText);
+        Assert.Equal("Helpers", copy.ContributorsSectionHeading);
+        Assert.Equal("Body for plan", copy.ContributorsSectionBody);
+        Assert.Equal("Invite", copy.ContributorsInviteButtonText);
+        Assert.Equal("Invite page", copy.ContributorsPageHeading);
+        Assert.Equal("Intro for plan", copy.ContributorsIntro);
+        Assert.Equal("Sign in", copy.ContributorsSignInText);
+        Assert.Equal("Joined plan", copy.ContributorsOnceJoinedText);
+        Assert.Equal("Later", copy.ContributorsAddLaterText);
+        Assert.Equal("Add", copy.ContributorsAddButtonText);
+        Assert.Equal("Proceed", copy.ContributorsProceedButtonText);
+        Assert.Equal("Current", copy.ContributorsCurrentHeading);
+    }
+
+    [Fact]
+    public void Resolve_UsesTemplateCopyForEverySection_AndSubstitutesTemplateName()
+    {
+        var context = new TemplateCopyContext();
+        context.Use(Template(new TemplateDisplayCopy
+        {
+            Terminology = new TemplateTerminologyCopy { Singular = "case", Plural = "cases" },
+            Dashboard = new TemplateDashboardCopy
+            {
+                MainHeading = "{template_name} dashboard",
+                InProgressHeading = "In progress",
+                StartNewHeading = "Start",
+                StartNewHint = "Hint",
+                StartNewButtonText = "Go"
+            },
+            Preview = new TemplatePreviewCopy
+            {
+                PageHeading = "Preview",
+                SubmitHeading = "Send",
+                SubmitHint = "Sure?",
+                SubmitButtonText = "Send now"
+            },
+            Contributors = new TemplateContributorsCopy
+            {
+                SectionHeading = "Team",
+                SectionBody = "Help with {template_name}",
+                InviteButtonText = "Add team",
+                PageHeading = "Invite team",
+                Intro = "Intro",
+                SignInText = "Sign in",
+                OnceJoinedText = "Joined",
+                AddLaterText = "Later",
+                AddButtonText = "Add",
+                ProceedButtonText = "Back",
+                CurrentHeading = "Current team"
+            },
+            TaskList = new TemplateTaskListCopy
+            {
+                ReviewButtonText = "Review {singular}",
+                ViewButtonText = "Open {singular}"
+            }
+        }));
+
+        var copy = Create(context, new ApplicationTerminologyOptions());
+
+        Assert.Equal("Visits dashboard", copy.DashboardMainHeading);
+        Assert.Equal("In progress", copy.DashboardInProgressHeading);
+        Assert.Equal("Preview", copy.PreviewPageHeading);
+        Assert.Equal("Help with Visits", copy.ContributorsSectionBody);
+        Assert.Equal("Review case", copy.ReviewButtonText);
+        Assert.Equal("Open case", copy.ViewButtonText);
+        Assert.Equal("Team", copy.ContributorsSectionHeading);
+        Assert.Equal("Current team", copy.ContributorsCurrentHeading);
+    }
+
+    [Fact]
+    public void Resolve_TrimsWhitespace_WhenChoosingBetweenTemplateTenantAndDefaults()
+    {
+        var context = new TemplateCopyContext();
+        context.Use(Template(new TemplateDisplayCopy
+        {
+            Terminology = new TemplateTerminologyCopy { Singular = "  visit  ", Plural = "  visits  " }
+        }));
+
+        var copy = Create(context, new ApplicationTerminologyOptions());
+
+        Assert.Equal("visit", copy.Singular);
+        Assert.Equal("visits", copy.Plural);
+    }
+
     private static TemplateDisplayCopyResolver Create(
         ITemplateCopyContext context,
         ApplicationTerminologyOptions terminology,

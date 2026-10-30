@@ -1696,14 +1696,7 @@
     }
 
     function contributorRoleChoices(root) {
-        var items = [{ value: '', label: 'User (can edit this application)' }];
-        (data.contributorRoles || []).forEach(function (role) {
-            if (role && role.roleId) items.push({ value: role.roleId, label: role.name || role.roleId });
-        });
-        if (root.contributorRoleId && !items.some(function (item) { return item.value === root.contributorRoleId; })) {
-            items.push({ value: root.contributorRoleId, label: 'Saved role (no longer available)' });
-        }
-        return items;
+        return lib.contributorRoleChoices(data.contributorRoles, root.contributorRoleId);
     }
 
     function copyValue(section, property) {
@@ -1814,8 +1807,8 @@
             root.contributorPattern !== false ? selectInput({
                 id: 'tpl-contributor-role',
                 label: 'Role for invited contributors',
-                hint: 'User can edit the application. Any other role can only view it.',
-                value: root.contributorRoleId || '',
+                hint: 'User can edit the application. Any other role can only view it and its files.',
+                value: lib.contributorRoleSelectValue(root.contributorRoleId, data.contributorRoles),
                 items: contributorRoleChoices(root),
                 onChange: function (value) {
                     if (value) root.contributorRoleId = value;

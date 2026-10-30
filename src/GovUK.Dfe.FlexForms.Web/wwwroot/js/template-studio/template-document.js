@@ -1049,6 +1049,61 @@
             : [{ value: 'option-1', label: 'Option 1' }, { value: 'option-2', label: 'Option 2' }];
     }
 
+    function normalizeRoleId(value) {
+        if (value == null || value === '') return '';
+        return String(value).toLowerCase();
+    }
+
+    function roleIdsEqual(a, b) {
+        return normalizeRoleId(a) === normalizeRoleId(b);
+    }
+
+    function findUserRoleId(contributorRoles) {
+        var roles = contributorRoles || [];
+        for (var i = 0; i < roles.length; i++) {
+            var role = roles[i];
+            if (role && role.name && String(role.name).toLowerCase() === 'user' && role.roleId) {
+                return role.roleId;
+            }
+        }
+        return null;
+    }
+
+    function contributorRoleOptionLabel(role) {
+        var name = (role && (role.name || role.roleId)) || '';
+        if (String(name).toLowerCase() === 'user') {
+            return 'User (can edit this application)';
+        }
+        return name + ' (view-only on this application)';
+    }
+
+    function contributorRoleIsKnown(items, savedRoleId, userRoleId) {
+        if ((items || []).some(function (item) { return roleIdsEqual(item.value, savedRoleId); })) {
+            return true;
+        }
+        return !!(userRoleId && roleIdsEqual(savedRoleId, userRoleId));
+    }
+
+    function contributorRoleChoices(contributorRoles, savedRoleId) {
+        var userRoleId = findUserRoleId(contributorRoles);
+        var items = [{ value: '', label: 'User (can edit this application)' }];
+        (contributorRoles || []).forEach(function (role) {
+            if (!role || !role.roleId) return;
+            if (userRoleId && roleIdsEqual(role.roleId, userRoleId)) return;
+            items.push({ value: role.roleId, label: contributorRoleOptionLabel(role) });
+        });
+        if (savedRoleId && !contributorRoleIsKnown(items, savedRoleId, userRoleId)) {
+            items.push({ value: savedRoleId, label: 'Saved role (no longer available)' });
+        }
+        return items;
+    }
+
+    function contributorRoleSelectValue(savedRoleId, contributorRoles) {
+        var userRoleId = findUserRoleId(contributorRoles);
+        if (userRoleId && savedRoleId && roleIdsEqual(savedRoleId, userRoleId)) return '';
+        return savedRoleId || '';
+    }
+
     var api = {
         TemplateDocument: TemplateDocument,
         isChoiceType: isChoiceType,
@@ -1063,7 +1118,10 @@
         negateOperator: negateOperator,
         fieldKind: fieldKind,
         fieldKey: fieldKey,
-        inventory: inventory
+        inventory: inventory,
+        contributorRoleChoices: contributorRoleChoices,
+        contributorRoleSelectValue: contributorRoleSelectValue,
+        roleIdsEqual: roleIdsEqual
     };
 
     if (typeof module !== 'undefined' && module.exports) {

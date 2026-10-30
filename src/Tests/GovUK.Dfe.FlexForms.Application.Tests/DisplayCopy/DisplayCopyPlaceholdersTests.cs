@@ -39,4 +39,18 @@ public class DisplayCopyPlaceholdersTests
 
         Assert.Equal("Hello {unknown}", result);
     }
+
+    [Fact]
+    public void Apply_ReplacesMissingValuesWithEmptyStrings()
+    {
+        var result = DisplayCopyPlaceholders.Apply(
+            "{template_name} {contributor_email}",
+            null,
+            "visit",
+            "visits",
+            null);
+
+        Assert.Equal(" ", result);
+        Assert.DoesNotContain("{template_name}", result, StringComparison.OrdinalIgnoreCase);
+    }
 }
