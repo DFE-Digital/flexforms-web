@@ -58,6 +58,52 @@ public class InternalServiceAuthEnvironmentGateTests
         Assert.False(InternalServiceAuthEnvironmentGate.IsAllowed(Env("Development"), configuration));
     }
 
+    [Fact]
+    public void IsAllowed_UsesTenantFlag_InProduction()
+    {
+        Assert.True(InternalServiceAuthEnvironmentGate.IsAllowed(
+            Env("Production"),
+            new ConfigurationBuilder().Build(),
+            Tenant(enabled: true)));
+        Assert.False(InternalServiceAuthEnvironmentGate.IsAllowed(
+            Env("Production"),
+            new ConfigurationBuilder().Build(),
+            Tenant(enabled: false)));
+    }
+
+    [Fact]
+    public void IsAllowed_HostFalse_OverridesTenantTrue()
+    {
+        var host = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [InternalServiceAuthEnvironmentGate.WebEdgeEnabledKey] = "false"
+            })
+            .Build();
+
+        Assert.False(InternalServiceAuthEnvironmentGate.IsAllowed(
+            Env("Production"),
+            host,
+            Tenant(enabled: true)));
+    }
+
+    [Fact]
+    public void IsAllowed_TenantFalse_DisablesOutsideProduction()
+    {
+        Assert.False(InternalServiceAuthEnvironmentGate.IsAllowed(
+            Env("Development"),
+            new ConfigurationBuilder().Build(),
+            Tenant(enabled: false)));
+    }
+
+    private static IConfiguration Tenant(bool enabled)
+        => new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [InternalServiceAuthEnvironmentGate.WebEdgeEnabledKey] = enabled ? "true" : "false"
+            })
+            .Build();
+
     private static IHostEnvironment Env(string name)
     {
         var environment = Substitute.For<IHostEnvironment>();
