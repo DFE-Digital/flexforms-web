@@ -154,7 +154,7 @@
                         <ul class="govuk-list govuk-error-summary__list">
                             @foreach (var problem in Model.CompletionProblems)
                             {
-                                <li><a href="#SectionComplete">@problem</a></li>
+                                <li><a href="#IsTaskCompleted">@problem</a></li>
                             }
                         </ul>
                     </div>
@@ -351,21 +351,14 @@
 
         <form method="post" asp-page-handler="Complete" asp-route-task="@task.TaskId" novalidate>
             <div class="govuk-form-group @(Model.CompletionProblems.Count > 0 ? "govuk-form-group--error" : "")">
-                <fieldset class="govuk-fieldset">
-                    <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">Have you completed this section?</legend>
-                    <div class="govuk-radios" data-module="govuk-radios">
-                        <div class="govuk-radios__item">
-                            <input class="govuk-radios__input" id="SectionComplete" name="SectionComplete" type="radio" value="yes" @(Model.IsCompleted(task.TaskId) ? "checked" : null) />
-                            <label class="govuk-label govuk-radios__label" for="SectionComplete">Yes, I've completed this section</label>
-                        </div>
-                        <div class="govuk-radios__item">
-                            <input class="govuk-radios__input" id="SectionComplete-no" name="SectionComplete" type="radio" value="no" @(Model.IsCompleted(task.TaskId) ? null : "checked") />
-                            <label class="govuk-label govuk-radios__label" for="SectionComplete-no">No, I'll come back to it later</label>
-                        </div>
+                <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+                    <div class="govuk-checkboxes__item">
+                        <input class="govuk-checkboxes__input" id="IsTaskCompleted" name="IsTaskCompleted" type="checkbox" value="true" @(Model.IsCompleted(task.TaskId) ? "checked" : null) />
+                        <label class="govuk-label govuk-checkboxes__label" for="IsTaskCompleted">Mark this section as complete, it's ready for review</label>
                     </div>
-                </fieldset>
+                </div>
             </div>
-            <button type="submit" class="govuk-button" data-module="govuk-button">Continue</button>
+            <button type="submit" class="govuk-button" data-module="govuk-button" id="save-task-summary-button">Save and continue</button>
         </form>
     }
 

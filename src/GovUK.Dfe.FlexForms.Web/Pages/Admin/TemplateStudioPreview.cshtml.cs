@@ -76,7 +76,7 @@ public partial class TemplateStudioPreviewModel(
     public string? ViewName { get; set; }
 
     [BindProperty]
-    public string? SectionComplete { get; set; }
+    public bool IsTaskCompleted { get; set; }
 
     [TempData]
     public string? Message { get; set; }
@@ -234,7 +234,7 @@ public partial class TemplateStudioPreviewModel(
         if (Task is null)
             return RedirectToPage();
 
-        if (SectionComplete == "yes")
+        if (IsTaskCompleted)
         {
             CompletionProblems = await draftFormPreview.CompletionProblemsAsync(Template!, Task, _state!.Answers);
             if (CompletionProblems.Count > 0)

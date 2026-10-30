@@ -62,8 +62,8 @@ public sealed class TemplateStudioPreview(IPage page) : BasePage(page)
 
     public async Task MarkCompleteAsync()
     {
-        await Page.GetByRole(AriaRole.Radio, new PageGetByRoleOptions { Name = "Yes, I've completed this section" }).CheckAsync();
-        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Continue", Exact = true }).ClickAsync();
+        await Page.GetByLabel("Mark this section as complete, it's ready for review").CheckAsync();
+        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save and continue", Exact = true }).ClickAsync();
     }
 
     public async Task ExpectCompletionBlockedByAsync(string message) =>

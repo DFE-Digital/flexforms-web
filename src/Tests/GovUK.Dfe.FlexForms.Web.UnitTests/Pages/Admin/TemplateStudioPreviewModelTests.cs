@@ -248,7 +248,7 @@ public class TemplateStudioPreviewModelTests
         StartPreview();
         var model = NewModel();
         model.TaskId = "lists";
-        model.SectionComplete = "yes";
+        model.IsTaskCompleted = true;
 
         Assert.IsType<PageResult>(await model.OnPostCompleteAsync());
 
@@ -268,7 +268,7 @@ public class TemplateStudioPreviewModelTests
 
         var model = NewModel();
         model.TaskId = "linear";
-        model.SectionComplete = "yes";
+        model.IsTaskCompleted = true;
         Assert.IsType<RedirectToPageResult>(await model.OnPostCompleteAsync());
 
         Assert.Contains("linear", StoredState().Completed);
