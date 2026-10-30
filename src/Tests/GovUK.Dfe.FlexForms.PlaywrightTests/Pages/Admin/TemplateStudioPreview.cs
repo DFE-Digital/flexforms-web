@@ -32,8 +32,12 @@ public sealed class TemplateStudioPreview(IPage page) : BasePage(page)
     public async Task GoBackAsync() =>
         await Page.GetByRole(AriaRole.Link, new PageGetByRoleOptions { Name = "Back", Exact = true }).ClickAsync();
 
-    public async Task ExpectErrorAsync(string message) =>
-        await Assertions.Expect(Page.Locator(".govuk-error-summary")).ToContainTextAsync(message);
+    public async Task ExpectErrorAsync(string message)
+    {
+        var summaries = Page.Locator(".govuk-error-summary");
+        await Assertions.Expect(summaries).ToHaveCountAsync(1);
+        await Assertions.Expect(summaries).ToContainTextAsync(message);
+    }
 
     public async Task ExpectAnswerAsync(string question, string answer) =>
         await Assertions.Expect(SummaryRow(question).Locator(".govuk-summary-list__value")).ToContainTextAsync(answer);
