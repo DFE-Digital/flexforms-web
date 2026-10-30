@@ -2,6 +2,7 @@ using GovUK.Dfe.CoreLibs.Security.Configurations;
 using GovUK.Dfe.CoreLibs.Security.EntraSso;
 using GovUK.Dfe.FlexForms.Web.Authentication;
 using GovUK.Dfe.FlexForms.Web.Security;
+using GovUK.Dfe.FlexForms.Web.Tenancy;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -51,9 +52,30 @@ public class DynamicAuthenticationSchemeProviderTests
         Assert.Equal(CookieAuthenticationDefaults.AuthenticationScheme, scheme!.Name);
     }
 
+    [Fact]
+    public async Task GetDefaultAuthenticateSchemeAsync_UsesInternalService_WhenTenantEnablesWebEdge()
+    {
+        var tenantConfiguration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [InternalServiceAuthEnvironmentGate.WebEdgeEnabledKey] = "true"
+            })
+            .Build();
+
+        var provider = CreateProvider(
+            "Production",
+            serviceEmail: "svc@education.gov.uk",
+            tenantConfiguration: tenantConfiguration);
+
+        var scheme = await provider.GetDefaultAuthenticateSchemeAsync();
+
+        Assert.Equal(InternalServiceAuthenticationHandler.SchemeName, scheme!.Name);
+    }
+
     private static DynamicAuthenticationSchemeProvider CreateProvider(
         string environmentName = "Development",
-        string? serviceEmail = null)
+        string? serviceEmail = null,
+        IConfiguration? tenantConfiguration = null)
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -64,6 +86,12 @@ public class DynamicAuthenticationSchemeProviderTests
                 TestAuthenticationHandler.SchemeName, _ => { })
             .AddScheme<InternalServiceAuthenticationSchemeOptions, InternalServiceAuthenticationHandler>(
                 InternalServiceAuthenticationHandler.SchemeName, _ => { });
+        services.AddScoped<ITenantRequestContext>(_ => new TenantRequestContext
+        {
+            TenantId = Guid.NewGuid(),
+            TenantName = "Test",
+            TenantConfiguration = tenantConfiguration
+        });
 
         var httpContext = new DefaultHttpContext();
         if (serviceEmail is not null)
