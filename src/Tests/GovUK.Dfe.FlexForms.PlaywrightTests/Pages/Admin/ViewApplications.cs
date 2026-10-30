@@ -6,12 +6,12 @@ namespace GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Admin;
 
 public sealed class ViewApplications : BasePage
 {
-    public ApplicationsTable ApplicationsTable { get; }
+    public SummaryCards SummaryCards { get; }
 
     public ViewApplications(IPage page)
         : base(page)
     {
-        ApplicationsTable = new ApplicationsTable(page);
+        SummaryCards = new SummaryCards(page);
     }
 
     public async Task GoToAsync() => await Page.GotoAsync("/admin/applications");
@@ -23,20 +23,19 @@ public sealed class ViewApplications : BasePage
             new Regex(@"/admin/applications\?selectedTemplateId=.+"));
     }
 
+
     public async Task DeleteApplicationAsync(string reference)
     {
-        var deleteButton = ApplicationRow(reference)
-            .GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Delete" });
+        var deleteButton = Page.Locator(".admin-application-card")
+            .Filter(new LocatorFilterOptions
+            {
+                Has = Page.Locator(".govuk-summary-card__title").GetByText(reference, new LocatorGetByTextOptions { Exact = true }),
+            })
+            .GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Delete" })
+            .First;
 
         await AcceptDialogAsync(() => deleteButton.ClickAsync());
         await Assertions.Expect(Page).ToHaveURLAsync(
             new Regex(@"/admin/applications\?.*CurrentPage=1"));
     }
-
-    private ILocator ApplicationRow(string reference) =>
-        Page.Locator("tbody.govuk-table__body > tr.govuk-table__row")
-            .Filter(new LocatorFilterOptions
-            {
-                Has = Page.GetByRole(AriaRole.Cell, new PageGetByRoleOptions { Name = reference, Exact = true }),
-            });
 }

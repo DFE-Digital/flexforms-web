@@ -85,7 +85,7 @@ public sealed class NotificationTests : PlaywrightTestBase
         await notificationsPage.ExpectNotificationNotVisibleAsync("Test success");
         await notificationsPage.ExpectNotificationNotVisibleAsync("Test error");
         await notificationsPage.ExpectNoNotificationsAsync();
-        
+
         // bug 309578, dismiss requires a reload to update the unread badge count
         await Page.ReloadAsync();
         await notificationsPage.ExpectUnreadBadgeNotVisibleAsync();

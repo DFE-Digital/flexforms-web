@@ -38,17 +38,14 @@ public sealed class ViewApplicationsTests : PlaywrightTestBase
         var viewApplications = new ViewApplications(Page);
 
         await viewApplications.SelectATemplateAsync(TestData.DefaultTemplateName);
-        await viewApplications.ApplicationsTable
-            .HasTableHeaders(["Reference", "Application ID", "Date created", "Action"])
+        await viewApplications.SummaryCards
             .WithReference(_application.ApplicationReference)
-            .ColumnHasValue("Reference", _application.ApplicationReference)
-            .ColumnHasValue("Application ID", _application.ApplicationId)
-            .ColumnContainsValue("Date created", ApplicationsTableFormatting.FormatApplicationDisplayDate())
-            .ColumnHasValueWithLink(
-                "Action",
-                "Open",
-                $"/applications/{_application.ApplicationReference}?templateId={ApiConfig.TemplateId}")
-            .ColumnContainsValue("Action", "Delete")
+            .HasTitle(_application.ApplicationReference)
+            .HasSummaryValue("Application ID", _application.ApplicationId)
+            .HasSummaryValue("Date created", ApplicationsTableFormatting.FormatApplicationDisplayDate())
+            .HasSummaryValue("Lead applicant", AuthUsers.ResolveAuthUser("default").Email)
+            .HasLink("Open", $"/applications/{_application.ApplicationReference}?templateId={ApiConfig.TemplateId}")
+            .HasButton("Delete")
             .VerifyAsync();
     }
 
@@ -61,9 +58,9 @@ public sealed class ViewApplicationsTests : PlaywrightTestBase
 
         await viewApplications.SelectATemplateAsync(TestData.DefaultTemplateName);
         await viewApplications.DeleteApplicationAsync(_applicationToDelete.ApplicationReference);
-        await viewApplications.ApplicationsTable
+        await viewApplications.SummaryCards
             .WithReference(_applicationToDelete.ApplicationReference)
-            .ColumnHasValue("Action", "Deleted")
+            .HasText("Deleted")
             .VerifyAsync();
 
         await dashboardPage.GoToAllApplicationsAsync();
