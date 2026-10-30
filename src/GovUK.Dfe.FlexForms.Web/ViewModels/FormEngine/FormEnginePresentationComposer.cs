@@ -140,7 +140,7 @@ public sealed class FormEnginePresentationComposer(
                         rows.Add(new SummaryRowViewModel
                         {
                             Key = field.Label.Value,
-                            Value = BuildDerivedFieldValue(context, task, field, fieldValue)
+                            Value = BuildDerivedFieldValue(context, task, field, fieldValue, declarationData)
                         });
                     }
                 }
@@ -154,7 +154,8 @@ public sealed class FormEnginePresentationComposer(
         FormEnginePresentationContext context,
         TaskModel task,
         Field field,
-        string fieldValue)
+        string fieldValue,
+        IReadOnlyDictionary<string, object> itemData)
     {
         if (string.IsNullOrEmpty(fieldValue))
             return SummaryValueViewModel.NotAnswered;
@@ -175,26 +176,21 @@ public sealed class FormEnginePresentationComposer(
         if (field.Type == "radios" && field.Options != null)
         {
             var selectedOption = field.Options.FirstOrDefault(o => o.Value == fieldValue);
-            return SummaryValueViewModel.FromHtml(selectedOption?.Label ?? fieldValue);
+            return FromStored(selectedOption?.Label ?? fieldValue);
         }
 
         if (field.Type == "select" && field.Options != null)
         {
             var selectedOption = field.Options.FirstOrDefault(o => o.Value == fieldValue);
-            return SummaryValueViewModel.FromHtml(selectedOption?.Label ?? fieldValue);
+            return FromStored(selectedOption?.Label ?? fieldValue);
         }
 
-        if (field.Type == "checkboxes" && field.Options != null)
+        if (field.Type == "checkboxes")
         {
-            var selectedValues = fieldFormattingService.GetFormattedFieldValues(field.FieldId, context.FormData);
-            var selectedLabels = field.Options
-                .Where(o => selectedValues.Contains(o.Value))
-                .Select(o => o.Label ?? o.Value)
-                .ToList();
-
-            return selectedLabels.Count > 0
-                ? SummaryValueViewModel.FromCheckboxes(selectedLabels)
-                : SummaryValueViewModel.FromHtml(ToHtmlBreaks(fieldValue));
+            var checkboxData = itemData is Dictionary<string, object> dict
+                ? dict
+                : itemData.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+            return BuildCheckboxSummaryValue(field, checkboxData);
         }
 
         return SummaryValueViewModel.FromHtml(ToHtmlBreaks(fieldValue));
@@ -267,7 +263,7 @@ public sealed class FormEnginePresentationComposer(
         if (formattedValues.Count == 1)
         {
             if (!isUploadField)
-                return SummaryValueViewModel.FromHtml(formattedValues[0]);
+                return FromStored(formattedValues[0]);
 
             return TryBuildUploadValue(
                 value,
@@ -277,11 +273,11 @@ public sealed class FormEnginePresentationComposer(
                 pageId: null,
                 filterInfected: false,
                 showAllFiles: false,
-                fallbackWhenEmpty: SummaryValueViewModel.FromHtml(formattedValues[0]));
+                fallbackWhenEmpty: FromStored(formattedValues[0]));
         }
 
         if (!isUploadField)
-            return SummaryValueViewModel.FromHtmlList(formattedValues);
+            return FromStoredList(formattedValues);
 
         return TryBuildUploadValue(
             value,
@@ -291,7 +287,7 @@ public sealed class FormEnginePresentationComposer(
             pageId: null,
             filterInfected: false,
             showAllFiles: true,
-            fallbackWhenEmpty: SummaryValueViewModel.FromHtmlList(formattedValues));
+            fallbackWhenEmpty: FromStoredList(formattedValues));
     }
 
     private List<SummaryRowViewModel> BuildRegularPreviewRows(
@@ -356,7 +352,7 @@ public sealed class FormEnginePresentationComposer(
                     pageId: null,
                     filterInfected: false,
                     showAllFiles: false,
-                    fallbackWhenEmpty: SummaryValueViewModel.FromHtml(formattedValues.FirstOrDefault() ?? string.Empty));
+                    fallbackWhenEmpty: FromStored(formattedValues.FirstOrDefault()));
             }
             else
             {
@@ -416,7 +412,7 @@ public sealed class FormEnginePresentationComposer(
             rows.Add(new SummaryRowViewModel
             {
                 Key = $"{itemLabel} {i + 1}",
-                Value = SummaryValueViewModel.FromHtml(formattedValues[i])
+                Value = FromStored(formattedValues[i])
             });
         }
 
@@ -458,7 +454,35 @@ public sealed class FormEnginePresentationComposer(
             return SummaryValueViewModel.FromText(selectedOption?.Label ?? fieldValue);
         }
 
+        if (field.Type == "checkboxes")
+            return BuildCheckboxSummaryValue(field, context.FormData);
+
         return SummaryValueViewModel.FromHtml(ToHtmlBreaks(fieldValue));
+    }
+
+    private static SummaryValueViewModel BuildCheckboxSummaryValue(
+        Field field,
+        Dictionary<string, object> formData)
+    {
+        var normalized = CheckboxValueNormalizer.Normalize(
+            formData.TryGetValue(field.FieldId, out var raw) ? raw : null);
+        if (normalized.Count == 0)
+            return SummaryValueViewModel.NotAnswered;
+
+        if (field.Options is null || field.Options.Count == 0)
+            return SummaryValueViewModel.FromHtml(ToHtmlBreaks(string.Join("<br />", normalized)));
+
+        var labels = normalized
+            .Select(value =>
+            {
+                var option = field.Options?.FirstOrDefault(o =>
+                    string.Equals(o.Value, value, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(o.Label, value, StringComparison.OrdinalIgnoreCase));
+                return option?.Label ?? option?.Value ?? value;
+            })
+            .ToList();
+
+        return SummaryValueViewModel.FromCheckboxes(labels);
     }
 
     private CollectionFlowSectionViewModel BuildCollectionSection(
@@ -640,7 +664,7 @@ public sealed class FormEnginePresentationComposer(
                     pageId,
                     filterInfected: true,
                     showAllFiles: false,
-                    fallbackWhenEmpty: SummaryValueViewModel.FromHtml(formattedValues[0]));
+                    fallbackWhenEmpty: FromStored(formattedValues[0]));
             }
 
             if (isAutocompleteField)
@@ -656,7 +680,7 @@ public sealed class FormEnginePresentationComposer(
                 return SummaryValueViewModel.FromAutocompleteHtml(AutocompleteSummaryFormatter.Render(raw, summaryDisplay));
             }
 
-            return SummaryValueViewModel.FromHtml(formattedValues[0]);
+            return FromStored(formattedValues[0]);
         }
 
         if (isUploadField)
@@ -669,7 +693,7 @@ public sealed class FormEnginePresentationComposer(
                 pageId,
                 filterInfected: true,
                 showAllFiles: true,
-                fallbackWhenEmpty: SummaryValueViewModel.FromHtmlList(formattedValues));
+                fallbackWhenEmpty: FromStoredList(formattedValues));
         }
 
         if (isAutocompleteField)
@@ -679,7 +703,7 @@ public sealed class FormEnginePresentationComposer(
                 return SummaryValueViewModel.FromHtmlList(items);
         }
 
-        return SummaryValueViewModel.FromHtmlList(formattedValues);
+        return FromStoredList(formattedValues);
     }
 
     private static bool TryRenderAutocompleteItems(
@@ -776,8 +800,8 @@ public sealed class FormEnginePresentationComposer(
         if (!TryParseUploads(rawValue, out var uploadFiles))
         {
             return showAllFiles && formattedValues.Count > 1
-                ? SummaryValueViewModel.FromHtmlList(formattedValues)
-                : SummaryValueViewModel.FromHtml(formattedValues.Count > 0 ? formattedValues[0] : string.Empty);
+                ? FromStoredList(formattedValues)
+                : FromStored(formattedValues.Count > 0 ? formattedValues[0] : string.Empty);
         }
 
         if (filterInfected)
@@ -858,8 +882,14 @@ public sealed class FormEnginePresentationComposer(
         }
     }
 
+    private static SummaryValueViewModel FromStored(string? value) =>
+        SummaryValueViewModel.FromHtml(StoredAnswerHtml.ToSafeLineBreaks(value));
+
+    private static SummaryValueViewModel FromStoredList(IReadOnlyList<string> values) =>
+        SummaryValueViewModel.FromHtmlList(values.Select(StoredAnswerHtml.ToSafeLineBreaks).ToList());
+
     private static string ToHtmlBreaks(string value) =>
-        value.Replace("\r\n", "<br/>").Replace("\r", "<br/>").Replace("\n", "<br/>");
+        StoredAnswerHtml.ToSafeLineBreaks(value);
 
     private static string ToTestId(string name) => name.Replace(" ", "-").ToLower();
 }

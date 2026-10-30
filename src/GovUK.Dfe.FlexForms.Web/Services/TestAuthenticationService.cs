@@ -3,7 +3,9 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using GovUK.Dfe.CoreLibs.Security.Configurations;
+using GovUK.Dfe.FlexForms.Web.Middleware;
 using GovUK.Dfe.FlexForms.Web.Security;
+using GovUK.Dfe.FlexForms.Web.Tenancy;
 using System.Security.Claims;
 using System.Diagnostics.CodeAnalysis;
 
@@ -20,6 +22,7 @@ public class TestAuthenticationService : ITestAuthenticationService
     {
         public const string Email = "TestAuth:Email";
         public const string Token = "TestAuth:Token";
+        public const string TenantId = "TestAuth:TenantId";
     }
 
     public TestAuthenticationService(
@@ -50,7 +53,7 @@ public class TestAuthenticationService : ITestAuthenticationService
         {
             _logger.LogDebug("Creating claims and identity for {Email}", email);
             
-            var claims = CreateUserClaims(email);
+            var claims = CreateUserClaims(email, httpContext);
             var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
             var principal = new ClaimsPrincipal(identity);
 
@@ -63,6 +66,9 @@ public class TestAuthenticationService : ITestAuthenticationService
             // Store in session for TestAuthenticationHandler
             httpContext.Session.SetString(SessionKeys.Email, email);
             httpContext.Session.SetString(SessionKeys.Token, testToken);
+            var tenantId = httpContext.RequestServices.GetService<ITenantRequestContext>()?.TenantId;
+            if (tenantId is Guid id)
+                httpContext.Session.SetString(SessionKeys.TenantId, id.ToString());
 
             // Create authentication properties with stored tokens
             var authProperties = new AuthenticationProperties();
@@ -93,20 +99,27 @@ public class TestAuthenticationService : ITestAuthenticationService
         // Clear test authentication session data
         httpContext.Session.Remove(SessionKeys.Email);
         httpContext.Session.Remove(SessionKeys.Token);
+        httpContext.Session.Remove(SessionKeys.TenantId);
 
         // Sign out from cookie authentication if signed in
         await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
     }
 
-    private static IEnumerable<Claim> CreateUserClaims(string email)
+    private static IEnumerable<Claim> CreateUserClaims(string email, HttpContext httpContext)
     {
-        return new[]
+        var claims = new List<Claim>
         {
-            new Claim(ClaimTypes.Email, email),
-            new Claim(ClaimTypes.NameIdentifier, email),
-            new Claim(ClaimTypes.Name, email),
-            new Claim("sub", email),
-            new Claim("email", email)
+            new(ClaimTypes.Email, email),
+            new(ClaimTypes.NameIdentifier, email),
+            new(ClaimTypes.Name, email),
+            new("sub", email),
+            new("email", email)
         };
+
+        var tenantId = httpContext.RequestServices.GetService<ITenantRequestContext>()?.TenantId;
+        if (tenantId is Guid boundTenant)
+            claims.Add(new Claim(TenantSessionBindingMiddleware.TenantIdClaimType, boundTenant.ToString()));
+
+        return claims;
     }
 }

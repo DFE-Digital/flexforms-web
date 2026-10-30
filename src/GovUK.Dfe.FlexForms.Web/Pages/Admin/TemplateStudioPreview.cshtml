@@ -11,6 +11,22 @@
     var previewPage = "/Admin/TemplateStudioPreview";
 }
 
+@* Back links sit outside <main> so the GOV.UK library can prepend its error summary at the top of main. *@
+@section BeforeContent {
+    @if (Model.View == PreviewView.Page)
+    {
+        <a class="govuk-back-link" href="@Model.BackUrl()">Back</a>
+    }
+    else if (Model.View == PreviewView.TaskSummary)
+    {
+        <a class="govuk-back-link" asp-page="@previewPage" asp-route-task="">Back to task list</a>
+    }
+    else if (Model.View == PreviewView.AllPages && Model.Task is not null)
+    {
+        <a class="govuk-back-link" asp-page="@previewPage" asp-route-task="@Model.Task.TaskId">Back to @Model.Task.TaskName</a>
+    }
+}
+
 <div class="govuk-notification-banner" role="region" aria-labelledby="tpl-preview-banner-title" data-module="govuk-notification-banner">
     <div class="govuk-notification-banner__header">
         <h2 class="govuk-notification-banner__title" id="tpl-preview-banner-title">Draft preview</h2>
@@ -127,7 +143,6 @@
         var task = Model.Task!;
         var summary = task.Summary;
         var visibility = Model.Visibility;
-        <a class="govuk-back-link" asp-page="/Admin/TemplateStudioPreview" asp-route-task="">Back to task list</a>
 
         @if (Model.CompletionProblems.Count > 0)
         {
@@ -363,27 +378,14 @@
         var hideFieldLabel = Model.Template!.HideFieldLabelWhenOnlyOneField && fields.Count == 1 && fields[0].Type != "complexField";
         var caption = Model.List?.Title ?? Model.Derived?.Title
             ?? (task.Caption is null ? task.TaskName : DisplayHelpers.InterpolateMessage(task.Caption, null));
-        var fieldErrors = Model.Errors.Where(error => !string.IsNullOrEmpty(error.FieldKey))
+        var pageErrors = Model.Errors
+            .GroupBy(error => (error.FieldKey, error.Message))
+            .Select(group => group.First())
+            .ToList();
+        var fieldErrors = pageErrors.Where(error => !string.IsNullOrEmpty(error.FieldKey))
             .GroupBy(error => error.FieldKey)
             .ToDictionary(group => group.Key, group => group.First().Message);
-        <a class="govuk-back-link" href="@Model.BackUrl()">Back</a>
-
-        @if (Model.Errors.Count > 0)
-        {
-            <div class="govuk-error-summary" data-module="govuk-error-summary">
-                <div role="alert">
-                    <h2 class="govuk-error-summary__title">There is a problem</h2>
-                    <div class="govuk-error-summary__body">
-                        <ul class="govuk-list govuk-error-summary__list">
-                            @foreach (var error in Model.Errors)
-                            {
-                                <li><a href="#@(string.IsNullOrEmpty(error.FieldKey) ? "page-title" : ErrorId(error.FieldKey))">@error.Message</a></li>
-                            }
-                        </ul>
-                    </div>
-                </div>
-            </div>
-        }
+        @* Field tag helpers register these errors; GovUk.Frontend prepends one summary to <main>. *@
 
         @if (Model.List is null && Model.Derived is null && visibility?.IsPageHidden(screen.PageId) == true)
         {
@@ -392,7 +394,7 @@
 
         <div class="govuk-grid-row">
             <div class="govuk-grid-column-two-thirds">
-                <form method="post" asp-page-handler="Answer" novalidate>
+                <form method="post" asp-page-handler="Answer" novalidate prepend-error-summary="false">
                     <input type="hidden" name="task" value="@task.TaskId" />
                     <input type="hidden" name="pageId" value="@screen.PageId" />
                     <input type="hidden" name="list" value="@Model.ListId" />
@@ -437,7 +439,7 @@
                                 </div>
                                 @if (errorMessage.Length > 0)
                                 {
-                                    <p class="govuk-error-message" id="@id-error"><span class="govuk-visually-hidden">Error:</span> @errorMessage</p>
+                                    <govuk-error-message id="@id-error"><span class="govuk-visually-hidden">Error:</span> @errorMessage</govuk-error-message>
                                 }
                                 @if (multiple)
                                 {
@@ -489,7 +491,6 @@
     async Task RenderAllPages()
     {
         var task = Model.Task!;
-        <a class="govuk-back-link" asp-page="/Admin/TemplateStudioPreview" asp-route-task="@task.TaskId">Back to @task.TaskName</a>
         <h1 class="govuk-heading-xl">@task.TaskName</h1>
         <p class="govuk-body">Every page of this task, including ones a rule would skip. Pages and questions a rule shows are marked.</p>
 

@@ -44,6 +44,20 @@ namespace GovUK.Dfe.FlexForms.Domain.Models
         public bool ContributorPattern { get; set; } = true;
 
         /// <summary>
+        /// Tenant role assigned when someone is invited to an application.
+        /// Empty means the system User role, which can edit the application.
+        /// Any other role is given read-only access to that application.
+        /// </summary>
+        [JsonPropertyName("contributorRoleId")]
+        public string? ContributorRoleId { get; set; }
+
+        /// <summary>
+        /// Optional wording for this template. Blank fields keep the tenant setting, then the built-in sentence.
+        /// </summary>
+        [JsonPropertyName("displayCopy")]
+        public TemplateDisplayCopy? DisplayCopy { get; set; }
+
+        /// <summary>
         /// Optional applications-dashboard column layout. When omitted, only the default
         /// system columns are shown. See <see cref="DashboardConfiguration"/>.
         /// </summary>

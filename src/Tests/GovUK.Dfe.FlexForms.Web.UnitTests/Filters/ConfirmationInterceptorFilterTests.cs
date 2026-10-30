@@ -112,6 +112,73 @@ public class ConfirmationInterceptorFilterTests
     }
 
     [Fact]
+    public void OnActionExecuting_ShouldUseConfirmationActionOverride_WhenLocal()
+    {
+        var form = ConfirmationForm();
+        form = new FormCollection(new Dictionary<string, StringValues>(form)
+        {
+            ["confirmation-action-RemoveCollectionItem"] = "/applications/REF-1/override"
+        });
+
+        var context = ExecutingContext(method: "POST", query: "", form: form);
+
+        _filter.OnActionExecuting(context);
+
+        _confirmations.Received().CreateConfirmation(Arg.Is<ConfirmationRequest>(r =>
+            r.OriginalPagePath == "/applications/REF-1/override"));
+    }
+
+    [Fact]
+    public void OnActionExecuting_ShouldIgnoreExternalConfirmationActionOverride()
+    {
+        var form = ConfirmationForm();
+        form = new FormCollection(new Dictionary<string, StringValues>(form)
+        {
+            ["confirmation-action-RemoveCollectionItem"] = "https://evil.example/phish"
+        });
+
+        var context = ExecutingContext(method: "POST", query: "", form: form);
+
+        _filter.OnActionExecuting(context);
+
+        _confirmations.Received().CreateConfirmation(Arg.Is<ConfirmationRequest>(r =>
+            r.OriginalPagePath == "/applications/REF-1/t1"));
+    }
+
+    [Fact]
+    public void OnActionExecuting_ShouldIgnoreExternalConfirmationReturnOverride()
+    {
+        var form = ConfirmationForm();
+        form = new FormCollection(new Dictionary<string, StringValues>(form)
+        {
+            ["confirmation-return-RemoveCollectionItem"] = "//evil.example"
+        });
+
+        var context = ExecutingContext(method: "POST", query: "", form: form);
+
+        _filter.OnActionExecuting(context);
+
+        _confirmations.Received().CreateConfirmation(Arg.Is<ConfirmationRequest>(r =>
+            r.ReturnUrl == "/applications/REF-1/t1"));
+    }
+
+    [Fact]
+    public void OnActionExecuting_ShouldSkipInterception_ForApiController()
+    {
+        var context = ExecutingContext(method: "POST", query: "", form: ConfirmationForm());
+        context.ActionDescriptor.RouteValues["controller"] = "Applications";
+
+        _filter.OnActionExecuting(context);
+
+        Assert.Null(context.Result);
+        _confirmations.DidNotReceive().CreateConfirmation(Arg.Any<ConfirmationRequest>());
+    }
+
+    [Fact]
+    public void Order_IsNegativeSoFilterRunsEarly()
+        => Assert.Equal(-1000, _filter.Order);
+
+    [Fact]
     public void OnActionExecuting_ShouldProceed_WhenCreateConfirmationThrows()
     {
         _confirmations.CreateConfirmation(Arg.Any<ConfirmationRequest>())
@@ -229,6 +296,52 @@ public class ConfirmationInterceptorFilterTests
 
         _confirmations.Received().CreateConfirmation(Arg.Is<ConfirmationRequest>(r =>
             r.ReturnUrl == "/applications/REF-1/back"));
+    }
+
+    [Fact]
+    public async Task OnPageHandlerExecutionAsync_ShouldUseConfirmationActionOverride_WhenLocal()
+    {
+        var form = ConfirmationForm();
+        form = new FormCollection(new Dictionary<string, StringValues>(form)
+        {
+            ["confirmation-action-RemoveCollectionItem"] = "/applications/REF-1/override"
+        });
+        var page = CreatePageModel();
+        var executing = PageExecutingContext(page, "POST", form: form);
+        PageHandlerExecutedContext? executed = null;
+
+        await _filter.OnPageHandlerExecutionAsync(executing, () =>
+        {
+            executed = CreateExecutedContext(executing, new RedirectToPageResult("/done"));
+            return Task.FromResult(executed);
+        });
+
+        _confirmations.Received().CreateConfirmation(Arg.Is<ConfirmationRequest>(r =>
+            r.OriginalPagePath == "/applications/REF-1/override"));
+    }
+
+    [Fact]
+    public async Task OnPageHandlerExecutionAsync_ShouldIgnoreExternalConfirmationOverrides()
+    {
+        var form = ConfirmationForm();
+        form = new FormCollection(new Dictionary<string, StringValues>(form)
+        {
+            ["confirmation-action-RemoveCollectionItem"] = "https://evil.example/phish",
+            ["confirmation-return-RemoveCollectionItem"] = "//evil.example"
+        });
+        var page = CreatePageModel();
+        var executing = PageExecutingContext(page, "POST", form: form);
+        PageHandlerExecutedContext? executed = null;
+
+        await _filter.OnPageHandlerExecutionAsync(executing, () =>
+        {
+            executed = CreateExecutedContext(executing, new RedirectToPageResult("/done"));
+            return Task.FromResult(executed);
+        });
+
+        _confirmations.Received().CreateConfirmation(Arg.Is<ConfirmationRequest>(r =>
+            r.OriginalPagePath == "/applications/REF-1/t1"
+            && r.ReturnUrl == "/applications/REF-1/t1"));
     }
 
     [Fact]

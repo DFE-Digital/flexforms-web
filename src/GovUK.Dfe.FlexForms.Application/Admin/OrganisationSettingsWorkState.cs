@@ -45,6 +45,21 @@ public sealed class OrganisationSettingsWorkState
 
     public bool PreviewHideSubmitSection { get; set; }
 
+    public string? ContributorsSectionHeading { get; set; }
+    public string? ContributorsSectionBody { get; set; }
+    public string? ContributorsInviteButtonText { get; set; }
+    public string? ContributorsPageHeading { get; set; }
+    public string? ContributorsIntro { get; set; }
+    public string? ContributorsSignInText { get; set; }
+    public string? ContributorsOnceJoinedText { get; set; }
+    public string? ContributorsAddLaterText { get; set; }
+    public string? ContributorsAddButtonText { get; set; }
+    public string? ContributorsProceedButtonText { get; set; }
+    public string? ContributorsCurrentHeading { get; set; }
+
+    public string? TaskListReviewButtonText { get; set; }
+    public string? TaskListViewButtonText { get; set; }
+
     public string? SubmittedTemplateId { get; set; }
 
     public IReadOnlyList<AdminSelectOption> SubmittedTemplateOptions { get; set; } = [];

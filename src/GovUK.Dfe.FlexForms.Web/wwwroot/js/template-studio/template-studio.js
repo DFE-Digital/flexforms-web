@@ -136,8 +136,9 @@
     var baselineFields = lib.inventory(baselineRoot).fields;
     var applicationCount = typeof data.applicationCount === 'number' ? data.applicationCount : null;
 
-    // Unknown counts are treated as in use, which is the safe way round.
+    // Unknown counts are treated as in use. Known-unused templates are isStarter or a zero application count.
     function inUse() {
+        if (data.isStarter || applicationCount === 0) return false;
         return baselineFields.size > 0 && applicationCount !== 0;
     }
 
@@ -1293,7 +1294,7 @@
                 autoIds.delete(node);
                 edited(path);
             },
-            onChange: function (value) {
+            onChange: function (value, input) {
                 var trimmed = value.trim();
                 var text = '';
                 var isError = true;
@@ -1306,21 +1307,35 @@
                     text = 'Something else in this template already uses this id';
                 } else {
                     var notes = [];
-                    if (doc.kindOf(path) === 'field' || doc.kindOf(path) === 'page') {
-                        var updated = doc.renameReferences(before, trimmed);
-                        if (updated) notes.push('Updated ' + updated + (updated === 1 ? ' rule' : ' rules') + ' to use the new id.');
-                    }
+                    var updated = 0;
+                    var rejected = false;
                     if (key === 'fieldId') {
                         var retired = answerIdRenamed(path, before, trimmed);
-                        if (retired) notes.push(retired);
-                        var mapped = before && before !== trimmed ? mappingsReading([before]) : [];
-                        if (mapped.length) {
-                            notes.push(mapped.map(function (reference) { return describeMapping(reference).replace(/^t/, 'T'); }).join(', ')
-                                + ' still read' + (mapped.length === 1 ? 's' : '') + ' "' + before + '". Update ' + (mapped.length === 1 ? 'it' : 'them') + ' in Event mappings after you save.');
+                        if (retired && retired.indexOf('already retired') !== -1) {
+                            rejected = true;
+                            text = retired;
+                            if (input) input.value = before;
+                            node[key] = before;
+                            trimmed = before;
+                        } else if (retired) {
+                            notes.push(retired);
                         }
                     }
-                    text = notes.join(' ');
-                    isError = false;
+                    if (!rejected) {
+                        if (doc.kindOf(path) === 'field' || doc.kindOf(path) === 'page') {
+                            updated = doc.renameReferences(before, trimmed);
+                        }
+                        if (updated) notes.push('Updated ' + updated + (updated === 1 ? ' rule' : ' rules') + ' to use the new id.');
+                        if (key === 'fieldId') {
+                            var mapped = before && before !== trimmed ? mappingsReading([before]) : [];
+                            if (mapped.length) {
+                                notes.push(mapped.map(function (reference) { return describeMapping(reference).replace(/^t/, 'T'); }).join(', ')
+                                    + ' still read' + (mapped.length === 1 ? 's' : '') + ' "' + before + '". Update ' + (mapped.length === 1 ? 'it' : 'them') + ' in Event mappings after you save.');
+                            }
+                        }
+                        text = notes.join(' ');
+                        isError = false;
+                    }
                 }
                 message.className = isError ? 'govuk-error-message' : 'govuk-hint';
                 message.textContent = '';
@@ -1335,27 +1350,9 @@
     }
 
     // Once applications have answers saved under an id, renaming it is a retirement plus a replacement that keeps
-    // the old reporting key. Renaming back undoes that.
+    // the old reporting key. Renaming a replacement back undoes that. Reusing some other retired id is not allowed.
     function answerIdRenamed(path, before, after) {
-        if (!before || before === after) return '';
-        (doc.root.retiredFields || []).forEach(function (entry) {
-            if (entry.replacedBy) entry.replacedBy = entry.replacedBy.map(function (id) { return id === before ? after : id; });
-        });
-
-        var node = doc.get(path);
-        var parentFieldId = doc.fieldKeyOf(path).parentFieldId;
-        var original = baselineFor({ fieldId: after, parentFieldId: parentFieldId });
-        if (original) {
-            doc.unretire({ fieldId: after, parentFieldId: parentFieldId });
-            if (node.semanticKey === original.semanticKey && original.semanticKey === after) delete node.semanticKey;
-            return '';
-        }
-
-        var previous = inUse() ? baselineFor({ fieldId: before, parentFieldId: parentFieldId }) : null;
-        if (!previous) return '';
-        doc.retire({ fieldId: before, parentFieldId: parentFieldId }, [after]);
-        if (!node.semanticKey) node.semanticKey = previous.semanticKey;
-        return 'Applications already have answers saved as "' + before + '", so it is retired and replaced by "' + after + '", which keeps its reporting key.';
+        return doc.applyAnswerIdRename(path, before, after, { inUse: inUse(), baselineRoot: baselineRoot });
     }
 
     function addForm(options) {
@@ -1418,6 +1415,15 @@
         { value: 'status', label: 'Status' },
         { value: 'action', label: 'Action' }
     ];
+
+    // Optional built-in columns. They are offered in the column editor but are not part of the
+    // default layout that "Choose the columns" starts from.
+    var OPTIONAL_SYSTEM_COLUMNS = [
+        { value: 'leadApplicantName', label: 'Lead applicant name' },
+        { value: 'leadApplicantEmail', label: 'Lead applicant email' }
+    ];
+
+    var BUILT_IN_COLUMNS = SYSTEM_COLUMNS.concat(OPTIONAL_SYSTEM_COLUMNS);
 
     var APPLICATION_BINDINGS = [
         { value: 'application.reference', label: 'Application reference' },
@@ -1545,10 +1551,10 @@
                 emptyText: 'There are no columns.',
                 renumber: function () { columns.forEach(function (column, index) { column.order = (index + 1) * 10; }); },
                 key: function (column) {
-                    return column.header || (isFieldColumn(column) ? column.fieldId || 'Answer not chosen' : choiceLabel(SYSTEM_COLUMNS, column.id));
+                    return column.header || (isFieldColumn(column) ? column.fieldId || 'Answer not chosen' : choiceLabel(BUILT_IN_COLUMNS, column.id));
                 },
                 value: function (column) {
-                    if (!isFieldColumn(column)) return 'Built in: ' + choiceLabel(SYSTEM_COLUMNS, column.id);
+                    if (!isFieldColumn(column)) return 'Built in: ' + choiceLabel(BUILT_IN_COLUMNS, column.id);
                     if (listTitleFor(column.fieldId)) return 'The whole list "' + listTitleFor(column.fieldId) + '": choose a question in it';
                     return 'Answer: ' + (column.fieldId ? choiceLabel(choices, column.fieldId) : 'not chosen');
                 },
@@ -1581,7 +1587,7 @@
                                 onChange: function (value) { column.fieldId = value; markDirty(); renderInspector(); }
                             })
                             : selectInput({
-                                id: 'tpl-column-system', label: 'Built-in column', value: column.id, items: SYSTEM_COLUMNS,
+                                id: 'tpl-column-system', label: 'Built-in column', value: column.id, items: BUILT_IN_COLUMNS,
                                 onChange: function (value) { column.id = value; markDirty(); }
                             }),
                         textInput({
@@ -1689,6 +1695,70 @@
         ]);
     }
 
+    function contributorRoleChoices(root) {
+        return lib.contributorRoleChoices(data.contributorRoles, root.contributorRoleId);
+    }
+
+    function copyValue(section, property) {
+        var copy = (doc.root.displayCopy || {})[section] || {};
+        return copy[property] || '';
+    }
+
+    function bindCopy(path, section, property) {
+        return function (value) {
+            var root = doc.root;
+            root.displayCopy = root.displayCopy || {};
+            root.displayCopy[section] = root.displayCopy[section] || {};
+            if (value) {
+                root.displayCopy[section][property] = value;
+            } else {
+                delete root.displayCopy[section][property];
+                if (!Object.keys(root.displayCopy[section]).length) delete root.displayCopy[section];
+                if (!Object.keys(root.displayCopy).length) delete root.displayCopy;
+            }
+            edited(path);
+        };
+    }
+
+    function displayCopyFields(path) {
+        var hint = 'Leave blank to keep the organisation setting, then the built-in sentence. You can use {singular}, {plural}, {template_name} and {contributor_email}.';
+        function field(section, property, label) {
+            return textInput({
+                id: 'tpl-copy-' + section + '-' + property,
+                label: label,
+                value: copyValue(section, property),
+                onInput: bindCopy(path, section, property)
+            });
+        }
+        return section('Wording for this template', [
+            h('p', { class: 'govuk-hint', text: hint }),
+            field('terminology', 'singular', 'Singular, for example visit'),
+            field('terminology', 'plural', 'Plural, for example visits'),
+            field('dashboard', 'mainHeading', 'Dashboard heading'),
+            field('dashboard', 'inProgressHeading', 'In progress heading'),
+            field('dashboard', 'startNewHeading', 'Start new heading'),
+            field('dashboard', 'startNewHint', 'Start new hint'),
+            field('dashboard', 'startNewButtonText', 'Start new button'),
+            field('preview', 'pageHeading', 'Check your answers heading'),
+            field('preview', 'submitHeading', 'Submit heading'),
+            field('preview', 'submitHint', 'Submit hint'),
+            field('preview', 'submitButtonText', 'Submit button'),
+            field('contributors', 'sectionHeading', 'Contributors heading'),
+            field('contributors', 'sectionBody', 'Contributors text'),
+            field('contributors', 'inviteButtonText', 'Invite button'),
+            field('contributors', 'pageHeading', 'Invite page heading'),
+            field('contributors', 'intro', 'Invite introduction'),
+            field('contributors', 'signInText', 'DfE Sign-in text'),
+            field('contributors', 'onceJoinedText', 'After they join'),
+            field('contributors', 'addLaterText', 'Add later text'),
+            field('contributors', 'addButtonText', 'Add a contributor button'),
+            field('contributors', 'proceedButtonText', 'Go to application button'),
+            field('contributors', 'currentHeading', 'Current contributors heading'),
+            field('taskList', 'reviewButtonText', 'Review button'),
+            field('taskList', 'viewButtonText', 'View button')
+        ]);
+    }
+
     function templateInspector(path) {
         var root = doc.root;
 
@@ -1728,8 +1798,25 @@
                 id: 'tpl-contributors',
                 label: 'Let applicants invite contributors',
                 checked: root.contributorPattern !== false,
-                onChange: function (checked) { root.contributorPattern = checked; edited(path); }
+                onChange: function (checked) {
+                    root.contributorPattern = checked;
+                    if (!checked) delete root.contributorRoleId;
+                    restructured();
+                }
             }),
+            root.contributorPattern !== false ? selectInput({
+                id: 'tpl-contributor-role',
+                label: 'Role for invited contributors',
+                hint: 'User can edit the application. Any other role can only view it and its files.',
+                value: lib.contributorRoleSelectValue(root.contributorRoleId, data.contributorRoles),
+                items: contributorRoleChoices(root),
+                onChange: function (value) {
+                    if (value) root.contributorRoleId = value;
+                    else delete root.contributorRoleId;
+                    edited(path);
+                }
+            }) : null,
+            displayCopyFields(path),
             contents(path, 'Sections', 'This template has no sections yet.'),
             addForm({
                 id: 'tpl-new-group',
@@ -3473,11 +3560,31 @@
     });
 
     window.addEventListener('beforeunload', function (e) {
+        if (window.__flexformsAllowUnload) return;
         if (dirty && !submitting) {
             e.preventDefault();
             e.returnValue = '';
         }
     });
+
+    var grantForm = document.getElementById('grant-template-to-all-users-form');
+    if (grantForm) {
+        grantForm.addEventListener('submit', function (e) {
+            if (dirty && !window.confirm('You have unsaved changes. Granting access does not save this version. Continue?')) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                return;
+            }
+            window.__flexformsAllowUnload = true;
+        });
+    }
+
+    if (data.templateId && window.history.replaceState) {
+        var studioUrl = new URL(window.location.href);
+        studioUrl.searchParams.set('templateId', data.templateId);
+        if (data.versionNumber) studioUrl.searchParams.set('version', data.versionNumber);
+        window.history.replaceState(null, '', studioUrl);
+    }
 
     // ---- Start -------------------------------------------------------------------------------------------------
 

@@ -1,4 +1,5 @@
 using System.Reflection;
+using GovUK.Dfe.FlexForms.Web.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -8,7 +9,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages;
 /// <summary>
 /// Diagnostics endpoint that returns basic runtime information as JSON.
 /// </summary>
-[AllowAnonymous]
+[Authorize(Policy = AdminAccessHelper.CanManageTenantSettingsPolicy)]
 public class DiagnosticsModel(IHostEnvironment hostEnvironment) : PageModel
 {
     /// <summary>

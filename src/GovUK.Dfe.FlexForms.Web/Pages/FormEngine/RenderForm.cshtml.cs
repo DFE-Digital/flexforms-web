@@ -335,7 +335,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
             if (!Guid.TryParse(fileIdStr, out var fileId))
             {
                 ModelState.AddModelError("FileId", FormEngineMessages.InvalidFileId);
-                return string.IsNullOrEmpty(returnUrl) ? Page() : Redirect(returnUrl);
+                return string.IsNullOrEmpty(returnUrl) ? Page() : Redirect(LocalRedirects.OrFallback(returnUrl));
             }
 
             var confirmed = Request.Query.ContainsKey("confirmed") && Request.Query["confirmed"] == "true";

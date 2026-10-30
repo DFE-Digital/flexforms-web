@@ -1,4 +1,5 @@
 @using GovUK.Dfe.FlexForms.Web
+@using GovUK.Dfe.FlexForms.Web.Utilities
 @using Microsoft.Extensions.Options
 @using GovUK.Dfe.FlexForms.Application.Options
 @using NetEscapades.AspNetCore.SecurityHeaders
@@ -6,5 +7,6 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 @addTagHelper *, GovUk.Frontend.AspNetCore
 @inject GovUK.Dfe.FlexForms.Application.Interfaces.IApplicationTerminologyProvider AppTerminology
+@inject GovUK.Dfe.FlexForms.Application.DisplayCopy.ITemplateDisplayCopy DisplayCopy
 @inject IOptions<ApplicationPreviewOptions> ApplicationPreviewOptions
 

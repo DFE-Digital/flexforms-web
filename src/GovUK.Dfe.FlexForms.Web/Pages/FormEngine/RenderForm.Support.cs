@@ -6,6 +6,7 @@ using GovUK.Dfe.FlexForms.Domain.Caching;
 using GovUK.Dfe.FlexForms.Domain.FormEngine;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using GovUK.Dfe.FlexForms.Web.Extensions;
+using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.FlexForms.Web.ViewModels.FormEngine;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
@@ -116,7 +117,7 @@ public partial class RenderFormModel
         return outcome.Kind switch
         {
             FormEngineOutcomeKind.StayOnPage => Page(),
-            FormEngineOutcomeKind.Redirect => Redirect(outcome.RedirectUrl!),
+            FormEngineOutcomeKind.Redirect => Redirect(LocalRedirects.OrFallback(outcome.RedirectUrl)),
             FormEngineOutcomeKind.RedirectToPage => RedirectToPage(outcome.PageName, outcome.RouteValues),
             FormEngineOutcomeKind.NotFound => NotFound(),
             FormEngineOutcomeKind.BadRequest => BadRequest(outcome.ErrorMessage),

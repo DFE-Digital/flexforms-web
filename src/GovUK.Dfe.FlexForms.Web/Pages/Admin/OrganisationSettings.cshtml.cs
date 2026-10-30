@@ -99,6 +99,58 @@ public sealed class OrganisationSettingsModel(
     [BindProperty]
     public bool PreviewHideSubmitSection { get; set; }
 
+    [BindProperty]
+    [StringLength(200)]
+    public string? ContributorsSectionHeading { get; set; }
+
+    [BindProperty]
+    [StringLength(1000)]
+    public string? ContributorsSectionBody { get; set; }
+
+    [BindProperty]
+    [StringLength(200)]
+    public string? ContributorsInviteButtonText { get; set; }
+
+    [BindProperty]
+    [StringLength(200)]
+    public string? ContributorsPageHeading { get; set; }
+
+    [BindProperty]
+    [StringLength(1000)]
+    public string? ContributorsIntro { get; set; }
+
+    [BindProperty]
+    [StringLength(1000)]
+    public string? ContributorsSignInText { get; set; }
+
+    [BindProperty]
+    [StringLength(1000)]
+    public string? ContributorsOnceJoinedText { get; set; }
+
+    [BindProperty]
+    [StringLength(1000)]
+    public string? ContributorsAddLaterText { get; set; }
+
+    [BindProperty]
+    [StringLength(200)]
+    public string? ContributorsAddButtonText { get; set; }
+
+    [BindProperty]
+    [StringLength(200)]
+    public string? ContributorsProceedButtonText { get; set; }
+
+    [BindProperty]
+    [StringLength(200)]
+    public string? ContributorsCurrentHeading { get; set; }
+
+    [BindProperty]
+    [StringLength(200)]
+    public string? TaskListReviewButtonText { get; set; }
+
+    [BindProperty]
+    [StringLength(200)]
+    public string? TaskListViewButtonText { get; set; }
+
     [BindProperty(SupportsGet = true)]
     public string? SubmittedTemplateId { get; set; }
 
@@ -156,6 +208,19 @@ public sealed class OrganisationSettingsModel(
         PreviewSubmitHeading = PreviewSubmitHeading?.Trim() ?? string.Empty;
         PreviewSubmitHint = PreviewSubmitHint?.Trim() ?? string.Empty;
         PreviewSubmitButtonText = PreviewSubmitButtonText?.Trim() ?? string.Empty;
+        ContributorsSectionHeading = ContributorsSectionHeading?.Trim() ?? string.Empty;
+        ContributorsSectionBody = ContributorsSectionBody?.Trim() ?? string.Empty;
+        ContributorsInviteButtonText = ContributorsInviteButtonText?.Trim() ?? string.Empty;
+        ContributorsPageHeading = ContributorsPageHeading?.Trim() ?? string.Empty;
+        ContributorsIntro = ContributorsIntro?.Trim() ?? string.Empty;
+        ContributorsSignInText = ContributorsSignInText?.Trim() ?? string.Empty;
+        ContributorsOnceJoinedText = ContributorsOnceJoinedText?.Trim() ?? string.Empty;
+        ContributorsAddLaterText = ContributorsAddLaterText?.Trim() ?? string.Empty;
+        ContributorsAddButtonText = ContributorsAddButtonText?.Trim() ?? string.Empty;
+        ContributorsProceedButtonText = ContributorsProceedButtonText?.Trim() ?? string.Empty;
+        ContributorsCurrentHeading = ContributorsCurrentHeading?.Trim() ?? string.Empty;
+        TaskListReviewButtonText = TaskListReviewButtonText?.Trim() ?? string.Empty;
+        TaskListViewButtonText = TaskListViewButtonText?.Trim() ?? string.Empty;
         SubmittedPanelTitle = SubmittedPanelTitle?.Trim() ?? string.Empty;
 
         var outcome = await organisationSettingsAdmin.SaveAsync(CaptureWorkState(), cancellationToken);
@@ -220,6 +285,19 @@ public sealed class OrganisationSettingsModel(
             PreviewSubmitHint = PreviewSubmitHint,
             PreviewSubmitButtonText = PreviewSubmitButtonText,
             PreviewHideSubmitSection = PreviewHideSubmitSection,
+            ContributorsSectionHeading = ContributorsSectionHeading,
+            ContributorsSectionBody = ContributorsSectionBody,
+            ContributorsInviteButtonText = ContributorsInviteButtonText,
+            ContributorsPageHeading = ContributorsPageHeading,
+            ContributorsIntro = ContributorsIntro,
+            ContributorsSignInText = ContributorsSignInText,
+            ContributorsOnceJoinedText = ContributorsOnceJoinedText,
+            ContributorsAddLaterText = ContributorsAddLaterText,
+            ContributorsAddButtonText = ContributorsAddButtonText,
+            ContributorsProceedButtonText = ContributorsProceedButtonText,
+            ContributorsCurrentHeading = ContributorsCurrentHeading,
+            TaskListReviewButtonText = TaskListReviewButtonText,
+            TaskListViewButtonText = TaskListViewButtonText,
             SubmittedTemplateId = SubmittedTemplateId,
             SubmittedPanelTitle = SubmittedPanelTitle,
             SubmittedBodyMarkdown = SubmittedBodyMarkdown
@@ -246,6 +324,19 @@ public sealed class OrganisationSettingsModel(
         PreviewSubmitHint = state.PreviewSubmitHint;
         PreviewSubmitButtonText = state.PreviewSubmitButtonText;
         PreviewHideSubmitSection = state.PreviewHideSubmitSection;
+        ContributorsSectionHeading = state.ContributorsSectionHeading;
+        ContributorsSectionBody = state.ContributorsSectionBody;
+        ContributorsInviteButtonText = state.ContributorsInviteButtonText;
+        ContributorsPageHeading = state.ContributorsPageHeading;
+        ContributorsIntro = state.ContributorsIntro;
+        ContributorsSignInText = state.ContributorsSignInText;
+        ContributorsOnceJoinedText = state.ContributorsOnceJoinedText;
+        ContributorsAddLaterText = state.ContributorsAddLaterText;
+        ContributorsAddButtonText = state.ContributorsAddButtonText;
+        ContributorsProceedButtonText = state.ContributorsProceedButtonText;
+        ContributorsCurrentHeading = state.ContributorsCurrentHeading;
+        TaskListReviewButtonText = state.TaskListReviewButtonText;
+        TaskListViewButtonText = state.TaskListViewButtonText;
         SubmittedTemplateId = state.SubmittedTemplateId;
         SubmittedTemplateOptions = state.SubmittedTemplateOptions
             .Select(o => new SelectListItem(o.Text, o.Value, o.Selected))

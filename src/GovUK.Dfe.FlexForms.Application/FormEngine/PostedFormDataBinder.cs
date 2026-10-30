@@ -33,9 +33,9 @@ public sealed class PostedFormDataBinder : IPostedFormDataBinder
 
             object bound = values.Count switch
             {
+                0 => string.Empty,
                 1 => HtmlInputSanitiser.Sanitise(values[0] ?? string.Empty),
-                > 1 => values.Select(v => HtmlInputSanitiser.Sanitise(v ?? string.Empty)).ToArray(),
-                _ => string.Empty
+                _ => BindMultiValue(values)
             };
 
             data[fieldId] = bound;
@@ -44,6 +44,21 @@ public sealed class PostedFormDataBinder : IPostedFormDataBinder
         }
 
         return data;
+    }
+
+    private static object BindMultiValue(IReadOnlyList<string> values)
+    {
+        var sanitised = values
+            .Select(v => HtmlInputSanitiser.Sanitise(v ?? string.Empty))
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .ToArray();
+
+        return sanitised.Length switch
+        {
+            0 => Array.Empty<string>(),
+            1 => sanitised[0],
+            _ => sanitised
+        };
     }
 
     public void ApplyDateParts(
@@ -60,7 +75,11 @@ public sealed class PostedFormDataBinder : IPostedFormDataBinder
 
             var dateFieldId = dateMatch.Groups[1].Value;
             var part = dateMatch.Groups[2].Value.ToLowerInvariant();
-            var formValue = values.Count > 0 ? values[0] : string.Empty;
+            var rawValue = values.Count > 0 ? values[0] ?? string.Empty : string.Empty;
+            // Keep non-digit characters so "1.5" cannot become day 15. HTML is encoded, not stripped.
+            var formValue = IsAllDigits(rawValue)
+                ? rawValue.Trim()
+                : HtmlInputSanitiser.Sanitise(rawValue);
 
             if (!dateParts.TryGetValue(dateFieldId, out var parts))
                 parts = (null, null, null);
@@ -70,7 +89,6 @@ public sealed class PostedFormDataBinder : IPostedFormDataBinder
                 "day" => (formValue, parts.Month, parts.Year),
                 "month" => (parts.Day, formValue, parts.Year),
                 "year" => (parts.Day, parts.Month, formValue),
-                _ => parts
             };
 
             dateParts[dateFieldId] = parts;
@@ -116,5 +134,20 @@ public sealed class PostedFormDataBinder : IPostedFormDataBinder
             if (!string.Equals(fieldId, normalisedFieldId, StringComparison.Ordinal))
                 data[normalisedFieldId] = composed;
         }
+    }
+
+    private static bool IsAllDigits(string value)
+    {
+        var trimmed = value.Trim();
+        if (trimmed.Length == 0)
+            return true;
+
+        foreach (var c in trimmed)
+        {
+            if (!char.IsDigit(c))
+                return false;
+        }
+
+        return true;
     }
 }

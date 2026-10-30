@@ -1,5 +1,6 @@
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.Models;
+using GovUK.Dfe.FlexForms.Web.Security;
 using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -84,7 +85,9 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
                 if (!string.IsNullOrWhiteSpace(desired))
                 {
                     // Guard against accidental CSV joining from multiple inputs
-                    originalPath = desired.Split(',')[0].Trim();
+                    var candidate = desired.Split(',')[0].Trim();
+                    if (LocalRedirects.IsLocal(candidate))
+                        originalPath = candidate;
                 }
             }
 
@@ -97,7 +100,9 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
                 var desiredReturn = values.Count > 0 ? values[0] : string.Empty;
                 if (!string.IsNullOrWhiteSpace(desiredReturn))
                 {
-                    returnUrl = desiredReturn.Split(',')[0].Trim();
+                    var candidateReturn = desiredReturn.Split(',')[0].Trim();
+                    if (LocalRedirects.IsLocal(candidateReturn))
+                        returnUrl = candidateReturn;
                 }
             }
 
@@ -208,7 +213,9 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
                 var desired = values.Count > 0 ? values[0] : string.Empty;
                 if (!string.IsNullOrWhiteSpace(desired))
                 {
-                    originalPath2 = desired.Split(',')[0].Trim();
+                    var candidate = desired.Split(',')[0].Trim();
+                    if (LocalRedirects.IsLocal(candidate))
+                        originalPath2 = candidate;
                 }
             }
 
@@ -221,7 +228,9 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
                 var desiredReturn2 = values.Count > 0 ? values[0] : string.Empty;
                 if (!string.IsNullOrWhiteSpace(desiredReturn2))
                 {
-                    returnUrl2 = desiredReturn2.Split(',')[0].Trim();
+                    var candidateReturn = desiredReturn2.Split(',')[0].Trim();
+                    if (LocalRedirects.IsLocal(candidateReturn))
+                        returnUrl2 = candidateReturn;
                 }
             }
 

@@ -3,7 +3,10 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
+using GovUK.Dfe.FlexForms.Web.Middleware;
+using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.FlexForms.Web.Services;
+using GovUK.Dfe.FlexForms.Web.Tenancy;
 
 namespace GovUK.Dfe.FlexForms.Web.Authentication;
 
@@ -45,6 +48,17 @@ public class InternalServiceAuthenticationHandler(
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         var path = Context.Request.Path;
+
+        var environment = Context.RequestServices.GetService<IHostEnvironment>();
+        var configuration = Context.RequestServices.GetService<IConfiguration>();
+        if (!InternalServiceAuthEnvironmentGate.IsAllowedForRequest(Context, environment, configuration))
+        {
+            Logger.LogWarning(
+                "InternalServiceAuth rejected in {Environment} for {Path}",
+                environment?.EnvironmentName,
+                path);
+            return AuthenticateResult.NoResult();
+        }
         
         // FORWARDER PATTERN: Only engage this handler if the service header is present
         // This is a performance optimization - avoid unnecessary processing
@@ -87,7 +101,7 @@ public class InternalServiceAuthenticationHandler(
         Context.Session.SetString(InternalServiceAuthenticationHandler.SessionKeys.Token, token);
 
         // Create claims and ticket (exactly like Test Auth)
-        var claims = CreateServiceClaims(serviceEmail);
+        var claims = CreateServiceClaims(serviceEmail, Context);
         var identity = new ClaimsIdentity(claims, SchemeName);
         var principal = new ClaimsPrincipal(identity);
         var ticket = new AuthenticationTicket(principal, CreateAuthenticationProperties(token), SchemeName);
@@ -100,17 +114,23 @@ public class InternalServiceAuthenticationHandler(
     }
 
     // Exactly like Test Auth
-    private static IEnumerable<Claim> CreateServiceClaims(string serviceEmail)
+    private static IEnumerable<Claim> CreateServiceClaims(string serviceEmail, HttpContext context)
     {
-        return new[]
+        var claims = new List<Claim>
         {
-            new Claim(ClaimTypes.Name, serviceEmail),
-            new Claim(ClaimTypes.Email, serviceEmail),
-            new Claim(ClaimTypes.NameIdentifier, serviceEmail),
-            new Claim("sub", serviceEmail),
-            new Claim("email", serviceEmail),
-            new Claim("service_type", "internal")
+            new(ClaimTypes.Name, serviceEmail),
+            new(ClaimTypes.Email, serviceEmail),
+            new(ClaimTypes.NameIdentifier, serviceEmail),
+            new("sub", serviceEmail),
+            new("email", serviceEmail),
+            new("service_type", "internal")
         };
+
+        var tenantId = context.RequestServices.GetService<ITenantRequestContext>()?.TenantId;
+        if (tenantId is Guid id)
+            claims.Add(new Claim(TenantSessionBindingMiddleware.TenantIdClaimType, id.ToString()));
+
+        return claims;
     }
 
     // Exactly like Test Auth

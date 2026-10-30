@@ -1,9 +1,12 @@
 using GovUK.Dfe.CoreLibs.Http.Models;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Application.Exceptions;
+using GovUK.Dfe.FlexForms.Application.FormEngine;
+using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Web.Constants;
 using GovUK.Dfe.FlexForms.Web.Filters;
 using GovUK.Dfe.FlexForms.Web.Interfaces;
+using GovUK.Dfe.FlexForms.Web.Pages.FormEngine;
 using GovUK.Dfe.FlexForms.Web.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
@@ -492,6 +495,111 @@ public class ExternalApiExceptionFilterTests
     }
 
     [Fact]
+    public async Task OnPageHandlerExecutionAsync_ShouldUseLocalReferer_WhenFileValidationReturnUrlIsExternal()
+    {
+        var formErrorStore = Substitute.For<IFormErrorStore>();
+        var services = new ServiceCollection();
+        services.AddSingleton(formErrorStore);
+        var page = CreatePageModel(services.BuildServiceProvider());
+        var form = UploadForm(fieldId: "uploadField", returnUrl: "https://evil.example/phish");
+        var executingContext = CreateExecutingContext(
+            page,
+            method: "POST",
+            path: "/applications/REF-1/t1",
+            form: form,
+            handlerMethod: new HandlerMethodDescriptor { Name = "OnPostUploadFileAsync" });
+        executingContext.HttpContext.Request.Headers.Referer = "/applications/REF-1/t1?pageId=p1";
+        var response = new ExceptionResponse
+        {
+            StatusCode = 400,
+            Message = "File type not allowed",
+            ErrorId = "121212"
+        };
+        var executedContext = CreateExecutedContext(executingContext, CreateTypedApiException(response));
+
+        await _pageFilter.OnPageHandlerExecutionAsync(executingContext, () => Task.FromResult(executedContext));
+
+        var redirect = Assert.IsType<RedirectResult>(executedContext.Result);
+        Assert.Equal("/applications/REF-1/t1?pageId=p1", redirect.Url);
+    }
+
+    [Fact]
+    public async Task OnPageHandlerExecutionAsync_ShouldIgnoreExternalReferer_WhenFileValidationReturnUrlIsExternal()
+    {
+        var page = CreatePageModel();
+        var form = UploadForm(fieldId: "uploadField", returnUrl: "//evil.example");
+        var executingContext = CreateExecutingContext(
+            page,
+            method: "POST",
+            path: "/applications/REF-1/t1",
+            form: form,
+            handlerMethod: new HandlerMethodDescriptor { Name = "OnPostUploadFileAsync" });
+        executingContext.HttpContext.Request.Headers.Referer = "https://evil.example/phish";
+        var response = new ExceptionResponse
+        {
+            StatusCode = 422,
+            Message = "Virus detected",
+            ErrorId = "131313"
+        };
+        var executedContext = CreateExecutedContext(executingContext, CreateTypedApiException(response));
+
+        await _pageFilter.OnPageHandlerExecutionAsync(executingContext, () => Task.FromResult(executedContext));
+
+        Assert.IsType<PageResult>(executedContext.Result);
+    }
+
+    [Fact]
+    public async Task OnPageHandlerExecutionAsync_ShouldClearUploadFileReturnUrl_WhenFileValidationFallsBackToPage()
+    {
+        var page = CreateUploadFilePage(returnUrl: "https://evil.example/phish");
+        var form = UploadForm(fieldId: "uploadField", returnUrl: "https://evil.example/phish");
+        var executingContext = CreateExecutingContext(
+            page,
+            method: "POST",
+            path: "/applications/REF-1/t1/upload-file",
+            form: form,
+            handlerMethod: new HandlerMethodDescriptor { Name = "OnPostUploadFileAsync" });
+        executingContext.HttpContext.Request.Headers.Referer = "https://evil.example/phish";
+        var response = new ExceptionResponse
+        {
+            StatusCode = 422,
+            Message = "Virus detected",
+            ErrorId = "131313"
+        };
+        var executedContext = CreateExecutedContext(executingContext, CreateTypedApiException(response));
+
+        await _pageFilter.OnPageHandlerExecutionAsync(executingContext, () => Task.FromResult(executedContext));
+
+        Assert.IsType<PageResult>(executedContext.Result);
+        Assert.Equal(string.Empty, page.ReturnUrl);
+    }
+
+    [Fact]
+    public async Task OnPageHandlerExecutionAsync_ShouldClearUploadFileReturnUrl_WhenFileAccessDeniedFallsBackToPage()
+    {
+        var page = CreateUploadFilePage(returnUrl: "//evil.example");
+        var form = UploadForm(fieldId: "docField", returnUrl: "//evil.example");
+        var executingContext = CreateExecutingContext(
+            page,
+            method: "POST",
+            path: "/applications/REF-1/t1",
+            form: form,
+            handlerMethod: new HandlerMethodDescriptor { Name = "OnPostUploadFileAsync" });
+        var response = new ExceptionResponse
+        {
+            StatusCode = 403,
+            Message = "Forbidden",
+            ErrorId = "151515"
+        };
+        var executedContext = CreateExecutedContext(executingContext, CreateTypedApiException(response));
+
+        await _pageFilter.OnPageHandlerExecutionAsync(executingContext, () => Task.FromResult(executedContext));
+
+        Assert.IsType<PageResult>(executedContext.Result);
+        Assert.Equal(string.Empty, page.ReturnUrl);
+    }
+
+    [Fact]
     public async Task OnPageHandlerExecutionAsync_ShouldHandleApplicationWriteAccessDenied_OnMutating403()
     {
         var page = CreatePageModel();
@@ -732,8 +840,35 @@ public class ExternalApiExceptionFilterTests
         return httpContext;
     }
 
+    private static UploadFileModel CreateUploadFilePage(string returnUrl, IServiceProvider? requestServices = null)
+    {
+        var httpContext = CreateHttpContext(requestServices);
+        var pageContext = CreatePageContext(httpContext);
+        var config = Substitute.For<IRequestAppConfiguration>();
+        config["ApplicationName"].Returns("Test");
+
+        var page = new UploadFileModel(
+            Substitute.For<IUploadFormFile>(),
+            Substitute.For<IDeleteFormFile>(),
+            Substitute.For<IDownloadFormFile>(),
+            Substitute.For<IFormFileFieldService>(),
+            Substitute.For<IFileUploadService>(),
+            Substitute.For<IApplicationResponseService>(),
+            Substitute.For<IApplicationStateService>(),
+            Substitute.For<INotificationsClient>(),
+            Substitute.For<IFormErrorStore>(),
+            config,
+            NullLogger<UploadFileModel>.Instance)
+        {
+            PageContext = pageContext,
+            ReturnUrl = returnUrl
+        };
+        page.TempData = new TempDataDictionary(httpContext, Substitute.For<ITempDataProvider>());
+        return page;
+    }
+
     private static PageHandlerExecutingContext CreateExecutingContext(
-        TestPageModel page,
+        PageModel page,
         string method = "POST",
         string path = "/page",
         string query = "",
@@ -764,7 +899,7 @@ public class ExternalApiExceptionFilterTests
         PageHandlerExecutingContext executingContext,
         Exception? exception = null)
     {
-        var page = (TestPageModel)executingContext.HandlerInstance;
+        var page = (PageModel)executingContext.HandlerInstance;
         var pageContext = CreatePageContext(executingContext.HttpContext, page.ModelState);
         var executed = new PageHandlerExecutedContext(
             pageContext,

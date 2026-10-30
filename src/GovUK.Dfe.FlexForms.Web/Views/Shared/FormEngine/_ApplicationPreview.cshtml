@@ -4,12 +4,10 @@
     var preview = Model.Preview;
     var submit = preview?.Submit;
     var previewOptions = ApplicationPreviewOptions.Value;
-    var pageHeading = FirstNonEmpty(previewOptions.PageHeading, "Check your answers");
-    var submitHeading = FirstNonEmpty(previewOptions.SubmitHeading, $"Submit your {AppTerminology.Singular}");
-    var submitHint = FirstNonEmpty(
-        previewOptions.SubmitHint,
-        $"By submitting this {AppTerminology.Singular} you are confirming that, to the best of your knowledge, the details you are providing are correct.");
-    var submitButtonText = FirstNonEmpty(previewOptions.SubmitButtonText, "Submit");
+    var pageHeading = DisplayCopy.PreviewPageHeading;
+    var submitHeading = DisplayCopy.PreviewSubmitHeading;
+    var submitHint = DisplayCopy.PreviewSubmitHint;
+    var submitButtonText = DisplayCopy.PreviewSubmitButtonText;
     var showSubmitSection = submit?.ShowSubmitSection == true && !previewOptions.HideSubmitSection;
 }
 
@@ -144,9 +142,4 @@ else if (submit?.ShowLeadApplicantInset == true && !previewOptions.HideSubmitSec
             <p class="govuk-body">Only the lead applicant can submit this @AppTerminology.Singular.</p>
         </div>
     </div>
-}
-
-@functions {
-    private static string FirstNonEmpty(string? configured, string fallback) =>
-        string.IsNullOrWhiteSpace(configured) ? fallback : configured.Trim();
 }

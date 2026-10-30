@@ -1,5 +1,6 @@
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.Models;
+using GovUK.Dfe.FlexForms.Web.Security;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.Text.Json;
@@ -128,8 +129,11 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Confirmation
                 // Clear the confirmation as it's been used
                 _confirmationService.ClearConfirmation(ConfirmationToken);
 
+                if (!LocalRedirects.IsLocal(originalPath))
+                    return RedirectToPage("/Error/General");
+
                 // Preserve the POST and body so the original handler executes as intended
-                var redirectUrl = $"{originalPath}?confirmed=true&handler={originalHandler}";
+                var redirectUrl = $"{originalPath}?confirmed=true&handler={Uri.EscapeDataString(originalHandler ?? string.Empty)}";
                 _logger.LogInformation("Redirecting (preserve method) to execute original action: {RedirectUrl}", redirectUrl);
                 return new RedirectResult(redirectUrl, permanent: false, preserveMethod: true);
             }

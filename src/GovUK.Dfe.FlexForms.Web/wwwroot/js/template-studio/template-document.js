@@ -902,7 +902,7 @@
             if (after.fields.has(fieldKey(entry.parentFieldId, entry.fieldId))) {
                 issues.push({
                     fieldId: entry.fieldId,
-                    message: 'Question ' + describeField({ fieldId: entry.fieldId, parentFieldId: entry.parentFieldId }) + ' is retired but is still in the template. Remove it from the retired list, or delete the question.'
+                    message: 'Question ' + describeField({ fieldId: entry.fieldId, parentFieldId: entry.parentFieldId }) + ' is already retired. Choose another answer id.'
                 });
             }
             (entry.replacedBy || []).forEach(function (replacement) {
@@ -991,10 +991,120 @@
         });
     };
 
+    // After a question's id has already been changed from `before` to `after`, update retirement and reporting-key
+    // metadata. Returns an error the inspector should revert, a note, or an empty string.
+    TemplateDocument.prototype.applyAnswerIdRename = function (path, before, after, options) {
+        options = options || {};
+        if (before === after) return '';
+        var node = this.get(path);
+        if (!node) return '';
+        var parentFieldId = this.fieldKeyOf(path).parentFieldId;
+        var retired = this.root.retiredFields || [];
+        var retirementOfAfter = retired.find(function (entry) {
+            return fieldKey(entry.parentFieldId, entry.fieldId) === fieldKey(parentFieldId, after);
+        });
+        var renamingBack = !!(retirementOfAfter && before && (retirementOfAfter.replacedBy || []).some(function (id) {
+            return String(id).toLowerCase() === String(before).toLowerCase();
+        }));
+
+        if (retirementOfAfter && !renamingBack) {
+            node.fieldId = before;
+            return '"' + after + '" is already retired, choose another id';
+        }
+
+        if (!before) return '';
+
+        // Swapping two live ids (a → b while b is still on another question, then that question b → a) must not
+        // retire or rewrite reporting keys for an id that is still in use.
+        var stillLive = inventory(this.root).fields.has(fieldKey(parentFieldId, before));
+        if (!stillLive) {
+            (this.root.retiredFields || []).forEach(function (entry) {
+                if (entry.replacedBy) entry.replacedBy = entry.replacedBy.map(function (id) { return id === before ? after : id; });
+            });
+        }
+
+        if (renamingBack) {
+            this.unretire({ fieldId: after, parentFieldId: parentFieldId });
+            var original = options.baselineRoot
+                ? inventory(options.baselineRoot).fields.get(fieldKey(parentFieldId, after))
+                : null;
+            if (original && node.semanticKey === original.semanticKey && original.semanticKey === after) delete node.semanticKey;
+            return '';
+        }
+
+        if (stillLive) return '';
+
+        var previous = options.inUse && options.baselineRoot
+            ? inventory(options.baselineRoot).fields.get(fieldKey(parentFieldId, before))
+            : null;
+        if (!previous) return '';
+        this.retire({ fieldId: before, parentFieldId: parentFieldId }, [after]);
+        if (!node.semanticKey) node.semanticKey = previous.semanticKey;
+        return 'Applications already have answers saved as "' + before + '", so it is retired and replaced by "' + after + '", which keeps its reporting key.';
+    };
+
     function defaultOptions(type) {
         return type === 'radios'
             ? [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }]
             : [{ value: 'option-1', label: 'Option 1' }, { value: 'option-2', label: 'Option 2' }];
+    }
+
+    function normalizeRoleId(value) {
+        if (value == null || value === '') return '';
+        return String(value).toLowerCase();
+    }
+
+    function roleIdsEqual(a, b) {
+        return normalizeRoleId(a) === normalizeRoleId(b);
+    }
+
+    function findUserRoleId(contributorRoles) {
+        var roles = contributorRoles || [];
+        for (var i = 0; i < roles.length; i++) {
+            var role = roles[i];
+            if (role && role.name && String(role.name).toLowerCase() === 'user' && role.roleId) {
+                return role.roleId;
+            }
+        }
+        return null;
+    }
+
+    function contributorRoleOptionLabel(role) {
+        var name = (role && (role.name || role.roleId)) || '';
+        if (String(name).toLowerCase() === 'user') {
+            return 'User (can edit this application)';
+        }
+        return name + ' (view-only on this application)';
+    }
+
+    function contributorRoleIsKnown(items, savedRoleId, userRoleId) {
+        if ((items || []).some(function (item) { return roleIdsEqual(item.value, savedRoleId); })) {
+            return true;
+        }
+        return !!(userRoleId && roleIdsEqual(savedRoleId, userRoleId));
+    }
+
+    function contributorRoleChoices(contributorRoles, savedRoleId) {
+        var userRoleId = findUserRoleId(contributorRoles);
+        var items = [{ value: '', label: 'User (can edit this application)' }];
+        (contributorRoles || []).forEach(function (role) {
+            if (!role || !role.roleId) return;
+            if (userRoleId && roleIdsEqual(role.roleId, userRoleId)) return;
+            items.push({ value: role.roleId, label: contributorRoleOptionLabel(role) });
+        });
+        if (savedRoleId && !contributorRoleIsKnown(items, savedRoleId, userRoleId)) {
+            items.push({ value: savedRoleId, label: 'Saved role (no longer available)' });
+        }
+        return items;
+    }
+
+    function contributorRoleSelectValue(savedRoleId, contributorRoles) {
+        var userRoleId = findUserRoleId(contributorRoles);
+        if (userRoleId && savedRoleId && roleIdsEqual(savedRoleId, userRoleId)) return '';
+        var matchingRole = (contributorRoles || []).find(function (role) {
+            return role && role.roleId && roleIdsEqual(role.roleId, savedRoleId);
+        });
+        return matchingRole ? matchingRole.roleId : savedRoleId || '';
     }
 
     var api = {
@@ -1011,7 +1121,10 @@
         negateOperator: negateOperator,
         fieldKind: fieldKind,
         fieldKey: fieldKey,
-        inventory: inventory
+        inventory: inventory,
+        contributorRoleChoices: contributorRoleChoices,
+        contributorRoleSelectValue: contributorRoleSelectValue,
+        roleIdsEqual: roleIdsEqual
     };
 
     if (typeof module !== 'undefined' && module.exports) {
