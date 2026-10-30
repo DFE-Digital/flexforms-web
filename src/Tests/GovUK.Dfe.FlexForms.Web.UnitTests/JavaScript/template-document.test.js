@@ -419,12 +419,13 @@ test('contributor role choices treat saved user role id as the default user opti
 });
 
 test('contributor role choices match role ids case-insensitively', () => {
-    const caseworkerRoleId = '22222222-2222-4222-8222-222222222222';
+    const caseworkerRoleId = 'abcdef12-abcd-4abc-8abc-abcdefabcdef';
     const roles = [{ roleId: caseworkerRoleId, name: 'Caseworker' }];
-    const savedId = caseworkerRoleId.toUpperCase();
+    const savedId = 'ABCDEF12-ABCD-4ABC-8ABC-ABCDEFABCDEF';
     const items = lib.contributorRoleChoices(roles, savedId);
     assert.equal(items.length, 2);
     assert.ok(!items.some(item => item.label.includes('no longer available')));
+    assert.equal(lib.contributorRoleSelectValue(savedId, roles), caseworkerRoleId);
 });
 
 test('contributor role choices mark unknown saved roles as unavailable', () => {

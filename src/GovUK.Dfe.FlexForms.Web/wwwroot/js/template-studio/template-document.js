@@ -1101,7 +1101,10 @@
     function contributorRoleSelectValue(savedRoleId, contributorRoles) {
         var userRoleId = findUserRoleId(contributorRoles);
         if (userRoleId && savedRoleId && roleIdsEqual(savedRoleId, userRoleId)) return '';
-        return savedRoleId || '';
+        var matchingRole = (contributorRoles || []).find(function (role) {
+            return role && role.roleId && roleIdsEqual(role.roleId, savedRoleId);
+        });
+        return matchingRole ? matchingRole.roleId : savedRoleId || '';
     }
 
     var api = {
