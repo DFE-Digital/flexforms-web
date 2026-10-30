@@ -22,6 +22,9 @@ You do not need to be a developer to use this manual. Where a change is made in 
 10. [Permissions — how they work](#10-permissions--how-they-work)
 11. [Organisation settings](#11-organisation-settings)
     - [11.4 Application submitted page](#114-application-submitted-page)
+    - [11.5 Check your answers](#115-check-your-answers)
+    - [11.6 Contributors](#116-contributors)
+    - [11.7 Task list buttons](#117-task-list-buttons)
 12. [Event mappings](#12-event-mappings)
     - [12.1 What this page is for](#121-what-this-page-is-for)
     - [12.2 Events in plain English](#122-events-in-plain-english)
@@ -239,7 +242,7 @@ For a full step-by-step guide with screenshots, see the [Template Studio User Ma
 - **Undo** and **Redo** step back and forward through your changes, including moves, deletes and JSON edits. Typing in one box counts as one change. Outside text boxes you can also press Ctrl+Z and Ctrl+Y (Cmd on a Mac). Undoing back to where you started clears **Unsaved changes**. The breadcrumbs above the heading take you back up the structure. Each item lists what's inside it, with a **Change** link for each, and has an **Add …** form for adding more. Ids are made from names as you type, until you change an id yourself.
 - **Questions** — choose the question type, wording, hint, whether it must be answered and the error message, options for radios, checkboxes and dropdowns, a length limit, and format checks such as a UK telephone number. Search and upload questions list the complex fields set up for the tenant. Changing the text of an existing option keeps its saved value, because saved answers and rules use it.
 - **Rules** — **Add a rule** to show pages and questions only when an answer is, isn't, or is one of the values you choose, or has or hasn't been given. Template Studio saves each rule as the pair the form needs: one rule that skips and hides them, and one that shows them. You can also start a rule from a page or question (**Add a rule that shows this page**). Rules made this way can be changed later; rules written in JSON can be turned on and off or deleted, and changed in the JSON tab. Pages and questions that a rule shows are marked **Shown by a rule** in the structure. Pages set to "Go to the next page a rule shows" only follow rules that use "is".
-- **Template settings** — also set the **Dashboard columns** (up to 3 answers alongside built-in columns) and the **Details on the task list** (up to 10 rows, from application details or answers). **Use the default columns** or **Use the default details** goes back to the platform defaults.
+- **Template settings** — also set the **Dashboard columns** (up to 3 answers alongside built-in columns, plus optional lead applicant name or email), the **Details on the task list** (up to 10 rows, from application details or answers), the **role invited contributors get**, and **Wording for this template**. **Use the default columns** or **Use the default details** goes back to the platform defaults. Blank wording keeps the organisation setting.
 - **Tasks and lists** — a task can be questions on pages, a repeatable list, or pages repeated for each item in another list (for example a declaration for each trust). You can change the type while the task has no pages. Repeatable lists also have the columns shown for each added item and the added, changed and removed messages.
 - **Checks only when another answer matches** — a length limit or format check can apply only when another answer is, or isn't, a value. Whether a question must be answered can't depend on another answer; use a rule to show the question instead.
 - **Once applications use the template** — Template Studio checks how many applications use the template. If there are any, or it can't check:
@@ -247,7 +250,7 @@ For a full step-by-step guide with screenshots, see the [Template Studio User Ma
   - changing an answer id retires the old id, names the new one as its replacement, and keeps the old reporting key (`semanticKey`), so reports keep one column;
   - changing what a question stores (for example text to radios) shows a warning with **Give it a new answer id**;
   - **Check for problems** and **Save new version** list anything the API would reject for reporting, before you save. These checks compare with the version you opened; saving still checks every earlier version.
-- **JSON (advanced)** — the JSON Template Studio generates. You can edit it directly; your edits are applied when you leave the tab, and you can't leave while the JSON is invalid. Anything Template Studio doesn't show, such as `semanticKey`, `retiredFields`, dashboard columns and task list details, is kept as it is.
+- **JSON (advanced)** — the JSON Template Studio generates. You can edit it directly; your edits are applied when you leave the tab, and you can't leave while the JSON is invalid. Anything Template Studio doesn't show, such as `semanticKey` and `retiredFields`, is kept as it is.
 - **Check for problems** runs the same checks as saving, without saving. Each problem links to the item it is about.
 - **Preview task** opens the task you are working on in a new tab, using your unsaved changes. Nothing is saved, rules aren't run, and search and upload questions are shown as placeholders.
 - **Save new version** works like the JSON route below: version number, reporting confirmation, then save. If the save is rejected, Template Studio keeps your changes and lists the problems.
@@ -319,7 +322,7 @@ The cache refreshes immediately. Repeat for each base status you want to rename 
 
 ## 7. Dashboard columns (via the template)
 
-There is **no Admin screen** for dashboard columns. You add them in the template JSON, then save a new version in Template Manager.
+Set dashboard columns in **Template Studio**, under the template settings. You can still add them in the template JSON, then save a new version in Template Manager.
 
 The applications dashboard (`/applications/dashboard`) heading defaults to **Your {plural}** and can be overridden in [Organisation settings](#11-organisation-settings), including a `{template_name}` placeholder that names the form the user is in. The table columns come from the template’s `"dashboard"` section.
 
@@ -354,7 +357,7 @@ In the root of the template JSON:
 
 | You set | Meaning |
 |---------|---------|
-| `"type": "system"` | Built-in column. `id` is one of `reference`, `dateStarted`, `dateSubmitted`, `status`, `action`. |
+| `"type": "system"` | Built-in column. `id` is one of `reference`, `dateStarted`, `dateSubmitted`, `status`, `action`, `leadApplicantName`, `leadApplicantEmail`. |
 | `"type": "field"` | Answer from the form. `fieldId` must match the question’s id. `header` is the column title. |
 | `order` | Lower numbers appear first. |
 
@@ -364,6 +367,7 @@ In the root of the template JSON:
 - If you only list field columns, the default system columns are still added.
 - Column **headings** come from the **latest** template version. Cell **values** come from each application’s own answers. Older applications show a blank cell if that field did not exist yet.
 - Prefer simple answers (text, date, radios). File uploads do not work well in a table cell.
+- **Lead applicant name** (`leadApplicantName`) and **Lead applicant email** (`leadApplicantEmail`) are optional. They are not part of the default columns. After a lead applicant is changed, these columns show the new person.
 
 You can also point `fieldId` at a field inside a repeatable collection; several items are shown joined with commas. Full path rules are in the [designer manual, §3.1](Form-Template-Designer-Manual.md#31-dashboard-columns-dashboard).
 
@@ -537,6 +541,8 @@ A legacy `ExternalApplicationsApiClient:DefaultTemplateId` tenant setting is onl
 
 Invite/remove of extra people on **one application** is done from that application’s task list when the template has `"contributorPattern": true`.
 
+In Template Studio, **Role for invited contributors** chooses what those people can do. Leave it as **User** and they can edit the application. Choose any other custom role and they can only view that application and its files. Admin, SuperAdmin and Administrator cannot be chosen. People already invited keep the access they have. See the [Template Studio user manual](Template-Studio-User-Manual.md#41-role-for-invited-contributors).
+
 Admins and SuperAdmins can also look up who is on an application, or look up a user by email to see the applications they created and who they invited, at **Admin → Users & Roles → Contributor management** (`/admin/contributor-management`). Custom User Manager roles cannot open this page.
 
 ---
@@ -672,6 +678,8 @@ Effects you will notice:
 - Filter panel **Filter reform plans**
 - Admin applications list still says “applications” in the page title; day-to-day user language follows these terms
 
+A template can set its own singular and plural in Template Studio. A blank template field keeps these organisation values.
+
 ### 11.2 Notification banner
 
 Show a GOV.UK notification banner on **every page** (for example “This is a test environment”).
@@ -696,7 +704,9 @@ Show a GOV.UK notification banner on **every page** (for example “This is a te
 | **Start new hint** | Supporting text under that heading. Leave blank for the default lead-applicant sentence |
 | **Start new button text** | Primary button label. Leave blank to use **Start new {singular}** |
 
-Listing options do **not** change which columns appear. Columns come from the template JSON ([section 7](#7-dashboard-columns-via-the-template)).
+Listing options do **not** change which columns appear. Columns come from the template ([section 7](#7-dashboard-columns-via-the-template)).
+
+**Page size** and **Enable application filters** apply to the whole tenant. The five text fields are the default for every template. A template can replace any of them in Template Studio; a blank template field keeps the text you set here.
 
 #### Showing the template name in dashboard text
 
@@ -733,6 +743,51 @@ Markdown uses the same **Markdig** renderer as form hints. Supported:
 - Links: `[text](https://…)` or `[email](mailto:name@example.com)`
 
 Raw HTML is stripped. Save settings before switching template if you have unsaved changes.
+
+### 11.5 Check your answers
+
+This is the page applicants see before they submit. It applies to every template. A template can replace the text fields in Template Studio. **Hide the submit section** stays here and is not set per template.
+
+| Field | Purpose |
+|-------|---------|
+| **Page heading** | For example `Check your answers`. Leave blank for the built-in heading. |
+| **Submit heading** | Heading above the submit button. Leave blank to use the terminology default. |
+| **Submit hint** | Confirmation text above the submit button. |
+| **Submit button text** | For example `Submit`. |
+| **Hide the submit section** | Removes the submit heading, hint and button from the preview page. |
+
+### 11.6 Contributors
+
+Wording for the contributors block on the task list, and for the invite contributors page. This is the default for every template. A template can replace any field in Template Studio.
+
+Leave a field blank to keep the built-in sentence. You can use `{singular}`, `{plural}`, `{template_name}` and `{contributor_email}`.
+
+| Field | Where it appears |
+|-------|------------------|
+| **Section heading** | Heading of the contributors block. Default: Contributors. |
+| **Section text** | Text under that heading. |
+| **Invite button** | Button that opens the invite page. |
+| **Invite page heading** | Heading of the invite page. |
+| **Invite introduction** | First paragraph on the invite page. |
+| **DfE Sign-in text** | Paragraph about signing in. `{contributor_email}` is the example email. |
+| **After they join** | Paragraph about what happens once a contributor joins. |
+| **Add later text** | Paragraph that they can be added later. |
+| **Add button** | Button that adds a contributor. |
+| **Go to application button** | Button that returns to the application. |
+| **Current contributors heading** | Heading above the list of people already invited. |
+
+The table of current contributors keeps its fixed column headings.
+
+### 11.7 Task list buttons
+
+Labels for the buttons at the bottom of a task list. This is the default for every template. A template can replace either label in Template Studio.
+
+| Field | Default when blank |
+|-------|--------------------|
+| **Review button** | Review {singular} |
+| **View button** | View {singular} |
+
+`{singular}` uses the application terminology, or the singular set on that template.
 
 ---
 
@@ -2232,9 +2287,26 @@ Every change is recorded against your name with the reason, and starts a **refre
 Page: `/admin/applications`  
 **Admin and SuperAdmin only** (not Caseworker).
 
-![Template selector and table of reference, id, date created, Open](images/17-admin-applications.png)
+![Template selector and a card for one application](images/17-admin-applications.png)
 
-Choose a **Template** to list every application for that form in this tenant, newest first. Columns: Reference, Application ID, Date created, **Open** (new tab).
+Choose a **Template** to list every application for that form in this tenant, newest first. Each application is a card:
+
+| On the card | What it does |
+|-------------|--------------|
+| **Reference** | The card title. |
+| **Open** | Opens that application in a new tab. |
+| **Delete** | Deletes the application, after you confirm. |
+| **Application ID** | The identifier, for support. |
+| **Date created** | When the application was created. |
+| **Lead applicant** | Name and email of the person who currently owns it. |
+| **Change lead applicant** | Asks for the new owner's email. |
+
+**Change lead applicant** gives the new person the same access to that application as the person who created it, and removes the previous owner's access to that application only. Their access to other applications, and to the template, is left as it is.
+
+- The new owner must already be in this tenant. If they are not, or the email is unknown, you see **That user was not found in this tenant.** The list stays on the page.
+- If they cannot open this template, they are given read access to it. The success message says so. They are not given permission to edit the template.
+- If they are already the lead applicant, nothing is changed.
+- A deleted application shows **Deleted**. It cannot be opened or given a new lead applicant.
 
 This is a catalogue for support. Caseworkers use the main **Applications** item in the header instead, which uses the same filters as the dashboard when filters are enabled.
 
@@ -2308,7 +2380,9 @@ Some settings are not in the Admin UI at all, even for SuperAdmins, because they
 | Banner or terminology not updating | Organisation settings: refresh the browser. Banner only shows when **Enabled** is ticked and **Message** is not empty. |
 | User has a role but cannot open a form | User role needs **Forms** ticked, unless the role already grants application access (for example Caseworker). |
 | Caseworker sees Applications in the nav but cannot list | They need `Application:Any:Read` (Create Caseworker role) and usually `ApplicationFiles:Any:Read` for files. They may also need template read for custom statuses. |
-| Dashboard missing a custom column | Check `fieldId` matches the question, you have no more than three field columns, and you saved a new template version. Older applications can show blank cells. |
+| Dashboard missing a custom column | Check `fieldId` matches the question, you have no more than three field columns, and you saved a new template version. Older applications can show blank cells. Lead applicant columns are optional and are not in the default set. |
+| Change lead applicant says the user was not found | They must already be in this tenant. An unknown email shows the same message. |
+| Wording changed in Organisation settings but one form is unchanged | That template has its own wording in Template Studio. Clear the template field to use the organisation setting again, then save a new version. |
 | Grant to all users succeeded but the banner showed zeros | Fixed in a recent release; counts should match people actually updated. |
 | Submit succeeded but reporting never received a message | See [12.18 Troubleshooting event mappings](#1218-troubleshooting-event-mappings). Check triggers, mapping, Service Bus topic/subscription, and API logs. |
 | Confirmation email missing academy name / custom text | See [13.12 Troubleshooting email placeholders](#1312-troubleshooting-email-placeholders). Check Notify `((placeholder))` spelling, `EmailPlaceholderMappings` (Target Shared), and form `fieldId`. |

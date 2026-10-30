@@ -1,5 +1,6 @@
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
+using GovUK.Dfe.FlexForms.Application.DisplayCopy;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using Microsoft.Extensions.Logging;
 using Task = System.Threading.Tasks.Task;
@@ -28,6 +29,7 @@ public sealed class DashboardApplicationsService(
     IApplicationsClient applicationsClient,
     IFormTemplateProvider formTemplateProvider,
     IContributorPatternService contributorPatternService,
+    ITemplateCopyContext templateCopyContext,
     ILogger<DashboardApplicationsService> logger) : IDashboardApplications
 {
     public async Task<IReadOnlyList<DashboardColumn>> ResolveColumnsAsync(
@@ -40,6 +42,7 @@ public sealed class DashboardApplicationsService(
         try
         {
             var template = await formTemplateProvider.GetTemplateAsync(templateId.Value.ToString(), cancellationToken);
+            templateCopyContext.Use(template);
             return DashboardColumnResolver.Resolve(template);
         }
         catch (Exception ex)

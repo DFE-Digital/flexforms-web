@@ -23,7 +23,8 @@ public class DashboardConfiguration
 
 /// <summary>
 /// A single dashboard column. Use <c>type: "system"</c> for built-in columns
-/// (<c>reference</c>, <c>dateStarted</c>, <c>dateSubmitted</c>, <c>status</c>, <c>action</c>)
+/// (<c>reference</c>, <c>dateStarted</c>, <c>dateSubmitted</c>, <c>status</c>, <c>action</c>,
+/// <c>leadApplicantName</c>, <c>leadApplicantEmail</c>)
 /// or <c>type: "field"</c> with a stable form <see cref="FieldId"/>.
 /// </summary>
 [ExcludeFromCodeCoverage]

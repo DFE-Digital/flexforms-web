@@ -78,13 +78,13 @@
             @if (Model.IsApplicationEditable())
             {
                 <a href="/applications/@Model.ReferenceNumber?preview=true" class="govuk-button" id="review-application-button" role="button">
-                    Review @AppTerminology.Singular
+                    @DisplayCopy.ReviewButtonText
                 </a>
             }
             else
             {
                 <a href="/applications/@Model.ReferenceNumber?preview=true" class="govuk-button" id="view-application-button" role="button">
-                    View @AppTerminology.Singular
+                    @DisplayCopy.ViewButtonText
                 </a>
                 <div class="govuk-inset-text govuk-!-margin-top-4">
                     @if (string.Equals(Model.ApplicationStatus, "Submitted", StringComparison.OrdinalIgnoreCase))
@@ -106,10 +106,10 @@
     {
         <div class="govuk-grid-column-one-third">
             <div class="govuk-!-margin-top-6">
-                <h2 class="govuk-heading-m">Contributors</h2>
-                <p class="govuk-body">You can invite other people to complete or view parts of this @AppTerminology.Singular.</p>
+                <h2 class="govuk-heading-m">@DisplayCopy.ContributorsSectionHeading</h2>
+                <p class="govuk-body">@DisplayCopy.ContributorsSectionBody</p>
                     <a href="/applications/@Model.ReferenceNumber/contributors" id="invite-contributors" class="govuk-button govuk-button--secondary" role="button">
-                        Invite contributors
+                        @DisplayCopy.ContributorsInviteButtonText
                     </a>
             </div>
         </div>

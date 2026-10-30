@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
+using GovUK.Dfe.FlexForms.Application.DisplayCopy;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,6 +20,8 @@ public class ContributorsModel(
     IContributorPatternService contributorPatternService,
     IRequestAppConfiguration requestConfiguration,
     IApplicationTerminologyProvider terminologyProvider,
+    ITemplateCopyContext templateCopyContext,
+    IFormTemplateProvider formTemplateProvider,
     ILogger<ContributorsModel> logger) : PageModel
 {
     [BindProperty(SupportsGet = true, Name = "referenceNumber")]
@@ -43,6 +46,7 @@ public class ContributorsModel(
         }
 
         ApplicationId = applicationId;
+        await UseTemplateCopyAsync(application);
 
         Contributors = await contributorService.GetApplicationContributorsAsync(applicationId!.Value);
 
@@ -216,5 +220,26 @@ public class ContributorsModel(
             templateId,
             ReferenceNumber);
         return RedirectToPage("/FormEngine/RenderForm", new { referenceNumber = ReferenceNumber });
+    }
+
+    private async Task UseTemplateCopyAsync(ApplicationDto? application)
+    {
+        var schema = application?.TemplateSchema?.JsonSchema
+                     ?? HttpContext.Session.GetString($"TemplateSchema_{ReferenceNumber}");
+        if (templateCopyContext.TryUseJson(schema))
+            return;
+
+        var templateId = HttpContext.Session.GetString("TemplateId");
+        if (string.IsNullOrWhiteSpace(templateId))
+            return;
+
+        try
+        {
+            templateCopyContext.Use(await formTemplateProvider.GetTemplateAsync(templateId));
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not load template {TemplateId} for contributor page wording", templateId);
+        }
     }
 }

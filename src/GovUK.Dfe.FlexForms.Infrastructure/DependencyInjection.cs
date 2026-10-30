@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using GovUK.Dfe.FlexForms.Application.DisplayCopy;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Infrastructure.Parsers;
 using GovUK.Dfe.FlexForms.Infrastructure.Providers;
@@ -48,6 +49,8 @@ public static class DependencyInjection
         services.AddScoped<IConditionalLogicEngine, ConditionalLogicEngine>();
         services.AddScoped<IConditionalLogicOrchestrator, ConditionalLogicOrchestrator>();
         services.AddScoped<IDerivedCollectionFlowService, DerivedCollectionFlowService>();
+        services.AddScoped<ITemplateCopyContext, TemplateCopyContext>();
+        services.AddScoped<ITemplateDisplayCopy, TemplateDisplayCopyResolver>();
         services.AddScoped<IApplicationTerminologyProvider, ApplicationTerminologyProvider>();
         services.AddScoped<ISchemaEventDefinitionProvider, SchemaEventDefinitionProvider>();
         services.AddSingleton<IEventTypeRegistry, EventTypeRegistry>();

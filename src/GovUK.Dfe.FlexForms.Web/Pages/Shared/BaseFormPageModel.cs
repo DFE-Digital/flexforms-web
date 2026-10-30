@@ -1,3 +1,4 @@
+using GovUK.Dfe.FlexForms.Application.DisplayCopy;
 using GovUK.Dfe.FlexForms.Application.Diagnostics;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.Models;
@@ -7,6 +8,7 @@ using GovUK.Dfe.FlexForms.Web.Services;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.DependencyInjection;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
 using Task = System.Threading.Tasks.Task;
@@ -63,6 +65,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Shared
         protected async Task LoadTemplateAsync()
         {
             Template = await _templateManagementService.LoadTemplateAsync(TemplateId, CurrentApplication);
+            HttpContext?.RequestServices.GetService<ITemplateCopyContext>()?.Use(Template);
         }
 
         /// <summary>

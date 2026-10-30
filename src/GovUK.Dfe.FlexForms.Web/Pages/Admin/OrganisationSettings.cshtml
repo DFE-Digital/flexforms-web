@@ -240,6 +240,78 @@
 
             <div class="govuk-summary-card">
                 <div class="govuk-summary-card__title-wrapper">
+                    <h2 class="govuk-summary-card__title">Contributors</h2>
+                </div>
+                <div class="govuk-summary-card__content">
+                    <p class="govuk-body">Default wording for the contributors section and the invite page. A template can override each field in Template Studio.</p>
+                    <p class="govuk-hint">Leave a field blank to keep the built-in sentence. You can use {singular}, {plural}, {template_name} and {contributor_email}.</p>
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="ContributorsSectionHeading">Section heading</label>
+                        <input class="govuk-input" asp-for="ContributorsSectionHeading" autocomplete="off" />
+                    </div>
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="ContributorsSectionBody">Section text</label>
+                        <textarea class="govuk-textarea" asp-for="ContributorsSectionBody" rows="2"></textarea>
+                    </div>
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="ContributorsInviteButtonText">Invite button</label>
+                        <input class="govuk-input" asp-for="ContributorsInviteButtonText" autocomplete="off" />
+                    </div>
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="ContributorsPageHeading">Invite page heading</label>
+                        <input class="govuk-input" asp-for="ContributorsPageHeading" autocomplete="off" />
+                    </div>
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="ContributorsIntro">Invite introduction</label>
+                        <textarea class="govuk-textarea" asp-for="ContributorsIntro" rows="2"></textarea>
+                    </div>
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="ContributorsSignInText">DfE Sign-in text</label>
+                        <textarea class="govuk-textarea" asp-for="ContributorsSignInText" rows="2"></textarea>
+                    </div>
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="ContributorsOnceJoinedText">After they join</label>
+                        <textarea class="govuk-textarea" asp-for="ContributorsOnceJoinedText" rows="2"></textarea>
+                    </div>
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="ContributorsAddLaterText">Add later text</label>
+                        <input class="govuk-input" asp-for="ContributorsAddLaterText" autocomplete="off" />
+                    </div>
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="ContributorsAddButtonText">Add button</label>
+                        <input class="govuk-input" asp-for="ContributorsAddButtonText" autocomplete="off" />
+                    </div>
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="ContributorsProceedButtonText">Go to application button</label>
+                        <input class="govuk-input" asp-for="ContributorsProceedButtonText" autocomplete="off" />
+                    </div>
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="ContributorsCurrentHeading">Current contributors heading</label>
+                        <input class="govuk-input" asp-for="ContributorsCurrentHeading" autocomplete="off" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="govuk-summary-card">
+                <div class="govuk-summary-card__title-wrapper">
+                    <h2 class="govuk-summary-card__title">Task list buttons</h2>
+                </div>
+                <div class="govuk-summary-card__content">
+                    <p class="govuk-body">Default labels for the review and view buttons. A template can override them in Template Studio.</p>
+                    <p class="govuk-hint">Leave blank to use Review {singular} and View {singular}.</p>
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="TaskListReviewButtonText">Review button</label>
+                        <input class="govuk-input" asp-for="TaskListReviewButtonText" autocomplete="off" />
+                    </div>
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="TaskListViewButtonText">View button</label>
+                        <input class="govuk-input" asp-for="TaskListViewButtonText" autocomplete="off" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="govuk-summary-card">
+                <div class="govuk-summary-card__title-wrapper">
                     <h2 class="govuk-summary-card__title">Application submitted page</h2>
                 </div>
                 <div class="govuk-summary-card__content">

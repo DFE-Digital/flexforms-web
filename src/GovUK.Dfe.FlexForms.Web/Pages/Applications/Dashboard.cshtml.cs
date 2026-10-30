@@ -1,4 +1,5 @@
 using GovUK.Dfe.FlexForms.Application.Dashboard;
+using GovUK.Dfe.FlexForms.Application.DisplayCopy;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Application.Options;
 using GovUK.Dfe.FlexForms.Web.Models.Applications;
@@ -12,6 +13,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
@@ -90,21 +92,29 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
         public bool CanStartNewApplication { get; private set; }
 
         public string MainHeading =>
-            Copy(dashboardOptions.Value.MainHeading, $"Your {terminology.Plural}");
+            Resolved(display => display.DashboardMainHeading, Copy(dashboardOptions.Value.MainHeading, $"Your {terminology.Plural}"));
 
         public string InProgressHeading =>
-            Copy(dashboardOptions.Value.InProgressHeading, $"{terminology.PluralCapitalised} in progress");
+            Resolved(display => display.DashboardInProgressHeading, Copy(dashboardOptions.Value.InProgressHeading, $"{terminology.PluralCapitalised} in progress"));
 
         public string StartNewHeading =>
-            Copy(dashboardOptions.Value.StartNewHeading, $"Start a new {terminology.Singular}");
+            Resolved(display => display.DashboardStartNewHeading, Copy(dashboardOptions.Value.StartNewHeading, $"Start a new {terminology.Singular}"));
 
         public string StartNewHint =>
-            Copy(
-                dashboardOptions.Value.StartNewHint,
-                $"If you start an {terminology.Singular}, you will be the lead applicant for it.");
+            Resolved(
+                display => display.DashboardStartNewHint,
+                Copy(
+                    dashboardOptions.Value.StartNewHint,
+                    $"If you start an {terminology.Singular}, you will be the lead applicant for it."));
 
         public string StartNewButtonText =>
-            Copy(dashboardOptions.Value.StartNewButtonText, $"Start new {terminology.Singular}");
+            Resolved(display => display.DashboardStartNewButtonText, Copy(dashboardOptions.Value.StartNewButtonText, $"Start new {terminology.Singular}"));
+
+        private string Resolved(Func<ITemplateDisplayCopy, string> read, string fallback)
+        {
+            var display = HttpContext?.RequestServices.GetService<ITemplateDisplayCopy>();
+            return display is null ? fallback : read(display);
+        }
 
         private string Copy(string? configured, string fallback) =>
             DashboardCopyPlaceholders.Apply(FirstNonEmpty(configured, fallback), SelectedTemplateName);

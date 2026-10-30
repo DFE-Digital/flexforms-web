@@ -28,6 +28,8 @@ public sealed class OrganisationSettingsAdminService(
     private const string CategoryBanner = "NotificationBanner";
     private const string CategoryDashboard = "Dashboard";
     private const string CategoryApplicationPreview = "ApplicationPreview";
+    private const string CategoryContributors = "Contributors";
+    private const string CategoryTaskList = "TaskList";
     private const string CategoryApplicationSubmittedPage = "ApplicationSubmittedPage";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -107,6 +109,35 @@ public sealed class OrganisationSettingsAdminService(
                     SubmitHint = state.PreviewSubmitHint,
                     SubmitButtonText = state.PreviewSubmitButtonText,
                     HideSubmitSection = state.PreviewHideSubmitSection
+                },
+                cancellationToken);
+
+            await UpsertCategoryAsync(
+                state.TenantId,
+                CategoryContributors,
+                new
+                {
+                    SectionHeading = state.ContributorsSectionHeading,
+                    SectionBody = state.ContributorsSectionBody,
+                    InviteButtonText = state.ContributorsInviteButtonText,
+                    PageHeading = state.ContributorsPageHeading,
+                    Intro = state.ContributorsIntro,
+                    SignInText = state.ContributorsSignInText,
+                    OnceJoinedText = state.ContributorsOnceJoinedText,
+                    AddLaterText = state.ContributorsAddLaterText,
+                    AddButtonText = state.ContributorsAddButtonText,
+                    ProceedButtonText = state.ContributorsProceedButtonText,
+                    CurrentHeading = state.ContributorsCurrentHeading
+                },
+                cancellationToken);
+
+            await UpsertCategoryAsync(
+                state.TenantId,
+                CategoryTaskList,
+                new
+                {
+                    ReviewButtonText = state.TaskListReviewButtonText,
+                    ViewButtonText = state.TaskListViewButtonText
                 },
                 cancellationToken);
 
@@ -204,6 +235,38 @@ public sealed class OrganisationSettingsAdminService(
                     state.PreviewSubmitButtonText = submitButtonText;
                 if (TryGetBool(root, "HideSubmitSection", out var hideSubmit))
                     state.PreviewHideSubmitSection = hideSubmit;
+            }
+            else if (string.Equals(category, CategoryContributors, StringComparison.OrdinalIgnoreCase))
+            {
+                if (TryGetString(root, "SectionHeading", out var sectionHeading))
+                    state.ContributorsSectionHeading = sectionHeading;
+                if (TryGetString(root, "SectionBody", out var sectionBody))
+                    state.ContributorsSectionBody = sectionBody;
+                if (TryGetString(root, "InviteButtonText", out var inviteButton))
+                    state.ContributorsInviteButtonText = inviteButton;
+                if (TryGetString(root, "PageHeading", out var pageHeading))
+                    state.ContributorsPageHeading = pageHeading;
+                if (TryGetString(root, "Intro", out var intro))
+                    state.ContributorsIntro = intro;
+                if (TryGetString(root, "SignInText", out var signIn))
+                    state.ContributorsSignInText = signIn;
+                if (TryGetString(root, "OnceJoinedText", out var onceJoined))
+                    state.ContributorsOnceJoinedText = onceJoined;
+                if (TryGetString(root, "AddLaterText", out var addLater))
+                    state.ContributorsAddLaterText = addLater;
+                if (TryGetString(root, "AddButtonText", out var addButton))
+                    state.ContributorsAddButtonText = addButton;
+                if (TryGetString(root, "ProceedButtonText", out var proceedButton))
+                    state.ContributorsProceedButtonText = proceedButton;
+                if (TryGetString(root, "CurrentHeading", out var currentHeading))
+                    state.ContributorsCurrentHeading = currentHeading;
+            }
+            else if (string.Equals(category, CategoryTaskList, StringComparison.OrdinalIgnoreCase))
+            {
+                if (TryGetString(root, "ReviewButtonText", out var reviewButton))
+                    state.TaskListReviewButtonText = reviewButton;
+                if (TryGetString(root, "ViewButtonText", out var viewButton))
+                    state.TaskListViewButtonText = viewButton;
             }
             else if (string.Equals(category, CategoryApplicationSubmittedPage, StringComparison.OrdinalIgnoreCase))
             {

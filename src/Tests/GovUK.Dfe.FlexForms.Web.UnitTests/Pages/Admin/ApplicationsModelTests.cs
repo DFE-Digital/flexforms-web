@@ -20,6 +20,7 @@ public class ApplicationsModelTests
 {
     private readonly IFixture _fixture;
     private readonly IApplicationsClient _applicationsClient;
+    private readonly IApplicationOwnerClient _applicationOwnerClient;
     private readonly ITemplateSelectionService _templateSelectionService;
     private readonly ISession _session = Substitute.For<ISession>();
     private readonly ApplicationsModel _model;
@@ -31,12 +32,15 @@ public class ApplicationsModelTests
         _applicationsClient = Substitute.For<IApplicationsClient>();
         _fixture.Inject(_applicationsClient);
 
+        _applicationOwnerClient = Substitute.For<IApplicationOwnerClient>();
+        _fixture.Inject(_applicationOwnerClient);
+
         _templateSelectionService = Substitute.For<ITemplateSelectionService>();
         _fixture.Inject(_templateSelectionService);
 
         var options = Options.Create(new DashboardOptions { PageSize = 10 });
 
-        _model = new ApplicationsModel(_applicationsClient, _templateSelectionService, options, NullLogger<ApplicationsModel>.Instance);
+        _model = new ApplicationsModel(_applicationsClient, _applicationOwnerClient, _templateSelectionService, options, NullLogger<ApplicationsModel>.Instance);
 
         var httpContext = Substitute.For<HttpContext>();
         httpContext.Session.Returns(_session);
@@ -172,5 +176,89 @@ public class ApplicationsModelTests
         var redirect = Assert.IsType<RedirectToPageResult>(result);
         Assert.Equal(templateId, (Guid)redirect.RouteValues![("selectedTemplateId")!]);
         Assert.Equal(1, redirect.RouteValues![("CurrentPage")!]);
+    }
+
+    [Fact]
+    public async Task OnPostChangeOwnerAsync_when_user_is_not_found_redirects_back_to_the_selected_template()
+    {
+        var templateId = Guid.NewGuid();
+        var applicationId = Guid.NewGuid();
+        _model.CurrentPage = 2;
+        _applicationOwnerClient.ChangeOwnerAsync(applicationId, "missing@example.com", Arg.Any<CancellationToken>())
+            .Returns<Task<ApplicationOwnerChangeResult>>(_ => throw new ExternalApplicationsException("Not found", 404, null!, null!, null!));
+
+        var result = await _model.OnPostChangeOwnerAsync(templateId, applicationId, "missing@example.com", CancellationToken.None);
+
+        var redirect = Assert.IsType<RedirectToPageResult>(result);
+        Assert.Equal(templateId, (Guid)redirect.RouteValues![("selectedTemplateId")!]);
+        Assert.Equal(2, redirect.RouteValues![("CurrentPage")!]);
+        Assert.Equal("That user was not found in this tenant.", _model.TempData["OwnerChangeError"]);
+    }
+
+    [Fact]
+    public async Task OnPostChangeOwnerAsync_when_validation_fails_keeps_generic_error_message()
+    {
+        var templateId = Guid.NewGuid();
+        var applicationId = Guid.NewGuid();
+        _applicationOwnerClient.ChangeOwnerAsync(applicationId, string.Empty, Arg.Any<CancellationToken>())
+            .Returns<Task<ApplicationOwnerChangeResult>>(_ =>
+                throw new ExternalApplicationsException("Bad request", 400, "Email is required", null!, null!));
+
+        await _model.OnPostChangeOwnerAsync(templateId, applicationId, string.Empty, CancellationToken.None);
+
+        Assert.Equal(
+            "The lead applicant could not be changed. Please try again.",
+            _model.TempData["OwnerChangeError"]);
+    }
+
+    [Fact]
+    public async Task OnPostChangeOwnerAsync_when_user_is_already_lead_applicant_shows_specific_message()
+    {
+        var templateId = Guid.NewGuid();
+        var applicationId = Guid.NewGuid();
+        _applicationOwnerClient.ChangeOwnerAsync(applicationId, "owner@example.com", Arg.Any<CancellationToken>())
+            .Returns<Task<ApplicationOwnerChangeResult>>(_ =>
+                throw new ExternalApplicationsException(
+                    "Bad request",
+                    400,
+                    "This user is already the lead applicant",
+                    null!,
+                    null!));
+
+        await _model.OnPostChangeOwnerAsync(templateId, applicationId, "owner@example.com", CancellationToken.None);
+
+        Assert.Equal("This user is already the lead applicant.", _model.TempData["OwnerChangeError"]);
+    }
+
+    [Fact]
+    public async Task OnPostChangeOwnerAsync_when_successful_sets_success_message_and_redirects()
+    {
+        var templateId = Guid.NewGuid();
+        var applicationId = Guid.NewGuid();
+        _model.CurrentPage = 3;
+        _applicationOwnerClient.ChangeOwnerAsync(applicationId, "new@example.com", Arg.Any<CancellationToken>())
+            .Returns(new ApplicationOwnerChangeResult { ApplicationId = applicationId, TemplateReadGranted = false });
+
+        var result = await _model.OnPostChangeOwnerAsync(templateId, applicationId, "new@example.com", CancellationToken.None);
+
+        var redirect = Assert.IsType<RedirectToPageResult>(result);
+        Assert.Equal(templateId, (Guid)redirect.RouteValues![("selectedTemplateId")!]);
+        Assert.Equal(3, redirect.RouteValues![("CurrentPage")!]);
+        Assert.Equal("Lead applicant updated.", _model.TempData["OwnerChangeSuccess"]);
+    }
+
+    [Fact]
+    public async Task OnPostChangeOwnerAsync_when_template_read_granted_mentions_template_access()
+    {
+        var templateId = Guid.NewGuid();
+        var applicationId = Guid.NewGuid();
+        _applicationOwnerClient.ChangeOwnerAsync(applicationId, "new@example.com", Arg.Any<CancellationToken>())
+            .Returns(new ApplicationOwnerChangeResult { ApplicationId = applicationId, TemplateReadGranted = true });
+
+        await _model.OnPostChangeOwnerAsync(templateId, applicationId, "new@example.com", CancellationToken.None);
+
+        Assert.Equal(
+            "Lead applicant updated. They were given read access to this template.",
+            _model.TempData["OwnerChangeSuccess"]);
     }
 }

@@ -20,6 +20,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 [Authorize(Roles = AdminAccessHelper.AuthorizeRoles)]
 public class ApplicationsModel(
     IApplicationsClient applicationsClient,
+    IApplicationOwnerClient applicationOwnerClient,
     ITemplateSelectionService templateSelectionService,
     IOptions<DashboardOptions> dashboardOptions,
     ILogger<ApplicationsModel> logger) : PageModel
@@ -36,6 +37,8 @@ public class ApplicationsModel(
 
     public string? ErrorMessage { get; private set; }
 
+    public string? SuccessMessage { get; private set; }
+
     [BindProperty(SupportsGet = true)]
     public Guid? SelectedTemplateId { get; set; }
 
@@ -44,6 +47,9 @@ public class ApplicationsModel(
 
     public async Task OnGetAsync(CancellationToken cancellationToken)
     {
+        SuccessMessage = TempData["OwnerChangeSuccess"] as string;
+        ErrorMessage = TempData["OwnerChangeError"] as string;
+        HasError = ErrorMessage is not null;
         await LoadTemplatesAsync(cancellationToken);
 
         if (SelectedTemplateId is null || SelectedTemplateId == Guid.Empty)
@@ -70,6 +76,41 @@ public class ApplicationsModel(
         CurrentPage = 1; // Reset to first page after deletion/un-deletion
         
         return RedirectToPage(new {selectedTemplateId, CurrentPage});
+    }
+
+    public async Task<IActionResult> OnPostChangeOwnerAsync(
+        Guid selectedTemplateId,
+        Guid applicationId,
+        string email,
+        CancellationToken cancellationToken)
+    {
+        SelectedTemplateId = selectedTemplateId;
+        var message = "The lead applicant could not be changed. Please try again.";
+
+        try
+        {
+            var result = await applicationOwnerClient.ChangeOwnerAsync(applicationId, email, cancellationToken);
+            TempData["OwnerChangeSuccess"] = result.TemplateReadGranted
+                ? "Lead applicant updated. They were given read access to this template."
+                : "Lead applicant updated.";
+            return RedirectToPage(new { selectedTemplateId, CurrentPage });
+        }
+        catch (ExternalApplicationsException ex) when (ex.StatusCode == 404)
+        {
+            message = "That user was not found in this tenant.";
+        }
+        catch (ExternalApplicationsException ex) when (ex.StatusCode == 400)
+        {
+            if (ex.Response?.Contains("already the lead applicant", StringComparison.OrdinalIgnoreCase) == true)
+                message = "This user is already the lead applicant.";
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to change lead applicant for application {ApplicationId}", applicationId);
+        }
+
+        TempData["OwnerChangeError"] = message;
+        return RedirectToPage(new { selectedTemplateId, CurrentPage });
     }
 
     private async Task LoadTemplatesAsync(CancellationToken cancellationToken)

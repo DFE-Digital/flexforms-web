@@ -36,14 +36,17 @@ public class TemplateStudioModelTests
     private readonly IComplexFieldConfigurationService _complexFields = Substitute.For<IComplexFieldConfigurationService>();
     private readonly IEventMappingReferenceReader _eventMappings = Substitute.For<IEventMappingReferenceReader>();
     private readonly IApplicationsClient _applications = Substitute.For<IApplicationsClient>();
+    private readonly IRolesClient _roles = Substitute.For<IRolesClient>();
     private readonly InMemorySession _session = new();
     private readonly TemplateDto _template = new() { TemplateId = Guid.NewGuid(), Name = "Transfers", CreatedOn = DateTime.UtcNow };
     private readonly TemplateStudioModel _model;
 
     public TemplateStudioModelTests()
     {
+        _roles.ListAsync(Arg.Any<CancellationToken>())
+            .Returns(new System.Collections.ObjectModel.ObservableCollection<TenantRoleDto>());
         _model = new TemplateStudioModel(
-            _admin, _selection, _validation, _cacheInvalidator, _complexFields, _eventMappings, _applications, NullLogger<TemplateStudioModel>.Instance);
+            _admin, _selection, _validation, _cacheInvalidator, _complexFields, _eventMappings, _applications, _roles, NullLogger<TemplateStudioModel>.Instance);
         GivenApplicationCount(Task.FromResult(new PagedResultOfApplicationDto { TotalCount = 4 }));
 
         var httpContext = new DefaultHttpContext();
