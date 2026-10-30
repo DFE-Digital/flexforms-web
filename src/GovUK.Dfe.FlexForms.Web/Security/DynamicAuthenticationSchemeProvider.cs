@@ -36,7 +36,7 @@ public class DynamicAuthenticationSchemeProvider(
         var httpContext = httpContextAccessor.HttpContext;
         if (httpContext == null) return false;
 
-        return InternalServiceAuthEnvironmentGate.IsAllowed(hostEnvironment, configuration)
+        return InternalServiceAuthEnvironmentGate.IsAllowedForRequest(httpContext, hostEnvironment, configuration)
                && httpContext.Request.Headers.ContainsKey("x-service-email");
     }
 

@@ -51,7 +51,7 @@ public class InternalServiceAuthenticationHandler(
 
         var environment = Context.RequestServices.GetService<IHostEnvironment>();
         var configuration = Context.RequestServices.GetService<IConfiguration>();
-        if (!InternalServiceAuthEnvironmentGate.IsAllowed(environment, configuration))
+        if (!InternalServiceAuthEnvironmentGate.IsAllowedForRequest(Context, environment, configuration))
         {
             Logger.LogWarning(
                 "InternalServiceAuth rejected in {Environment} for {Path}",
