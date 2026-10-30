@@ -38,10 +38,15 @@ public sealed class ViewApplicationsTests : PlaywrightTestBase
         var viewApplications = new ViewApplications(Page);
 
         await viewApplications.SelectATemplateAsync(TestData.DefaultTemplateName);
-        await viewApplications.ExpectApplicationListedAsync(
-            _application.ApplicationReference,
-            _application.ApplicationId,
-            $"/applications/{_application.ApplicationReference}?templateId={ApiConfig.TemplateId}");
+        await viewApplications.SummaryCards
+            .WithReference(_application.ApplicationReference)
+            .HasTitle(_application.ApplicationReference)
+            .HasSummaryValue("Application ID", _application.ApplicationId)
+            .HasSummaryValue("Date created", ApplicationsTableFormatting.FormatApplicationDisplayDate())
+            .HasSummaryValue("Lead applicant", AuthUsers.ResolveAuthUser("default").Email)
+            .HasLink("Open", $"/applications/{_application.ApplicationReference}?templateId={ApiConfig.TemplateId}")
+            .HasButton("Delete")
+            .VerifyAsync();
     }
 
     [TestCase(TestName = "Admin can delete an application and it is removed from the user's dashboard")]
@@ -53,7 +58,10 @@ public sealed class ViewApplicationsTests : PlaywrightTestBase
 
         await viewApplications.SelectATemplateAsync(TestData.DefaultTemplateName);
         await viewApplications.DeleteApplicationAsync(_applicationToDelete.ApplicationReference);
-        await viewApplications.ExpectApplicationDeletedAsync(_applicationToDelete.ApplicationReference);
+        await viewApplications.SummaryCards
+            .WithReference(_applicationToDelete.ApplicationReference)
+            .HasText("Deleted")
+            .VerifyAsync();
 
         await dashboardPage.GoToAllApplicationsAsync();
         await dashboardPage.ApplicationsTable

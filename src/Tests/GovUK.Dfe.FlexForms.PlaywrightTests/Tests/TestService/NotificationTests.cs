@@ -50,7 +50,10 @@ public sealed class NotificationTests : PlaywrightTestBase
         await Page.ReloadAsync();
 
         await notificationsPage.ExpectUnreadBadgeAsync(2);
-        await notificationsPage.ExpectNotificationAsync($"The file '{uploadedFileName}' has been validated.");
+
+        // extend timeout for file-validation pipeline completing
+        await notificationsPage.ExpectNotificationAsync(
+            $"The file '{uploadedFileName}' has been validated.", timeout: 20_000);
     }
 
     [TestCase(TestName = "User can dismiss a notification and clear all notifications")]
@@ -82,6 +85,9 @@ public sealed class NotificationTests : PlaywrightTestBase
         await notificationsPage.ExpectNotificationNotVisibleAsync("Test success");
         await notificationsPage.ExpectNotificationNotVisibleAsync("Test error");
         await notificationsPage.ExpectNoNotificationsAsync();
+
+        // bug 309578, dismiss requires a reload to update the unread badge count
+        await Page.ReloadAsync();
         await notificationsPage.ExpectUnreadBadgeNotVisibleAsync();
     }
 
