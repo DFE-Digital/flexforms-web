@@ -60,10 +60,6 @@ public sealed class OrganisationSettingsWorkState
     public string? TaskListReviewButtonText { get; set; }
     public string? TaskListViewButtonText { get; set; }
 
-    public string? SubmittedTemplateId { get; set; }
-
-    public IReadOnlyList<AdminSelectOption> SubmittedTemplateOptions { get; set; } = [];
-
     public string? SubmittedPanelTitle { get; set; }
 
     public string? SubmittedBodyMarkdown { get; set; }

@@ -1,7 +1,10 @@
 namespace GovUK.Dfe.FlexForms.Application.Options;
 
 /// <summary>
-/// Per-template confirmation copy stored under TenantConfig category <c>ApplicationSubmittedPage</c>.
+/// Confirmation copy stored under TenantConfig category <c>ApplicationSubmittedPage</c>.
+/// <see cref="DefaultTemplateKey"/> is the tenant-wide fallback. Other keys (template GUIDs or
+/// schema aliases) are still read for templates that have not moved copy onto
+/// <c>displayCopy.submittedPage</c>.
 /// </summary>
 public sealed class ApplicationSubmittedPageCopy
 {

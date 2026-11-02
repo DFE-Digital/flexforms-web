@@ -14,7 +14,6 @@ namespace GovUK.Dfe.FlexForms.Application.Tests.Admin;
 public class OrganisationSettingsAdminServiceTests
 {
     private readonly ITenantAdminClient _client = Substitute.For<ITenantAdminClient>();
-    private readonly ITemplatesClient _templates = Substitute.For<ITemplatesClient>();
     private readonly OrganisationSettingsAdminService _service;
     private readonly OrganisationSettingsWorkState _state = new()
     {
@@ -31,10 +30,8 @@ public class OrganisationSettingsAdminServiceTests
 
     public OrganisationSettingsAdminServiceTests()
     {
-        _templates.GetAccessibleTemplatesAsync(Arg.Any<CancellationToken>()).Returns([]);
         _service = new OrganisationSettingsAdminService(
             _client,
-            _templates,
             NullLogger<OrganisationSettingsAdminService>.Instance);
     }
 
@@ -93,7 +90,6 @@ public class OrganisationSettingsAdminServiceTests
         Assert.Equal("Please confirm", _state.PreviewSubmitHint);
         Assert.Equal("Send", _state.PreviewSubmitButtonText);
         Assert.True(_state.PreviewHideSubmitSection);
-        Assert.Equal("_default", _state.SubmittedTemplateId);
         Assert.Equal("Plan submitted", _state.SubmittedPanelTitle);
         Assert.Equal("Thanks.", _state.SubmittedBodyMarkdown);
         Assert.False(_state.HasError);
@@ -206,38 +202,8 @@ public class OrganisationSettingsAdminServiceTests
     }
 
     [Fact]
-    public async Task SaveAsync_ShouldMergeSelectedSubmittedPageCopy()
+    public async Task SaveAsync_ShouldUpdateDefaultSubmittedPageCopy_WithoutRemovingStoredTemplateCopy()
     {
-        var templateId = Guid.NewGuid();
-        _templates.GetAccessibleTemplatesAsync(Arg.Any<CancellationToken>()).Returns([
-            new TemplateDto { TemplateId = templateId, Name = "Transfers", CreatedOn = DateTime.UtcNow }
-        ]);
-        _state.SubmittedTemplateId = templateId.ToString();
-        _state.SubmittedPanelTitle = "Transfer submitted";
-        _state.SubmittedBodyMarkdown = "## Next\n\nWe will contact you.";
-        _state.SubmittedPageByTemplate["_default"] = new ApplicationSubmittedPageCopy
-        {
-            PanelTitle = "Plan submitted",
-            BodyMarkdown = "Default body"
-        };
-
-        await _service.SaveAsync(_state);
-
-        await _client.Received().UpsertSafeTenantSettingAsync(
-            _state.TenantId,
-            Arg.Is<UpsertTenantSettingRequest>(r =>
-                r.Category == "ApplicationSubmittedPage"
-                && Encoding.UTF8.GetString(Convert.FromBase64String(r.SettingsJson))
-                    .Contains("Transfer submitted", StringComparison.Ordinal)
-                && Encoding.UTF8.GetString(Convert.FromBase64String(r.SettingsJson))
-                    .Contains("Plan submitted", StringComparison.Ordinal)),
-            Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task SaveAsync_ShouldKeepStoredCopy_ForTemplatesNotBeingEdited()
-    {
-        var editedTemplateId = Guid.NewGuid();
         var otherTemplateId = Guid.NewGuid();
         var storedJson = $$$"""{"_default":{"PanelTitle":"Plan submitted","BodyMarkdown":"Default body"},"{{{otherTemplateId}}}":{"PanelTitle":"Conversion submitted","BodyMarkdown":"Other body"}}""";
         _client.GetSafeTenantSettingsAsync(_state.TenantId, Arg.Any<CancellationToken>())
@@ -254,7 +220,6 @@ public class OrganisationSettingsAdminServiceTests
                         DateTime.UtcNow)
                 ]));
 
-        _state.SubmittedTemplateId = editedTemplateId.ToString();
         _state.SubmittedPanelTitle = "Transfer submitted";
         _state.SubmittedBodyMarkdown = "## Next\n\nWe will contact you.";
 
@@ -265,9 +230,34 @@ public class OrganisationSettingsAdminServiceTests
             Arg.Is<UpsertTenantSettingRequest>(r =>
                 r.Category == "ApplicationSubmittedPage"
                 && Decode(r).Contains("Transfer submitted", StringComparison.Ordinal)
-                && Decode(r).Contains("Plan submitted", StringComparison.Ordinal)
-                && Decode(r).Contains("Conversion submitted", StringComparison.Ordinal)),
+                && Decode(r).Contains("Conversion submitted", StringComparison.Ordinal)
+                && !Decode(r).Contains("Plan submitted", StringComparison.Ordinal)),
             Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task LoadAsync_ShouldShowDefaultSubmittedCopy_WhenPerTemplateCopyAlsoExists()
+    {
+        var templateId = Guid.NewGuid();
+        _client.GetSafeTenantSettingsAsync(_state.TenantId, Arg.Any<CancellationToken>())
+            .Returns(new GetTenantSettingsResponse(
+                _state.TenantId,
+                "Transfers",
+                [
+                    new TenantSettingDto(
+                        Guid.NewGuid(),
+                        "ApplicationSubmittedPage",
+                        "Web",
+                        $$$"""{"_default":{"PanelTitle":"Plan submitted","BodyMarkdown":"Default body"},"{{{templateId}}}":{"PanelTitle":"Transfer submitted","BodyMarkdown":"Template body"}}""",
+                        false,
+                        DateTime.UtcNow)
+                ]));
+
+        await _service.LoadAsync(_state);
+
+        Assert.Equal("Plan submitted", _state.SubmittedPanelTitle);
+        Assert.Equal("Default body", _state.SubmittedBodyMarkdown);
+        Assert.Equal("Transfer submitted", _state.SubmittedPageByTemplate[templateId.ToString()].PanelTitle);
     }
 
     [Fact]

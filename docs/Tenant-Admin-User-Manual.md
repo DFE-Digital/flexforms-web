@@ -242,7 +242,7 @@ For a full step-by-step guide with screenshots, see the [Template Studio User Ma
 - **Undo** and **Redo** step back and forward through your changes, including moves, deletes and JSON edits. Typing in one box counts as one change. Outside text boxes you can also press Ctrl+Z and Ctrl+Y (Cmd on a Mac). Undoing back to where you started clears **Unsaved changes**. The breadcrumbs above the heading take you back up the structure. Each item lists what's inside it, with a **Change** link for each, and has an **Add …** form for adding more. Ids are made from names as you type, until you change an id yourself.
 - **Questions** — choose the question type, wording, hint, whether it must be answered and the error message, options for radios, checkboxes and dropdowns, a length limit, and format checks such as a UK telephone number. Search and upload questions list the complex fields set up for the tenant. Changing the text of an existing option keeps its saved value, because saved answers and rules use it.
 - **Rules** — **Add a rule** to show pages and questions only when an answer is, isn't, or is one of the values you choose, or has or hasn't been given. Template Studio saves each rule as the pair the form needs: one rule that skips and hides them, and one that shows them. You can also start a rule from a page or question (**Add a rule that shows this page**). Rules made this way can be changed later; rules written in JSON can be turned on and off or deleted, and changed in the JSON tab. Pages and questions that a rule shows are marked **Shown by a rule** in the structure. Pages set to "Go to the next page a rule shows" only follow rules that use "is".
-- **Template settings** — also set the **Dashboard columns** (up to 3 answers alongside built-in columns, plus optional lead applicant name or email), the **Details on the task list** (up to 10 rows, from application details or answers), the **role invited contributors get**, and **Wording for this template**. **Use the default columns** or **Use the default details** goes back to the platform defaults. Blank wording keeps the organisation setting.
+- **Template settings** — also set the **Dashboard columns** (up to 3 answers alongside built-in columns, plus optional lead applicant name or email), the **Details on the task list** (up to 10 rows, from application details or answers), the **role invited contributors get**, wording grouped by area (dashboard, application page, preview, submitted page, contributor sidebar and invitation page), and **Email templates** (Notify IDs for this form; blank keeps the tenant setting). Those sit in an accordion. **Use the default columns** or **Use the default details** goes back to the platform defaults. Blank wording keeps the organisation setting.
 - **Tasks and lists** — a task can be questions on pages, a repeatable list, or pages repeated for each item in another list (for example a declaration for each trust). You can change the type while the task has no pages. Repeatable lists also have the columns shown for each added item and the added, changed and removed messages.
 - **Checks only when another answer matches** — a length limit or format check can apply only when another answer is, or isn't, a value. Whether a question must be answered can't depend on another answer; use a rule to show the question instead.
 - **Once applications use the template** — Template Studio checks how many applications use the template. If there are any, or it can't check:
@@ -727,11 +727,10 @@ Notes:
 
 ### 11.4 Application submitted page
 
-Customise the confirmation page after submit (`/application-submitted/{reference}`). This category is **per template**.
+Customise the default confirmation page after submit (`/application-submitted/{reference}`). This is the fallback for every form in the tenant. A form can replace it in Template Studio under **Application submitted page**.
 
 | Field | Purpose |
 |-------|---------|
-| **Template** | A form from this tenant’s catalogue, or **Default (all templates)** as the fallback |
 | **Confirmation title** | Green panel heading (for example `Plan submitted`). Leave blank to use **{Singular} submitted** |
 | **Page body** | Markdown for everything below the reference number |
 
@@ -742,7 +741,7 @@ Markdown uses the same **Markdig** renderer as form hints. Supported:
 - **Bold** and *italic*
 - Links: `[text](https://…)` or `[email](mailto:name@example.com)`
 
-Raw HTML is stripped. Save settings before switching template if you have unsaved changes.
+Raw HTML is stripped. If a template has its own confirmation title or page body, that is used instead of this default. Older per-template copy still stored in tenant settings is used until the template has wording of its own.
 
 ### 11.5 Check your answers
 
@@ -1400,7 +1399,7 @@ GOV.UK Notify template  →  ((placeholders)) filled  →  inbox
 | Piece | Where it lives | Who usually owns it |
 |-------|----------------|---------------------|
 | Email wording / layout | GOV.UK Notify template | Product / platform with Notify access |
-| Notify template GUID per form type | TenantConfig `EmailTemplates` | SuperAdmin / platform |
+| Notify template GUID per form type | TenantConfig `EmailTemplates`, overridable on the form as `emailTemplates` | SuperAdmin / platform, or Template Studio |
 | Extra placeholders from form answers | TenantConfig `EmailPlaceholderMappings` | Tenant Admin (this section) |
 
 **Important:** The personalisation **key** in FlexForms must match the Notify placeholder name **exactly** (case-sensitive). If Notify has `((AcademyName))`, the mapping JSON key must be `AcademyName`, not `academy_name`.
@@ -1768,7 +1767,7 @@ Prefer the dedicated screens first. If you must use this page, these categories 
 | **ApplicationTerminology** | Web | Singular / plural labels | Organisation settings |
 | **NotificationBanner** | Web | Site-wide banner | Organisation settings |
 | **Dashboard** | Web | Page size, filters, and dashboard display text | Organisation settings |
-| **ApplicationSubmittedPage** | Web | Per-template confirmation title and markdown body | Organisation settings |
+| **ApplicationSubmittedPage** | Web | Default confirmation title and markdown body (per-template copy is in Template Studio) | Organisation settings |
 | **EventMappings** | Shared | Field mappings | Event mappings |
 | **SchemaEvents** | Shared | Tenant event shapes | Event mappings |
 | **EventTriggers** | Shared | Submit / upload publish bindings | Event mappings |

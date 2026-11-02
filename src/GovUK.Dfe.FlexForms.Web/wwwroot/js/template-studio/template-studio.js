@@ -63,6 +63,17 @@
 
     var NO_VALUE_OPERATORS = ['isEmpty', 'isNotEmpty', 'isTrue', 'isFalse', 'isValidEmail', 'isValidPhone'];
 
+    // Same keys as tenant EmailTemplates. The user only sets the Notify template ID.
+    var EMAIL_TEMPLATE_KEYS = [
+        { key: 'ApplicationSubmitted', label: 'Application submitted' },
+        { key: 'ContributorInvited', label: 'Contributor invited' },
+        { key: 'BugReportInternal', label: 'Bug report (internal)' },
+        { key: 'BugReportUser', label: 'Bug report (user)' },
+        { key: 'FeedbackOrSuggestionInternal', label: 'Feedback or suggestion (internal)' },
+        { key: 'SupportRequestInternal', label: 'Support request (internal)' },
+        { key: 'SupportRequestUser', label: 'Support request (user)' }
+    ];
+
     // Comparisons the rule builder offers that don't need an answer to compare with.
     var VALUELESS = ['isEmpty', 'isNotEmpty'];
 
@@ -212,6 +223,7 @@
         govuk.createAll(govuk.Checkboxes, undefined, options);
         govuk.createAll(govuk.ErrorSummary, undefined, options);
         govuk.createAll(govuk.NotificationBanner, undefined, options);
+        if (govuk.Accordion) govuk.createAll(govuk.Accordion, undefined, options);
     }
 
     // ---- DOM helpers -------------------------------------------------------------------------------------------
@@ -434,6 +446,28 @@
             h('h3', { class: 'govuk-heading-m', text: title }),
             children
         ]);
+    }
+
+    function accordion(id, items) {
+        var sections = (items || []).filter(function (item) {
+            return item && item.title && item.content != null && item.content !== false;
+        });
+        if (!sections.length) return null;
+        return h('div', {
+            class: 'govuk-accordion govuk-!-margin-top-6',
+            'data-module': 'govuk-accordion',
+            id: id
+        }, sections.map(function (item, index) {
+            var n = String(index + 1);
+            var headingId = id + '-heading-' + n;
+            var contentId = id + '-content-' + n;
+            return h('div', { class: 'govuk-accordion__section' }, [
+                h('div', { class: 'govuk-accordion__section-header' },
+                    h('h2', { class: 'govuk-accordion__section-heading' },
+                        h('span', { class: 'govuk-accordion__section-button', id: headingId, text: item.title }))),
+                h('div', { id: contentId, class: 'govuk-accordion__section-content' }, item.content)
+            ]);
+        }));
     }
 
     function inset(text) {
@@ -1357,7 +1391,7 @@
 
     function addForm(options) {
         var id = options.id;
-        return section(options.title, [
+        var body = [
             options.choices || null,
             textInput({ id: id, label: options.label, hint: options.hint }),
             button(options.button, function () {
@@ -1365,14 +1399,18 @@
                 var name = (input.value || '').trim() || options.fallback;
                 options.add(name);
             }, 'secondary', id + '-button')
-        ]);
+        ];
+        if (options.bodyOnly) {
+            return [h('h3', { class: 'govuk-heading-s', text: options.title })].concat(body);
+        }
+        return section(options.title, body);
     }
 
     // A summary list of what's inside the selected item, each with a Change link that opens it.
-    function contents(path, title, emptyText) {
+    function contents(path, title, emptyText, bodyOnly) {
         var targets = ruleTargets();
         var children = childrenOf(path);
-        return section(title, children.length
+        var body = children.length
             ? summaryList(children.map(function (child) {
                 return {
                     key: [nodeTitle(child), targets.has(idOf(child)) ? [' ', tag('Shown by a rule', 'yellow')] : null],
@@ -1380,7 +1418,8 @@
                     actions: [{ text: 'Change', hidden: nodeTitle(child), onClick: function () { select(child, true); } }]
                 };
             }))
-            : h('p', { class: 'govuk-body', text: emptyText }));
+            : h('p', { class: 'govuk-body', text: emptyText });
+        return bodyOnly ? body : section(title, body);
     }
 
     function isInList(path) {
@@ -1527,18 +1566,18 @@
         var root = doc.root;
         var columns = root.dashboard && Array.isArray(root.dashboard.columns) ? root.dashboard.columns : null;
         if (!columns || !columns.length) {
-            return section('Dashboard columns', [
+            return [
                 h('p', { class: 'govuk-body', text: 'The applications dashboard shows the default columns: reference, date started, date submitted, status and an action link.' }),
                 button('Choose the columns', function () {
                     root.dashboard = { columns: SYSTEM_COLUMNS.map(function (column, index) { return { type: 'system', id: column.value, order: (index + 1) * 10 }; }) };
                     restructured();
                 }, 'secondary', 'tpl-dashboard-customise')
-            ]);
+            ];
         }
 
         var choices = answerChoices();
         var answerColumns = columns.filter(isFieldColumn).length;
-        return section('Dashboard columns', [
+        return [
             h('p', { class: 'govuk-body', text: 'Columns on the applications dashboard, in order. Up to 3 can show answers.' }),
             answerColumns > 3 ? warningText('Only the first 3 answer columns are shown.') : null,
             listEditor({
@@ -1601,14 +1640,14 @@
                 text: 'Use the default columns',
                 onClick: function () { root.dashboard = null; editing = null; restructured(); }
             }))
-        ]);
+        ];
     }
 
     function metadataEditor() {
         var root = doc.root;
         var items = root.applicationMetaData && Array.isArray(root.applicationMetaData.items) ? root.applicationMetaData.items : null;
         if (!items || !items.length) {
-            return section('Details on the task list', [
+            return [
                 h('p', { class: 'govuk-body', text: 'The task list shows the default details: application reference, template version and lead applicant.' }),
                 button('Choose the details', function () {
                     root.applicationMetaData = {
@@ -1620,12 +1659,12 @@
                     };
                     restructured();
                 }, 'secondary', 'tpl-metadata-customise')
-            ]);
+            ];
         }
 
         var choices = APPLICATION_BINDINGS.map(function (binding) { return Object.assign({ group: 'About the application' }, binding); })
             .concat(answerChoices());
-        return section('Details on the task list', [
+        return [
             h('p', { class: 'govuk-body', text: 'Rows shown under "Your application" on the task list, in order. You can have up to 10.' }),
             listEditor({
                 items: items,
@@ -1678,13 +1717,13 @@
                 text: 'Use the default details',
                 onClick: function () { root.applicationMetaData = null; editing = null; restructured(); }
             }))
-        ]);
+        ];
     }
 
     function retiredList() {
         var retired = doc.root.retiredFields || [];
         if (!retired.length) return null;
-        return section('Retired questions', [
+        return [
             h('p', { class: 'govuk-body', text: 'Questions taken out of the template after applications had answered them. Reports keep their answers.' }),
             summaryList(retired.map(function (entry) {
                 return {
@@ -1692,7 +1731,7 @@
                     value: entry.replacedBy && entry.replacedBy.length ? 'Replaced by ' + entry.replacedBy.join(', ') : 'Not replaced'
                 };
             }))
-        ]);
+        ];
     }
 
     function contributorRoleChoices(root) {
@@ -1720,47 +1759,127 @@
         };
     }
 
-    function displayCopyFields(path) {
-        var hint = 'Leave blank to keep the organisation setting, then the built-in sentence. You can use {singular}, {plural}, {template_name} and {contributor_email}.';
-        function field(section, property, label) {
-            return textInput({
+    function copyHint() {
+        return h('p', { class: 'govuk-hint', text: 'Leave blank to keep the organisation setting, then the built-in sentence. You can use {singular}, {plural}, {template_name} and {contributor_email}.' });
+    }
+
+    function displayCopySections(path) {
+        function field(section, property, label, options) {
+            var opts = {
                 id: 'tpl-copy-' + section + '-' + property,
                 label: label,
                 value: copyValue(section, property),
+                hint: options && options.hint,
+                rows: options && options.rows,
                 onInput: bindCopy(path, section, property)
+            };
+            return options && options.rows ? textArea(opts) : textInput(opts);
+        }
+        var items = [
+            {
+                title: 'What you call this form',
+                content: [
+                    copyHint(),
+                    field('terminology', 'singular', 'Singular, for example visit'),
+                    field('terminology', 'plural', 'Plural, for example visits')
+                ]
+            },
+            {
+                title: 'Dashboard',
+                content: [
+                    copyHint(),
+                    field('dashboard', 'mainHeading', 'Dashboard heading'),
+                    field('dashboard', 'inProgressHeading', 'In progress heading'),
+                    field('dashboard', 'startNewHeading', 'Start new heading'),
+                    field('dashboard', 'startNewHint', 'Start new hint'),
+                    field('dashboard', 'startNewButtonText', 'Start new button')
+                ]
+            },
+            {
+                title: 'Application page',
+                content: [
+                    copyHint(),
+                    field('taskList', 'reviewButtonText', 'Review button'),
+                    field('taskList', 'viewButtonText', 'View button')
+                ]
+            },
+            {
+                title: 'Application preview',
+                content: [
+                    copyHint(),
+                    field('preview', 'pageHeading', 'Check your answers heading'),
+                    field('preview', 'submitHeading', 'Submit heading'),
+                    field('preview', 'submitHint', 'Submit hint'),
+                    field('preview', 'submitButtonText', 'Submit button')
+                ]
+            },
+            {
+                title: 'Application submitted page',
+                content: [
+                    copyHint(),
+                    field('submittedPage', 'panelTitle', 'Confirmation title'),
+                    field('submittedPage', 'bodyMarkdown', 'Submitted page body', {
+                        rows: 8,
+                        hint: 'Markdown below the reference number. Use ## for headings, - for lists, **bold**, and links.'
+                    })
+                ]
+            }
+        ];
+        if (doc.root.contributorPattern !== false) {
+            items.push({
+                title: 'Contributor sidebar',
+                content: [
+                    copyHint(),
+                    field('contributors', 'sectionHeading', 'Contributors heading'),
+                    field('contributors', 'sectionBody', 'Contributors text'),
+                    field('contributors', 'inviteButtonText', 'Invite button'),
+                    field('contributors', 'currentHeading', 'Current contributors heading')
+                ]
+            }, {
+                title: 'Contributor invitation page',
+                content: [
+                    copyHint(),
+                    field('contributors', 'pageHeading', 'Invite page heading'),
+                    field('contributors', 'intro', 'Invite introduction'),
+                    field('contributors', 'signInText', 'DfE Sign-in text'),
+                    field('contributors', 'onceJoinedText', 'After they join'),
+                    field('contributors', 'addLaterText', 'Add later text'),
+                    field('contributors', 'addButtonText', 'Add a contributor button'),
+                    field('contributors', 'proceedButtonText', 'Go to application button')
+                ]
             });
         }
-        return section('Wording for this template', [
-            h('p', { class: 'govuk-hint', text: hint }),
-            field('terminology', 'singular', 'Singular, for example visit'),
-            field('terminology', 'plural', 'Plural, for example visits'),
-            field('dashboard', 'mainHeading', 'Dashboard heading'),
-            field('dashboard', 'inProgressHeading', 'In progress heading'),
-            field('dashboard', 'startNewHeading', 'Start new heading'),
-            field('dashboard', 'startNewHint', 'Start new hint'),
-            field('dashboard', 'startNewButtonText', 'Start new button'),
-            field('preview', 'pageHeading', 'Check your answers heading'),
-            field('preview', 'submitHeading', 'Submit heading'),
-            field('preview', 'submitHint', 'Submit hint'),
-            field('preview', 'submitButtonText', 'Submit button'),
-            field('contributors', 'sectionHeading', 'Contributors heading'),
-            field('contributors', 'sectionBody', 'Contributors text'),
-            field('contributors', 'inviteButtonText', 'Invite button'),
-            field('contributors', 'pageHeading', 'Invite page heading'),
-            field('contributors', 'intro', 'Invite introduction'),
-            field('contributors', 'signInText', 'DfE Sign-in text'),
-            field('contributors', 'onceJoinedText', 'After they join'),
-            field('contributors', 'addLaterText', 'Add later text'),
-            field('contributors', 'addButtonText', 'Add a contributor button'),
-            field('contributors', 'proceedButtonText', 'Go to application button'),
-            field('contributors', 'currentHeading', 'Current contributors heading'),
-            field('taskList', 'reviewButtonText', 'Review button'),
-            field('taskList', 'viewButtonText', 'View button')
-        ]);
+        return items;
+    }
+
+    function emailTemplatesEditor(path) {
+        var map = doc.root.emailTemplates || {};
+        return [
+            h('p', { class: 'govuk-hint', text: 'GOV.UK Notify template IDs for this form. The keys match tenant EmailTemplates. Leave a box blank to keep the tenant setting.' })
+        ].concat(EMAIL_TEMPLATE_KEYS.map(function (item) {
+            return textInput({
+                id: 'tpl-email-' + item.key,
+                label: item.label,
+                hint: item.key,
+                value: map[item.key] || '',
+                onInput: function (value) {
+                    var root = doc.root;
+                    root.emailTemplates = root.emailTemplates || {};
+                    if (value) {
+                        root.emailTemplates[item.key] = value;
+                    } else {
+                        delete root.emailTemplates[item.key];
+                        if (!Object.keys(root.emailTemplates).length) delete root.emailTemplates;
+                    }
+                    edited(path);
+                }
+            });
+        }));
     }
 
     function templateInspector(path) {
         var root = doc.root;
+        var retired = retiredList();
 
         return [
             header(path),
@@ -1816,20 +1935,28 @@
                     edited(path);
                 }
             }) : null,
-            displayCopyFields(path),
-            contents(path, 'Sections', 'This template has no sections yet.'),
-            addForm({
-                id: 'tpl-new-group',
-                title: 'Add a section',
-                label: 'Section heading',
-                hint: 'Sections group tasks on the task list.',
-                button: 'Add section',
-                fallback: 'New section',
-                add: function (name) { addAndSelect(['taskGroups'], doc.newGroup(name)); }
-            }),
-            dashboardEditor(),
-            metadataEditor(),
-            retiredList()
+            accordion('tpl-settings-accordion', displayCopySections(path).concat([
+                { title: 'Email templates', content: emailTemplatesEditor(path) },
+                {
+                    title: 'Sections',
+                    content: [
+                        contents(path, 'Sections', 'This template has no sections yet.', true),
+                        addForm({
+                            id: 'tpl-new-group',
+                            title: 'Add a section',
+                            label: 'Section heading',
+                            hint: 'Sections group tasks on the task list.',
+                            button: 'Add section',
+                            fallback: 'New section',
+                            bodyOnly: true,
+                            add: function (name) { addAndSelect(['taskGroups'], doc.newGroup(name)); }
+                        })
+                    ]
+                },
+                { title: 'Dashboard columns', content: dashboardEditor() },
+                { title: 'Details on the task list', content: metadataEditor() },
+                retired ? { title: 'Retired questions', content: retired } : null
+            ]))
         ];
     }
 

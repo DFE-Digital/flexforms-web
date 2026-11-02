@@ -58,6 +58,14 @@ namespace GovUK.Dfe.FlexForms.Domain.Models
         public TemplateDisplayCopy? DisplayCopy { get; set; }
 
         /// <summary>
+        /// GOV.UK Notify template IDs for this form. Keys are the same as tenant
+        /// <c>EmailTemplates</c> (for example ApplicationSubmitted). A blank or missing
+        /// key keeps the tenant setting.
+        /// </summary>
+        [JsonPropertyName("emailTemplates")]
+        public Dictionary<string, string>? EmailTemplates { get; set; }
+
+        /// <summary>
         /// Optional applications-dashboard column layout. When omitted, only the default
         /// system columns are shown. See <see cref="DashboardConfiguration"/>.
         /// </summary>

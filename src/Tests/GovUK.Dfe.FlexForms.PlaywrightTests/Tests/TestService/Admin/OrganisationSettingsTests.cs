@@ -159,7 +159,7 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
         var organisationSettings = new OrganisationSettings(Page);
         var applicationSubmittedPage = new ApplicationSubmittedPage(Page);
 
-        await organisationSettings.ApplicationSubmittedSettings.ForAllTemplates()
+        await organisationSettings.ApplicationSubmittedSettings
             .WithConfirmationTitle("Orange app submitted")
             .WithPageBody(
                 "## Next steps for your orange application\n\nThank you for submitting your orange application. We will review it and get back to you shortly.")
@@ -171,25 +171,37 @@ public sealed class OrganisationSettingsTests : PlaywrightTestBase
             "Thank you for submitting your orange application. We will review it and get back to you shortly.");
     }
 
-    [TestCase(TestName = "Admin can customise application submitted page for a specific template")]
+    [TestCase(TestName = "Existing tenant per-template submitted page copy still applies")]
     [CiRetry]
-    public async Task AdminCanCustomiseApplicationSubmittedPageForSpecificTemplateAsync()
+    public async Task ExistingTenantPerTemplateSubmittedPageCopyStillAppliesAsync()
     {
-        var organisationSettings = new OrganisationSettings(Page);
         var applicationSubmittedPage = new ApplicationSubmittedPage(Page);
 
-        await organisationSettings.ApplicationSubmittedSettings.ForTemplate(ApiConfig.TemplateId)
-            .WithConfirmationTitle("Pear app submitted")
-            .WithPageBody(
-                "## Next steps for your pear application\n\nThank you for submitting your pear application. We will review it and get back to you shortly.")
-            .SaveAsync();
+        await TenantAdmin.UpsertApplicationSubmittedPageAsync(
+            AdminApiClient,
+            ApiConfig.TenantId,
+            new Dictionary<string, Dictionary<string, string>>
+            {
+                ["_default"] = new()
+                {
+                    ["PanelTitle"] = "",
+                    ["BodyMarkdown"] = ""
+                },
+                [ApiConfig.TemplateId] = new()
+                {
+                    ["PanelTitle"] = "Pear app submitted",
+                    ["BodyMarkdown"] =
+                        "## Next steps for your pear application\n\nThank you for submitting your pear application. We will review it and get back to you shortly."
+                }
+            });
+        await TenantAdmin.RefreshTenantSettingsAsync(AdminApiClient);
+        await new TenantSettings(Page).RefreshSettingsAsync();
 
         await applicationSubmittedPage.GoToAsync(_application.ApplicationReference);
         await applicationSubmittedPage.ExpectContentAsync("Pear app submitted",
             "Next steps for your pear application",
             "Thank you for submitting your pear application. We will review it and get back to you shortly.");
 
-        // verify other template application still uses the default submitted page
         await applicationSubmittedPage.GoToAsync(_otherTemplateApplication.ApplicationReference);
         await applicationSubmittedPage.ExpectHeading("Application submitted");
         await applicationSubmittedPage.ExpectHeading("What happens next");

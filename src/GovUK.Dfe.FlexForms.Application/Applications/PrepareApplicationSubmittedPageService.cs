@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
+using GovUK.Dfe.FlexForms.Application.DisplayCopy;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Application.Options;
 using Microsoft.Extensions.Logging;
@@ -9,7 +10,9 @@ using Microsoft.Extensions.Logging;
 namespace GovUK.Dfe.FlexForms.Application.Applications;
 
 /// <summary>
-/// Resolves per-template confirmation copy for the application-submitted page.
+/// Resolves confirmation copy for the application-submitted page.
+/// Template <c>displayCopy.submittedPage</c> wins, then existing tenant settings (including
+/// per-template keys still stored there), then the built-in sentence.
 /// </summary>
 public interface IPrepareApplicationSubmittedPage
 {
@@ -20,6 +23,7 @@ public sealed class PrepareApplicationSubmittedPageService(
     IApplicationsClient applicationsClient,
     IRequestAppConfiguration requestAppConfiguration,
     IApplicationTerminologyProvider terminology,
+    ITemplateCopyContext templateCopyContext,
     ILogger<PrepareApplicationSubmittedPageService> logger) : IPrepareApplicationSubmittedPage
 {
     public const string SettingsCategory = "ApplicationSubmittedPage";
@@ -28,23 +32,29 @@ public sealed class PrepareApplicationSubmittedPageService(
         ApplicationSubmittedWorkState state,
         CancellationToken cancellationToken = default)
     {
-        var copy = await ResolveCopyAsync(state.ReferenceNumber, cancellationToken);
-        state.PanelTitle = FirstNonEmpty(copy.PanelTitle, ApplicationSubmittedPageDefaults.PanelTitle(terminology));
-        state.BodyMarkdown = FirstNonEmpty(copy.BodyMarkdown, ApplicationSubmittedPageDefaults.BodyMarkdown(terminology));
+        var application = await TryGetApplicationAsync(state.ReferenceNumber, cancellationToken);
+        BindTemplateCopy(application);
+
+        var templateCopy = templateCopyContext.Template?.DisplayCopy?.SubmittedPage;
+        var tenantCopy = ResolveTenantCopy(application);
+
+        state.PanelTitle = ResolveField(
+            templateCopy?.PanelTitle,
+            tenantCopy.PanelTitle,
+            ApplicationSubmittedPageDefaults.PanelTitle(terminology));
+        state.BodyMarkdown = ResolveField(
+            templateCopy?.BodyMarkdown,
+            tenantCopy.BodyMarkdown,
+            ApplicationSubmittedPageDefaults.BodyMarkdown(terminology));
     }
 
-    private async Task<ApplicationSubmittedPageCopy> ResolveCopyAsync(
-        string referenceNumber,
-        CancellationToken cancellationToken)
+    private ApplicationSubmittedPageCopy ResolveTenantCopy(ApplicationDto? application)
     {
         var configured = BindConfiguredCopy();
         if (configured.Count == 0)
             return new ApplicationSubmittedPageCopy();
 
-        var keys = await ResolveTemplateKeysAsync(referenceNumber, cancellationToken);
-        keys.Add(ApplicationSubmittedPageCopy.DefaultTemplateKey);
-
-        foreach (var key in keys)
+        foreach (var key in ResolveTemplateKeys(application))
         {
             if (configured.TryGetValue(key, out var copy))
                 return copy;
@@ -73,29 +83,18 @@ public sealed class PrepareApplicationSubmittedPageService(
         return result;
     }
 
-    private async Task<List<string>> ResolveTemplateKeysAsync(
+    private async Task<ApplicationDto?> TryGetApplicationAsync(
         string referenceNumber,
         CancellationToken cancellationToken)
     {
-        var keys = new List<string>();
         if (string.IsNullOrWhiteSpace(referenceNumber))
-            return keys;
+            return null;
 
         try
         {
-            var application = await applicationsClient.GetApplicationByReferenceAsync(
+            return await applicationsClient.GetApplicationByReferenceAsync(
                 referenceNumber,
                 cancellationToken);
-
-            var templateId = application.TemplateSchema?.TemplateId;
-            if (templateId is Guid guid && guid != Guid.Empty)
-                keys.Add(guid.ToString());
-
-            foreach (var alias in EmbeddedSchemaTemplateIds(application.TemplateSchema))
-            {
-                if (!keys.Contains(alias, StringComparer.OrdinalIgnoreCase))
-                    keys.Add(alias);
-            }
         }
         catch (Exception ex)
         {
@@ -103,28 +102,48 @@ public sealed class PrepareApplicationSubmittedPageService(
                 ex,
                 "Could not resolve template for submitted page copy using reference {ReferenceNumber}",
                 referenceNumber);
+            return null;
+        }
+    }
+
+    private void BindTemplateCopy(ApplicationDto? application)
+    {
+        var schemaText = DecodeSchemaJson(application?.TemplateSchema?.JsonSchema);
+        if (schemaText is null)
+            return;
+
+        templateCopyContext.TryUseJson(schemaText);
+    }
+
+    private List<string> ResolveTemplateKeys(ApplicationDto? application)
+    {
+        var keys = new List<string>();
+        var templateId = application?.TemplateSchema?.TemplateId;
+        if (templateId is Guid guid && guid != Guid.Empty)
+            keys.Add(guid.ToString());
+
+        var schemaAlias = templateCopyContext.Template?.TemplateId;
+        if (!string.IsNullOrWhiteSpace(schemaAlias)
+            && !keys.Contains(schemaAlias, StringComparer.OrdinalIgnoreCase))
+        {
+            keys.Add(schemaAlias);
         }
 
+        foreach (var alias in EmbeddedSchemaTemplateIds(application?.TemplateSchema))
+        {
+            if (!keys.Contains(alias, StringComparer.OrdinalIgnoreCase))
+                keys.Add(alias);
+        }
+
+        keys.Add(ApplicationSubmittedPageCopy.DefaultTemplateKey);
         return keys;
     }
 
     private static IEnumerable<string> EmbeddedSchemaTemplateIds(TemplateSchemaDto? schema)
     {
-        if (string.IsNullOrWhiteSpace(schema?.JsonSchema))
+        var schemaText = DecodeSchemaJson(schema?.JsonSchema);
+        if (schemaText is null)
             yield break;
-
-        var schemaText = schema.JsonSchema.Trim();
-        if (!schemaText.StartsWith('{') && !schemaText.StartsWith('['))
-        {
-            try
-            {
-                schemaText = Encoding.UTF8.GetString(Convert.FromBase64String(schemaText));
-            }
-            catch (FormatException)
-            {
-                yield break;
-            }
-        }
 
         JsonDocument doc;
         try
@@ -146,6 +165,35 @@ public sealed class PrepareApplicationSubmittedPageService(
             }
         }
     }
+
+    private static string? DecodeSchemaJson(string? jsonSchema)
+    {
+        if (string.IsNullOrWhiteSpace(jsonSchema))
+            return null;
+
+        var schemaText = jsonSchema.Trim();
+        if (!schemaText.StartsWith('{') && !schemaText.StartsWith('['))
+        {
+            try
+            {
+                schemaText = Encoding.UTF8.GetString(Convert.FromBase64String(schemaText));
+            }
+            catch (FormatException)
+            {
+                return null;
+            }
+        }
+
+        return schemaText;
+    }
+
+    private string ResolveField(string? templateValue, string? tenantValue, string codeDefault) =>
+        DisplayCopyPlaceholders.Apply(
+            FirstNonEmpty(templateValue, FirstNonEmpty(tenantValue, codeDefault)),
+            templateCopyContext.Template?.TemplateName,
+            terminology.Singular,
+            terminology.Plural,
+            requestAppConfiguration["Layout:ContributorEmail"]);
 
     private static string FirstNonEmpty(string? value, string fallback) =>
         string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();

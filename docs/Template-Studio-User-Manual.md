@@ -130,9 +130,10 @@ Select the template name at the top of the structure.
 | **Use the page heading as the question when a page has one question** | Hides the question label on single-question pages so it isn't repeated under the heading. |
 | **Let applicants invite contributors** | Turns contributor invitations on or off. |
 | **Role for invited contributors** | Shown when invitations are on. **User** can edit the application. Any other role can only view it. |
-| **Wording for this template** | Optional headings, hints and buttons for this form. A blank field keeps the organisation setting, then the built-in sentence. |
+| **Wording** (accordion) | Optional headings, hints and buttons grouped by area: what you call this form, dashboard, application page, application preview, application submitted page, contributor sidebar, and contributor invitation page. A blank field keeps the organisation setting, then the built-in sentence. |
+| **Email templates** | GOV.UK Notify template IDs for this form. The keys are fixed (application submitted, contributor invited, and so on). Leave a box blank to keep the tenant setting. |
 
-Below these you'll find the list of **Sections** with **Add a section**, then the dashboard columns, task list details and retired questions.
+The rest of Template settings is in the same accordion: **Email templates**, **Sections** (with **Add a section**), **Dashboard columns**, **Details on the task list**, and **Retired questions** if any questions have been retired. Contributor wording sections only appear when invitations are on.
 
 ### 4.1 Role for invited contributors
 
@@ -179,23 +180,39 @@ You can have up to 10. **Use the default details** goes back to the platform def
 
 ### 4.4 Wording for this template
 
-Use this when one form should read differently from the rest of the service. Each box can stay blank.
+Use this when one form should read differently from the rest of the service. Open the accordion section for the area you want to change. Each box can stay blank.
 
 A filled box is used for this template. A blank box uses the matching field in Organisation settings, then the built-in sentence. You can use `{singular}`, `{plural}`, `{template_name}` and `{contributor_email}`. `{contributor_email}` is the example email from the service layout.
 
-The boxes cover:
+The sections are:
 
-- singular and plural names, such as visit and visits
-- dashboard heading, in-progress heading, start-new heading, hint and button
-- check-your-answers heading, submit heading, hint and button
-- the contributors section on the task list, and the invite contributors page
-- the task list **Review** and **View** buttons
+- **What you call this form** — singular and plural names, such as visit and visits
+- **Dashboard** — heading, in-progress heading, start-new heading, hint and button
+- **Application page** — the task list **Review** and **View** buttons
+- **Application preview** — check-your-answers heading, submit heading, hint and button
+- **Application submitted page** — **Confirmation title** (green panel) and **Submitted page body** (markdown below the reference number)
+- **Contributor sidebar** — heading, text, invite button and current contributors heading on the task list
+- **Contributor invitation page** — heading, introduction, DfE Sign-in text, after they join, add later, add button and go to application button
 
-The notification banner, dashboard page size, filters, and whether the submit section is hidden stay in Organisation settings. They are not set here.
+The notification banner, dashboard page size, filters, and whether the submit section is hidden stay in Organisation settings. They are not set here. Organisation settings still holds the default submitted-page copy for the tenant.
 
 Wording is saved with the template version. Applications already started keep the wording of the version they started on. Dashboard headings follow the latest template, in the same way as dashboard column headings.
 
-### 4.5 Retired questions
+### 4.5 Email templates
+
+GOV.UK Notify template IDs for emails this form sends. The keys are the same as tenant **EmailTemplates** and cannot be renamed:
+
+- Application submitted
+- Contributor invited
+- Bug report (internal)
+- Bug report (user)
+- Feedback or suggestion (internal)
+- Support request (internal)
+- Support request (user)
+
+Enter the Notify template ID for a key to use it for this form. Leave a box blank to keep the tenant EmailTemplates value. The one-time password email stays tenant-wide and is not set here.
+
+### 4.6 Retired questions
 
 If any questions have been retired (see [section 13](#13-when-applications-already-use-the-template)), they are listed at the bottom with what replaced them.
 
