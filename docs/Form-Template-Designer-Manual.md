@@ -178,7 +178,7 @@ In Transfer: “Trust details” uses a collection; “Reason and benefits” us
 | `contributorRoleId` | Optional GUID of a custom tenant role. Omit it, or use the User role, and invited contributors can edit the application. Any other allowed role can only view that application and its files. Admin, SuperAdmin and Administrator are rejected. See §3.3. |
 | `dashboard` | Optional. Configures applications-dashboard columns (see §3.1). |
 | `applicationMetaData` | Optional. Configures the metadata block on the application task list (see §3.2). |
-| `displayCopy` | Optional. Per-template headings and buttons. A blank field falls back to the organisation setting, then the built-in sentence. See §3.4. |
+| `displayCopy` | Optional. Per-template headings and buttons. A blank field uses the wording from Organisation settings. If that is also blank, the FlexForms default wording is used. See §3.4. |
 | `emailTemplates` | Optional. GOV.UK Notify template IDs for this form. Keys match tenant `EmailTemplates` (for example `ApplicationSubmitted`). A blank or missing key keeps the tenant setting. See §3.5. |
 
 ### 3.1 Dashboard columns (`dashboard`)
@@ -312,7 +312,7 @@ The API rejects a missing role, a role from another tenant, and Admin, SuperAdmi
 
 ### 3.4 Per-template wording (`displayCopy`)
 
-Optional object. Each property is a string. An empty or missing property uses the organisation setting for that field, then the built-in sentence. Placeholders: `{singular}`, `{plural}`, `{template_name}`, `{contributor_email}`.
+Optional object. Each property is a string. An empty or missing property uses the wording from Organisation settings for that field. If that is also blank, the FlexForms default wording is used. Placeholders: `{singular}`, `{plural}`, `{template_name}`, `{contributor_email}`.
 
 ```json
 "displayCopy": {

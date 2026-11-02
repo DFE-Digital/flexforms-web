@@ -183,7 +183,7 @@ Before you save, check that any answer a column uses still exists in the latest 
 
 #### Dashboard wording
 
-Open **Dashboard wording** in the **Dashboard** group. It has boxes for the dashboard heading, in-progress heading, start-new heading, start-new hint and start-new button. A blank box uses the matching field in Organisation settings, then the built-in sentence. `{singular}` and `{plural}` on the dashboard also come from the latest saved version. See [section 4.4](#44-wording-for-this-template) for the placeholders you can use.
+Open **Dashboard wording** in the **Dashboard** group. It has boxes for the dashboard heading, in-progress heading, start-new heading, start-new hint and start-new button. If you leave a box blank, the wording from Organisation settings is used. If that is also blank, the FlexForms default wording is used. `{singular}` and `{plural}` on the dashboard also come from the latest saved version. See [section 4.4](#44-wording-for-this-template) for the placeholders you can use.
 
 #### Dashboard columns
 
@@ -221,7 +221,7 @@ You can have up to 10. **Use the default details** goes back to the platform def
 
 Use this when one form should read differently from the rest of the service. In the **Wording** group, open the section for the area you want to change. Each box can stay blank.
 
-A filled box is used for this template. A blank box uses the matching field in Organisation settings, then the built-in sentence. You can use `{singular}`, `{plural}`, `{template_name}` and `{contributor_email}`. `{contributor_email}` is the example email from the service layout.
+If you fill in a box, that wording is used for this template. If you leave a box blank, the wording from Organisation settings is used. If that is also blank, the FlexForms default wording is used. You can use `{singular}`, `{plural}`, `{template_name}` and `{contributor_email}`. `{contributor_email}` is the example email from the service layout.
 
 The sections in the **Wording** group are:
 

@@ -1775,7 +1775,7 @@
     }
 
     function copyHint() {
-        return h('p', { class: 'govuk-hint', text: 'Leave blank to keep the organisation setting, then the built-in sentence. You can use {singular}, {plural}, {template_name} and {contributor_email}.' });
+        return h('p', { class: 'govuk-hint', text: 'If you leave a box blank, the wording from Organisation settings is used. If that is also blank, the FlexForms default wording is used. You can use {singular}, {plural}, {template_name} and {contributor_email}.' });
     }
 
     function displayCopySections(path) {

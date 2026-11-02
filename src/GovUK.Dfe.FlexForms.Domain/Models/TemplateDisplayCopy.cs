@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 namespace GovUK.Dfe.FlexForms.Domain.Models;
 
 /// <summary>
-/// Optional wording stored on the template. A blank field keeps the tenant setting, then the built-in sentence.
+/// Optional wording stored on the template. A blank field uses the tenant setting, then the FlexForms default wording.
 /// </summary>
 [ExcludeFromCodeCoverage]
 public class TemplateDisplayCopy

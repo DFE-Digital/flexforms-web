@@ -52,7 +52,7 @@ namespace GovUK.Dfe.FlexForms.Domain.Models
         public string? ContributorRoleId { get; set; }
 
         /// <summary>
-        /// Optional wording for this template. Blank fields keep the tenant setting, then the built-in sentence.
+        /// Optional wording for this template. Blank fields use the tenant setting, then the FlexForms default wording.
         /// </summary>
         [JsonPropertyName("displayCopy")]
         public TemplateDisplayCopy? DisplayCopy { get; set; }

@@ -1,7 +1,7 @@
 namespace GovUK.Dfe.FlexForms.Application.DisplayCopy;
 
 /// <summary>
-/// Wording for the current template. A template value wins, then the tenant setting, then the built-in sentence.
+/// Wording for the current template. A template value wins, then the tenant setting, then the FlexForms default wording.
 /// </summary>
 public interface ITemplateDisplayCopy
 {

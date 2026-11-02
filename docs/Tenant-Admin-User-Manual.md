@@ -759,7 +759,7 @@ This is the page applicants see before they submit. It applies to every template
 
 Wording for the contributors block on the task list, and for the invite contributors page. This is the default for every template. A template can replace any field in Template Studio.
 
-Leave a field blank to keep the built-in sentence. You can use `{singular}`, `{plural}`, `{template_name}` and `{contributor_email}`.
+If you leave a box blank, the FlexForms default wording is used. You can use `{singular}`, `{plural}`, `{template_name}` and `{contributor_email}`.
 
 | Field | Where it appears |
 |-------|------------------|

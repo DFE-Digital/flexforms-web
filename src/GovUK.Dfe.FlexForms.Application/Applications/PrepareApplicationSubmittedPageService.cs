@@ -12,7 +12,7 @@ namespace GovUK.Dfe.FlexForms.Application.Applications;
 /// <summary>
 /// Resolves confirmation copy for the application-submitted page.
 /// Template <c>displayCopy.submittedPage</c> wins, then existing tenant settings (including
-/// per-template keys still stored there), then the built-in sentence.
+/// per-template keys still stored there), then the FlexForms default wording.
 /// </summary>
 public interface IPrepareApplicationSubmittedPage
 {
