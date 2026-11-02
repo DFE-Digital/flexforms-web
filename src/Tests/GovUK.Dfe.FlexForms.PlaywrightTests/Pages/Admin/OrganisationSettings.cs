@@ -120,11 +120,6 @@ public sealed class CheckYourAnswersSettings(OrganisationSettings settings)
 
 public sealed class ApplicationSubmittedSettings(OrganisationSettings settings)
 {
-    public ApplicationSubmittedSettings ForAllTemplates() => this.ForTemplate("_default");
-
-    public ApplicationSubmittedSettings ForTemplate(string templateId) =>
-        settings.Enqueue(this, "SubmittedTemplateId", field => field.SelectOptionAsync(templateId));
-
     public ApplicationSubmittedSettings WithConfirmationTitle(string title) =>
         settings.Enqueue(this, "SubmittedPanelTitle", field => field.FillAsync(title));
 

@@ -83,16 +83,25 @@ public static class TenantAdmin
             }));
 
     public static Task RestoreApplicationSubmittedPageAsync(IAPIRequestContext request, string tenantId) =>
-        UpsertSafeSettingAsync(
+        UpsertApplicationSubmittedPageAsync(
             request,
             tenantId,
-            "ApplicationSubmittedPage",
-            JsonSerializer.Serialize(new
+            new
             {
                 _default = new
                 {
                     PanelTitle = "",
                     BodyMarkdown = ""
                 }
-            }));
+            });
+
+    public static Task UpsertApplicationSubmittedPageAsync(
+        IAPIRequestContext request,
+        string tenantId,
+        object payload) =>
+        UpsertSafeSettingAsync(
+            request,
+            tenantId,
+            "ApplicationSubmittedPage",
+            JsonSerializer.Serialize(payload));
 }

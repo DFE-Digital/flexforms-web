@@ -179,6 +179,7 @@ In Transfer: “Trust details” uses a collection; “Reason and benefits” us
 | `dashboard` | Optional. Configures applications-dashboard columns (see §3.1). |
 | `applicationMetaData` | Optional. Configures the metadata block on the application task list (see §3.2). |
 | `displayCopy` | Optional. Per-template headings and buttons. A blank field falls back to the organisation setting, then the built-in sentence. See §3.4. |
+| `emailTemplates` | Optional. GOV.UK Notify template IDs for this form. Keys match tenant `EmailTemplates` (for example `ApplicationSubmitted`). A blank or missing key keeps the tenant setting. See §3.5. |
 
 ### 3.1 Dashboard columns (`dashboard`)
 
@@ -345,6 +346,10 @@ Optional object. Each property is a string. An empty or missing property uses th
   "taskList": {
     "reviewButtonText": "Review {singular}",
     "viewButtonText": "View {singular}"
+  },
+  "submittedPage": {
+    "panelTitle": "{singular} submitted",
+    "bodyMarkdown": "We've sent you a confirmation email with your reference number.\n\n## What happens next\n\nYour {singular} will be reviewed."
   }
 }
 ```
@@ -352,6 +357,24 @@ Optional object. Each property is a string. An empty or missing property uses th
 Wording is stored on the template version. Pages for an application in progress use that application's version. Dashboard headings use the latest template, as column headings do.
 
 The notification banner, dashboard page size, filters, and `hideSubmitSection` are not in `displayCopy`. They stay in organisation settings.
+
+### 3.5 Email templates (`emailTemplates`)
+
+Optional object. Keys are fixed and match tenant `EmailTemplates`. Values are GOV.UK Notify template GUIDs. A missing or blank key uses the tenant setting.
+
+```json
+"emailTemplates": {
+  "ApplicationSubmitted": "a4188604-0053-4d77-9ad2-720f6fbbdf0a",
+  "ContributorInvited": "3a0e2130-ceea-48c9-8e3d-906431acc86f",
+  "BugReportInternal": "8b51948c-d7d1-4a26-8ea6-f4a78a27ce5a",
+  "BugReportUser": "6b0c7eb1-ec0b-4e6e-91e0-92c602ede7d8",
+  "FeedbackOrSuggestionInternal": "73f684f4-875c-4d4b-b88a-b73f5f1e7c5b",
+  "SupportRequestInternal": "d6577f06-cedd-4bb1-8274-a5399c5e7056",
+  "SupportRequestUser": "2abe75fc-b772-4a02-89c2-0069f56a49b7"
+}
+```
+
+`TestAuthPasswordEmail` stays on the tenant setting. It is not set per form.
 
 ---
 

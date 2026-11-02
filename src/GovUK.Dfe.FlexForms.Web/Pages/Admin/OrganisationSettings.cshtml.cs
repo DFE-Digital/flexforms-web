@@ -6,7 +6,6 @@ using GovUK.Dfe.FlexForms.Web.Tenancy;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.AspNetCore.Mvc.Rendering;
 
 namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 
@@ -151,11 +150,6 @@ public sealed class OrganisationSettingsModel(
     [StringLength(200)]
     public string? TaskListViewButtonText { get; set; }
 
-    [BindProperty(SupportsGet = true)]
-    public string? SubmittedTemplateId { get; set; }
-
-    public IReadOnlyList<SelectListItem> SubmittedTemplateOptions { get; private set; } = [];
-
     [BindProperty]
     [StringLength(200)]
     public string? SubmittedPanelTitle { get; set; }
@@ -190,10 +184,7 @@ public sealed class OrganisationSettingsModel(
         }
 
         if (!ModelState.IsValid)
-        {
-            await ReloadSubmittedTemplateOptionsAsync(cancellationToken);
             return Page();
-        }
 
         TerminologySingular = TerminologySingular?.Trim() ?? string.Empty;
         TerminologyPlural = TerminologyPlural?.Trim() ?? string.Empty;
@@ -224,10 +215,10 @@ public sealed class OrganisationSettingsModel(
         SubmittedPanelTitle = SubmittedPanelTitle?.Trim() ?? string.Empty;
 
         var outcome = await organisationSettingsAdmin.SaveAsync(CaptureWorkState(), cancellationToken);
-        return await MapOutcome(outcome, cancellationToken);
+        return MapOutcome(outcome);
     }
 
-    private async Task<IActionResult> MapOutcome(AdminPageOutcome outcome, CancellationToken cancellationToken)
+    private IActionResult MapOutcome(AdminPageOutcome outcome)
     {
         if (outcome.RefreshLocalCaches)
         {
@@ -246,21 +237,10 @@ public sealed class OrganisationSettingsModel(
                 ErrorMessage = outcome.ErrorMessage;
             }
 
-            await ReloadSubmittedTemplateOptionsAsync(cancellationToken);
             return Page();
         }
 
-        return RedirectToPage(new { SubmittedTemplateId });
-    }
-
-    private async Task ReloadSubmittedTemplateOptionsAsync(CancellationToken cancellationToken)
-    {
-        var state = CaptureWorkState();
-        await organisationSettingsAdmin.LoadTemplateOptionsAsync(state, cancellationToken);
-        SubmittedTemplateOptions = state.SubmittedTemplateOptions
-            .Select(o => new SelectListItem(o.Text, o.Value, o.Selected))
-            .ToList();
-        SubmittedTemplateId = state.SubmittedTemplateId;
+        return RedirectToPage();
     }
 
     private OrganisationSettingsWorkState CaptureWorkState() =>
@@ -298,7 +278,6 @@ public sealed class OrganisationSettingsModel(
             ContributorsCurrentHeading = ContributorsCurrentHeading,
             TaskListReviewButtonText = TaskListReviewButtonText,
             TaskListViewButtonText = TaskListViewButtonText,
-            SubmittedTemplateId = SubmittedTemplateId,
             SubmittedPanelTitle = SubmittedPanelTitle,
             SubmittedBodyMarkdown = SubmittedBodyMarkdown
         };
@@ -337,10 +316,6 @@ public sealed class OrganisationSettingsModel(
         ContributorsCurrentHeading = state.ContributorsCurrentHeading;
         TaskListReviewButtonText = state.TaskListReviewButtonText;
         TaskListViewButtonText = state.TaskListViewButtonText;
-        SubmittedTemplateId = state.SubmittedTemplateId;
-        SubmittedTemplateOptions = state.SubmittedTemplateOptions
-            .Select(o => new SelectListItem(o.Text, o.Value, o.Selected))
-            .ToList();
         SubmittedPanelTitle = state.SubmittedPanelTitle;
         SubmittedBodyMarkdown = state.SubmittedBodyMarkdown;
         if (state.HasError)

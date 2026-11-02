@@ -13,14 +13,11 @@ public interface IOrganisationSettingsAdmin
 {
     Task LoadAsync(OrganisationSettingsWorkState state, CancellationToken cancellationToken = default);
 
-    Task LoadTemplateOptionsAsync(OrganisationSettingsWorkState state, CancellationToken cancellationToken = default);
-
     Task<AdminPageOutcome> SaveAsync(OrganisationSettingsWorkState state, CancellationToken cancellationToken = default);
 }
 
 public sealed class OrganisationSettingsAdminService(
     ITenantAdminClient tenantAdminClient,
-    ITemplatesClient templatesClient,
     ILogger<OrganisationSettingsAdminService> logger) : IOrganisationSettingsAdmin
 {
     private const string TargetWeb = "Web";
@@ -50,8 +47,7 @@ public sealed class OrganisationSettingsAdminService(
                 ApplySettingJson(state, setting.Category, setting.SettingsJson);
             }
 
-            await LoadTemplateOptionsAsync(state, cancellationToken);
-            ApplySelectedSubmittedCopy(state);
+            ApplyDefaultSubmittedCopy(state);
         }
         catch (Exception ex)
         {
@@ -141,7 +137,7 @@ public sealed class OrganisationSettingsAdminService(
                 },
                 cancellationToken);
 
-            MergeSelectedSubmittedCopy(state);
+            MergeDefaultSubmittedCopy(state);
             await UpsertCategoryAsync(
                 state.TenantId,
                 CategoryApplicationSubmittedPage,
@@ -329,63 +325,11 @@ public sealed class OrganisationSettingsAdminService(
         return false;
     }
 
-    public Task LoadTemplateOptionsAsync(
-        OrganisationSettingsWorkState state,
-        CancellationToken cancellationToken = default) =>
-        LoadSubmittedTemplateOptionsAsync(state, cancellationToken);
-
-    private async Task LoadSubmittedTemplateOptionsAsync(
-        OrganisationSettingsWorkState state,
-        CancellationToken cancellationToken)
+    private static void ApplyDefaultSubmittedCopy(OrganisationSettingsWorkState state)
     {
-        var options = new List<AdminSelectOption>
-        {
-            new(
-                "Default (all templates)",
+        if (!state.SubmittedPageByTemplate.TryGetValue(
                 ApplicationSubmittedPageCopy.DefaultTemplateKey,
-                string.Equals(
-                    state.SubmittedTemplateId,
-                    ApplicationSubmittedPageCopy.DefaultTemplateKey,
-                    StringComparison.OrdinalIgnoreCase))
-        };
-
-        try
-        {
-            var templates = await templatesClient.GetAccessibleTemplatesAsync(cancellationToken) ?? [];
-            options.AddRange(
-                templates
-                    .Where(t => t.TemplateId != Guid.Empty)
-                    .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
-                    .Select(t =>
-                    {
-                        var id = t.TemplateId.ToString();
-                        var label = string.IsNullOrWhiteSpace(t.Name) ? id : $"{t.Name} ({id})";
-                        return new AdminSelectOption(
-                            label,
-                            id,
-                            string.Equals(id, state.SubmittedTemplateId, StringComparison.OrdinalIgnoreCase));
-                    }));
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Could not load templates for application submitted page settings");
-        }
-
-        if (string.IsNullOrWhiteSpace(state.SubmittedTemplateId))
-        {
-            state.SubmittedTemplateId = options[0].Value;
-            options[0] = options[0] with { Selected = true };
-        }
-
-        state.SubmittedTemplateOptions = options;
-    }
-
-    private static void ApplySelectedSubmittedCopy(OrganisationSettingsWorkState state)
-    {
-        if (string.IsNullOrWhiteSpace(state.SubmittedTemplateId))
-            return;
-
-        if (!state.SubmittedPageByTemplate.TryGetValue(state.SubmittedTemplateId, out var copy))
+                out var copy))
             return;
 
         state.SubmittedPanelTitle = copy.PanelTitle;
@@ -409,16 +353,14 @@ public sealed class OrganisationSettingsAdminService(
         }
     }
 
-    private static void MergeSelectedSubmittedCopy(OrganisationSettingsWorkState state)
+    private static void MergeDefaultSubmittedCopy(OrganisationSettingsWorkState state)
     {
-        if (string.IsNullOrWhiteSpace(state.SubmittedTemplateId))
-            return;
-
-        state.SubmittedPageByTemplate[state.SubmittedTemplateId] = new ApplicationSubmittedPageCopy
-        {
-            PanelTitle = state.SubmittedPanelTitle?.Trim() ?? string.Empty,
-            BodyMarkdown = state.SubmittedBodyMarkdown ?? string.Empty
-        };
+        state.SubmittedPageByTemplate[ApplicationSubmittedPageCopy.DefaultTemplateKey] =
+            new ApplicationSubmittedPageCopy
+            {
+                PanelTitle = state.SubmittedPanelTitle?.Trim() ?? string.Empty,
+                BodyMarkdown = state.SubmittedBodyMarkdown ?? string.Empty
+            };
     }
 
     private static void ApplySubmittedPageJson(OrganisationSettingsWorkState state, JsonElement root)

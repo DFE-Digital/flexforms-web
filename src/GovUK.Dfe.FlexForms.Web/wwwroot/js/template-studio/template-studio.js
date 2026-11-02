@@ -63,6 +63,17 @@
 
     var NO_VALUE_OPERATORS = ['isEmpty', 'isNotEmpty', 'isTrue', 'isFalse', 'isValidEmail', 'isValidPhone'];
 
+    // Same keys as tenant EmailTemplates. The user only sets the Notify template ID.
+    var EMAIL_TEMPLATE_LABELS = {
+        ApplicationSubmitted: 'Application submitted',
+        ContributorInvited: 'Contributor invited',
+        BugReportInternal: 'Bug report (internal)',
+        BugReportUser: 'Bug report (user)',
+        FeedbackOrSuggestionInternal: 'Feedback or suggestion (internal)',
+        SupportRequestInternal: 'Support request (internal)',
+        SupportRequestUser: 'Support request (user)'
+    };
+
     // Comparisons the rule builder offers that don't need an answer to compare with.
     var VALUELESS = ['isEmpty', 'isNotEmpty'];
 
@@ -212,6 +223,7 @@
         govuk.createAll(govuk.Checkboxes, undefined, options);
         govuk.createAll(govuk.ErrorSummary, undefined, options);
         govuk.createAll(govuk.NotificationBanner, undefined, options);
+        if (govuk.Accordion) govuk.createAll(govuk.Accordion, undefined, options);
     }
 
     // ---- DOM helpers -------------------------------------------------------------------------------------------
@@ -434,6 +446,25 @@
             h('h3', { class: 'govuk-heading-m', text: title }),
             children
         ]);
+    }
+
+    function accordion(id, items) {
+        var rootEl = h('div', {
+            class: 'govuk-accordion govuk-!-margin-top-6',
+            'data-module': 'govuk-accordion',
+            id: id
+        });
+        (items || []).forEach(function (item) {
+            if (!item || !item.title || !item.content) return;
+            var slug = id + '-' + String(item.title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+            var sectionEl = h('div', { class: 'govuk-accordion__section' });
+            var heading = h('h2', { class: 'govuk-accordion__section-heading' });
+            heading.appendChild(h('span', { class: 'govuk-accordion__section-button', id: slug + '-heading', text: item.title }));
+            sectionEl.appendChild(h('div', { class: 'govuk-accordion__section-header' }, heading));
+            sectionEl.appendChild(h('div', { id: slug + '-content', class: 'govuk-accordion__section-content' }, item.content));
+            rootEl.appendChild(sectionEl);
+        });
+        return rootEl.childNodes.length ? rootEl : null;
     }
 
     function inset(text) {
@@ -1357,7 +1388,7 @@
 
     function addForm(options) {
         var id = options.id;
-        return section(options.title, [
+        var body = [
             options.choices || null,
             textInput({ id: id, label: options.label, hint: options.hint }),
             button(options.button, function () {
@@ -1365,14 +1396,18 @@
                 var name = (input.value || '').trim() || options.fallback;
                 options.add(name);
             }, 'secondary', id + '-button')
-        ]);
+        ];
+        if (options.bodyOnly) {
+            return [h('h3', { class: 'govuk-heading-s', text: options.title })].concat(body);
+        }
+        return section(options.title, body);
     }
 
     // A summary list of what's inside the selected item, each with a Change link that opens it.
-    function contents(path, title, emptyText) {
+    function contents(path, title, emptyText, bodyOnly) {
         var targets = ruleTargets();
         var children = childrenOf(path);
-        return section(title, children.length
+        var body = children.length
             ? summaryList(children.map(function (child) {
                 return {
                     key: [nodeTitle(child), targets.has(idOf(child)) ? [' ', tag('Shown by a rule', 'yellow')] : null],
@@ -1380,7 +1415,8 @@
                     actions: [{ text: 'Change', hidden: nodeTitle(child), onClick: function () { select(child, true); } }]
                 };
             }))
-            : h('p', { class: 'govuk-body', text: emptyText }));
+            : h('p', { class: 'govuk-body', text: emptyText });
+        return bodyOnly ? body : section(title, body);
     }
 
     function isInList(path) {
@@ -1523,22 +1559,37 @@
         return column.type === 'field' || (!column.type && !!column.fieldId);
     }
 
+    function startCustomising(text, buttonText, id, start) {
+        return [
+            h('p', { class: 'govuk-body', text: text }),
+            button(buttonText, function () { start(); restructured(); }, 'secondary', id)
+        ];
+    }
+
+    function revertToDefault(text, revert) {
+        return h('p', { class: 'govuk-body' }, actionLink({
+            text: text,
+            onClick: function () { revert(); editing = null; restructured(); }
+        }));
+    }
+
     function dashboardEditor() {
         var root = doc.root;
         var columns = root.dashboard && Array.isArray(root.dashboard.columns) ? root.dashboard.columns : null;
         if (!columns || !columns.length) {
-            return section('Dashboard columns', [
-                h('p', { class: 'govuk-body', text: 'The applications dashboard shows the default columns: reference, date started, date submitted, status and an action link.' }),
-                button('Choose the columns', function () {
+            return startCustomising(
+                'The applications dashboard shows the default columns: reference, date started, date submitted, status and an action link.',
+                'Choose the columns',
+                'tpl-dashboard-customise',
+                function () {
                     root.dashboard = { columns: SYSTEM_COLUMNS.map(function (column, index) { return { type: 'system', id: column.value, order: (index + 1) * 10 }; }) };
-                    restructured();
-                }, 'secondary', 'tpl-dashboard-customise')
-            ]);
+                }
+            );
         }
 
         var choices = answerChoices();
         var answerColumns = columns.filter(isFieldColumn).length;
-        return section('Dashboard columns', [
+        return [
             h('p', { class: 'govuk-body', text: 'Columns on the applications dashboard, in order. Up to 3 can show answers.' }),
             answerColumns > 3 ? warningText('Only the first 3 answer columns are shown.') : null,
             listEditor({
@@ -1597,20 +1648,19 @@
                     ];
                 }
             }),
-            h('p', { class: 'govuk-body' }, actionLink({
-                text: 'Use the default columns',
-                onClick: function () { root.dashboard = null; editing = null; restructured(); }
-            }))
-        ]);
+            revertToDefault('Use the default columns', function () { root.dashboard = null; })
+        ];
     }
 
     function metadataEditor() {
         var root = doc.root;
         var items = root.applicationMetaData && Array.isArray(root.applicationMetaData.items) ? root.applicationMetaData.items : null;
         if (!items || !items.length) {
-            return section('Details on the task list', [
-                h('p', { class: 'govuk-body', text: 'The task list shows the default details: application reference, template version and lead applicant.' }),
-                button('Choose the details', function () {
+            return startCustomising(
+                'The task list shows the default details: application reference, template version and lead applicant.',
+                'Choose the details',
+                'tpl-metadata-customise',
+                function () {
                     root.applicationMetaData = {
                         items: [
                             { label: 'Application reference', fieldId: 'application.reference', order: 10 },
@@ -1618,14 +1668,13 @@
                             { label: 'Lead applicant', fieldId: 'application.leadApplicant', order: 30 }
                         ]
                     };
-                    restructured();
-                }, 'secondary', 'tpl-metadata-customise')
-            ]);
+                }
+            );
         }
 
         var choices = APPLICATION_BINDINGS.map(function (binding) { return Object.assign({ group: 'About the application' }, binding); })
             .concat(answerChoices());
-        return section('Details on the task list', [
+        return [
             h('p', { class: 'govuk-body', text: 'Rows shown under "Your application" on the task list, in order. You can have up to 10.' }),
             listEditor({
                 items: items,
@@ -1674,17 +1723,14 @@
                     ];
                 }
             }),
-            h('p', { class: 'govuk-body' }, actionLink({
-                text: 'Use the default details',
-                onClick: function () { root.applicationMetaData = null; editing = null; restructured(); }
-            }))
-        ]);
+            revertToDefault('Use the default details', function () { root.applicationMetaData = null; })
+        ];
     }
 
     function retiredList() {
         var retired = doc.root.retiredFields || [];
         if (!retired.length) return null;
-        return section('Retired questions', [
+        return [
             h('p', { class: 'govuk-body', text: 'Questions taken out of the template after applications had answered them. Reports keep their answers.' }),
             summaryList(retired.map(function (entry) {
                 return {
@@ -1692,7 +1738,7 @@
                     value: entry.replacedBy && entry.replacedBy.length ? 'Replaced by ' + entry.replacedBy.join(', ') : 'Not replaced'
                 };
             }))
-        ]);
+        ];
     }
 
     function contributorRoleChoices(root) {
@@ -1704,63 +1750,111 @@
         return copy[property] || '';
     }
 
-    function bindCopy(path, section, property) {
+    function bindRootMap(path, keys) {
         return function (value) {
-            var root = doc.root;
-            root.displayCopy = root.displayCopy || {};
-            root.displayCopy[section] = root.displayCopy[section] || {};
+            var cursor = doc.root;
+            var frames = [];
+            for (var i = 0; i < keys.length - 1; i++) {
+                var key = keys[i];
+                if (!cursor[key]) cursor[key] = {};
+                frames.push({ parent: cursor, key: key });
+                cursor = cursor[key];
+            }
+            var leaf = keys[keys.length - 1];
             if (value) {
-                root.displayCopy[section][property] = value;
+                cursor[leaf] = value;
             } else {
-                delete root.displayCopy[section][property];
-                if (!Object.keys(root.displayCopy[section]).length) delete root.displayCopy[section];
-                if (!Object.keys(root.displayCopy).length) delete root.displayCopy;
+                delete cursor[leaf];
+                for (var j = frames.length - 1; j >= 0; j--) {
+                    if (Object.keys(frames[j].parent[frames[j].key]).length) break;
+                    delete frames[j].parent[frames[j].key];
+                }
             }
             edited(path);
         };
     }
 
-    function displayCopyFields(path) {
-        var hint = 'Leave blank to keep the organisation setting, then the built-in sentence. You can use {singular}, {plural}, {template_name} and {contributor_email}.';
-        function field(section, property, label) {
-            return textInput({
+    function copyHint() {
+        return h('p', { class: 'govuk-hint', text: 'Leave blank to keep the organisation setting, then the built-in sentence. You can use {singular}, {plural}, {template_name} and {contributor_email}.' });
+    }
+
+    function displayCopySections(path) {
+        // title | json section | property | label | textarea rows | hint
+        var rows = [
+            'What you call this form|terminology|singular|Singular, for example visit',
+            'What you call this form|terminology|plural|Plural, for example visits',
+            'Dashboard|dashboard|mainHeading|Dashboard heading',
+            'Dashboard|dashboard|inProgressHeading|In progress heading',
+            'Dashboard|dashboard|startNewHeading|Start new heading',
+            'Dashboard|dashboard|startNewHint|Start new hint',
+            'Dashboard|dashboard|startNewButtonText|Start new button',
+            'Application page|taskList|reviewButtonText|Review button',
+            'Application page|taskList|viewButtonText|View button',
+            'Application preview|preview|pageHeading|Check your answers heading',
+            'Application preview|preview|submitHeading|Submit heading',
+            'Application preview|preview|submitHint|Submit hint',
+            'Application preview|preview|submitButtonText|Submit button',
+            'Application submitted page|submittedPage|panelTitle|Confirmation title',
+            'Application submitted page|submittedPage|bodyMarkdown|Submitted page body|8|Markdown below the reference number. Use ## for headings, - for lists, **bold**, and links.',
+            'Contributor sidebar|contributors|sectionHeading|Contributors heading',
+            'Contributor sidebar|contributors|sectionBody|Contributors text',
+            'Contributor sidebar|contributors|inviteButtonText|Invite button',
+            'Contributor sidebar|contributors|currentHeading|Current contributors heading',
+            'Contributor invitation page|contributors|pageHeading|Invite page heading',
+            'Contributor invitation page|contributors|intro|Invite introduction',
+            'Contributor invitation page|contributors|signInText|DfE Sign-in text',
+            'Contributor invitation page|contributors|onceJoinedText|After they join',
+            'Contributor invitation page|contributors|addLaterText|Add later text',
+            'Contributor invitation page|contributors|addButtonText|Add a contributor button',
+            'Contributor invitation page|contributors|proceedButtonText|Go to application button'
+        ];
+        var byTitle = {};
+        var order = [];
+        rows.forEach(function (row) {
+            var parts = row.split('|');
+            var title = parts[0];
+            var section = parts[1];
+            var property = parts[2];
+            var opts = {
                 id: 'tpl-copy-' + section + '-' + property,
-                label: label,
+                label: parts[3],
                 value: copyValue(section, property),
-                onInput: bindCopy(path, section, property)
-            });
-        }
-        return section('Wording for this template', [
-            h('p', { class: 'govuk-hint', text: hint }),
-            field('terminology', 'singular', 'Singular, for example visit'),
-            field('terminology', 'plural', 'Plural, for example visits'),
-            field('dashboard', 'mainHeading', 'Dashboard heading'),
-            field('dashboard', 'inProgressHeading', 'In progress heading'),
-            field('dashboard', 'startNewHeading', 'Start new heading'),
-            field('dashboard', 'startNewHint', 'Start new hint'),
-            field('dashboard', 'startNewButtonText', 'Start new button'),
-            field('preview', 'pageHeading', 'Check your answers heading'),
-            field('preview', 'submitHeading', 'Submit heading'),
-            field('preview', 'submitHint', 'Submit hint'),
-            field('preview', 'submitButtonText', 'Submit button'),
-            field('contributors', 'sectionHeading', 'Contributors heading'),
-            field('contributors', 'sectionBody', 'Contributors text'),
-            field('contributors', 'inviteButtonText', 'Invite button'),
-            field('contributors', 'pageHeading', 'Invite page heading'),
-            field('contributors', 'intro', 'Invite introduction'),
-            field('contributors', 'signInText', 'DfE Sign-in text'),
-            field('contributors', 'onceJoinedText', 'After they join'),
-            field('contributors', 'addLaterText', 'Add later text'),
-            field('contributors', 'addButtonText', 'Add a contributor button'),
-            field('contributors', 'proceedButtonText', 'Go to application button'),
-            field('contributors', 'currentHeading', 'Current contributors heading'),
-            field('taskList', 'reviewButtonText', 'Review button'),
-            field('taskList', 'viewButtonText', 'View button')
-        ]);
+                rows: parts[4] ? parseInt(parts[4], 10) : undefined,
+                hint: parts[5],
+                onInput: bindRootMap(path, ['displayCopy', section, property])
+            };
+            if (!byTitle[title]) {
+                byTitle[title] = [];
+                order.push(title);
+            }
+            byTitle[title].push(opts.rows ? textArea(opts) : textInput(opts));
+        });
+        var contributorsOn = doc.root.contributorPattern !== false;
+        return order.filter(function (title) {
+            return contributorsOn || title.indexOf('Contributor') !== 0;
+        }).map(function (title) {
+            return { title: title, content: [copyHint()].concat(byTitle[title]) };
+        });
+    }
+
+    function emailTemplatesEditor(path) {
+        var map = doc.root.emailTemplates || {};
+        return [h('p', { class: 'govuk-hint', text: 'GOV.UK Notify template IDs for this form. The keys match tenant EmailTemplates. Leave a box blank to keep the tenant setting.' })].concat(
+            Object.keys(EMAIL_TEMPLATE_LABELS).map(function (key) {
+                return textInput({
+                    id: 'tpl-email-' + key,
+                    label: EMAIL_TEMPLATE_LABELS[key],
+                    hint: key,
+                    value: map[key] || '',
+                    onInput: bindRootMap(path, ['emailTemplates', key])
+                });
+            })
+        );
     }
 
     function templateInspector(path) {
         var root = doc.root;
+        var retired = retiredList();
 
         return [
             header(path),
@@ -1816,20 +1910,28 @@
                     edited(path);
                 }
             }) : null,
-            displayCopyFields(path),
-            contents(path, 'Sections', 'This template has no sections yet.'),
-            addForm({
-                id: 'tpl-new-group',
-                title: 'Add a section',
-                label: 'Section heading',
-                hint: 'Sections group tasks on the task list.',
-                button: 'Add section',
-                fallback: 'New section',
-                add: function (name) { addAndSelect(['taskGroups'], doc.newGroup(name)); }
-            }),
-            dashboardEditor(),
-            metadataEditor(),
-            retiredList()
+            accordion('tpl-settings-accordion', displayCopySections(path).concat([
+                { title: 'Email templates', content: emailTemplatesEditor(path) },
+                {
+                    title: 'Sections',
+                    content: [
+                        contents(path, 'Sections', 'This template has no sections yet.', true),
+                        addForm({
+                            id: 'tpl-new-group',
+                            title: 'Add a section',
+                            label: 'Section heading',
+                            hint: 'Sections group tasks on the task list.',
+                            button: 'Add section',
+                            fallback: 'New section',
+                            bodyOnly: true,
+                            add: function (name) { addAndSelect(['taskGroups'], doc.newGroup(name)); }
+                        })
+                    ]
+                },
+                { title: 'Dashboard columns', content: dashboardEditor() },
+                { title: 'Details on the task list', content: metadataEditor() },
+                retired ? { title: 'Retired questions', content: retired } : null
+            ]))
         ];
     }
 

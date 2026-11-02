@@ -1,6 +1,7 @@
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Application.Applications;
+using GovUK.Dfe.FlexForms.Application.DisplayCopy;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -34,21 +35,10 @@ public class PrepareApplicationSubmittedPageServiceTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_UsesTemplateCopy_WhenGuidMatches()
+    public async Task ExecuteAsync_UsesTenantTemplateCopy_WhenGuidMatches()
     {
         var templateId = Guid.NewGuid();
-        _applications.GetApplicationByReferenceAsync("TRF-1", Arg.Any<CancellationToken>())
-            .Returns(new ApplicationDto
-            {
-                ApplicationReference = "TRF-1",
-                TemplateSchema = new TemplateSchemaDto
-                {
-                    TemplateId = templateId,
-                    TemplateVersionId = Guid.NewGuid(),
-                    VersionNumber = "1",
-                    JsonSchema = """{"templateId":"form-001"}"""
-                }
-            });
+        GivenApplication("TRF-1", templateId, """{"templateId":"form-001"}""");
 
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -71,18 +61,7 @@ public class PrepareApplicationSubmittedPageServiceTests
     public async Task ExecuteAsync_UsesSchemaAlias_WhenGuidHasNoCopy()
     {
         var templateId = Guid.NewGuid();
-        _applications.GetApplicationByReferenceAsync("TRF-1", Arg.Any<CancellationToken>())
-            .Returns(new ApplicationDto
-            {
-                ApplicationReference = "TRF-1",
-                TemplateSchema = new TemplateSchemaDto
-                {
-                    TemplateId = templateId,
-                    TemplateVersionId = Guid.NewGuid(),
-                    VersionNumber = "1",
-                    JsonSchema = """{"templateId":"form-001"}"""
-                }
-            });
+        GivenApplication("TRF-1", templateId, """{"templateId":"form-001"}""");
 
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -124,11 +103,133 @@ public class PrepareApplicationSubmittedPageServiceTests
         Assert.Equal("Fallback body", state.BodyMarkdown);
     }
 
+    [Fact]
+    public async Task ExecuteAsync_UsesTemplateDisplayCopy_WhenSubmittedPageIsOnTheTemplate()
+    {
+        var templateId = Guid.NewGuid();
+        GivenApplication("TRF-1", templateId, SchemaWithSubmittedPage("From the template", "Template body for {singular}"));
+
+        var service = CreateService(new ConfigurationBuilder().Build());
+        var state = new ApplicationSubmittedWorkState { ReferenceNumber = "TRF-1" };
+
+        await service.ExecuteAsync(state);
+
+        Assert.Equal("From the template", state.PanelTitle);
+        Assert.Equal("Template body for plan", state.BodyMarkdown);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_PrefersTemplateDisplayCopy_OverTenantTemplateCopy()
+    {
+        var templateId = Guid.NewGuid();
+        GivenApplication("TRF-1", templateId, SchemaWithSubmittedPage("From the template", "Template body"));
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [$"ApplicationSubmittedPage:{templateId}:PanelTitle"] = "From tenant settings",
+                [$"ApplicationSubmittedPage:{templateId}:BodyMarkdown"] = "Tenant body",
+                ["ApplicationSubmittedPage:_default:PanelTitle"] = "Default title",
+                ["ApplicationSubmittedPage:_default:BodyMarkdown"] = "Default body"
+            })
+            .Build();
+
+        var service = CreateService(config);
+        var state = new ApplicationSubmittedWorkState { ReferenceNumber = "TRF-1" };
+
+        await service.ExecuteAsync(state);
+
+        Assert.Equal("From the template", state.PanelTitle);
+        Assert.Equal("Template body", state.BodyMarkdown);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_FallsBackToTenantCopy_WhenDisplayCopyFieldsAreBlank()
+    {
+        var templateId = Guid.NewGuid();
+        GivenApplication("TRF-1", templateId, SchemaWithSubmittedPage("", ""));
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [$"ApplicationSubmittedPage:{templateId}:PanelTitle"] = "Tenant title",
+                [$"ApplicationSubmittedPage:{templateId}:BodyMarkdown"] = "Tenant body"
+            })
+            .Build();
+
+        var service = CreateService(config);
+        var state = new ApplicationSubmittedWorkState { ReferenceNumber = "TRF-1" };
+
+        await service.ExecuteAsync(state);
+
+        Assert.Equal("Tenant title", state.PanelTitle);
+        Assert.Equal("Tenant body", state.BodyMarkdown);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_UsesTenantField_WhenOnlyOneDisplayCopyFieldIsSet()
+    {
+        var templateId = Guid.NewGuid();
+        GivenApplication("TRF-1", templateId, SchemaWithSubmittedPage("Template title", ""));
+
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ApplicationSubmittedPage:_default:PanelTitle"] = "Default title",
+                ["ApplicationSubmittedPage:_default:BodyMarkdown"] = "Default body"
+            })
+            .Build();
+
+        var service = CreateService(config);
+        var state = new ApplicationSubmittedWorkState { ReferenceNumber = "TRF-1" };
+
+        await service.ExecuteAsync(state);
+
+        Assert.Equal("Template title", state.PanelTitle);
+        Assert.Equal("Default body", state.BodyMarkdown);
+    }
+
+    private void GivenApplication(string reference, Guid templateId, string jsonSchema)
+    {
+        _applications.GetApplicationByReferenceAsync(reference, Arg.Any<CancellationToken>())
+            .Returns(new ApplicationDto
+            {
+                ApplicationReference = reference,
+                TemplateSchema = new TemplateSchemaDto
+                {
+                    TemplateId = templateId,
+                    TemplateVersionId = Guid.NewGuid(),
+                    VersionNumber = "1",
+                    JsonSchema = jsonSchema
+                }
+            });
+    }
+
+    private static string SchemaWithSubmittedPage(string panelTitle, string bodyMarkdown) =>
+        $$"""
+        {
+          "templateId": "form-001",
+          "templateName": "Transfers",
+          "description": "Transfers",
+          "taskGroups": [],
+          "displayCopy": {
+            "submittedPage": {
+              "panelTitle": {{JsonString(panelTitle)}},
+              "bodyMarkdown": {{JsonString(bodyMarkdown)}}
+            }
+          }
+        }
+        """;
+
+    private static string JsonString(string value) =>
+        $"\"{value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal)}\"";
+
     private PrepareApplicationSubmittedPageService CreateService(IConfiguration configuration) =>
         new(
             _applications,
             new TestRequestConfig(configuration),
             _terminology,
+            new TemplateCopyContext(),
             NullLogger<PrepareApplicationSubmittedPageService>.Instance);
 
     private sealed class TestRequestConfig(IConfiguration current) : IRequestAppConfiguration

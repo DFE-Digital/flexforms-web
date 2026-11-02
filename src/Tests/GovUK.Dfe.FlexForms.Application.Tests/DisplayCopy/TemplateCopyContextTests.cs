@@ -52,7 +52,8 @@ public class TemplateCopyContextTests
               "description": "Visits",
               "taskGroups": [],
               "displayCopy": {
-                "terminology": { "singular": "visit", "plural": "visits" }
+                "terminology": { "singular": "visit", "plural": "visits" },
+                "submittedPage": { "panelTitle": "Visit submitted", "bodyMarkdown": "Thanks." }
               }
             }
             """;
@@ -60,5 +61,7 @@ public class TemplateCopyContextTests
         Assert.True(context.TryUseJson(json));
         Assert.Equal("form-001", context.Template!.TemplateId);
         Assert.Equal("visit", context.Template.DisplayCopy!.Terminology!.Singular);
+        Assert.Equal("Visit submitted", context.Template.DisplayCopy.SubmittedPage!.PanelTitle);
+        Assert.Equal("Thanks.", context.Template.DisplayCopy.SubmittedPage.BodyMarkdown);
     }
 }

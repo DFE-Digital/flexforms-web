@@ -23,6 +23,9 @@ public class TemplateDisplayCopy
 
     [JsonPropertyName("taskList")]
     public TemplateTaskListCopy? TaskList { get; set; }
+
+    [JsonPropertyName("submittedPage")]
+    public TemplateSubmittedPageCopy? SubmittedPage { get; set; }
 }
 
 [ExcludeFromCodeCoverage]
@@ -115,4 +118,14 @@ public class TemplateTaskListCopy
 
     [JsonPropertyName("viewButtonText")]
     public string? ViewButtonText { get; set; }
+}
+
+[ExcludeFromCodeCoverage]
+public class TemplateSubmittedPageCopy
+{
+    [JsonPropertyName("panelTitle")]
+    public string? PanelTitle { get; set; }
+
+    [JsonPropertyName("bodyMarkdown")]
+    public string? BodyMarkdown { get; set; }
 }

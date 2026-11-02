@@ -316,20 +316,9 @@
                 </div>
                 <div class="govuk-summary-card__content">
                     <p class="govuk-body">
-                        Customise the confirmation page shown after someone submits a form.
-                        Choose a template, or <strong>Default (all templates)</strong> as the fallback.
+                        Default confirmation page shown after someone submits a form. A template can replace this in Template Studio.
                     </p>
-                    <p class="govuk-hint">
-                        Leave a field blank to use the default. Save settings before switching template if you have unsaved changes.
-                    </p>
-
-                    <div class="govuk-form-group">
-                        <label class="govuk-label" asp-for="SubmittedTemplateId">Template</label>
-                        <select class="govuk-select" asp-for="SubmittedTemplateId" asp-items="Model.SubmittedTemplateOptions"
-                                id="SubmittedTemplateId"
-                                data-navigate-param="SubmittedTemplateId">
-                        </select>
-                    </div>
+                    <p class="govuk-hint">Leave a field blank to use “{singular} submitted” and the built-in page body.</p>
 
                     <div class="govuk-form-group">
                         <label class="govuk-label" asp-for="SubmittedPanelTitle">Confirmation title</label>
