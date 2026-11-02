@@ -94,9 +94,27 @@ public sealed class TemplateStudio(IPage page) : BasePage(page)
 
     public async Task StartAddingTaskListDetailAsync()
     {
-        if (await ById("tpl-metadata-customise").CountAsync() > 0)
-            await ById("tpl-metadata-customise").ClickAsync();
+        await ExpandSettingsSectionAsync("Details on the task list");
+        var customise = ById("tpl-metadata-customise");
+        if (await customise.CountAsync() > 0)
+        {
+            await customise.ClickAsync();
+            await ExpandSettingsSectionAsync("Details on the task list");
+        }
         await ById("tpl-add-detail").ClickAsync();
+    }
+
+    private async Task ExpandSettingsSectionAsync(string title)
+    {
+        var heading = ById("tpl-settings-accordion")
+            .Locator(".govuk-accordion__section-button")
+            .Filter(new LocatorFilterOptions { HasText = title });
+        await heading.WaitForAsync();
+        if (await heading.GetAttributeAsync("aria-expanded") == "false")
+        {
+            await heading.ClickAsync();
+            await Assertions.Expect(heading).ToHaveAttributeAsync("aria-expanded", "true");
+        }
     }
 
     /// <summary>The detail's answer choices list <paramref name="question"/> under the heading for its repeatable list.</summary>

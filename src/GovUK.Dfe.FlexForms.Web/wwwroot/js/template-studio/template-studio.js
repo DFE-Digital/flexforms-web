@@ -448,6 +448,10 @@
         ]);
     }
 
+    function accordionSlug(title) {
+        return String(title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    }
+
     function accordion(id, items) {
         var sections = (items || []).filter(function (item) {
             return item && item.title && item.content != null && item.content !== false;
@@ -457,15 +461,13 @@
             class: 'govuk-accordion govuk-!-margin-top-6',
             'data-module': 'govuk-accordion',
             id: id
-        }, sections.map(function (item, index) {
-            var n = String(index + 1);
-            var headingId = id + '-heading-' + n;
-            var contentId = id + '-content-' + n;
+        }, sections.map(function (item) {
+            var slug = accordionSlug(item.title);
             return h('div', { class: 'govuk-accordion__section' }, [
                 h('div', { class: 'govuk-accordion__section-header' },
                     h('h2', { class: 'govuk-accordion__section-heading' },
-                        h('span', { class: 'govuk-accordion__section-button', id: headingId, text: item.title }))),
-                h('div', { id: contentId, class: 'govuk-accordion__section-content' }, item.content)
+                        h('span', { class: 'govuk-accordion__section-button', id: id + '-heading-' + slug, text: item.title }))),
+                h('div', { id: id + '-content-' + slug, class: 'govuk-accordion__section-content' }, item.content)
             ]);
         }));
     }
@@ -1562,17 +1564,32 @@
         return column.type === 'field' || (!column.type && !!column.fieldId);
     }
 
+    function startCustomising(text, buttonText, id, start) {
+        return [
+            h('p', { class: 'govuk-body', text: text }),
+            button(buttonText, function () { start(); restructured(); }, 'secondary', id)
+        ];
+    }
+
+    function revertToDefault(text, revert) {
+        return h('p', { class: 'govuk-body' }, actionLink({
+            text: text,
+            onClick: function () { revert(); editing = null; restructured(); }
+        }));
+    }
+
     function dashboardEditor() {
         var root = doc.root;
         var columns = root.dashboard && Array.isArray(root.dashboard.columns) ? root.dashboard.columns : null;
         if (!columns || !columns.length) {
-            return [
-                h('p', { class: 'govuk-body', text: 'The applications dashboard shows the default columns: reference, date started, date submitted, status and an action link.' }),
-                button('Choose the columns', function () {
+            return startCustomising(
+                'The applications dashboard shows the default columns: reference, date started, date submitted, status and an action link.',
+                'Choose the columns',
+                'tpl-dashboard-customise',
+                function () {
                     root.dashboard = { columns: SYSTEM_COLUMNS.map(function (column, index) { return { type: 'system', id: column.value, order: (index + 1) * 10 }; }) };
-                    restructured();
-                }, 'secondary', 'tpl-dashboard-customise')
-            ];
+                }
+            );
         }
 
         var choices = answerChoices();
@@ -1636,10 +1653,7 @@
                     ];
                 }
             }),
-            h('p', { class: 'govuk-body' }, actionLink({
-                text: 'Use the default columns',
-                onClick: function () { root.dashboard = null; editing = null; restructured(); }
-            }))
+            revertToDefault('Use the default columns', function () { root.dashboard = null; })
         ];
     }
 
@@ -1647,9 +1661,11 @@
         var root = doc.root;
         var items = root.applicationMetaData && Array.isArray(root.applicationMetaData.items) ? root.applicationMetaData.items : null;
         if (!items || !items.length) {
-            return [
-                h('p', { class: 'govuk-body', text: 'The task list shows the default details: application reference, template version and lead applicant.' }),
-                button('Choose the details', function () {
+            return startCustomising(
+                'The task list shows the default details: application reference, template version and lead applicant.',
+                'Choose the details',
+                'tpl-metadata-customise',
+                function () {
                     root.applicationMetaData = {
                         items: [
                             { label: 'Application reference', fieldId: 'application.reference', order: 10 },
@@ -1657,9 +1673,8 @@
                             { label: 'Lead applicant', fieldId: 'application.leadApplicant', order: 30 }
                         ]
                     };
-                    restructured();
-                }, 'secondary', 'tpl-metadata-customise')
-            ];
+                }
+            );
         }
 
         var choices = APPLICATION_BINDINGS.map(function (binding) { return Object.assign({ group: 'About the application' }, binding); })
@@ -1713,10 +1728,7 @@
                     ];
                 }
             }),
-            h('p', { class: 'govuk-body' }, actionLink({
-                text: 'Use the default details',
-                onClick: function () { root.applicationMetaData = null; editing = null; restructured(); }
-            }))
+            revertToDefault('Use the default details', function () { root.applicationMetaData = null; })
         ];
     }
 
@@ -1764,90 +1776,71 @@
     }
 
     function displayCopySections(path) {
-        function field(section, property, label, options) {
+        function field(spec) {
             var opts = {
-                id: 'tpl-copy-' + section + '-' + property,
-                label: label,
-                value: copyValue(section, property),
-                hint: options && options.hint,
-                rows: options && options.rows,
-                onInput: bindCopy(path, section, property)
+                id: 'tpl-copy-' + spec.section + '-' + spec.property,
+                label: spec.label,
+                value: copyValue(spec.section, spec.property),
+                hint: spec.hint,
+                rows: spec.rows,
+                onInput: bindCopy(path, spec.section, spec.property)
             };
-            return options && options.rows ? textArea(opts) : textInput(opts);
+            return spec.rows ? textArea(opts) : textInput(opts);
+        }
+        function group(title, fields) {
+            return { title: title, content: [copyHint()].concat(fields.map(field)) };
         }
         var items = [
-            {
-                title: 'What you call this form',
-                content: [
-                    copyHint(),
-                    field('terminology', 'singular', 'Singular, for example visit'),
-                    field('terminology', 'plural', 'Plural, for example visits')
-                ]
-            },
-            {
-                title: 'Dashboard',
-                content: [
-                    copyHint(),
-                    field('dashboard', 'mainHeading', 'Dashboard heading'),
-                    field('dashboard', 'inProgressHeading', 'In progress heading'),
-                    field('dashboard', 'startNewHeading', 'Start new heading'),
-                    field('dashboard', 'startNewHint', 'Start new hint'),
-                    field('dashboard', 'startNewButtonText', 'Start new button')
-                ]
-            },
-            {
-                title: 'Application page',
-                content: [
-                    copyHint(),
-                    field('taskList', 'reviewButtonText', 'Review button'),
-                    field('taskList', 'viewButtonText', 'View button')
-                ]
-            },
-            {
-                title: 'Application preview',
-                content: [
-                    copyHint(),
-                    field('preview', 'pageHeading', 'Check your answers heading'),
-                    field('preview', 'submitHeading', 'Submit heading'),
-                    field('preview', 'submitHint', 'Submit hint'),
-                    field('preview', 'submitButtonText', 'Submit button')
-                ]
-            },
-            {
-                title: 'Application submitted page',
-                content: [
-                    copyHint(),
-                    field('submittedPage', 'panelTitle', 'Confirmation title'),
-                    field('submittedPage', 'bodyMarkdown', 'Submitted page body', {
-                        rows: 8,
-                        hint: 'Markdown below the reference number. Use ## for headings, - for lists, **bold**, and links.'
-                    })
-                ]
-            }
+            group('What you call this form', [
+                { section: 'terminology', property: 'singular', label: 'Singular, for example visit' },
+                { section: 'terminology', property: 'plural', label: 'Plural, for example visits' }
+            ]),
+            group('Dashboard', [
+                { section: 'dashboard', property: 'mainHeading', label: 'Dashboard heading' },
+                { section: 'dashboard', property: 'inProgressHeading', label: 'In progress heading' },
+                { section: 'dashboard', property: 'startNewHeading', label: 'Start new heading' },
+                { section: 'dashboard', property: 'startNewHint', label: 'Start new hint' },
+                { section: 'dashboard', property: 'startNewButtonText', label: 'Start new button' }
+            ]),
+            group('Application page', [
+                { section: 'taskList', property: 'reviewButtonText', label: 'Review button' },
+                { section: 'taskList', property: 'viewButtonText', label: 'View button' }
+            ]),
+            group('Application preview', [
+                { section: 'preview', property: 'pageHeading', label: 'Check your answers heading' },
+                { section: 'preview', property: 'submitHeading', label: 'Submit heading' },
+                { section: 'preview', property: 'submitHint', label: 'Submit hint' },
+                { section: 'preview', property: 'submitButtonText', label: 'Submit button' }
+            ]),
+            group('Application submitted page', [
+                { section: 'submittedPage', property: 'panelTitle', label: 'Confirmation title' },
+                {
+                    section: 'submittedPage',
+                    property: 'bodyMarkdown',
+                    label: 'Submitted page body',
+                    rows: 8,
+                    hint: 'Markdown below the reference number. Use ## for headings, - for lists, **bold**, and links.'
+                }
+            ])
         ];
         if (doc.root.contributorPattern !== false) {
-            items.push({
-                title: 'Contributor sidebar',
-                content: [
-                    copyHint(),
-                    field('contributors', 'sectionHeading', 'Contributors heading'),
-                    field('contributors', 'sectionBody', 'Contributors text'),
-                    field('contributors', 'inviteButtonText', 'Invite button'),
-                    field('contributors', 'currentHeading', 'Current contributors heading')
-                ]
-            }, {
-                title: 'Contributor invitation page',
-                content: [
-                    copyHint(),
-                    field('contributors', 'pageHeading', 'Invite page heading'),
-                    field('contributors', 'intro', 'Invite introduction'),
-                    field('contributors', 'signInText', 'DfE Sign-in text'),
-                    field('contributors', 'onceJoinedText', 'After they join'),
-                    field('contributors', 'addLaterText', 'Add later text'),
-                    field('contributors', 'addButtonText', 'Add a contributor button'),
-                    field('contributors', 'proceedButtonText', 'Go to application button')
-                ]
-            });
+            items.push(
+                group('Contributor sidebar', [
+                    { section: 'contributors', property: 'sectionHeading', label: 'Contributors heading' },
+                    { section: 'contributors', property: 'sectionBody', label: 'Contributors text' },
+                    { section: 'contributors', property: 'inviteButtonText', label: 'Invite button' },
+                    { section: 'contributors', property: 'currentHeading', label: 'Current contributors heading' }
+                ]),
+                group('Contributor invitation page', [
+                    { section: 'contributors', property: 'pageHeading', label: 'Invite page heading' },
+                    { section: 'contributors', property: 'intro', label: 'Invite introduction' },
+                    { section: 'contributors', property: 'signInText', label: 'DfE Sign-in text' },
+                    { section: 'contributors', property: 'onceJoinedText', label: 'After they join' },
+                    { section: 'contributors', property: 'addLaterText', label: 'Add later text' },
+                    { section: 'contributors', property: 'addButtonText', label: 'Add a contributor button' },
+                    { section: 'contributors', property: 'proceedButtonText', label: 'Go to application button' }
+                ])
+            );
         }
         return items;
     }
