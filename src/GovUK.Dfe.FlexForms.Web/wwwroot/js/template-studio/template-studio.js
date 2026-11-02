@@ -64,15 +64,15 @@
     var NO_VALUE_OPERATORS = ['isEmpty', 'isNotEmpty', 'isTrue', 'isFalse', 'isValidEmail', 'isValidPhone'];
 
     // Same keys as tenant EmailTemplates. The user only sets the Notify template ID.
-    var EMAIL_TEMPLATE_KEYS = [
-        { key: 'ApplicationSubmitted', label: 'Application submitted' },
-        { key: 'ContributorInvited', label: 'Contributor invited' },
-        { key: 'BugReportInternal', label: 'Bug report (internal)' },
-        { key: 'BugReportUser', label: 'Bug report (user)' },
-        { key: 'FeedbackOrSuggestionInternal', label: 'Feedback or suggestion (internal)' },
-        { key: 'SupportRequestInternal', label: 'Support request (internal)' },
-        { key: 'SupportRequestUser', label: 'Support request (user)' }
-    ];
+    var EMAIL_TEMPLATE_LABELS = {
+        ApplicationSubmitted: 'Application submitted',
+        ContributorInvited: 'Contributor invited',
+        BugReportInternal: 'Bug report (internal)',
+        BugReportUser: 'Bug report (user)',
+        FeedbackOrSuggestionInternal: 'Feedback or suggestion (internal)',
+        SupportRequestInternal: 'Support request (internal)',
+        SupportRequestUser: 'Support request (user)'
+    };
 
     // Comparisons the rule builder offers that don't need an answer to compare with.
     var VALUELESS = ['isEmpty', 'isNotEmpty'];
@@ -448,28 +448,23 @@
         ]);
     }
 
-    function accordionSlug(title) {
-        return String(title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    }
-
     function accordion(id, items) {
-        var sections = (items || []).filter(function (item) {
-            return item && item.title && item.content != null && item.content !== false;
-        });
-        if (!sections.length) return null;
-        return h('div', {
+        var rootEl = h('div', {
             class: 'govuk-accordion govuk-!-margin-top-6',
             'data-module': 'govuk-accordion',
             id: id
-        }, sections.map(function (item) {
-            var slug = accordionSlug(item.title);
-            return h('div', { class: 'govuk-accordion__section' }, [
-                h('div', { class: 'govuk-accordion__section-header' },
-                    h('h2', { class: 'govuk-accordion__section-heading' },
-                        h('span', { class: 'govuk-accordion__section-button', id: id + '-heading-' + slug, text: item.title }))),
-                h('div', { id: id + '-content-' + slug, class: 'govuk-accordion__section-content' }, item.content)
-            ]);
-        }));
+        });
+        (items || []).forEach(function (item) {
+            if (!item || !item.title || !item.content) return;
+            var slug = id + '-' + String(item.title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+            var sectionEl = h('div', { class: 'govuk-accordion__section' });
+            var heading = h('h2', { class: 'govuk-accordion__section-heading' });
+            heading.appendChild(h('span', { class: 'govuk-accordion__section-button', id: slug + '-heading', text: item.title }));
+            sectionEl.appendChild(h('div', { class: 'govuk-accordion__section-header' }, heading));
+            sectionEl.appendChild(h('div', { id: slug + '-content', class: 'govuk-accordion__section-content' }, item.content));
+            rootEl.appendChild(sectionEl);
+        });
+        return rootEl.childNodes.length ? rootEl : null;
     }
 
     function inset(text) {
@@ -1755,17 +1750,25 @@
         return copy[property] || '';
     }
 
-    function bindCopy(path, section, property) {
+    function bindRootMap(path, keys) {
         return function (value) {
-            var root = doc.root;
-            root.displayCopy = root.displayCopy || {};
-            root.displayCopy[section] = root.displayCopy[section] || {};
+            var cursor = doc.root;
+            var frames = [];
+            for (var i = 0; i < keys.length - 1; i++) {
+                var key = keys[i];
+                if (!cursor[key]) cursor[key] = {};
+                frames.push({ parent: cursor, key: key });
+                cursor = cursor[key];
+            }
+            var leaf = keys[keys.length - 1];
             if (value) {
-                root.displayCopy[section][property] = value;
+                cursor[leaf] = value;
             } else {
-                delete root.displayCopy[section][property];
-                if (!Object.keys(root.displayCopy[section]).length) delete root.displayCopy[section];
-                if (!Object.keys(root.displayCopy).length) delete root.displayCopy;
+                delete cursor[leaf];
+                for (var j = frames.length - 1; j >= 0; j--) {
+                    if (Object.keys(frames[j].parent[frames[j].key]).length) break;
+                    delete frames[j].parent[frames[j].key];
+                }
             }
             edited(path);
         };
@@ -1776,98 +1779,77 @@
     }
 
     function displayCopySections(path) {
-        function field(spec) {
-            var opts = {
-                id: 'tpl-copy-' + spec.section + '-' + spec.property,
-                label: spec.label,
-                value: copyValue(spec.section, spec.property),
-                hint: spec.hint,
-                rows: spec.rows,
-                onInput: bindCopy(path, spec.section, spec.property)
-            };
-            return spec.rows ? textArea(opts) : textInput(opts);
-        }
-        function group(title, fields) {
-            return { title: title, content: [copyHint()].concat(fields.map(field)) };
-        }
-        var items = [
-            group('What you call this form', [
-                { section: 'terminology', property: 'singular', label: 'Singular, for example visit' },
-                { section: 'terminology', property: 'plural', label: 'Plural, for example visits' }
-            ]),
-            group('Dashboard', [
-                { section: 'dashboard', property: 'mainHeading', label: 'Dashboard heading' },
-                { section: 'dashboard', property: 'inProgressHeading', label: 'In progress heading' },
-                { section: 'dashboard', property: 'startNewHeading', label: 'Start new heading' },
-                { section: 'dashboard', property: 'startNewHint', label: 'Start new hint' },
-                { section: 'dashboard', property: 'startNewButtonText', label: 'Start new button' }
-            ]),
-            group('Application page', [
-                { section: 'taskList', property: 'reviewButtonText', label: 'Review button' },
-                { section: 'taskList', property: 'viewButtonText', label: 'View button' }
-            ]),
-            group('Application preview', [
-                { section: 'preview', property: 'pageHeading', label: 'Check your answers heading' },
-                { section: 'preview', property: 'submitHeading', label: 'Submit heading' },
-                { section: 'preview', property: 'submitHint', label: 'Submit hint' },
-                { section: 'preview', property: 'submitButtonText', label: 'Submit button' }
-            ]),
-            group('Application submitted page', [
-                { section: 'submittedPage', property: 'panelTitle', label: 'Confirmation title' },
-                {
-                    section: 'submittedPage',
-                    property: 'bodyMarkdown',
-                    label: 'Submitted page body',
-                    rows: 8,
-                    hint: 'Markdown below the reference number. Use ## for headings, - for lists, **bold**, and links.'
-                }
-            ])
+        // title | json section | property | label | textarea rows | hint
+        var rows = [
+            'What you call this form|terminology|singular|Singular, for example visit',
+            'What you call this form|terminology|plural|Plural, for example visits',
+            'Dashboard|dashboard|mainHeading|Dashboard heading',
+            'Dashboard|dashboard|inProgressHeading|In progress heading',
+            'Dashboard|dashboard|startNewHeading|Start new heading',
+            'Dashboard|dashboard|startNewHint|Start new hint',
+            'Dashboard|dashboard|startNewButtonText|Start new button',
+            'Application page|taskList|reviewButtonText|Review button',
+            'Application page|taskList|viewButtonText|View button',
+            'Application preview|preview|pageHeading|Check your answers heading',
+            'Application preview|preview|submitHeading|Submit heading',
+            'Application preview|preview|submitHint|Submit hint',
+            'Application preview|preview|submitButtonText|Submit button',
+            'Application submitted page|submittedPage|panelTitle|Confirmation title',
+            'Application submitted page|submittedPage|bodyMarkdown|Submitted page body|8|Markdown below the reference number. Use ## for headings, - for lists, **bold**, and links.',
+            'Contributor sidebar|contributors|sectionHeading|Contributors heading',
+            'Contributor sidebar|contributors|sectionBody|Contributors text',
+            'Contributor sidebar|contributors|inviteButtonText|Invite button',
+            'Contributor sidebar|contributors|currentHeading|Current contributors heading',
+            'Contributor invitation page|contributors|pageHeading|Invite page heading',
+            'Contributor invitation page|contributors|intro|Invite introduction',
+            'Contributor invitation page|contributors|signInText|DfE Sign-in text',
+            'Contributor invitation page|contributors|onceJoinedText|After they join',
+            'Contributor invitation page|contributors|addLaterText|Add later text',
+            'Contributor invitation page|contributors|addButtonText|Add a contributor button',
+            'Contributor invitation page|contributors|proceedButtonText|Go to application button'
         ];
-        if (doc.root.contributorPattern !== false) {
-            items.push(
-                group('Contributor sidebar', [
-                    { section: 'contributors', property: 'sectionHeading', label: 'Contributors heading' },
-                    { section: 'contributors', property: 'sectionBody', label: 'Contributors text' },
-                    { section: 'contributors', property: 'inviteButtonText', label: 'Invite button' },
-                    { section: 'contributors', property: 'currentHeading', label: 'Current contributors heading' }
-                ]),
-                group('Contributor invitation page', [
-                    { section: 'contributors', property: 'pageHeading', label: 'Invite page heading' },
-                    { section: 'contributors', property: 'intro', label: 'Invite introduction' },
-                    { section: 'contributors', property: 'signInText', label: 'DfE Sign-in text' },
-                    { section: 'contributors', property: 'onceJoinedText', label: 'After they join' },
-                    { section: 'contributors', property: 'addLaterText', label: 'Add later text' },
-                    { section: 'contributors', property: 'addButtonText', label: 'Add a contributor button' },
-                    { section: 'contributors', property: 'proceedButtonText', label: 'Go to application button' }
-                ])
-            );
-        }
-        return items;
+        var byTitle = {};
+        var order = [];
+        rows.forEach(function (row) {
+            var parts = row.split('|');
+            var title = parts[0];
+            var section = parts[1];
+            var property = parts[2];
+            var opts = {
+                id: 'tpl-copy-' + section + '-' + property,
+                label: parts[3],
+                value: copyValue(section, property),
+                rows: parts[4] ? parseInt(parts[4], 10) : undefined,
+                hint: parts[5],
+                onInput: bindRootMap(path, ['displayCopy', section, property])
+            };
+            if (!byTitle[title]) {
+                byTitle[title] = [];
+                order.push(title);
+            }
+            byTitle[title].push(opts.rows ? textArea(opts) : textInput(opts));
+        });
+        var contributorsOn = doc.root.contributorPattern !== false;
+        return order.filter(function (title) {
+            return contributorsOn || title.indexOf('Contributor') !== 0;
+        }).map(function (title) {
+            return { title: title, content: [copyHint()].concat(byTitle[title]) };
+        });
     }
 
     function emailTemplatesEditor(path) {
         var map = doc.root.emailTemplates || {};
-        return [
-            h('p', { class: 'govuk-hint', text: 'GOV.UK Notify template IDs for this form. The keys match tenant EmailTemplates. Leave a box blank to keep the tenant setting.' })
-        ].concat(EMAIL_TEMPLATE_KEYS.map(function (item) {
-            return textInput({
-                id: 'tpl-email-' + item.key,
-                label: item.label,
-                hint: item.key,
-                value: map[item.key] || '',
-                onInput: function (value) {
-                    var root = doc.root;
-                    root.emailTemplates = root.emailTemplates || {};
-                    if (value) {
-                        root.emailTemplates[item.key] = value;
-                    } else {
-                        delete root.emailTemplates[item.key];
-                        if (!Object.keys(root.emailTemplates).length) delete root.emailTemplates;
-                    }
-                    edited(path);
-                }
-            });
-        }));
+        return [h('p', { class: 'govuk-hint', text: 'GOV.UK Notify template IDs for this form. The keys match tenant EmailTemplates. Leave a box blank to keep the tenant setting.' })].concat(
+            Object.keys(EMAIL_TEMPLATE_LABELS).map(function (key) {
+                return textInput({
+                    id: 'tpl-email-' + key,
+                    label: EMAIL_TEMPLATE_LABELS[key],
+                    hint: key,
+                    value: map[key] || '',
+                    onInput: bindRootMap(path, ['emailTemplates', key])
+                });
+            })
+        );
     }
 
     function templateInspector(path) {
