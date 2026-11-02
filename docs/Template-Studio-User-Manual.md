@@ -130,10 +130,15 @@ Select the template name at the top of the structure.
 | **Use the page heading as the question when a page has one question** | Hides the question label on single-question pages so it isn't repeated under the heading. |
 | **Let applicants invite contributors** | Turns contributor invitations on or off. |
 | **Role for invited contributors** | Shown when invitations are on. **User** can edit the application. Any other role can only view it. |
-| **Wording** (accordion) | Optional headings, hints and buttons grouped by area: what you call this form, dashboard, application page, application preview, application submitted page, contributor sidebar, and contributor invitation page. A blank field keeps the organisation setting, then the built-in sentence. |
-| **Email templates** | GOV.UK Notify template IDs for this form. The keys are fixed (application submitted, contributor invited, and so on). Leave a box blank to keep the tenant setting. |
 
-The rest of Template settings is in the same accordion: **Email templates**, **Sections** (with **Add a section**), **Dashboard columns**, **Details on the task list**, and **Retired questions** if any questions have been retired. Contributor wording sections only appear when invitations are on.
+Below these, the rest of Template settings is split into four groups, in this order. Each group has its own heading and opens and closes in sections:
+
+| Group | Sections | What it's for |
+|---|---|---|
+| **Dashboard** | **Dashboard wording**, **Dashboard columns** | The applications dashboard. **Template-wide: always taken from the latest saved version, for every application.** See [section 4.2](#42-dashboard-wording-and-columns-template-wide). |
+| **Wording** | **What you call this form**, **Application page**, **Application preview**, **Application submitted page**, **Contributor sidebar**, **Contributor invitation page** | Headings, hints and buttons for this form. Saved with each version. See [section 4.4](#44-wording-for-this-template). Contributor sections only appear when invitations are on. |
+| **Form structure** | **Sections** (with **Add a section**), **Details on the task list**, and **Retired questions** if any questions have been retired | How the form and task list are put together. See [section 4.3](#43-details-on-the-task-list) and [section 5](#5-sections). |
+| **Emails** | **Email templates** | GOV.UK Notify template IDs for this form. See [section 4.5](#45-email-templates). |
 
 ### 4.1 Role for invited contributors
 
@@ -148,7 +153,41 @@ Choose a custom role from Role Manager when they should only view the applicatio
 - People who were invited before the change keep the access they already have.
 - If the saved role is later deleted, the list shows **Saved role (no longer available)**. New invitations are rejected until you choose another role. They are not given the User role instead.
 
-### 4.2 Dashboard columns
+### 4.2 Dashboard: wording and columns (template-wide)
+
+> **Important: dashboard settings are template-wide. The dashboard always uses the latest saved version of the template.**
+>
+> This covers everything in the **Dashboard** group: **Dashboard wording** and **Dashboard columns**.
+>
+> - The applications dashboard lists applications from **every** version of this template on one page. It cannot use a different version for each row, so it reads its wording and columns from the **latest saved version** only.
+> - When you save a new version, the dashboard changes straight away for **all** applications, including ones started on an earlier version.
+> - The version an application started on makes **no difference** to the dashboard. That is different from the rest of the form (see the table below).
+> - Opening an earlier version in Template Studio does not change the dashboard. Only saving does, because the version you save becomes the latest.
+
+#### Which version does each setting use?
+
+| Setting | Which version is used | What changes when you save a new version |
+|---|---|---|
+| **Dashboard wording**: heading, in-progress heading, start-new heading, hint and button | **Latest saved version** | The dashboard for **every** application |
+| **Dashboard columns** | **Latest saved version** | The dashboard for **every** application |
+| Questions, pages, tasks, rules, and all other wording (task list, preview, submitted page, contributors) | **The version the application started on** | **New** applications only. Applications already started keep their version. |
+
+#### Example
+
+Applications A and B were started on version 1.0.0. You add an answer column called **Trust name** and change the dashboard heading to "Your transfers". Then you save version 1.1.0.
+
+- The dashboard shows **Your transfers** and the **Trust name** column straight away, for A, B and every new application.
+- Inside A and B (task list, pages, check your answers), nothing changes. They still use version 1.0.0.
+
+Before you save, check that any answer a column uses still exists in the latest version. If a column shows an answer an older application never gave, that cell is blank for that application.
+
+#### Dashboard wording
+
+Open **Dashboard wording** in the **Dashboard** group. It has boxes for the dashboard heading, in-progress heading, start-new heading, start-new hint and start-new button. A blank box uses the matching field in Organisation settings, then the built-in sentence. `{singular}` and `{plural}` on the dashboard also come from the latest saved version. See [section 4.4](#44-wording-for-this-template) for the placeholders you can use.
+
+#### Dashboard columns
+
+Open **Dashboard columns** in the **Dashboard** group.
 
 The applications dashboard shows default columns until you choose your own.
 
@@ -180,14 +219,13 @@ You can have up to 10. **Use the default details** goes back to the platform def
 
 ### 4.4 Wording for this template
 
-Use this when one form should read differently from the rest of the service. Open the accordion section for the area you want to change. Each box can stay blank.
+Use this when one form should read differently from the rest of the service. In the **Wording** group, open the section for the area you want to change. Each box can stay blank.
 
 A filled box is used for this template. A blank box uses the matching field in Organisation settings, then the built-in sentence. You can use `{singular}`, `{plural}`, `{template_name}` and `{contributor_email}`. `{contributor_email}` is the example email from the service layout.
 
-The sections are:
+The sections in the **Wording** group are:
 
 - **What you call this form** — singular and plural names, such as visit and visits
-- **Dashboard** — heading, in-progress heading, start-new heading, hint and button
 - **Application page** — the task list **Review** and **View** buttons
 - **Application preview** — check-your-answers heading, submit heading, hint and button
 - **Application submitted page** — **Confirmation title** (green panel) and **Submitted page body** (markdown below the reference number)
@@ -196,11 +234,17 @@ The sections are:
 
 The notification banner, dashboard page size, filters, and whether the submit section is hidden stay in Organisation settings. They are not set here. Organisation settings still holds the default submitted-page copy for the tenant.
 
-Wording is saved with the template version. Applications already started keep the wording of the version they started on. Dashboard headings follow the latest template, in the same way as dashboard column headings.
+Wording is saved with the template version. Applications already started keep the wording of the version they started on.
+
+**Dashboard wording is not in this group.** It is in the separate **Dashboard** group, because it works differently: like the dashboard columns, it always comes from the latest saved version, for every application. See [section 4.2](#42-dashboard-wording-and-columns-template-wide).
 
 ### 4.5 Email templates
 
-GOV.UK Notify template IDs for emails this form sends. The keys are the same as tenant **EmailTemplates** and cannot be renamed:
+> **You do not need to change these if emails are already set up in your Tenant settings.**
+>
+> By default, every template sends the emails set in Tenant settings (**EmailTemplates**). A Notify template ID entered here replaces the tenant one **for this template only**, so this template will send a different email from the one in Tenant settings. Only fill these in when this form needs its own email. Leave a box blank to keep using the tenant email.
+
+In the **Emails** group, open **Email templates**. It holds the GOV.UK Notify template IDs for emails this form sends. The keys are the same as tenant **EmailTemplates** and cannot be renamed:
 
 - Application submitted
 - Contributor invited
@@ -214,7 +258,7 @@ Enter the Notify template ID for a key to use it for this form. Leave a box blan
 
 ### 4.6 Retired questions
 
-If any questions have been retired (see [section 13](#13-when-applications-already-use-the-template)), they are listed at the bottom with what replaced them.
+If any questions have been retired (see [section 13](#13-when-applications-already-use-the-template)), **Retired questions** appears in the **Form structure** group, listing each one with what replaced it.
 
 ---
 
@@ -222,7 +266,7 @@ If any questions have been retired (see [section 13](#13-when-applications-alrea
 
 Sections are the headings on the task list. Each holds one or more tasks.
 
-**To add a section:** open **Template settings**, enter a **Section heading** under **Add a section**, and select **Add section**.
+**To add a section:** open **Template settings**, open **Sections** in the **Form structure** group, enter a **Section heading** under **Add a section**, and select **Add section**.
 
 **To change a section:** select **Edit** next to it in the structure.
 
@@ -734,7 +778,7 @@ If the save is rejected, Template Studio keeps your changes and lists the proble
 
 Your unsaved changes are kept while you decide.
 
-New applications use the latest saved version. Applications already started keep the version they started on. To make the template available to applicants, make it live on the Admin hub.
+New applications use the latest saved version. Applications already started keep the version they started on. **The applications dashboard is the exception.** Its wording and columns always come from the latest saved version, so saving changes the dashboard for every application. See [section 4.2](#42-dashboard-wording-and-columns-template-wide). To make the template available to applicants, make it live on the Admin hub.
 
 ---
 
@@ -814,6 +858,7 @@ New applications use the latest saved version. Applications already started keep
 |---|---|
 | **Template** | The whole application form: sections, tasks, pages, questions, rules and settings. |
 | **Version** | A saved copy of a template. Every save creates a new version; old ones are kept. |
+| **Template-wide setting** | A setting that always comes from the latest saved version, for every application, whatever version the application started on. The dashboard wording and dashboard columns are template-wide. |
 | **Live** | A template applicants can use. Set on the Admin hub. |
 | **Section** | A heading on the task list, grouping tasks. |
 | **Task** | A row on the task list. |

@@ -107,8 +107,7 @@ public sealed class TemplateStudio(IPage page) : BasePage(page)
 
     private async Task ExpandSettingsSectionAsync(string title)
     {
-        var heading = ById("tpl-settings-accordion")
-            .Locator(".govuk-accordion__section-button")
+        var heading = Page.Locator(".govuk-accordion .govuk-accordion__section-button")
             .Filter(new LocatorFilterOptions { HasText = title });
         await heading.WaitForAsync();
         if (await heading.GetAttributeAsync("aria-expanded") == "false")

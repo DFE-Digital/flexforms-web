@@ -2,6 +2,7 @@ using System.Security.Claims;
 using GovUK.Dfe.CoreLibs.Http.Interfaces;
 using GovUK.Dfe.FlexForms.Web.Telemetry;
 using GovUK.Dfe.FlexForms.Web.Tenancy;
+using Microsoft.Extensions.Options;
 
 namespace GovUK.Dfe.FlexForms.Web.Middleware;
 
@@ -10,8 +11,11 @@ namespace GovUK.Dfe.FlexForms.Web.Middleware;
 /// </summary>
 public sealed class RequestTelemetryEnrichmentMiddleware(
     RequestDelegate next,
+    IOptions<SessionOptions> sessionOptions,
     ILogger<RequestTelemetryEnrichmentMiddleware> logger)
 {
+    private readonly string _sessionCookieName = sessionOptions.Value.Cookie.Name!;
+
     public async Task InvokeAsync(
         HttpContext context,
         ITenantRequestContext tenantRequestContext,
@@ -35,13 +39,18 @@ public sealed class RequestTelemetryEnrichmentMiddleware(
                 : PiiMasking.MaskEmail(rawEmail);
         }
 
-        var templateId = context.Session.GetString("TemplateId");
-        if (!string.IsNullOrWhiteSpace(templateId))
-            flexFormsScope.TemplateId = templateId;
+        // Reading the session is a blocking Redis call, even for a brand-new session. Without a session cookie
+        // there is nothing to read, so skip it; otherwise every cookieless request stalls while Redis is down.
+        if (context.Request.Cookies.ContainsKey(_sessionCookieName))
+        {
+            var templateId = context.Session.GetString("TemplateId");
+            if (!string.IsNullOrWhiteSpace(templateId))
+                flexFormsScope.TemplateId = templateId;
 
-        var applicationReference = context.Session.GetString("ApplicationReference");
-        if (!string.IsNullOrWhiteSpace(applicationReference))
-            flexFormsScope.ApplicationReference = applicationReference;
+            var applicationReference = context.Session.GetString("ApplicationReference");
+            if (!string.IsNullOrWhiteSpace(applicationReference))
+                flexFormsScope.ApplicationReference = applicationReference;
+        }
 
         telemetry.CorrelationId ??= correlationContext.CorrelationId.ToString();
         telemetry.ServiceName = "flexforms-web";

@@ -815,12 +815,17 @@ app.MapRazorPages();
 app.MapControllers();
 
 // Liveness probe: no tenant resolution, no auth. Used by App Gateway / Container Apps probes.
+// ShortCircuit answers straight from UseRouting, so probes never reach session (Redis), auth or tenant middleware;
+// otherwise a Redis outage fails the probe and Container Apps restarts the container.
 app.MapGet("/health", () => Results.Text("Healthy", "text/plain"))
-    .AllowAnonymous();
+    .AllowAnonymous()
+    .ShortCircuit();
 app.MapGet("/healthz", () => Results.Text("Healthy", "text/plain"))
-    .AllowAnonymous();
+    .AllowAnonymous()
+    .ShortCircuit();
 app.MapGet("/liveness", () => Results.Text("Healthy", "text/plain"))
-    .AllowAnonymous();
+    .AllowAnonymous()
+    .ShortCircuit();
 
 // Landing goes through template selection gate (middleware) then dashboard.
 app.MapGet("/", context =>

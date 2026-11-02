@@ -450,7 +450,7 @@
 
     function accordion(id, items) {
         var rootEl = h('div', {
-            class: 'govuk-accordion govuk-!-margin-top-6',
+            class: 'govuk-accordion',
             'data-module': 'govuk-accordion',
             id: id
         });
@@ -458,7 +458,7 @@
             if (!item || !item.title || !item.content) return;
             var slug = id + '-' + String(item.title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
             var sectionEl = h('div', { class: 'govuk-accordion__section' });
-            var heading = h('h2', { class: 'govuk-accordion__section-heading' });
+            var heading = h('h3', { class: 'govuk-accordion__section-heading' });
             heading.appendChild(h('span', { class: 'govuk-accordion__section-button', id: slug + '-heading', text: item.title }));
             sectionEl.appendChild(h('div', { class: 'govuk-accordion__section-header' }, heading));
             sectionEl.appendChild(h('div', { id: slug + '-content', class: 'govuk-accordion__section-content' }, item.content));
@@ -1398,7 +1398,7 @@
             }, 'secondary', id + '-button')
         ];
         if (options.bodyOnly) {
-            return [h('h3', { class: 'govuk-heading-s', text: options.title })].concat(body);
+            return [h('h4', { class: 'govuk-heading-s', text: options.title })].concat(body);
         }
         return section(options.title, body);
     }
@@ -1833,13 +1833,23 @@
         return order.filter(function (title) {
             return contributorsOn || title.indexOf('Contributor') !== 0;
         }).map(function (title) {
-            return { title: title, content: [copyHint()].concat(byTitle[title]) };
+            return { title: title, content: byTitle[title] };
         });
+    }
+
+    function settingsGroup(id, title, intro, items) {
+        var body = accordion(id, items);
+        if (!body) return null;
+        return h('div', { class: 'govuk-!-margin-top-8' }, [
+            h('h2', { class: 'govuk-heading-m', text: title }),
+            intro,
+            body
+        ]);
     }
 
     function emailTemplatesEditor(path) {
         var map = doc.root.emailTemplates || {};
-        return [h('p', { class: 'govuk-hint', text: 'GOV.UK Notify template IDs for this form. The keys match tenant EmailTemplates. Leave a box blank to keep the tenant setting.' })].concat(
+        return [h('p', { class: 'govuk-hint', text: 'GOV.UK Notify template IDs. The keys match tenant EmailTemplates.' })].concat(
             Object.keys(EMAIL_TEMPLATE_LABELS).map(function (key) {
                 return textInput({
                     id: 'tpl-email-' + key,
@@ -1855,6 +1865,9 @@
     function templateInspector(path) {
         var root = doc.root;
         var retired = retiredList();
+        var copySections = displayCopySections(path);
+        var dashboardCopy = copySections.filter(function (item) { return item.title === 'Dashboard'; })[0];
+        var formCopy = copySections.filter(function (item) { return item.title !== 'Dashboard'; });
 
         return [
             header(path),
@@ -1910,8 +1923,19 @@
                     edited(path);
                 }
             }) : null,
-            accordion('tpl-settings-accordion', displayCopySections(path).concat([
-                { title: 'Email templates', content: emailTemplatesEditor(path) },
+            // The dashboard lists applications from every version, so it reads its wording and columns from the latest version.
+            settingsGroup('tpl-dashboard-accordion', 'Dashboard', [
+                h('p', { class: 'govuk-body govuk-!-font-weight-bold', text: 'These settings apply to the whole template, not to a single version.' }),
+                h('p', { class: 'govuk-body', text: 'The applications dashboard lists applications from every version of this template, so it always uses the wording and columns from the latest saved version. When you save a new version, the dashboard updates for all applications, including ones started on an earlier version.' })
+            ], [
+                dashboardCopy ? { title: 'Dashboard wording', content: [copyHint()].concat(dashboardCopy.content) } : null,
+                { title: 'Dashboard columns', content: dashboardEditor() }
+            ]),
+            settingsGroup('tpl-wording-accordion', 'Wording', [
+                h('p', { class: 'govuk-body', text: 'Headings, hints and buttons for this form. Wording is saved with each version, so applications keep the wording of the version they started on.' }),
+                copyHint()
+            ], formCopy),
+            settingsGroup('tpl-structure-accordion', 'Form structure', null, [
                 {
                     title: 'Sections',
                     content: [
@@ -1928,10 +1952,15 @@
                         })
                     ]
                 },
-                { title: 'Dashboard columns', content: dashboardEditor() },
                 { title: 'Details on the task list', content: metadataEditor() },
                 retired ? { title: 'Retired questions', content: retired } : null
-            ]))
+            ]),
+            settingsGroup('tpl-email-accordion', 'Emails', [
+                h('p', { class: 'govuk-body govuk-!-font-weight-bold', text: 'You do not need to change these if emails are already set up in your Tenant settings.' }),
+                h('p', { class: 'govuk-body', text: 'By default, this template sends the emails set in Tenant settings (EmailTemplates). A Notify template ID entered here replaces the tenant one for this template only, so this template will send a different email from the one in Tenant settings. Leave a box blank to keep using the tenant email.' })
+            ], [
+                { title: 'Email templates', content: emailTemplatesEditor(path) }
+            ])
         ];
     }
 
