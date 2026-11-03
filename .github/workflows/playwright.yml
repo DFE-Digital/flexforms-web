@@ -77,10 +77,10 @@ jobs:
       - name: Run Playwright tests
         run: >
           dotnet test GovUK.Dfe.FlexForms.PlaywrightTests.csproj --no-build
-          --filter "FullyQualifiedName~.Tests.${{ env.SERVICE }}.NotificationTests"
+          --filter "FullyQualifiedName~.Tests.${{ env.SERVICE }}."
           --logger "trx;LogFileName=report.trx"
           --results-directory reports
-          -- NUnit.NumberOfTestWorkers=1
+          -- NUnit.NumberOfTestWorkers=6
 
       - name: Generate Allure report
         if: ${{ !cancelled() }}
