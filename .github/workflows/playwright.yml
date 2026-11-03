@@ -78,12 +78,21 @@ jobs:
         run: >
           dotnet test GovUK.Dfe.FlexForms.PlaywrightTests.csproj --no-build
           --filter "FullyQualifiedName~.Tests.${{ env.SERVICE }}."
+          --logger "trx;LogFileName=report.trx"
+          --results-directory reports
           -- NUnit.NumberOfTestWorkers=6
 
       - name: Generate Allure report
         if: ${{ !cancelled() }}
+        shell: bash
         run: |
-          npx allure-commandline generate ./allure-results --clean -o ./allure-report
+          set -e
+          RESULTS_DIR="src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/bin/Debug/net10.0/allure-results"
+          if [ ! -d "$RESULTS_DIR" ] || [ -z "$(ls -A "$RESULTS_DIR" 2>/dev/null)" ]; then
+            echo "No Allure results found in $RESULTS_DIR"
+            exit 1
+          fi
+          npx allure-commandline generate "$RESULTS_DIR" --clean -o "src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/allure-report"
 
       - name: Upload Allure report
         if: ${{ !cancelled() }}
