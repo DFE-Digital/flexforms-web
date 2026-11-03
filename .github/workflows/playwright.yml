@@ -87,12 +87,27 @@ jobs:
         shell: bash
         run: |
           set -e
-          RESULTS_DIR="src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/bin/Debug/net10.0/allure-results"
-          if [ ! -d "$RESULTS_DIR" ] || [ -z "$(ls -A "$RESULTS_DIR" 2>/dev/null)" ]; then
-            echo "No Allure results found in $RESULTS_DIR"
+          PROJECT_DIR="$GITHUB_WORKSPACE/src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests"
+          RESULTS_DIR=""
+
+          for candidate in \
+            "$PROJECT_DIR/bin/Debug/net10.0/allure-results" \
+            "$PROJECT_DIR/allure-results" \
+            "bin/Debug/net10.0/allure-results" \
+            "allure-results"; do
+            if [ -d "$candidate" ] && [ -n "$(ls -A "$candidate" 2>/dev/null)" ]; then
+              RESULTS_DIR="$candidate"
+              break
+            fi
+          done
+
+          if [ -z "$RESULTS_DIR" ]; then
+            echo "No Allure results found under $PROJECT_DIR"
+            find "$PROJECT_DIR" -maxdepth 4 -type d -name "allure-results" -print
             exit 1
           fi
-          npx allure-commandline generate "$RESULTS_DIR" --clean -o "src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/allure-report"
+
+          npx allure-commandline generate "$RESULTS_DIR" --clean -o "$PROJECT_DIR/allure-report"
 
       - name: Upload Allure report
         if: ${{ !cancelled() }}
