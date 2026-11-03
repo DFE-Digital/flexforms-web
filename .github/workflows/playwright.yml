@@ -71,27 +71,33 @@ jobs:
       - name: Install Playwright browser
         run: pwsh bin/Debug/net10.0/playwright.ps1 install --with-deps chromium
 
+      - name: Install Allure CLI
+        run: npm install --no-save allure-commandline
+
       - name: Run Playwright tests
         run: >
           dotnet test GovUK.Dfe.FlexForms.PlaywrightTests.csproj --no-build
           --filter "FullyQualifiedName~.Tests.${{ env.SERVICE }}."
-          --logger "trx;LogFileName=report.trx"
-          --results-directory reports
           -- NUnit.NumberOfTestWorkers=6
 
-      - name: Upload Playwright report
+      - name: Generate Allure report
+        if: ${{ !cancelled() }}
+        run: |
+          npx allure-commandline generate ./allure-results --clean -o ./allure-report
+
+      - name: Upload Allure report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: playwright-report-${{ inputs.environment }}
-          path: src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/reports
+          name: playwright-allure-${{ inputs.environment }}
+          path: src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/allure-report
           retention-days: 14
 
-      - name: Upload test results
+      - name: Upload failed test results
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: playwright-results-${{ inputs.environment }}
+          name: playwright-failed-results-${{ inputs.environment }}
           path: src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/test-results
           retention-days: 14
 
