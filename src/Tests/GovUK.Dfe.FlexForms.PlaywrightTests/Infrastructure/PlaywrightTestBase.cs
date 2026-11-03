@@ -1,3 +1,4 @@
+using Allure.NUnit;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Api;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 using Microsoft.Playwright;
@@ -18,6 +19,7 @@ namespace GovUK.Dfe.FlexForms.PlaywrightTests.Infrastructure;
 /// `dotnet test` excludes TestCategory=Playwright so it doesn't try to launch a browser there.
 /// </remarks>
 [Category("Playwright")]
+[AllureNUnit]
 public abstract class PlaywrightTestBase : PageTest
 {
     private string _artifactsDirectory = null!;

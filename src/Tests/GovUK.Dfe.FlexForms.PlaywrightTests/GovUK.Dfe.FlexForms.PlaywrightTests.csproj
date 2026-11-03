@@ -26,6 +26,7 @@
     </ItemGroup>
 
     <ItemGroup>
+        <None Update="allureConfig.json" CopyToOutputDirectory="PreserveNewest" />
         <None Include="assets\**" CopyToOutputDirectory="PreserveNewest" />
         <None Include=".env.example" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
