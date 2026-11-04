@@ -981,6 +981,39 @@ public class FormValidationOrchestratorTests
     }
 
     [Theory]
+    [InlineData("")]
+    [InlineData("a.pdf")]
+    [InlineData("""{"fileName":"a.pdf"}""")]
+    [InlineData("[malformed]")]
+    [InlineData("[malformed")]
+    public void ValidateComplexField_when_upload_value_is_not_a_file_list_then_the_limit_does_not_apply(string value)
+    {
+        var orchestrator = CreateExplicitOrchestrator(complexFieldConfigurationService: UploadLimit(1));
+        var field = CreateComplexField("documentUpload");
+
+        Assert.True(orchestrator.ValidateField(field, value, "docs").IsValid);
+    }
+
+    [Fact]
+    public void ValidateComplexField_when_upload_configuration_is_missing_then_there_is_no_limit()
+    {
+        var orchestrator = CreateExplicitOrchestrator(
+            complexFieldConfigurationService: Substitute.For<IComplexFieldConfigurationService>());
+        var field = CreateComplexField("documentUpload");
+
+        Assert.True(orchestrator.ValidateField(field, """[{"fileName":"a.pdf"},{"fileName":"b.pdf"}]""", "docs").IsValid);
+    }
+
+    [Fact]
+    public void ValidateComplexField_when_a_search_field_has_many_values_then_the_upload_limit_does_not_apply()
+    {
+        var orchestrator = CreateExplicitOrchestrator(complexFieldConfigurationService: UploadLimit(1));
+        var field = CreateComplexField("TrustSearch");
+
+        Assert.True(orchestrator.ValidateField(field, """[{"name":"A"},{"name":"B"}]""", "trusts").IsValid);
+    }
+
+    [Theory]
     [InlineData(2, """[{"fileName":"a.pdf"},{"fileName":"b.pdf"}]""")]
     [InlineData(0, """[{"fileName":"a.pdf"},{"fileName":"b.pdf"},{"fileName":"c.pdf"}]""")]
     public void ValidateComplexField_when_upload_field_is_within_its_limit_or_has_none_then_returns_true(int maxFiles, string value)

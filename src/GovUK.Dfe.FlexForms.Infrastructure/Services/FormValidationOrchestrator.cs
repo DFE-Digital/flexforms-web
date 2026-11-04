@@ -564,7 +564,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
 
             try
             {
-                return System.Text.Json.JsonSerializer.Deserialize<List<object>>(value)?.Count ?? 0;
+                return System.Text.Json.JsonSerializer.Deserialize<List<object>>(value)!.Count;
             }
             catch (Exception ex)
             {
