@@ -583,7 +583,9 @@ You cannot rename, delete, or edit permissions on system roles.
 | Button | What you get | Typical use |
 |--------|----------------|-------------|
 | **Create Caseworker role** | Read all applications and files in the tenant (`Application:Any:Read` and `ApplicationFiles:Any:Read`) | Staff who list and review everyone’s applications, without becoming Admin |
-| **Create Template Manager role** | Manage templates (`Template:Any:Manage`) | Content owners who version forms and go live, without User Manager or Tenant Settings |
+| **Create Template Manager role** | Manage templates and start applications on any form, including forms that are not live yet (`Template:Any:Manage` and `Template:Any:Write`) | Content owners who version forms, test them and go live, without User Manager or Tenant Settings |
+
+Template Manager roles created before `Template:Any:Write` was added to the preset cannot start applications on other people's forms. Add **Template / Any / Write** to the role in Role Manager.
 
 Then assign the role on **Add user** / **Edit user**.
 
