@@ -10,8 +10,21 @@ env:
   DOTNET_VERSION: '10.0.x'
 
 jobs:
+  knowledge-check:
+    name: Knowledge base check
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/knowledge-check.yml
+    permissions:
+      contents: read
+      pull-requests: read
+    with:
+      code-paths: '^src/'
+      ignored-paths: '^src/(Tests|Test)/'
+
   build:
     name: Build, Test and Analyse
+    needs: [ knowledge-check ]
+    if: ${{ !cancelled() && needs.knowledge-check.result != 'failure' }}
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
