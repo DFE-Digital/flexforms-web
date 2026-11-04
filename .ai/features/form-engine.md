@@ -1,0 +1,45 @@
+# Feature: Form engine
+
+## 1. Purpose
+
+Render template tasks/pages/fields with GOV.UK components, conditional logic, collection and derived flows, save/complete/submit.
+
+## 2. Entry points
+
+- `Pages/FormEngine/RenderForm.cshtml.cs` (+ `RenderForm.Support.cs`)
+- Application: `IPrepareFormEngineGet`, `ISaveFormPage`, `ICompleteFormTask`, `ISubmitFormApplication`, file use cases
+- Infrastructure: `FormStateManager`, `ConditionalLogicEngine`, `ConditionalLogicOrchestrator`, `DerivedCollectionFlowService`
+- Domain: `FormRouteParser`, `FormStepPolicy`
+- Field partials: `Views/Shared/Fields/_*.cshtml`
+
+## 3. Flow
+
+GET prepare → render field partials. POST save → validate → merge into accumulated JSON → API add-response (full body) → navigate (standard / collection / derived). Complete task / submit call API.
+
+## 4. State
+
+Session accumulated data + `CurrentAccumulatedApplicationId`. API is source of truth; session is a working copy. **Never save session if it belongs to another application.**
+
+## 5. Other repos
+
+API applications/files endpoints. Prism flattens the JSON Web produces.
+
+## 6. Rules
+
+See [`../business-rules.md`](../business-rules.md). Conditional logic from template JSON. Collection items have their own pages; deleting an item must clean associated files.
+
+## 7. Edge cases
+
+- Two-tab contamination.
+- Redis miss treated as empty session (must throw).
+- `returnToSummaryPage` vs newly visible pages.
+- Derived flows vs multi-collection flows are different models — don’t share serializers casually.
+- Infected upload filter / Redis infected-file store.
+
+## 8. Tests
+
+Application FormEngine tests, Infrastructure conditional-logic tests, Web RenderForm characterization tests, Playwright create-and-submit journeys.
+
+## 9. Limits
+
+Engine is template-driven; product-specific behaviour belongs in JSON + tenant FormEngine settings, not hardcoded Transfers logic. RenderForm was historically huge; keep new logic in services.
