@@ -1907,7 +1907,8 @@
                 checked: root.contributorPattern !== false,
                 onChange: function (checked) {
                     root.contributorPattern = checked;
-                    if (!checked) delete root.contributorRoleId;
+                    // Someone who can't pick a role could not restore it after turning invitations back on.
+                    if (!checked && data.canChooseContributorRole !== false) delete root.contributorRoleId;
                     restructured();
                 }
             }),

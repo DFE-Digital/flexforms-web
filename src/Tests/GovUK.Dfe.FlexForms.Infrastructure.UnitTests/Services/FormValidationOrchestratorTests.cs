@@ -1007,10 +1007,22 @@ public class FormValidationOrchestratorTests
     [Fact]
     public void ValidateComplexField_when_a_search_field_has_many_values_then_the_upload_limit_does_not_apply()
     {
-        var orchestrator = CreateExplicitOrchestrator(complexFieldConfigurationService: UploadLimit(1));
+        var orchestrator = CreateExplicitOrchestrator(complexFieldConfigurationService: UploadLimit(1, "autocomplete"));
         var field = CreateComplexField("TrustSearch");
 
         Assert.True(orchestrator.ValidateField(field, """[{"name":"A"},{"name":"B"}]""", "trusts").IsValid);
+    }
+
+    [Fact]
+    public void ValidateComplexField_when_the_upload_id_does_not_say_upload_then_the_configured_field_type_still_applies_the_limit()
+    {
+        var orchestrator = CreateExplicitOrchestrator(complexFieldConfigurationService: UploadLimit(1));
+        var field = CreateComplexField("EvidenceDocuments");
+
+        var result = orchestrator.ValidateField(field, """[{"fileName":"a.pdf"},{"fileName":"b.pdf"}]""", "docs");
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Message == GovUK.Dfe.FlexForms.Application.FormEngine.FormEngineMessages.TooManyFiles(1));
     }
 
     [Theory]
@@ -1298,11 +1310,11 @@ public class FormValidationOrchestratorTests
 
     private static IComplexFieldConfigurationService NoUploadLimits() => UploadLimit(0);
 
-    private static IComplexFieldConfigurationService UploadLimit(int maxFiles)
+    private static IComplexFieldConfigurationService UploadLimit(int maxFiles, string fieldType = "upload")
     {
         var service = Substitute.For<IComplexFieldConfigurationService>();
         service.GetConfiguration(Arg.Any<string>())
-            .Returns(call => new ComplexFieldConfiguration { Id = call.Arg<string>(), FieldType = "upload", MaxSelections = maxFiles });
+            .Returns(call => new ComplexFieldConfiguration { Id = call.Arg<string>(), FieldType = fieldType, MaxSelections = maxFiles });
         return service;
     }
 

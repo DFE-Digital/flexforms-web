@@ -54,10 +54,10 @@ public static class AdminAccessHelper
         || HasAnyManageClaim(user, "Template");
 
     /// <summary>
-    /// True when the user has been given access to the template: Admin/SuperAdmin, a Read or Write
-    /// grant on that template, or a tenant-wide Template Read/Write grant.
-    /// <c>Template:*:Manage</c> alone does not count, so template managers see every template
-    /// but can only work in the ones they have been given.
+    /// True when the user may work in a template they can see. Template managers see every template,
+    /// so for them this needs a Read or Write grant on that template or a tenant-wide Template Read/Write
+    /// grant (<c>Template:*:Manage</c> alone does not count). Other users only see templates the API
+    /// already filtered for them, which they may use; Caseworkers, for example, have no Template grants.
     /// </summary>
     public static bool HasTemplateAccess(ClaimsPrincipal? user, Guid templateId)
     {
@@ -66,6 +66,9 @@ public static class AdminAccessHelper
 
         if (user is null || templateId == Guid.Empty)
             return false;
+
+        if (!HasAnyManageClaim(user, "Template"))
+            return true;
 
         return HasPermissionClaim(user, $"Template:{templateId}:Read")
             || HasPermissionClaim(user, $"Template:{templateId}:Write")

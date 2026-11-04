@@ -19,6 +19,9 @@ public static class FormEngineMessages
     public const string DuplicateFileName =
         "The selected file has already been uploaded. Upload a file with a different name.\n ";
 
+    public const string UploadFormUnavailable =
+        "The form could not be loaded, so your file was not uploaded. Try again.";
+
     public static string TooManyFiles(int maxFiles) =>
         $"You can upload up to {maxFiles} {(maxFiles == 1 ? "file" : "files")}. Delete a file to upload a different one.";
 

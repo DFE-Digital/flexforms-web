@@ -93,6 +93,16 @@ public class UploadFileModel(
 
         var state = CaptureWorkState();
         state.Template = await TryLoadTemplateAsync(application);
+        if (state.Template is null)
+        {
+            // This page saves files straight to the application, so without the template the file limit can't be checked.
+            ErrorMessage = FormEngineMessages.UploadFormUnavailable;
+            if (!string.IsNullOrEmpty(FieldId))
+                formErrorStore.Save(FieldId, ModelState, ErrorMessage);
+
+            return string.IsNullOrEmpty(ReturnUrl) ? Page() : Redirect(LocalRedirects.OrFallback(ReturnUrl));
+        }
+
         var outcome = await uploadFormFile.ExecuteAsync(state, new UploadFormFileRequest(
             appId,
             FieldId,
@@ -164,9 +174,6 @@ public class UploadFileModel(
         }
     }
 
-    /// <summary>
-    /// The template is only needed for the field's file limit, so a load failure does not block the upload.
-    /// </summary>
     private async Task<Domain.Models.FormTemplate?> TryLoadTemplateAsync(ApplicationDto? application)
     {
         var templateId = HttpContext.Session.GetString("TemplateId");

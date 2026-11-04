@@ -51,7 +51,8 @@ public sealed class UploadFormFileService(
         if (formFileFieldService.ContainsFileName(context, request.FieldId, request.FileName))
             return FileRejected(request, context, FormEngineMessages.DuplicateFileName);
 
-        var maxFiles = UploadFieldFileLimit.Resolve(state.Template, request.FieldId, complexFieldConfigurationService);
+        var maxFiles = UploadFieldFileLimit.Resolve(
+            state.Template, request.FieldId, complexFieldConfigurationService, state.TaskId, state.FlowId);
         if (maxFiles > 0)
         {
             var existingFiles = infectedUploadFilter.FilterList(

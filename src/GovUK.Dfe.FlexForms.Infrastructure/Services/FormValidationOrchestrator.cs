@@ -356,10 +356,11 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                 }
             }
 
-            if (isUploadField)
+            var configuration = _complexFieldConfigurationService.GetConfiguration(field.ComplexField.Id);
+            if (string.Equals(configuration?.FieldType, "upload", StringComparison.OrdinalIgnoreCase))
             {
                 // Uploads are rejected at the limit, but files saved before a limit was set still count.
-                var maxFiles = Math.Max(0, _complexFieldConfigurationService.GetConfiguration(field.ComplexField.Id)?.MaxSelections ?? 0);
+                var maxFiles = Math.Max(0, configuration!.MaxSelections);
                 if (maxFiles > 0 && CountUploadedFiles(stringValue) > maxFiles)
                 {
                     errors.Add(new FormValidationError(fieldKey, FormEngineMessages.TooManyFiles(maxFiles)));

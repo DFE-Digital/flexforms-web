@@ -65,6 +65,22 @@ public sealed class TemplateSelectionMiddlewareTests
     }
 
     [Fact]
+    public async Task InvokeAsync_SelectsTheTemplate_ForACaseworkerWithoutTemplateGrants()
+    {
+        var liveTemplate = CreateTemplate("Live", isLive: true);
+        var service = CreateService(liveTemplate);
+        var nextCalled = false;
+        var middleware = CreateMiddleware(() => nextCalled = true);
+        var context = CreateAuthenticatedContext("/applications/dashboard");
+        context.User.AddIdentity(new ClaimsIdentity([new Claim("permission", "Application:Any:Read")]));
+
+        await middleware.InvokeAsync(context, service);
+
+        Assert.True(nextCalled);
+        await service.Received(1).SelectTemplateAsync(context, liveTemplate, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task InvokeAsync_IgnoresQueryTemplate_WhenTemplateManagerHasNoAccess()
     {
         var granted = CreateTemplate("Granted", isLive: true);

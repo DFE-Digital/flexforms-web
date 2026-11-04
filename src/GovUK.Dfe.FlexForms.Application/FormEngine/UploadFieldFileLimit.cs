@@ -12,9 +12,11 @@ public static class UploadFieldFileLimit
     public static int Resolve(
         FormTemplate? template,
         string fieldId,
-        IComplexFieldConfigurationService complexFieldConfigurationService)
+        IComplexFieldConfigurationService complexFieldConfigurationService,
+        string? taskId = null,
+        string? flowId = null)
     {
-        var complexFieldId = FindField(template, fieldId)?.ComplexField?.Id;
+        var complexFieldId = FindField(template, fieldId, taskId, flowId)?.ComplexField?.Id;
         if (string.IsNullOrWhiteSpace(complexFieldId))
             return 0;
 
@@ -22,19 +24,38 @@ public static class UploadFieldFileLimit
     }
 
     /// <summary>
-    /// Finds a field on any task page, collection flow page or derived flow page.
+    /// Finds a field, looking first in the current flow (or the task's own pages), then the rest of the task,
+    /// then the whole template. Field ids may repeat across collection flows, so the current context wins.
     /// </summary>
-    public static Field? FindField(FormTemplate? template, string fieldId)
+    public static Field? FindField(FormTemplate? template, string fieldId, string? taskId = null, string? flowId = null)
     {
         if (template?.TaskGroups is null || string.IsNullOrWhiteSpace(fieldId))
             return null;
 
-        return template.TaskGroups
-            .SelectMany(group => group.Tasks ?? [])
-            .SelectMany(PagesOf)
+        var tasks = template.TaskGroups.SelectMany(group => group.Tasks ?? []).ToList();
+        var task = string.IsNullOrEmpty(taskId)
+            ? null
+            : tasks.FirstOrDefault(item => string.Equals(item.TaskId, taskId, StringComparison.Ordinal));
+
+        if (task is not null)
+        {
+            var currentPages = string.IsNullOrEmpty(flowId) ? task.Pages ?? [] : FlowPagesOf(task, flowId);
+            var inContext = FieldOn(currentPages, fieldId) ?? FieldOn(PagesOf(task), fieldId);
+            if (inContext is not null)
+                return inContext;
+        }
+
+        return FieldOn(tasks.SelectMany(PagesOf), fieldId);
+    }
+
+    private static Field? FieldOn(IEnumerable<Page> pages, string fieldId) =>
+        pages
             .SelectMany(page => page.Fields ?? [])
             .FirstOrDefault(field => string.Equals(field.FieldId, fieldId, StringComparison.Ordinal));
-    }
+
+    private static IEnumerable<Page> FlowPagesOf(Domain.Models.Task task, string flowId) =>
+        (task.Summary?.Flows?.Where(flow => flow.FlowId == flowId).SelectMany(flow => flow.Pages ?? []) ?? [])
+            .Concat(task.Summary?.DerivedFlows?.Where(flow => flow.FlowId == flowId).SelectMany(flow => flow.Pages ?? []) ?? []);
 
     private static IEnumerable<Page> PagesOf(Domain.Models.Task task) =>
         (task.Pages ?? [])

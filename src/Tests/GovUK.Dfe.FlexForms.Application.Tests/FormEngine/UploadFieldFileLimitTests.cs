@@ -49,6 +49,69 @@ public class UploadFieldFileLimitTests
     }
 
     [Fact]
+    public void Resolve_ShouldUseTheCurrentFlow_WhenTheFieldIdRepeatsAcrossFlows()
+    {
+        _configurations.GetConfiguration("OneFileUpload")
+            .Returns(new ComplexFieldConfiguration { Id = "OneFileUpload", FieldType = "upload", MaxSelections = 1 });
+        var task = TaskWith(pages: null);
+        task.Summary = new TaskSummaryConfiguration
+        {
+            Flows =
+            [
+                new MultiCollectionFlowConfiguration { FlowId = "trusts", Pages = [PageWith(UploadField("evidence", "OneFileUpload"))] },
+                new MultiCollectionFlowConfiguration { FlowId = "schools", Pages = [PageWith(UploadField("evidence"))] }
+            ]
+        };
+        var template = Template(task);
+
+        Assert.Equal(3, UploadFieldFileLimit.Resolve(template, "evidence", _configurations, "t1", "schools"));
+        Assert.Equal(1, UploadFieldFileLimit.Resolve(template, "evidence", _configurations, "t1", "trusts"));
+    }
+
+    [Fact]
+    public void Resolve_ShouldPreferTheTaskPages_OverAFlowWithTheSameFieldId()
+    {
+        _configurations.GetConfiguration("OneFileUpload")
+            .Returns(new ComplexFieldConfiguration { Id = "OneFileUpload", FieldType = "upload", MaxSelections = 1 });
+        var task = TaskWith(pages: [PageWith(UploadField("evidence"))]);
+        task.Summary = new TaskSummaryConfiguration
+        {
+            Flows = [new MultiCollectionFlowConfiguration { FlowId = "trusts", Pages = [PageWith(UploadField("evidence", "OneFileUpload"))] }]
+        };
+
+        Assert.Equal(3, UploadFieldFileLimit.Resolve(Template(task), "evidence", _configurations, "t1"));
+    }
+
+    [Fact]
+    public void Resolve_ShouldUseTheCurrentDerivedFlow()
+    {
+        var task = TaskWith(pages: null);
+        task.Summary = new TaskSummaryConfiguration
+        {
+            DerivedFlows = [new DerivedCollectionFlowConfiguration { FlowId = "signatures", Pages = [PageWith(UploadField("evidence"))] }]
+        };
+
+        Assert.Equal(3, UploadFieldFileLimit.Resolve(Template(task), "evidence", _configurations, "t1", "signatures"));
+    }
+
+    [Fact]
+    public void Resolve_ShouldSearchTheRestOfTheTask_WhenTheFlowDoesNotHaveTheField()
+    {
+        var task = TaskWith(pages: [PageWith(UploadField("evidence"))]);
+        task.Summary = new TaskSummaryConfiguration { Flows = null, DerivedFlows = null };
+
+        Assert.Equal(3, UploadFieldFileLimit.Resolve(Template(task), "evidence", _configurations, "t1", "missing-flow"));
+    }
+
+    [Fact]
+    public void Resolve_ShouldFallBackToTheWholeTemplate_WhenTheTaskIsNotFound()
+    {
+        var template = Template(TaskWith(pages: [PageWith(UploadField("evidence"))]));
+
+        Assert.Equal(3, UploadFieldFileLimit.Resolve(template, "evidence", _configurations, "other-task", "flow"));
+    }
+
+    [Fact]
     public void Resolve_ShouldSkipFlowsWithoutPages()
     {
         var task = TaskWith(pages: null);
@@ -152,13 +215,13 @@ public class UploadFieldFileLimitTests
     private static Page PageWith(Field field) =>
         new() { PageId = "p1", Slug = "p1", Title = "Page", Description = string.Empty, PageOrder = 1, Fields = [field] };
 
-    private static Field UploadField(string fieldId) =>
+    private static Field UploadField(string fieldId, string complexFieldId = "EvidenceUpload") =>
         new()
         {
             FieldId = fieldId,
             Type = "complexField",
             Label = new Label { Value = "Evidence" },
             Order = 1,
-            ComplexField = new ComplexField { Id = "EvidenceUpload" }
+            ComplexField = new ComplexField { Id = complexFieldId }
         };
 }
