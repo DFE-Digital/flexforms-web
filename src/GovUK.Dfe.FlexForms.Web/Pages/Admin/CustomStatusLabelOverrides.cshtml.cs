@@ -50,6 +50,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
             var templateId = ResolveTemplateId();
             if (templateId == null)
             {
+                state.SelectedTemplateId = null;
                 ApplyWorkState(state);
                 return Page();
             }
@@ -72,6 +73,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
             if (templateId == null)
             {
                 ModelState.AddModelError(nameof(SelectedTemplateId), CustomStatusLabelOverridesMessages.SelectTemplate);
+                state.SelectedTemplateId = null;
                 ApplyWorkState(state);
                 return Page();
             }
@@ -115,15 +117,19 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
             return new RedirectToPageResult("/Admin/Admin");
         }
 
+        public bool HasTemplateAccess(Guid templateId) =>
+            AdminAccessHelper.HasTemplateAccess(User, templateId);
+
         private Guid? ResolveTemplateId()
         {
             if (SelectedTemplateId.HasValue && SelectedTemplateId.Value != Guid.Empty)
             {
-                return SelectedTemplateId.Value;
+                return HasTemplateAccess(SelectedTemplateId.Value) ? SelectedTemplateId.Value : null;
             }
 
             if (Guid.TryParse(HttpContext.Session.GetString("TemplateId"), out var sessionId)
-                && sessionId != Guid.Empty)
+                && sessionId != Guid.Empty
+                && HasTemplateAccess(sessionId))
             {
                 return sessionId;
             }

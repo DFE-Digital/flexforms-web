@@ -22,7 +22,7 @@ public sealed class TemplateSelectionMiddlewareTests
 
         var nextCalled = false;
         var middleware = CreateMiddleware(() => nextCalled = true);
-        var context = CreateAuthenticatedContext("/applications/dashboard");
+        var context = CreateUserContext("/applications/dashboard", liveTemplate, draftTemplate);
 
         await middleware.InvokeAsync(context, service);
 
@@ -34,12 +34,58 @@ public sealed class TemplateSelectionMiddlewareTests
     }
 
     [Fact]
+    public async Task InvokeAsync_DoesNotAutoSelectSoleLiveTemplate_WhenTemplateManagerHasNoAccess()
+    {
+        var liveTemplate = CreateTemplate("Live", isLive: true);
+        var service = CreateService(liveTemplate);
+        var middleware = CreateMiddleware();
+        var context = CreateTemplateManagerContext("/applications/dashboard");
+
+        await middleware.InvokeAsync(context, service);
+
+        Assert.Equal(StatusCodes.Status302Found, context.Response.StatusCode);
+        Assert.StartsWith("/templates?liveOnly=true", context.Response.Headers.Location.ToString());
+        await service.DidNotReceiveWithAnyArgs().SelectTemplateAsync(default!, default!, default);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_AutoSelectsTheOnlyLiveTemplateTheTemplateManagerHasAccessTo()
+    {
+        var granted = CreateTemplate("Granted", isLive: true);
+        var other = CreateTemplate("Other", isLive: true);
+        var service = CreateService(granted, other);
+        var nextCalled = false;
+        var middleware = CreateMiddleware(() => nextCalled = true);
+        var context = CreateTemplateManagerContext("/applications/dashboard", granted);
+
+        await middleware.InvokeAsync(context, service);
+
+        Assert.True(nextCalled);
+        await service.Received(1).SelectTemplateAsync(context, granted, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task InvokeAsync_IgnoresQueryTemplate_WhenTemplateManagerHasNoAccess()
+    {
+        var granted = CreateTemplate("Granted", isLive: true);
+        var other = CreateTemplate("Other", isLive: true);
+        var service = CreateService(granted, other);
+        var middleware = CreateMiddleware();
+        var context = CreateTemplateManagerContext("/applications/dashboard", granted);
+        context.Request.QueryString = new QueryString($"?templateId={other.TemplateId}");
+
+        await middleware.InvokeAsync(context, service);
+
+        await service.DidNotReceive().SelectTemplateAsync(context, other, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task InvokeAsync_RedirectsRootToSoleLiveTemplateDashboard()
     {
         var liveTemplate = CreateTemplate("Live", isLive: true);
         var service = CreateService(liveTemplate);
         var middleware = CreateMiddleware();
-        var context = CreateAuthenticatedContext("/");
+        var context = CreateUserContext("/", liveTemplate);
 
         await middleware.InvokeAsync(context, service);
 
@@ -78,7 +124,7 @@ public sealed class TemplateSelectionMiddlewareTests
 
         var nextCalled = false;
         var middleware = CreateMiddleware(() => nextCalled = true);
-        var context = CreateAuthenticatedContext("/applications/dashboard");
+        var context = CreateUserContext("/applications/dashboard", one, two);
 
         await middleware.InvokeAsync(context, service);
 
@@ -162,7 +208,7 @@ public sealed class TemplateSelectionMiddlewareTests
             .Returns(one.TemplateId.ToString());
 
         var middleware = CreateMiddleware(() => throw new InvalidOperationException("dashboard broke"));
-        var context = CreateAuthenticatedContext("/applications/dashboard");
+        var context = CreateUserContext("/applications/dashboard", one, two);
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => middleware.InvokeAsync(context, service));
@@ -219,6 +265,21 @@ public sealed class TemplateSelectionMiddlewareTests
             User = new ClaimsPrincipal(new ClaimsIdentity(claims, "Test")),
             Request = { Path = path }
         };
+        return context;
+    }
+
+    private static DefaultHttpContext CreateUserContext(string path, params TemplateDto[] accessibleTemplates)
+    {
+        var context = CreateAuthenticatedContext(path);
+        context.User.AddIdentity(new ClaimsIdentity(
+            accessibleTemplates.Select(t => new Claim("permission", $"Template:{t.TemplateId}:Write"))));
+        return context;
+    }
+
+    private static DefaultHttpContext CreateTemplateManagerContext(string path, params TemplateDto[] accessibleTemplates)
+    {
+        var context = CreateUserContext(path, accessibleTemplates);
+        context.User.AddIdentity(new ClaimsIdentity([new Claim("permission", "Template:Any:Manage")]));
         return context;
     }
 

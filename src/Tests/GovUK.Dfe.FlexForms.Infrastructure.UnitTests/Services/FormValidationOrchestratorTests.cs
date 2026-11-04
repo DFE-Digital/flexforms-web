@@ -26,6 +26,7 @@ public class FormValidationOrchestratorTests
         var fieldRequirementService = Substitute.For<IFieldRequirementService>();
         fieldRequirementService.IsFieldRequired(Arg.Any<Field>(), Arg.Any<FormTemplate>()).Returns(false);
         _fixture.Register(() => fieldRequirementService);
+        _fixture.Register(() => NoUploadLimits());
         
         _orchestrator = _fixture.Create<FormValidationOrchestrator>();
     }
@@ -967,6 +968,30 @@ public class FormValidationOrchestratorTests
     }
 
     [Fact]
+    public void ValidateComplexField_when_upload_field_has_more_files_than_its_limit_then_returns_error()
+    {
+        var orchestrator = CreateExplicitOrchestrator(complexFieldConfigurationService: UploadLimit(2));
+        var field = CreateComplexField("documentUpload");
+
+        var result = orchestrator.ValidateField(
+            field, """[{"fileName":"a.pdf"},{"fileName":"b.pdf"},{"fileName":"c.pdf"}]""", "docs");
+
+        Assert.False(result.IsValid);
+        Assert.Equal(GovUK.Dfe.FlexForms.Application.FormEngine.FormEngineMessages.TooManyFiles(2), Assert.Single(result.Errors).Message);
+    }
+
+    [Theory]
+    [InlineData(2, """[{"fileName":"a.pdf"},{"fileName":"b.pdf"}]""")]
+    [InlineData(0, """[{"fileName":"a.pdf"},{"fileName":"b.pdf"},{"fileName":"c.pdf"}]""")]
+    public void ValidateComplexField_when_upload_field_is_within_its_limit_or_has_none_then_returns_true(int maxFiles, string value)
+    {
+        var orchestrator = CreateExplicitOrchestrator(complexFieldConfigurationService: UploadLimit(maxFiles));
+        var field = CreateComplexField("documentUpload");
+
+        Assert.True(orchestrator.ValidateField(field, value, "docs").IsValid);
+    }
+
+    [Fact]
     public void ValidateComplexField_when_autocomplete_required_rule_and_value_is_empty_then_uses_the_rule_message()
     {
         var orchestrator = CreateExplicitOrchestrator();
@@ -1225,7 +1250,8 @@ public class FormValidationOrchestratorTests
 
     private static FormValidationOrchestrator CreateExplicitOrchestrator(
         IFieldRequirementService? fieldRequirementService = null,
-        IConditionalLogicEngine? conditionalLogicEngine = null)
+        IConditionalLogicEngine? conditionalLogicEngine = null,
+        IComplexFieldConfigurationService? complexFieldConfigurationService = null)
     {
         fieldRequirementService ??= Substitute.For<IFieldRequirementService>();
         conditionalLogicEngine ??= new ConditionalLogicEngine(NullLogger<ConditionalLogicEngine>.Instance);
@@ -1233,7 +1259,18 @@ public class FormValidationOrchestratorTests
         return new FormValidationOrchestrator(
             NullLogger<FormValidationOrchestrator>.Instance,
             conditionalLogicEngine,
-            fieldRequirementService);
+            fieldRequirementService,
+            complexFieldConfigurationService ?? NoUploadLimits());
+    }
+
+    private static IComplexFieldConfigurationService NoUploadLimits() => UploadLimit(0);
+
+    private static IComplexFieldConfigurationService UploadLimit(int maxFiles)
+    {
+        var service = Substitute.For<IComplexFieldConfigurationService>();
+        service.GetConfiguration(Arg.Any<string>())
+            .Returns(call => new ComplexFieldConfiguration { Id = call.Arg<string>(), FieldType = "upload", MaxSelections = maxFiles });
+        return service;
     }
 
     private static ValidationRule RequiredRule(string message) =>

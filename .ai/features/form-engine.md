@@ -35,6 +35,7 @@ See [`../business-rules.md`](../business-rules.md). Conditional logic from templ
 - `returnToSummaryPage` vs newly visible pages.
 - Derived flows vs multi-collection flows are different models — don’t share serializers casually.
 - Infected upload filter / Redis infected-file store.
+- Upload file limit (**Verified**): `ComplexFieldConfiguration.MaxSelections` on the tenant's upload complex field is the maximum file count (0 = none). `UploadFieldFileLimit` finds the field on task, collection-flow and derived-flow pages. Enforced in `UploadFormFileService` before the API upload (needs `state.Template`; the standalone `UploadFile` page loads it), backstopped in `FormValidationOrchestrator` on save, and shown in `_UploadComplexField.cshtml`. If the template can't be loaded at upload time the limit is skipped, and the save-time check still applies. **Historical:** `MaxSelections` was only read by autocomplete, so upload limits were silently ignored.
 
 ## 8. Tests
 

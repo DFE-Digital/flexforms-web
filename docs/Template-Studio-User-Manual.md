@@ -56,7 +56,7 @@ You need permission to manage templates: the **Admin** or **SuperAdmin** role, o
 
 1. Go to **Admin**.
 2. In **Template Management**, select **Template Studio**. It opens the template you last worked on, or the first template if you haven't chosen one.
-3. To edit a different template, choose it in **Choose a template to edit** and select **Open template**.
+3. To edit a different template, choose it in **Choose a template to edit** and select **Open template**. If you are not an Admin, you can only open templates you have been given access to. The others are greyed out with **You do not have access to this template**. Ask your administrator to give you access in User Manager.
 4. To start from an earlier version, choose it in **Choose a version to start from** and select **Open version**. Your new version is still numbered after the latest one.
 
 If you have unsaved changes, your browser asks you to confirm before it opens another template or version.

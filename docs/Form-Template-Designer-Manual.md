@@ -825,6 +825,8 @@ Rules:
 
 `dropdownDisplay` / `confirmationDisplay` / `summaryDisplay` do not apply to uploads.
 
+To limit how many files can be uploaded, ask your Admin to set `MaxSelections` on the upload field in Tenant Settings → `FormEngine`. You can't set it in the template JSON, and `maxLength` / `maxWords` rules are ignored on uploads.
+
 #### Designer checklist for a new search question
 
 1. Confirm the FormEngine `Id` exists (Admin → Tenant Settings → `FormEngine`, Target **Web**).

@@ -25,6 +25,15 @@ API templates, users, roles, tenant admin, reporting export proxy to Prism.
 
 SuperAdmin-only Tenant Settings categories. Reporting acknowledgement on template save. `retiredFields` when editing live templates (manuals + API policy).
 
+Template access for template managers (**Verified**): users with `Template:*:Manage` get the full tenant catalogue from the API, but may only work in templates they have been given. `AdminAccessHelper.HasTemplateAccess` is true for Admin/SuperAdmin, a `Template:{id}:Read`/`Write` claim, or `Template:Any:Read`/`Write`. Manage alone does not count. Templates without access are shown disabled with `AdminAccessHelper.NoTemplateAccessText`, and the server ignores them if posted, in:
+
+- `/templates` (Choose a form) — `Pages/Templates/Index.cshtml(.cs)`
+- Template Studio "Choose a template to edit" — also skipped when opening the session template or the first template
+- Custom status labels (`CustomStatusLabelOverrides`) — a query/session template without access is treated as no selection
+- `TemplateSelectionMiddleware` — auto-select and `?templateId=` only consider accessible templates
+
+This is a UI rule. The API is the authority for what each call allows.
+
 ## 6. Edge cases
 
 Wrong FeatureManagement Target. EventMappings ≠ Prism contract. Duplicate tenant overlap of Shared/Api settings (API gate).

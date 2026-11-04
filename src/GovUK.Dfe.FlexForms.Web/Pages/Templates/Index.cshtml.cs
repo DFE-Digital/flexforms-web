@@ -43,14 +43,18 @@ public sealed class IndexModel(
     /// <summary>Error message when selection fails.</summary>
     public string? ErrorMessage { get; private set; }
 
-    public sealed record TemplateChoice(TemplateDto Template, string? Description);
+    /// <summary>
+    /// A form the user can see. <see cref="HasAccess"/> is false for template managers who can see
+    /// every form but have not been given access to this one; it is shown greyed out and can't be chosen.
+    /// </summary>
+    public sealed record TemplateChoice(TemplateDto Template, string? Description, bool HasAccess);
 
     public async Task<IActionResult> OnGetAsync(CancellationToken cancellationToken)
     {
         IsAdmin = AdminAccessHelper.CanManageTemplates(User);
         await LoadTemplatesAsync(cancellationToken);
 
-        if (Templates.Count == 1 && (LiveOnly || !IsAdmin))
+        if (Templates.Count == 1 && Templates[0].HasAccess && (LiveOnly || !IsAdmin))
         {
             await templateSelectionService.SelectTemplateAsync(
                 HttpContext,
@@ -61,7 +65,7 @@ public sealed class IndexModel(
 
         var currentSelection = templateSelectionService.GetSelectedTemplateId(HttpContext);
         if (Guid.TryParse(currentSelection, out var selectedId) &&
-            Templates.Any(template => template.Template.TemplateId == selectedId))
+            Templates.Any(template => template.HasAccess && template.Template.TemplateId == selectedId))
         {
             SelectedTemplateId = selectedId;
         }
@@ -80,7 +84,7 @@ public sealed class IndexModel(
             return Page();
         }
 
-        if (Templates.All(t => t.Template.TemplateId != SelectedTemplateId.Value))
+        if (!Templates.Any(t => t.HasAccess && t.Template.TemplateId == SelectedTemplateId.Value))
         {
             ErrorMessage = "You do not have access to that form.";
             logger.LogWarning("User attempted to select inaccessible form {TemplateId}", SelectedTemplateId);
@@ -103,7 +107,10 @@ public sealed class IndexModel(
         Templates = await Task.WhenAll(templates.Select(async template =>
         {
             var description = await TryGetTemplateDescriptionAsync(template.TemplateId, cancellationToken);
-            return new TemplateChoice(template, description);
+            return new TemplateChoice(
+                template,
+                description,
+                AdminAccessHelper.HasTemplateAccess(User, template.TemplateId));
         }));
     }
 

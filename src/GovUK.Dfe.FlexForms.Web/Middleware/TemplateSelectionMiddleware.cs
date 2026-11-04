@@ -48,7 +48,11 @@ public sealed class TemplateSelectionMiddleware(
     /// </summary>
     private async Task<bool> ApplyGateAsync(HttpContext context, ITemplateSelectionService templateSelectionService)
     {
-        var templates = await templateSelectionService.GetSelectableTemplatesAsync(context.RequestAborted);
+        var selectableTemplates = await templateSelectionService.GetSelectableTemplatesAsync(context.RequestAborted);
+        // Template managers see every template but may only enter the ones they have been given.
+        var templates = selectableTemplates
+            .Where(template => AdminAccessHelper.HasTemplateAccess(context.User, template.TemplateId))
+            .ToList();
 
         if (await TrySelectTemplateFromQueryAsync(context, templates, templateSelectionService, context.RequestAborted))
         {
@@ -94,7 +98,7 @@ public sealed class TemplateSelectionMiddleware(
             return true;
         }
 
-        if (templates.Count == 0)
+        if (selectableTemplates.Count == 0)
         {
             // Freshly cloned / empty tenants: admins must create a template first.
             if (AdminAccessHelper.CanManageTemplates(context.User))

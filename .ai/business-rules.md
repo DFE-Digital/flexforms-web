@@ -12,7 +12,7 @@ API enforces persistence rules. Web enforces **navigation and UX** rules.
 
 ## Live templates
 
-Saving a template version in admin does not change in-flight applications. Users only see live templates they can access. Admins can preview non-live.
+Saving a template version in admin does not change in-flight applications. Users only see live templates they can access. Admins can preview non-live. Template managers see every template but can only choose the ones they have been given; the rest are greyed out (see `.ai/features/admin-and-studio.md`).
 
 ## Contributors
 

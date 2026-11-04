@@ -26,6 +26,7 @@ public class UploadFileModel(
     IFileUploadService fileUploadService,
     IApplicationResponseService applicationResponseService,
     IApplicationStateService applicationStateService,
+    ITemplateManagementService templateManagementService,
     INotificationsClient notificationsClient,
     IFormErrorStore formErrorStore,
     IRequestAppConfiguration requestConfiguration,
@@ -84,13 +85,14 @@ public class UploadFileModel(
         if (!Guid.TryParse(ApplicationId, out var appId))
             return NotFound();
 
-        await applicationStateService.EnsureApplicationIdAsync(ReferenceNumber);
+        var (_, application) = await applicationStateService.EnsureApplicationIdAsync(ReferenceNumber);
 
         var file = Request.Form.Files["ChooseFile"];
         var hasFile = file is { Length: > 0 };
         await using var stream = hasFile ? file!.OpenReadStream() : Stream.Null;
 
         var state = CaptureWorkState();
+        state.Template = await TryLoadTemplateAsync(application);
         var outcome = await uploadFormFile.ExecuteAsync(state, new UploadFormFileRequest(
             appId,
             FieldId,
@@ -159,6 +161,26 @@ public class UploadFileModel(
         catch (ExternalApplicationsException ex) when (ex.StatusCode is 401 or 403)
         {
             return files;
+        }
+    }
+
+    /// <summary>
+    /// The template is only needed for the field's file limit, so a load failure does not block the upload.
+    /// </summary>
+    private async Task<Domain.Models.FormTemplate?> TryLoadTemplateAsync(ApplicationDto? application)
+    {
+        var templateId = HttpContext.Session.GetString("TemplateId");
+        if (string.IsNullOrEmpty(templateId))
+            return null;
+
+        try
+        {
+            return await templateManagementService.LoadTemplateAsync(templateId, application);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Could not load template {TemplateId} for upload file limit", templateId);
+            return null;
         }
     }
 

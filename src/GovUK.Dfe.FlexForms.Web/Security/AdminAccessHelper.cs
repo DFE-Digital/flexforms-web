@@ -54,6 +54,29 @@ public static class AdminAccessHelper
         || HasAnyManageClaim(user, "Template");
 
     /// <summary>
+    /// True when the user has been given access to the template: Admin/SuperAdmin, a Read or Write
+    /// grant on that template, or a tenant-wide Template Read/Write grant.
+    /// <c>Template:*:Manage</c> alone does not count, so template managers see every template
+    /// but can only work in the ones they have been given.
+    /// </summary>
+    public static bool HasTemplateAccess(ClaimsPrincipal? user, Guid templateId)
+    {
+        if (IsAdmin(user))
+            return true;
+
+        if (user is null || templateId == Guid.Empty)
+            return false;
+
+        return HasPermissionClaim(user, $"Template:{templateId}:Read")
+            || HasPermissionClaim(user, $"Template:{templateId}:Write")
+            || HasPermissionClaim(user, "Template:Any:Read")
+            || HasPermissionClaim(user, "Template:Any:Write");
+    }
+
+    /// <summary>Shown next to templates the user can see but has not been given access to.</summary>
+    public const string NoTemplateAccessText = "You do not have access to this template";
+
+    /// <summary>
     /// True when the user can list all applications for the active template
     /// (Admin/SuperAdmin, or Application:Any:Read — e.g. Caseworker).
     /// </summary>

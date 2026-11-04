@@ -297,6 +297,8 @@ Title: **Choose a form**
 
 Admins see live and not-live forms (not-live labelled for preview). End users only see live forms they can access.
 
+Template managers see every form, but can only choose the ones they have been given access to. The others are greyed out with **You do not have access to this template**. To give access, edit the user in **User Manager** and tick the form.
+
 Select a form, then **Go to dashboard**.
 
 ---
@@ -311,7 +313,7 @@ Title: **Admin - Custom Status Overrides**
 
 The underlying statuses stay the same (**Created**, **In progress**, **Submitted**, **Deleted**). You only change the **words people see** on dashboards, listings, and filters.
 
-1. Choose a **Template**.
+1. Choose a **Template**. Template managers can only choose templates they have been given access to; the others are greyed out.
 2. Choose a **Base Status**.
 3. Enter the **Custom Status Value** (the label to show).
 4. Select **Save Overrides**.
@@ -583,9 +585,7 @@ You cannot rename, delete, or edit permissions on system roles.
 | Button | What you get | Typical use |
 |--------|----------------|-------------|
 | **Create Caseworker role** | Read all applications and files in the tenant (`Application:Any:Read` and `ApplicationFiles:Any:Read`) | Staff who list and review everyone’s applications, without becoming Admin |
-| **Create Template Manager role** | Manage templates and start applications on any form, including forms that are not live yet (`Template:Any:Manage` and `Template:Any:Write`) | Content owners who version forms, test them and go live, without User Manager or Tenant Settings |
-
-Template Manager roles created before `Template:Any:Write` was added to the preset cannot start applications on other people's forms. Add **Template / Any / Write** to the role in Role Manager.
+| **Create Template Manager role** | Manage templates (`Template:Any:Manage`). Template managers see every form but only work in the ones they create or are given in User Manager, including forms that are not live yet | Content owners who version forms, test them and go live, without User Manager or Tenant Settings |
 
 Then assign the role on **Add user** / **Edit user**.
 
@@ -2107,6 +2107,32 @@ Use this when the third-party API does **not** take an API key. FlexForms first 
 Do **not** put `ApiKey` on a client-credentials field. The two auth types are alternatives, not combined.
 
 Certificate / managed-identity login for the search API is not supported here. If the provider only offers those, talk to the platform team.
+
+#### Upload fields
+
+An upload question also needs an entry in `ComplexFields`, with `FieldType` set to `upload`. No API settings are needed.
+
+```json
+{
+  "ComplexFields": [
+    {
+      "Id": "UploadDocumentsComplexField",
+      "FieldType": "upload",
+      "AllowMultiple": true,
+      "MaxSelections": 3
+    }
+  ]
+}
+```
+
+| Property | Required | What it does |
+|----------|----------|----------------|
+| `Id` | Yes | Must match `complexField.id` in the template. |
+| `FieldType` | Yes | `upload`. |
+| `AllowMultiple` | Recommended | `true` so the task summary lists each uploaded file. It does not limit or allow uploads. |
+| `MaxSelections` | No | The most files an applicant can upload to one question. `0` (the default) means no limit. |
+
+When an applicant reaches the limit, the upload box is replaced with a message asking them to delete a file first. Uploads over the limit are rejected, and a page that somehow has too many files can't be saved. The limit applies to every question that uses this `Id`, so use a separate `Id` for questions that need a different limit.
 
 #### Query URL tips
 

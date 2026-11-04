@@ -205,6 +205,7 @@ public class RenderFormModelCharacterizationTests
             _fileFieldService,
             _fileUploadService,
             _infectedFilter,
+            Substitute.For<IComplexFieldConfigurationService>(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<UploadFormFileService>.Instance));
         _fixture.Register<IDeleteFormFile>(() => new DeleteFormFileService(
             _fileFieldService,

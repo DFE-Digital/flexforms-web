@@ -19,6 +19,9 @@ public static class FormEngineMessages
     public const string DuplicateFileName =
         "The selected file has already been uploaded. Upload a file with a different name.\n ";
 
+    public static string TooManyFiles(int maxFiles) =>
+        $"You can upload up to {maxFiles} {(maxFiles == 1 ? "file" : "files")}. Delete a file to upload a different one.";
+
     public const string InvalidFileId = "Invalid file ID.";
 
     public const string FileDeleted = "File deleted.";

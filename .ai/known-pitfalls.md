@@ -9,7 +9,7 @@
 7. **Forwarded headers** required behind ACA/Front Door or OIDC redirect URIs break.
 8. **SignalR/Cypress** — tests disable the hub. Don’t “fix” Cypress by forcing WebSockets without the proxy.
 9. **FeatureManagement Target** for Template Studio is `Web`, not `Api`/`Shared`.
-10. **Upload summary blank** → FormEngine `AllowMultiple` + refresh settings.
+10. **Upload summary blank** → FormEngine `AllowMultiple` + refresh settings. The upload **file limit** is `MaxSelections` on the same entry (see `.ai/features/form-engine.md`); it used to be ignored for uploads.
 11. **Render notification text with `textContent` or a sanitiser**, never `innerHTML`.
 12. **GovUK Frontend 4 rebrand** is always on — don’t fight it.
 13. Redis is required for cookies/session; API can degrade to SQL. Same incident, different UX.
