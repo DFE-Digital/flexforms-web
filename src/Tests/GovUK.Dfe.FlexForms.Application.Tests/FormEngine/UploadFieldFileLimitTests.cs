@@ -111,6 +111,21 @@ public class UploadFieldFileLimitTests
         Assert.Equal(3, UploadFieldFileLimit.Resolve(template, "evidence", _configurations, "other-task", "flow"));
     }
 
+    [Theory]
+    [InlineData("trusts", null, "p1", "trusts")]
+    [InlineData(null, "signatures", "p1", "signatures")]
+    [InlineData(null, null, "signatures/derived/item-1/p1", "signatures")]
+    [InlineData(null, null, "flow/trusts/instance-1/p1", "trusts")]
+    [InlineData(null, null, "p1", null)]
+    [InlineData("", "", "", null)]
+    public void CurrentFlowId_ShouldReadTheFlowFromTheStateOrTheRoute(
+        string? flowId, string? derivedFlowId, string pageId, string? expected)
+    {
+        var state = new FormEngineWorkState { FlowId = flowId, DerivedFlowId = derivedFlowId, CurrentPageId = pageId };
+
+        Assert.Equal(expected, UploadFieldFileLimit.CurrentFlowId(state));
+    }
+
     [Fact]
     public void Resolve_ShouldSkipFlowsWithoutPages()
     {

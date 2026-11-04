@@ -44,8 +44,8 @@ public sealed class IndexModel(
     public string? ErrorMessage { get; private set; }
 
     /// <summary>
-    /// A form the user can see. <see cref="HasAccess"/> is false for template managers who can see
-    /// every form but have not been given access to this one; it is shown greyed out and can't be chosen.
+    /// A form the user can see. <see cref="HasAccess"/> is false for template managers who can see every
+    /// form but have not been given this one and can't read all applications; it is greyed out and can't be chosen.
     /// </summary>
     public sealed record TemplateChoice(TemplateDto Template, string? Description, bool HasAccess);
 
@@ -110,7 +110,7 @@ public sealed class IndexModel(
             return new TemplateChoice(
                 template,
                 description,
-                AdminAccessHelper.HasTemplateAccess(User, template.TemplateId));
+                AdminAccessHelper.CanOpenTemplate(User, template.TemplateId));
         }));
     }
 

@@ -1,4 +1,5 @@
 using GovUK.Dfe.FlexForms.Application.Interfaces;
+using GovUK.Dfe.FlexForms.Domain.FormEngine;
 using GovUK.Dfe.FlexForms.Domain.Models;
 
 namespace GovUK.Dfe.FlexForms.Application.FormEngine;
@@ -21,6 +22,26 @@ public static class UploadFieldFileLimit
             return 0;
 
         return Math.Max(0, complexFieldConfigurationService.GetConfiguration(complexFieldId)?.MaxSelections ?? 0);
+    }
+
+    /// <summary>
+    /// The collection or derived flow the request is in. Uploads on derived-flow pages only carry
+    /// the flow in the page route (<c>{flowId}/derived/{itemId}/{pageId}</c>).
+    /// </summary>
+    public static string? CurrentFlowId(FormEngineWorkState state)
+    {
+        if (!string.IsNullOrEmpty(state.FlowId))
+            return state.FlowId;
+
+        if (!string.IsNullOrEmpty(state.DerivedFlowId))
+            return state.DerivedFlowId;
+
+        if (FormRouteParser.TryParseDerivedFlow(state.CurrentPageId, out var derived))
+            return derived.FlowId;
+
+        return FormRouteParser.TryParseCollectionFlow(state.CurrentPageId, out var collection)
+            ? collection.FlowId
+            : null;
     }
 
     /// <summary>

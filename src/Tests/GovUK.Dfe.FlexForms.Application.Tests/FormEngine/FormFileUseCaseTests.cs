@@ -135,6 +135,37 @@ public class UploadFormFileServiceTests
         Assert.Contains(result.Errors, e => e.Message == FormEngineMessages.TooManyFiles(1));
     }
 
+    [Fact]
+    public async Task ExecuteAsync_ShouldUseTheDerivedFlowFromThePageRoute_WhenTheFieldIdRepeats()
+    {
+        GivenUploadLimit("OneFileUpload", 1);
+        GivenUploadLimit("ThreeFileUpload", 3);
+        var appId = Guid.NewGuid();
+        _fields.GetFiles(Arg.Any<FormFileFieldContext>(), "evidence")
+            .Returns([new UploadDto { Id = Guid.NewGuid(), OriginalFileName = "a.pdf" }]);
+        _uploads.UploadFileAsync(appId, "b.pdf", null, Arg.Any<FileParameter>(), Arg.Any<CancellationToken>())
+            .Returns(new UploadDto { Id = Guid.NewGuid(), OriginalFileName = "b.pdf" });
+        var template = TemplateWithUploadField("other", "OtherUpload");
+        template.TaskGroups[0].Tasks[0].Summary = new TaskSummaryConfiguration
+        {
+            Mode = "derivedCollectionFlow",
+            DerivedFlows =
+            [
+                new DerivedCollectionFlowConfiguration { FlowId = "trusts", Pages = [PageWith(UploadField("evidence", "OneFileUpload"))] },
+                new DerivedCollectionFlowConfiguration { FlowId = "schools", Pages = [PageWith(UploadField("evidence", "ThreeFileUpload"))] }
+            ]
+        };
+        using var stream = new MemoryStream("hi"u8.ToArray());
+
+        var result = await _service.ExecuteAsync(
+            new FormEngineWorkState { ReferenceNumber = "REF-1", TaskId = "t1", CurrentPageId = "schools/derived/item-1/p1", Template = template },
+            new UploadFormFileRequest(
+                appId, "evidence", null, null, stream, "b.pdf", "application/pdf", "page", HasFile: true));
+
+        Assert.Empty(result.Errors);
+        await _uploads.Received(1).UploadFileAsync(appId, "b.pdf", null, Arg.Any<FileParameter>(), Arg.Any<CancellationToken>());
+    }
+
     private void GivenUploadLimit(string complexFieldId, int maxFiles) =>
         _complexFields.GetConfiguration(complexFieldId)
             .Returns(new ComplexFieldConfiguration { Id = complexFieldId, FieldType = "upload", MaxSelections = maxFiles });

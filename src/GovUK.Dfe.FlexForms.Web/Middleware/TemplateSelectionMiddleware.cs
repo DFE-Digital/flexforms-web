@@ -49,9 +49,10 @@ public sealed class TemplateSelectionMiddleware(
     private async Task<bool> ApplyGateAsync(HttpContext context, ITemplateSelectionService templateSelectionService)
     {
         var selectableTemplates = await templateSelectionService.GetSelectableTemplatesAsync(context.RequestAborted);
-        // Template managers see every template but may only enter the ones they have been given.
+        // Template managers see every template but may only enter the ones they have been given,
+        // unless they can also read every application.
         var templates = selectableTemplates
-            .Where(template => AdminAccessHelper.HasTemplateAccess(context.User, template.TemplateId))
+            .Where(template => AdminAccessHelper.CanOpenTemplate(context.User, template.TemplateId))
             .ToList();
 
         if (await TrySelectTemplateFromQueryAsync(context, templates, templateSelectionService, context.RequestAborted))

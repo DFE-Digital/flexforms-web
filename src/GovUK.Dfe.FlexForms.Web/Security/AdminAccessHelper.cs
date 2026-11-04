@@ -76,6 +76,14 @@ public static class AdminAccessHelper
             || HasPermissionClaim(user, "Template:Any:Write");
     }
 
+    /// <summary>
+    /// True when the user may open the template's applications (Choose a form, template selection).
+    /// Separate from <see cref="HasTemplateAccess"/>, which gates template management: someone who can
+    /// read every application keeps that access even if they also manage templates.
+    /// </summary>
+    public static bool CanOpenTemplate(ClaimsPrincipal? user, Guid templateId) =>
+        HasTemplateAccess(user, templateId) || CanReadAnyApplication(user);
+
     /// <summary>Shown next to templates the user can see but has not been given access to.</summary>
     public const string NoTemplateAccessText = "You do not have access to this template";
 
