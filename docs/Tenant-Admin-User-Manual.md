@@ -205,6 +205,8 @@ For each template you see:
 - **Open** (if live) or **Preview** (if not live)
 - **Make live** or **Make not live**
 
+Template managers see every template here, but the buttons are greyed out with **You do not have access to this template** on templates they have not been given access to in User Manager.
+
 **Open / Preview** selects that template in your session and takes you into the service as that form.
 
 End users only see **live** forms they have been granted. Admins and Template Managers can still open not-live forms to preview them (an orange preview banner appears).

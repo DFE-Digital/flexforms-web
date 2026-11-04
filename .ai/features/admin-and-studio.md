@@ -27,12 +27,15 @@ SuperAdmin-only Tenant Settings categories. Reporting acknowledgement on templat
 
 Template access for template managers (**Verified**): users with `Template:*:Manage` get the full tenant catalogue from the API, but may only work in templates they have been given. `AdminAccessHelper.HasTemplateAccess` is true for Admin/SuperAdmin, a `Template:{id}:Read`/`Write` claim, or `Template:Any:Read`/`Write`. Manage alone does not count. Templates without access are shown disabled with `AdminAccessHelper.NoTemplateAccessText`, and the server ignores them if posted, in:
 
+- Admin hub "Tenant templates" table — Open/Preview and Make live/not live are disabled; the handlers reject them too
 - `/templates` (Choose a form) — `Pages/Templates/Index.cshtml(.cs)`
 - Template Studio "Choose a template to edit" — also skipped when opening the session template or the first template
 - Custom status labels (`CustomStatusLabelOverrides`) — a query/session template without access is treated as no selection
 - `TemplateSelectionMiddleware` — auto-select and `?templateId=` only consider accessible templates
 
 This is a UI rule. The API is the authority for what each call allows.
+
+Template Studio for non-admins (**Verified**): `GET /v1/Roles` is Admin/SuperAdmin only, so `TemplateStudioModel` skips it and sends `canChooseContributorRole: false`; the JS shows a note instead of the contributor-role picker and keeps the saved `contributorRoleId`. The application count needs `CanReadAnyApplication`, so it is skipped and sent as unknown (`null`), which Template Studio treats as "in use".
 
 ## 6. Edge cases
 

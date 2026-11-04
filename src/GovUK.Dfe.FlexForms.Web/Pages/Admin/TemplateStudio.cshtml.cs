@@ -310,6 +310,11 @@ public class TemplateStudioModel(
     /// </summary>
     private async Task<int?> CountApplicationsAsync(Guid templateId, CancellationToken cancellationToken)
     {
+        // Listing applications needs Admin or Application:Any:Read; template managers get an unknown count,
+        // which Template Studio treats as in use.
+        if (!AdminAccessHelper.CanReadAnyApplication(User))
+            return null;
+
         try
         {
             var page = await applicationsClient.GetApplicationsByTemplateAsync(
@@ -376,12 +381,17 @@ public class TemplateStudioModel(
             eventMappings = ReadEventMappingReferences(schemaJson, state.CurrentTemplateJson)
                 .Select(reference => new { fieldId = reference.FieldId, eventType = reference.EventType, mappingId = reference.MappingId }),
             contributorRoles = await ContributorRolesAsync(cancellationToken),
+            canChooseContributorRole = AdminAccessHelper.IsAdmin(User),
             validateUrl = Url.Page("/Admin/TemplateStudio", "Validate")
         });
     }
 
     private async Task<IReadOnlyList<object>> ContributorRolesAsync(CancellationToken cancellationToken)
     {
+        // Listing roles is Admin/SuperAdmin only.
+        if (!AdminAccessHelper.IsAdmin(User))
+            return [];
+
         try
         {
             var roles = await rolesClient.ListAsync(cancellationToken);

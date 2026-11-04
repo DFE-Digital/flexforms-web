@@ -148,6 +148,8 @@ Leave **Role for invited contributors** on **User** when invited people should b
 
 Choose a custom role from Role Manager when they should only view the application and its files. Admin, SuperAdmin and Administrator are not in the list.
 
+Only an Admin or SuperAdmin can change this setting. Template managers see a note instead, and the role already chosen is kept when they save a new version.
+
 - People invited after you save a new version get that role, if they do not already belong to the tenant.
 - Someone who is already in the tenant keeps their current role. They still get view-only access to that application when the chosen role is not User.
 - People who were invited before the change keep the access they already have.

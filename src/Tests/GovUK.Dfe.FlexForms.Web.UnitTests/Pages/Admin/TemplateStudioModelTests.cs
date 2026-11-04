@@ -262,6 +262,34 @@ public class TemplateStudioModelTests
     }
 
     [Fact]
+    public async Task OnGetAsync_ShouldNotAskTheApiForTheApplicationCount_WhenTheManagerCannotListApplications()
+    {
+        GivenTemplateManager(_template.TemplateId);
+        GivenStoredVersion("1.0.3");
+
+        await _model.OnGetAsync(null, false, CancellationToken.None);
+
+        using var data = JsonDocument.Parse(_model.StudioDataJson);
+        Assert.Equal(JsonValueKind.Null, data.RootElement.GetProperty("applicationCount").ValueKind);
+        await _applications.DidNotReceiveWithAnyArgs().GetApplicationsByTemplateAsync(
+            default, default, default, default, default, default, default, default, default, default, default);
+    }
+
+    [Fact]
+    public async Task OnGetAsync_ShouldNotListRoles_WhenTheUserIsNotAnAdmin()
+    {
+        GivenTemplateManager(_template.TemplateId);
+        GivenStoredVersion("1.0.3");
+
+        await _model.OnGetAsync(null, false, CancellationToken.None);
+
+        using var data = JsonDocument.Parse(_model.StudioDataJson);
+        Assert.False(data.RootElement.GetProperty("canChooseContributorRole").GetBoolean());
+        Assert.Equal(0, data.RootElement.GetProperty("contributorRoles").GetArrayLength());
+        await _roles.DidNotReceiveWithAnyArgs().ListAsync(default);
+    }
+
+    [Fact]
     public async Task OnPostSaveAsync_ShouldCompareWithTheStoredVersion_NotTheEditedOne_WhenRedisplaying()
     {
         GivenStoredVersion("1.0.3");
