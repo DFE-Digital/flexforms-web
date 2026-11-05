@@ -855,6 +855,7 @@ public class ExternalApiExceptionFilterTests
             Substitute.For<IFileUploadService>(),
             Substitute.For<IApplicationResponseService>(),
             Substitute.For<IApplicationStateService>(),
+            Substitute.For<ITemplateManagementService>(),
             Substitute.For<INotificationsClient>(),
             Substitute.For<IFormErrorStore>(),
             config,

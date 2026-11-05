@@ -1907,11 +1907,15 @@
                 checked: root.contributorPattern !== false,
                 onChange: function (checked) {
                     root.contributorPattern = checked;
-                    if (!checked) delete root.contributorRoleId;
+                    // Someone who can't pick a role could not restore it after turning invitations back on.
+                    if (!checked && data.canChooseContributorRole !== false) delete root.contributorRoleId;
                     restructured();
                 }
             }),
-            root.contributorPattern !== false ? selectInput({
+            root.contributorPattern !== false && data.canChooseContributorRole === false
+                ? h('p', { class: 'govuk-body', id: 'tpl-contributor-role-admin-only', text: 'Only an Admin can change the role for invited contributors. Any role already chosen is kept.' })
+                : null,
+            root.contributorPattern !== false && data.canChooseContributorRole !== false ? selectInput({
                 id: 'tpl-contributor-role',
                 label: 'Role for invited contributors',
                 hint: 'User can edit the application. Any other role can only view it and its files.',

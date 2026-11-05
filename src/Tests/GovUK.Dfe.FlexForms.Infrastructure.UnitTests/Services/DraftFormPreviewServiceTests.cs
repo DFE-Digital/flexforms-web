@@ -1,8 +1,10 @@
 using System.Text.Json;
 using GovUK.Dfe.FlexForms.Application.FormEngine;
+using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using GovUK.Dfe.FlexForms.Infrastructure.Services;
 using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 using Task = System.Threading.Tasks.Task;
 
 namespace GovUK.Dfe.FlexForms.Infrastructure.UnitTests.Services;
@@ -73,7 +75,7 @@ public class DraftFormPreviewServiceTests
         var requirements = new FieldRequirementService(NullLogger<FieldRequirementService>.Instance);
         _preview = new DraftFormPreviewService(
             new PostedFormDataBinder(),
-            new FormValidationOrchestrator(NullLogger<FormValidationOrchestrator>.Instance, engine, requirements),
+            new FormValidationOrchestrator(NullLogger<FormValidationOrchestrator>.Instance, engine, requirements, Substitute.For<IComplexFieldConfigurationService>()),
             new ConditionalLogicOrchestrator(engine, NullLogger<ConditionalLogicOrchestrator>.Instance),
             requirements,
             new DerivedCollectionFlowService(NullLogger<DerivedCollectionFlowService>.Instance),

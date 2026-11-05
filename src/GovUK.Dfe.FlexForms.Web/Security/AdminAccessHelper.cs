@@ -54,6 +54,40 @@ public static class AdminAccessHelper
         || HasAnyManageClaim(user, "Template");
 
     /// <summary>
+    /// True when the user may work in a template they can see. Template managers see every template,
+    /// so for them this needs a Read or Write grant on that template or a tenant-wide Template Read/Write
+    /// grant (<c>Template:*:Manage</c> alone does not count). Other users only see templates the API
+    /// already filtered for them, which they may use; Caseworkers, for example, have no Template grants.
+    /// </summary>
+    public static bool HasTemplateAccess(ClaimsPrincipal? user, Guid templateId)
+    {
+        if (IsAdmin(user))
+            return true;
+
+        if (user is null || templateId == Guid.Empty)
+            return false;
+
+        if (!HasAnyManageClaim(user, "Template"))
+            return true;
+
+        return HasPermissionClaim(user, $"Template:{templateId}:Read")
+            || HasPermissionClaim(user, $"Template:{templateId}:Write")
+            || HasPermissionClaim(user, "Template:Any:Read")
+            || HasPermissionClaim(user, "Template:Any:Write");
+    }
+
+    /// <summary>
+    /// True when the user may open the template's applications (Choose a form, template selection).
+    /// Separate from <see cref="HasTemplateAccess"/>, which gates template management: someone who can
+    /// read every application keeps that access even if they also manage templates.
+    /// </summary>
+    public static bool CanOpenTemplate(ClaimsPrincipal? user, Guid templateId) =>
+        HasTemplateAccess(user, templateId) || CanReadAnyApplication(user);
+
+    /// <summary>Shown next to templates the user can see but has not been given access to.</summary>
+    public const string NoTemplateAccessText = "You do not have access to this template";
+
+    /// <summary>
     /// True when the user can list all applications for the active template
     /// (Admin/SuperAdmin, or Application:Any:Read — e.g. Caseworker).
     /// </summary>

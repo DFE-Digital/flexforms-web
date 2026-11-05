@@ -25,6 +25,20 @@ API templates, users, roles, tenant admin, reporting export proxy to Prism.
 
 SuperAdmin-only Tenant Settings categories. Reporting acknowledgement on template save. `retiredFields` when editing live templates (manuals + API policy).
 
+Template access for template managers (**Verified**): users with `Template:*:Manage` get the full tenant catalogue from the API, but may only work in templates they have been given. `AdminAccessHelper.HasTemplateAccess` is true for Admin/SuperAdmin; for a template manager it needs a `Template:{id}:Read`/`Write` claim or `Template:Any:Read`/`Write` (Manage alone does not count). Everyone else is not filtered: the API already returned only their templates, and Caseworkers (`Application:Any:Read`) have no Template grants at all.
+
+Two checks, on purpose: `HasTemplateAccess` gates template **management** (Admin table, Template Studio, custom statuses). `CanOpenTemplate` gates **entering** a template's applications (Choose a form, `TemplateSelectionMiddleware`) and also passes anyone with `CanReadAnyApplication`, so a Caseworker who is also a template manager keeps their application access. Templates without access are shown disabled with `AdminAccessHelper.NoTemplateAccessText`, and the server ignores them if posted, in:
+
+- Admin hub "Tenant templates" table — Open/Preview and Make live/not live are disabled; the handlers reject them too
+- `/templates` (Choose a form) — `Pages/Templates/Index.cshtml(.cs)`, using `CanOpenTemplate`
+- Template Studio "Choose a template to edit" — also skipped when opening the session template or the first template
+- Custom status labels (`CustomStatusLabelOverrides`) — a query/session template without access is treated as no selection
+- `TemplateSelectionMiddleware` — auto-select and `?templateId=` only consider templates that pass `CanOpenTemplate`
+
+This is a UI rule. The API is the authority for what each call allows.
+
+Template Studio for non-admins (**Verified**): `GET /v1/Roles` is Admin/SuperAdmin only, so `TemplateStudioModel` skips it and sends `canChooseContributorRole: false`; the JS shows a note instead of the contributor-role picker and keeps the saved `contributorRoleId`, even if invitations are turned off and on again. The application count needs `CanReadAnyApplication`, so it is skipped and sent as unknown (`null`), which Template Studio treats as "in use".
+
 ## 6. Edge cases
 
 Wrong FeatureManagement Target. EventMappings ≠ Prism contract. Duplicate tenant overlap of Shared/Api settings (API gate).

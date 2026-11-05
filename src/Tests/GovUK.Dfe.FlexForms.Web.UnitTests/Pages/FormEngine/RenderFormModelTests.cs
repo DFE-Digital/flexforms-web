@@ -179,6 +179,7 @@ public class RenderFormModelTests
             fileFieldService,
             _fixture.Create<IFileUploadService>(),
             infectedFilter,
+            NSubstitute.Substitute.For<IComplexFieldConfigurationService>(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<UploadFormFileService>.Instance));
         _fixture.Register<IDeleteFormFile>(() => new DeleteFormFileService(
             fileFieldService,
