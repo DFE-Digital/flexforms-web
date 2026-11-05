@@ -21,15 +21,18 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
         private readonly ILogger<FormValidationOrchestrator> _logger;
         private readonly IConditionalLogicEngine _conditionalLogicEngine;
         private readonly IFieldRequirementService _fieldRequirementService;
+        private readonly IComplexFieldConfigurationService _complexFieldConfigurationService;
 
         public FormValidationOrchestrator(
-            ILogger<FormValidationOrchestrator> logger, 
+            ILogger<FormValidationOrchestrator> logger,
             IConditionalLogicEngine conditionalLogicEngine,
-            IFieldRequirementService fieldRequirementService)
+            IFieldRequirementService fieldRequirementService,
+            IComplexFieldConfigurationService complexFieldConfigurationService)
         {
             _logger = logger;
             _conditionalLogicEngine = conditionalLogicEngine;
             _fieldRequirementService = fieldRequirementService;
+            _complexFieldConfigurationService = complexFieldConfigurationService;
         }
 
         public FormValidationResult ValidatePage(Page page, Dictionary<string, object> data, FormTemplate? template = null)
@@ -353,6 +356,18 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                 }
             }
 
+            var configuration = _complexFieldConfigurationService.GetConfiguration(field.ComplexField.Id);
+            if (string.Equals(configuration?.FieldType, "upload", StringComparison.OrdinalIgnoreCase))
+            {
+                // Uploads are rejected at the limit, but files saved before a limit was set still count.
+                var maxFiles = Math.Max(0, configuration!.MaxSelections);
+                if (maxFiles > 0 && CountUploadedFiles(stringValue) > maxFiles)
+                {
+                    errors.Add(new FormValidationError(fieldKey, FormEngineMessages.TooManyFiles(maxFiles)));
+                    isValid = false;
+                }
+            }
+
             // If no explicit validation rules, we're done (global policy check above is sufficient)
             if (field.Validations == null)
             {
@@ -541,6 +556,22 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
 
             // If not JSON or parsing failed, treat non-empty as having files (except for known placeholders)
             return !string.IsNullOrWhiteSpace(value);
+        }
+
+        private int CountUploadedFiles(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value) || !value.StartsWith('[') || !value.EndsWith(']'))
+                return 0;
+
+            try
+            {
+                return System.Text.Json.JsonSerializer.Deserialize<List<object>>(value)!.Count;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to count files in upload field value");
+                return 0;
+            }
         }
 
         /// <summary>

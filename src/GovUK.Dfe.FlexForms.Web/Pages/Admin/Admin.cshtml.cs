@@ -49,6 +49,8 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
 
         public bool CanManageTemplates => AdminAccessHelper.CanManageTemplates(User);
 
+        public bool HasTemplateAccess(Guid templateId) => AdminAccessHelper.HasTemplateAccess(User, templateId);
+
         public bool CanManageUsers => AdminAccessHelper.CanManageUsers(User);
 
         public bool CanManageRoles => AdminAccessHelper.CanManageRoles(User);
@@ -138,6 +140,12 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
             if (!CanManageTemplates)
                 return Forbid();
 
+            if (!HasTemplateAccess(templateId))
+            {
+                TempData["AdminError"] = AdminAccessHelper.NoTemplateAccessText;
+                return RedirectToPage();
+            }
+
             var outcome = await adminHome.SetTemplateLiveAsync(templateId, isLive);
 
             if (outcome.SuccessMessage != null)
@@ -153,6 +161,12 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
         {
             if (!CanManageTemplates)
                 return Forbid();
+
+            if (!HasTemplateAccess(templateId))
+            {
+                TempData["AdminError"] = AdminAccessHelper.NoTemplateAccessText;
+                return RedirectToPage();
+            }
 
             CaptureSessionTemplate();
             var state = CaptureWorkState();

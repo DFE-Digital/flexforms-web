@@ -36,10 +36,19 @@
                 <option value="">-- Select a template --</option>
                 @foreach (var template in Model.AvailableTemplates)
                 {
-                    <option value="@template.TemplateId"
-                            selected="@(Model.SelectedTemplateId == template.TemplateId)">
-                        @template.Name
-                    </option>
+                    if (Model.HasTemplateAccess(template.TemplateId))
+                    {
+                        <option value="@template.TemplateId"
+                                selected="@(Model.SelectedTemplateId == template.TemplateId)">
+                            @template.Name
+                        </option>
+                    }
+                    else
+                    {
+                        <option value="@template.TemplateId" disabled>
+                            @template.Name – @AdminAccessHelper.NoTemplateAccessText
+                        </option>
+                    }
                 }
             </select>
         </div>

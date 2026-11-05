@@ -63,7 +63,7 @@ public class TemplateStudioPreviewModelTests
         var derived = new DerivedCollectionFlowService(NullLogger<DerivedCollectionFlowService>.Instance);
         var preview = new DraftFormPreviewService(
             new PostedFormDataBinder(),
-            new FormValidationOrchestrator(NullLogger<FormValidationOrchestrator>.Instance, engine, requirements),
+            new FormValidationOrchestrator(NullLogger<FormValidationOrchestrator>.Instance, engine, requirements, Substitute.For<IComplexFieldConfigurationService>()),
             new ConditionalLogicOrchestrator(engine, NullLogger<ConditionalLogicOrchestrator>.Instance),
             requirements,
             derived,
