@@ -20,6 +20,8 @@ Browser connects to **API** `{api-base}/hubs/notifications`, not Web. Ticket via
 
 `IAutocompleteService` + accessible-autocomplete. External establishment APIs (including Academies-style filters `IncludeOnlyAcademies`). Debounce/cancel in-flight requests — historical bug: min-3-chars fired a request per keystroke.
 
+Enter key behaviour lives in `_AutocompleteComplexField.cshtml`: while suggestions are open, Enter is intercepted so it never submits the form. With no arrow-highlighted option it selects the first suggestion. See [`known-pitfalls.md`](known-pitfalls.md) #17.
+
 ## GOV.UK Frontend
 
 `GovUk.Frontend.AspNetCore` 4.x — rebrand always on (`Program.cs` comment).
