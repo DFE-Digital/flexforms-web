@@ -40,6 +40,13 @@ public sealed class TenantAwareTelemetryChannel : ITelemetryChannel, ITelemetryM
     {
         var hostConnectionString = configuration.ConnectionString ?? string.Empty;
         var inner = _createChannel(hostConnectionString);
+        if (!string.IsNullOrWhiteSpace(hostConnectionString))
+        {
+            // The SDK only applies the connection string's ingestion endpoint to the channel it
+            // owns (this wrapper); without this the inner channel posts to the legacy global endpoint.
+            inner.EndpointAddress = new Uri(configuration.EndpointContainer.Ingestion, "v2/track").AbsoluteUri;
+        }
+
         if (inner is ITelemetryModule module)
         {
             module.Initialize(configuration);

@@ -29,6 +29,20 @@ public class TenantAwareTelemetryChannelTests
     }
 
     [Fact]
+    public void Initialize_ShouldPointHostChannelAtConnectionStringIngestionEndpoint()
+    {
+        var host = new RecordingChannel();
+        var channel = new TenantAwareTelemetryChannel(_ => host);
+
+        channel.Initialize(new TelemetryConfiguration
+        {
+            ConnectionString = "InstrumentationKey=22222222-2222-2222-2222-222222222222;IngestionEndpoint=https://westeurope-5.in.applicationinsights.azure.com/"
+        });
+
+        Assert.Equal("https://westeurope-5.in.applicationinsights.azure.com/v2/track", host.EndpointAddress);
+    }
+
+    [Fact]
     public void Send_ShouldRouteToTenantChannel_AndStampInstrumentationKey()
     {
         var host = new RecordingChannel();
