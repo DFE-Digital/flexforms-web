@@ -32,6 +32,7 @@ public sealed class UploadFormFileService(
     IFormFileFieldService formFileFieldService,
     IFileUploadService fileUploadService,
     IInfectedUploadFilter infectedUploadFilter,
+    IComplexFieldConfigurationService complexFieldConfigurationService,
     ILogger<UploadFormFileService> logger) : IUploadFormFile
 {
     public async Task<FormEngineOutcome> ExecuteAsync(
@@ -49,6 +50,18 @@ public sealed class UploadFormFileService(
 
         if (formFileFieldService.ContainsFileName(context, request.FieldId, request.FileName))
             return FileRejected(request, context, FormEngineMessages.DuplicateFileName);
+
+        var maxFiles = UploadFieldFileLimit.Resolve(
+            state.Template, request.FieldId, complexFieldConfigurationService, state.TaskId,
+            UploadFieldFileLimit.CurrentFlowId(state));
+        if (maxFiles > 0)
+        {
+            var existingFiles = infectedUploadFilter.FilterList(
+                formFileFieldService.GetFiles(context, request.FieldId).ToList(),
+                request.ApplicationId.ToString());
+            if (existingFiles.Count >= maxFiles)
+                return FileRejected(request, context, FormEngineMessages.TooManyFiles(maxFiles));
+        }
 
         var fileParam = new FileParameter(request.Content, request.FileName, request.ContentType);
         var uploadedFile = await fileUploadService.UploadFileAsync(

@@ -10,7 +10,14 @@
 @if (Model.SelectedTemplate is null)
 {
     <h1 class="govuk-heading-l">Template Studio</h1>
-    <p class="govuk-body">There are no templates to edit yet.</p>
+    @if (Model.TenantTemplates.Count > 0)
+    {
+        <p class="govuk-body">You do not have access to any templates yet. Ask your service administrator to give you access to a template, or create a new one.</p>
+    }
+    else
+    {
+        <p class="govuk-body">There are no templates to edit yet.</p>
+    }
     <a asp-page="/Admin/CreateTemplate" class="govuk-button" data-module="govuk-button" id="tpl-create-template">Create a new template</a>
     return;
 }
@@ -111,7 +118,14 @@
             <select class="govuk-select govuk-!-width-full" asp-for="SelectedTemplateId">
                 @foreach (var template in Model.TenantTemplates)
                 {
-                    <option value="@template.TemplateId">@template.Name (@(template.IsLive ? "Live" : "Not live"))</option>
+                    if (Model.HasTemplateAccess(template.TemplateId))
+                    {
+                        <option value="@template.TemplateId">@template.Name (@(template.IsLive ? "Live" : "Not live"))</option>
+                    }
+                    else
+                    {
+                        <option value="@template.TemplateId" disabled>@template.Name (@(template.IsLive ? "Live" : "Not live")) – @AdminAccessHelper.NoTemplateAccessText</option>
+                    }
                 }
             </select>
         </div>

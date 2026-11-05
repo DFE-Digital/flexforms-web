@@ -72,14 +72,16 @@
                             @foreach (var template in Model.Templates)
                             {
                                 var inputId = $"form-{template.Template.TemplateId}";
-                                var isChecked = Model.SelectedTemplateId == template.Template.TemplateId;
+                                var isChecked = template.HasAccess && Model.SelectedTemplateId == template.Template.TemplateId;
                                 <div class="govuk-radios__item">
                                     <input class="govuk-radios__input"
                                            id="@inputId"
                                            name="SelectedTemplateId"
                                            type="radio"
                                            value="@template.Template.TemplateId"
-                                           @(isChecked ? "checked" : null) />
+                                           aria-describedby="@(template.HasAccess ? null : $"{inputId}-no-access")"
+                                           @(isChecked ? "checked" : null)
+                                           @(template.HasAccess ? null : "disabled") />
                                     <label class="govuk-label govuk-radios__label" for="@inputId">
                                         @template.Template.Name
                                         @if (Model.IsAdmin)
@@ -87,6 +89,12 @@
                                             <text> (@(template.Template.IsLive ? "Live" : "Not live"))</text>
                                         }
                                     </label>
+                                    @if (!template.HasAccess)
+                                    {
+                                        <div id="@inputId-no-access" class="govuk-hint govuk-radios__hint">
+                                            @AdminAccessHelper.NoTemplateAccessText
+                                        </div>
+                                    }
                                     @if (!string.IsNullOrWhiteSpace(template.Description))
                                     {
                                         <div class="govuk-hint govuk-radios__hint">
