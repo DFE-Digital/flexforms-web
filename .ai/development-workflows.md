@@ -12,6 +12,8 @@
 
 Playwright: NUnit project, product journeys (Transfers, Visits, TestService). Cypress optional/out of solution.
 
+Playwright sets `window.Cypress = true` with `Context.AddInitScriptAsync` (`PlaywrightTestBase`), so every tab in the test gets it, including the Template Studio preview tab. A page-level init script does not reach tabs the page opens. Without the flag, a tab runs the SignalR and unread-count fetches, which can overwrite session state (see `.ai/known-pitfalls.md` #17).
+
 When adding PageModels, add Application use-case tests — not only PageModel tests.
 
 ## Template JSON

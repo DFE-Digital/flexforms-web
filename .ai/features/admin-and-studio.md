@@ -39,6 +39,8 @@ This is a UI rule. The API is the authority for what each call allows.
 
 Template Studio for non-admins (**Verified**): `GET /v1/Roles` is Admin/SuperAdmin only, so `TemplateStudioModel` skips it and sends `canChooseContributorRole: false`; the JS shows a note instead of the contributor-role picker and keeps the saved `contributorRoleId`, even if invitations are turned off and on again. The application count needs `CanReadAnyApplication`, so it is skipped and sent as unknown (`null`), which Template Studio treats as "in use".
 
+Template Studio preview (**Verified**): the preview keeps its template and answers in session only, so they can be lost to overlapping requests (see `.ai/known-pitfalls.md` #17).
+
 ## 6. Edge cases
 
 Wrong FeatureManagement Target. EventMappings ≠ Prism contract. Duplicate tenant overlap of Shared/Api settings (API gate).
