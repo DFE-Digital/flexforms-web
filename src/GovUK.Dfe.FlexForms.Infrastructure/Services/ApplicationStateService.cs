@@ -86,7 +86,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
                 logger.LogInformation("Loading response data for application {ApplicationReference}.",
                     application.ApplicationReference);
 
-                var responseJson = application.LatestResponse.ResponseBody;
+                var responseJson = DecodeResponseBody(application.LatestResponse.ResponseBody);
 
                 // Parse the response body JSON
                 var responseData = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(responseJson);
@@ -158,6 +158,23 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
             {
                 logger.LogError(ex, "Failed to load response data for application {ApplicationReference}: {ErrorMessage}",
                     application.ApplicationReference, ex.Message);
+            }
+        }
+
+        // Responses created via the API with a Base64 InitialResponseBody are stored as-is.
+        private static string DecodeResponseBody(string responseBody)
+        {
+            var trimmed = responseBody.TrimStart();
+            if (trimmed.StartsWith('{') || trimmed.StartsWith('['))
+                return responseBody;
+
+            try
+            {
+                return System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(trimmed));
+            }
+            catch (FormatException)
+            {
+                return responseBody;
             }
         }
 

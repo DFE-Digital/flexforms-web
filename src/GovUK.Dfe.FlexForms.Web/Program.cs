@@ -199,6 +199,7 @@ builder.Logging.AddFilter<Microsoft.Extensions.Logging.ApplicationInsights.Appli
 
 // Filter out health check endpoints from Application Insights telemetry
 builder.Services.AddApplicationInsightsTelemetryProcessor<HealthCheckTelemetryFilter>();
+builder.Services.AddApplicationInsightsTelemetryProcessor<ClientAbortedRequestTelemetryProcessor>();
 // Configure test authentication options
 builder.Services.Configure<TestAuthenticationOptions>(
     configuration.GetSection(TestAuthenticationOptions.SectionName));
