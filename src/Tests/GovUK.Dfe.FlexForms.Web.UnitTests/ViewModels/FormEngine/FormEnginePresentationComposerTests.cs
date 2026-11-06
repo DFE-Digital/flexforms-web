@@ -328,6 +328,101 @@ public class FormEnginePresentationComposerTests
     }
 
     [Fact]
+    public void BuildPreview_collection_date_uses_the_task_page_when_the_flow_has_no_pages()
+    {
+        var dateField = Field("visitDate", "date", "Visit date");
+        var flow = new MultiCollectionFlowConfiguration
+        {
+            FlowId = "visits",
+            FieldId = "visitList",
+            Title = "Visits",
+            SummaryColumns = [new FlowSummaryColumn { Field = "visitDate", Label = "Visit date" }]
+        };
+        var task = Task(
+            "t1",
+            "Dates",
+            mode: FormStepPolicy.MultiCollectionFlowMode,
+            pages: [Page("p1", [dateField])],
+            flows: [flow]);
+        var formData = new Dictionary<string, object>
+        {
+            ["visitList"] = JsonSerializer.Serialize(new[]
+            {
+                new Dictionary<string, object> { ["id"] = "i1", ["visitDate"] = "not-a-date" }
+            })
+        };
+
+        _formatting.GetFormattedFieldValues("visitDate", Arg.Any<Dictionary<string, object>>())
+            .Returns(["not-a-date"]);
+
+        var rows = _composer.BuildPreview(Context(formData, Template(task)))
+            .Groups.Single().Tasks.Single().Rows;
+
+        Assert.Equal("not-a-date", rows.Single(r => r.Key == "Visit date").Value.Html);
+    }
+
+    [Fact]
+    public void BuildPreview_collection_formats_each_date_in_a_multi_value_column()
+    {
+        var dateField = Field("visitDate", "date", "Visit date");
+        var flow = new MultiCollectionFlowConfiguration
+        {
+            FlowId = "visits",
+            FieldId = "visitList",
+            Title = "Visits",
+            SummaryColumns = [new FlowSummaryColumn { Field = "visitDate", Label = "Visit date" }],
+            Pages = [Page("p1", [dateField])]
+        };
+        var task = Task("t1", "Dates", mode: FormStepPolicy.MultiCollectionFlowMode, flows: [flow]);
+        var formData = new Dictionary<string, object>
+        {
+            ["visitList"] = JsonSerializer.Serialize(new[]
+            {
+                new Dictionary<string, object> { ["id"] = "i1", ["visitDate"] = "2026-12-05" }
+            })
+        };
+
+        _formatting.GetFormattedFieldValues("visitDate", Arg.Any<Dictionary<string, object>>())
+            .Returns(["2026-12-05", "later"]);
+
+        var items = _composer.BuildPreview(Context(formData, Template(task)))
+            .Groups.Single().Tasks.Single().Rows
+            .Single(r => r.Key == "Visit date").Value.HtmlItems;
+
+        Assert.Equal(["05-12-2026", "later"], items);
+    }
+
+    [Fact]
+    public void BuildCollectionFlows_formats_each_date_in_a_multi_value_column()
+    {
+        var dateField = Field("visitDate", "date", "Visit date");
+        var flow = new MultiCollectionFlowConfiguration
+        {
+            FlowId = "visits",
+            FieldId = "visitList",
+            Title = "Visits",
+            SummaryColumns = [new FlowSummaryColumn { Field = "visitDate", Label = "Visit date" }],
+            Pages = [Page("p1", [dateField])]
+        };
+        var task = Task("t1", "Dates", mode: FormStepPolicy.MultiCollectionFlowMode, flows: [flow]);
+        var formData = new Dictionary<string, object>
+        {
+            ["visitList"] = JsonSerializer.Serialize(new[]
+            {
+                new Dictionary<string, object> { ["id"] = "i1", ["visitDate"] = "2026-12-05" }
+            })
+        };
+
+        _formatting.GetFormattedFieldValues("visitDate", Arg.Any<Dictionary<string, object>>())
+            .Returns(["2026-12-05", "later"]);
+
+        var items = _composer.BuildCollectionFlows(Context(formData, Template(task), taskId: "t1"), task)
+            .Single().Items.Single().Rows.Single().Value.HtmlItems;
+
+        Assert.Equal(["05-12-2026", "later"], items);
+    }
+
+    [Fact]
     public void BuildPreview_collection_flow_preview_shows_not_answered_when_empty()
     {
         var flow = new MultiCollectionFlowConfiguration
@@ -432,6 +527,22 @@ public class FormEnginePresentationComposerTests
             .Groups.Single().Tasks.Single().Rows;
 
         Assert.Equal("05-12-2026", rows[0].Value.Text);
+    }
+
+    [Fact]
+    public void BuildPreview_leaves_an_unparseable_date_as_entered()
+    {
+        var date = Field("engagementDate", "date", "Engagement date");
+        var task = Task("t1", "Visit", pages: [Page("p1", [date])]);
+        var formData = new Dictionary<string, object> { ["engagementDate"] = "sometime" };
+
+        _formatting.GetFieldValue("engagementDate", formData).Returns("sometime");
+        _formatting.HasFieldValue("engagementDate", formData).Returns(true);
+
+        var rows = _composer.BuildPreview(Context(formData, Template(task)))
+            .Groups.Single().Tasks.Single().Rows;
+
+        Assert.Equal("sometime", rows[0].Value.Html);
     }
 
     [Fact]
