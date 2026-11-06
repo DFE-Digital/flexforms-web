@@ -179,6 +179,10 @@ public sealed class ContributorManagementAdminService(
                 ? templateId
                 : null;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Could not resolve template for {ApplicationReference}", applicationReference);

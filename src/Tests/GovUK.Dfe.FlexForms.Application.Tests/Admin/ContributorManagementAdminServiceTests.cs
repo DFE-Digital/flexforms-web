@@ -219,6 +219,35 @@ public class ContributorManagementAdminServiceTests
     }
 
     [Fact]
+    public async Task LookupByEmailAsync_ShouldRethrow_WhenClientAbortsDuringTemplateEnrichment()
+    {
+        using var cts = new CancellationTokenSource();
+        var state = new ContributorManagementWorkState { Email = "owner@example.test" };
+        _users.GetCreatedApplicationsByEmailAsync("owner@example.test", Arg.Any<CancellationToken>())
+            .Returns(new UserCreatedApplicationsLookupDto
+            {
+                UserId = Guid.NewGuid(),
+                Email = "owner@example.test",
+                Applications =
+                [
+                    new CreatedApplicationWithInviteesDto { ApplicationId = Guid.NewGuid(), ApplicationReference = "REF-1" },
+                    new CreatedApplicationWithInviteesDto { ApplicationId = Guid.NewGuid(), ApplicationReference = "REF-2" }
+                ]
+            });
+        _applications.GetApplicationByReferenceAsync("REF-1", Arg.Any<CancellationToken>())
+            .Returns<ApplicationDto>(_ =>
+            {
+                cts.Cancel();
+                throw new TaskCanceledException();
+            });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => _service.LookupByEmailAsync(state, cts.Token));
+
+        await _applications.DidNotReceive().GetApplicationByReferenceAsync("REF-2", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task LookupByEmailAsync_ShouldSetError_WhenCancelledWithoutClientAbort()
     {
         var state = new ContributorManagementWorkState { Email = "owner@example.test" };
