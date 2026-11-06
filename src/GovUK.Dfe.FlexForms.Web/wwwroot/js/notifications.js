@@ -66,6 +66,62 @@ function fileValidationStatusLabel(status) {
     return '';
 }
 
+// File-validation messages are Markdown from the tenant function. Web renders them with MarkdownSafe
+// (Markdig without raw HTML + HtmlSanitizer allow-list); the browser only inserts that output.
+async function renderValidationMessage(markdown) {
+    try {
+        const res = await fetch('/file-validation/message/render', {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+                'RequestVerificationToken': antiForgeryToken() ?? ''
+            },
+            body: JSON.stringify({ message: markdown })
+        });
+        return res.ok ? await res.json() : null;
+    } catch {
+        return null;
+    }
+}
+
+// Shows the message as plain text straight away, then swaps in the rendered HTML. Inline results
+// replace the text in place; block results (lists, several paragraphs) are appended to blockParent.
+function appendValidationMessage(inlineParent, blockParent, detail, { prefix = '', inlineClass = '', blockClass = '' } = {}) {
+    const fallback = document.createElement('span');
+    if (inlineClass) fallback.className = inlineClass;
+    fallback.textContent = `${prefix}${detail}`;
+    inlineParent.appendChild(fallback);
+
+    void renderValidationMessage(detail).then(rendered => {
+        if (!rendered?.html || !fallback.isConnected) return;
+
+        const content = document.createElement('div');
+        content.innerHTML = rendered.html;
+
+        if (rendered.isInline) {
+            const node = document.createElement('span');
+            if (inlineClass) node.className = inlineClass;
+            node.append(prefix, ...content.childNodes);
+            fallback.replaceWith(node);
+            return;
+        }
+
+        if (blockClass) content.className = blockClass;
+        fallback.remove();
+        blockParent.appendChild(content);
+    });
+}
+
+function splitFileValidationDetail(notification) {
+    if (String(notification?.category ?? '').toLowerCase() !== 'file-validation') return null;
+    const meta = notification.metadata || {};
+    const detail = String(meta.message || meta.Message || '').trim();
+    const message = String(notification.message ?? '');
+    if (!detail || !message.endsWith(detail)) return null;
+    return { lead: message.slice(0, message.length - detail.length).trimEnd(), detail };
+}
+
 function isApplicationPreviewPage() {
     return Boolean(document.querySelector('[data-application-preview]'));
 }
@@ -88,10 +144,11 @@ function applyFileValidationStatus(notification, options) {
             labelSpan.textContent = label;
             cell.appendChild(labelSpan);
             if (detail) {
-                const hint = document.createElement('span');
-                hint.className = 'govuk-hint';
-                hint.textContent = ` — ${detail}`;
-                cell.appendChild(hint);
+                appendValidationMessage(cell, cell, detail, {
+                    prefix: ' — ',
+                    inlineClass: 'govuk-hint',
+                    blockClass: 'govuk-hint govuk-!-margin-top-1 govuk-!-margin-bottom-0'
+                });
             }
         }
     }
@@ -125,21 +182,29 @@ function renderSingleNotification(notification, options) {
         return node;
     };
     const message = String(notification.message ?? '');
+    const validationDetail = splitFileValidationDetail(notification);
+    const appendDetail = (heading, blockParent) => {
+        if (!validationDetail) return;
+        appendValidationMessage(heading, blockParent, validationDetail.detail, { prefix: ' ' });
+    };
 
     if (map.banner === 'error-summary') {
         const alert = el('div');
         alert.setAttribute('role', 'alert');
         const body = el('div', 'govuk-error-summary__body');
         const heading = el('p', 'govuk-notification-banner__heading');
-        heading.append(el('span', 'govuk-visually-hidden', 'Error: '), message);
+        heading.append(el('span', 'govuk-visually-hidden', 'Error: '), validationDetail?.lead ?? message);
         body.appendChild(heading);
+        appendDetail(heading, body);
         alert.append(el('h2', 'govuk-error-summary__title', map.title), body);
         wrapper.replaceChildren(alert);
     } else {
         const header = el('div', 'govuk-notification-banner__header');
         header.appendChild(el('h2', 'govuk-notification-banner__title', map.title));
         const content = el('div', 'govuk-notification-banner__content');
-        content.appendChild(el('p', 'govuk-notification-banner__heading', message));
+        const heading = el('p', 'govuk-notification-banner__heading', validationDetail?.lead ?? message);
+        content.appendChild(heading);
+        appendDetail(heading, content);
         wrapper.replaceChildren(header, content);
     }
 

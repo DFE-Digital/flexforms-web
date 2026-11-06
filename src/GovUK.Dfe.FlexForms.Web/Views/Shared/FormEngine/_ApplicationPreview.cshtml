@@ -103,7 +103,15 @@
                                     <span>@file.OriginalFileName</span>
                                     @if (!string.IsNullOrWhiteSpace(file.ValidationMessage))
                                     {
-                                        <span> — @file.ValidationMessage</span>
+                                        var (messageHtml, messageIsInline) = GovUK.Dfe.FlexForms.Web.Utilities.MarkdownSafe.RenderIntegrationMessage(file.ValidationMessage);
+                                        if (messageIsInline)
+                                        {
+                                            <span> — @Html.Raw(messageHtml)</span>
+                                        }
+                                        else
+                                        {
+                                            <div class="govuk-!-margin-top-1">@Html.Raw(messageHtml)</div>
+                                        }
                                     }
                                     else if (file.ValidationStatus == GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums.FileValidationStatus.Pending)
                                     {

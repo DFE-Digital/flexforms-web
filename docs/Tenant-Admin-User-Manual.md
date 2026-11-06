@@ -1988,9 +1988,11 @@ Under **Event mappings**, bind **File uploaded** to the event your function alre
 
 | Surface | Behaviour |
 |---------|-----------|
-| Upload Status column | Validation pending / Validated / Validation failed |
-| Preview submit | Disabled when any blocking file remains; names are listed |
+| Upload Status column | Validation pending / Validated / Validation failed, followed by the function's `message` |
+| Preview submit | Disabled when any blocking file remains; names and messages are listed |
 | Banner and Notifications | Live update when the function posts a result |
+
+The function's `message` can use **Markdown**: paragraphs, line breaks, `**bold**`, `*italics*`, `` `inline code` ``, bullet and numbered lists, and `https` links. It is rendered on the upload page, the preview submit check and the live banner. Raw HTML and headings are not shown, and the **Notifications** list page shows the message as plain text. Keep it under 1000 characters; longer messages are cut off.
 
 Technical contract: [flexforms-api README — File validation](https://github.com/DFE-Digital/flexforms-api#file-validation-callback-tenant-integrations).
 
