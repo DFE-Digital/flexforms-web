@@ -457,6 +457,9 @@ public sealed class FormEnginePresentationComposer(
         if (field.Type == "checkboxes")
             return BuildCheckboxSummaryValue(field, context.FormData);
 
+        if (field.Type == "date" && DisplayHelpers.FormatStoredDate(fieldValue) is { } storedDate)
+            return SummaryValueViewModel.FromText(storedDate);
+
         return SummaryValueViewModel.FromHtml(ToHtmlBreaks(fieldValue));
     }
 
