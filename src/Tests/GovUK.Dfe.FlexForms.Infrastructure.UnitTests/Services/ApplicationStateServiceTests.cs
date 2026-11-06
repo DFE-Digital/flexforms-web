@@ -434,6 +434,57 @@ public class ApplicationStateServiceTests
         _applicationResponseService.Received(1).SetCurrentAccumulatedApplicationId(applicationId);
     }
 
+    [Theory]
+    [InlineData("""{"field-1": {"value": "answer"}}""")]
+    [InlineData("eyJmaWVsZC0xIjogeyJ2YWx1ZSI6ICJhbnN3ZXIifX0=")]
+    public async Task LoadResponseDataIntoSessionAsync_AcceptsRawOrBase64ResponseBody(string responseBody)
+    {
+        var applicationId = Guid.NewGuid();
+        var application = new ApplicationDto
+        {
+            ApplicationId = applicationId,
+            ApplicationReference = "APP-101",
+            TemplateVersionId = Guid.NewGuid(),
+            LatestResponse = new ApplicationResponseDetailsDto
+            {
+                ResponseId = Guid.NewGuid(),
+                ResponseBody = responseBody,
+                CreatedOn = DateTime.UtcNow,
+                CreatedBy = Guid.NewGuid()
+            }
+        };
+        var service = CreateService(CreateSessionStore());
+
+        await service.LoadResponseDataIntoSessionAsync(application);
+
+        _applicationResponseService.Received(1).StoreFormDataInSession(
+            Arg.Is<Dictionary<string, object>>(d => d.ContainsKey("field-1") && (string?)d["field-1"] == "answer"));
+        _applicationResponseService.Received(1).SetCurrentAccumulatedApplicationId(applicationId);
+    }
+
+    [Fact]
+    public async Task LoadResponseDataIntoSessionAsync_DoesNotThrow_WhenBodyIsNeitherJsonNorBase64()
+    {
+        var application = new ApplicationDto
+        {
+            ApplicationId = Guid.NewGuid(),
+            ApplicationReference = "APP-102",
+            TemplateVersionId = Guid.NewGuid(),
+            LatestResponse = new ApplicationResponseDetailsDto
+            {
+                ResponseId = Guid.NewGuid(),
+                ResponseBody = "not-json-or-base64!",
+                CreatedOn = DateTime.UtcNow,
+                CreatedBy = Guid.NewGuid()
+            }
+        };
+        var service = CreateService(CreateSessionStore());
+
+        await service.LoadResponseDataIntoSessionAsync(application);
+
+        _applicationResponseService.DidNotReceive().StoreFormDataInSession(Arg.Any<Dictionary<string, object>>());
+    }
+
     [Fact]
     public async Task LoadResponseDataIntoSessionAsync_ClearsData_WhenNoLatestResponse()
     {
