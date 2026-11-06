@@ -217,7 +217,15 @@
         .catch(function () { return null; });
 
     function enhance(scope) {
-        if (!govuk || !scope) return;
+        if (!scope) return;
+        // This script runs before the page template's GOV.UK Frontend <script type="module"> tags exist, so
+        // govukFrontendUrl() falls back to a separate, unversioned copy. That copy can still be loading after the
+        // page's initAll() has run, so a panel drawn in between would never be started. Start it once loaded.
+        // Starting a component twice is safe: GOV.UK Frontend skips it.
+        if (!govuk) {
+            void govukReady.then(function (module) { if (module) enhance(scope); });
+            return;
+        }
         var options = { scope: scope, onError: function () { } };
         govuk.createAll(govuk.Radios, undefined, options);
         govuk.createAll(govuk.Checkboxes, undefined, options);

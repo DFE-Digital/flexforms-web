@@ -108,7 +108,10 @@ public abstract class PlaywrightTestBase : PageTest
         if (!EnableSignalR)
         {
             // The application's Cypress flag skips SignalR to avoid WebSocket proxy issues.
-            await Page.AddInitScriptAsync("window.Cypress = true");
+            // Set on the context, not the page, so tabs the test opens (the Template Studio preview) get it too.
+            // Without it those tabs fetch /internal/hub-ticket and /notifications/unread on every load; each of
+            // those requests rewrites the shared session and can overwrite the preview's answers.
+            await Context.AddInitScriptAsync("window.Cypress = true");
         }
 
         await AuthenticationInterceptor.RegisterAuthenticationAsync(Context, ServiceConfig);
