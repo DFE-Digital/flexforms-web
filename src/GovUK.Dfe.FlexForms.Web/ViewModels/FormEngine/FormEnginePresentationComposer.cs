@@ -905,10 +905,7 @@ public sealed class FormEnginePresentationComposer(
         if (field?.Type != "date")
             return FromStoredList(values);
 
-        var dates = values.Select(value => DisplayHelpers.FormatStoredDate(value) ?? value).ToList();
-        return dates.Count == 1
-            ? SummaryValueViewModel.FromText(dates[0])
-            : FromStoredList(dates);
+        return FromStoredList(values.Select(value => DisplayHelpers.FormatStoredDate(value) ?? value).ToList());
     }
 
     private static SummaryValueViewModel FromStored(string? value) =>
