@@ -9,8 +9,11 @@ const antiForgeryToken = () => {
 };
 const PAGE_LOAD_AT_MS = Date.now();
 const HUB_TICKET_COOLDOWN_MS = 30_000;
+// hubauth cookie lasts 10 minutes; renew with headroom.
+const HUB_COOKIE_RENEW_MS = 8 * 60 * 1000;
 let hubTicketInFlight = null;
 let hubTicketCooldownUntil = 0;
+let hubCookieRenewedAt = 0;
 
 function mapTypeToCss(type) {
     const normalize = (val) => {
@@ -224,7 +227,14 @@ async function ensureHubCookie() {
                 return false;
             }
 
-            await fetch(url, { credentials: "include" });
+            // Tickets are single use and expire after 60s, so a throttled background tab can redeem too late.
+            const redeemed = await fetch(url, { credentials: "include" });
+            if (!redeemed.ok) {
+                hubTicketCooldownUntil = Date.now() + HUB_TICKET_COOLDOWN_MS;
+                return false;
+            }
+
+            hubCookieRenewedAt = Date.now();
             return true;
         } catch {
             hubTicketCooldownUntil = Date.now() + HUB_TICKET_COOLDOWN_MS;
@@ -264,10 +274,21 @@ async function startHub() {
         connection.on("notification.dismissed", ({ id }) => window.removeFromUi(id));
         connection.on("notification.cleared", () => window.clearUi());
 
+        // Reconnect re-negotiates with the API, which needs a live hubauth cookie.
+        connection.onreconnecting(() => { void ensureHubCookie(); });
         connection.onreconnected(async () => { await ensureHubCookie(); });
 
-        // Renew hub cookie proactively (10min cookie >>> renew every ~8 min)
-        setInterval(() => { void ensureHubCookie(); }, 8 * 60 * 1000);
+        // Hidden tabs have their timers throttled, so renew when the tab is visible again instead.
+        setInterval(() => {
+            if (!document.hidden) {
+                void ensureHubCookie();
+            }
+        }, HUB_COOKIE_RENEW_MS);
+        document.addEventListener("visibilitychange", () => {
+            if (!document.hidden && Date.now() - hubCookieRenewedAt >= HUB_COOKIE_RENEW_MS) {
+                void ensureHubCookie();
+            }
+        });
 
         await connection.start();
         // Render only notifications that were created very recently (to catch events created during navigation)

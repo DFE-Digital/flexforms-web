@@ -12,6 +12,10 @@ Startup: app-only Entra token → host-config.
 
 Browser connects to **API** `{api-base}/hubs/notifications`, not Web. Ticket via `FrontHubTicketController` → `IHubAuthClient`. Cypress sets `window.Cypress` and skips the hub (WebSocket proxy issues).
 
+Cookie lifecycle in `wwwroot/js/notifications.js` (**Verified**): the API ticket is single use for 60s and the `hubauth` cookie lasts 10 minutes. `ensureHubCookie` treats a failed redeem as failure (30s cooldown). Renewal runs every 8 minutes only while the tab is visible, on `visibilitychange` when the cookie is stale, and on `onreconnecting` so the retry negotiate has a live cookie. `FrontHubTicketController` returns the API's 401/403 as-is (information log, no exception) when the user's API session has expired.
+
+`/notifications/unread` 403 means the user's API claims have no `Notifications:{email}:Read` for this tenant. It is an API grant problem, not Web (see flexforms-api `.ai/features/notifications-signalr.md`).
+
 ## Scan results
 
 `Infrastructure/Consumers/ScanResultConsumer.cs` listens to `file-scanner-results`. Handles infected UX (blacklist, strip from session JSON, notify). API consumer deletes storage rows. **Keep both.** Local instance-id filter applies.

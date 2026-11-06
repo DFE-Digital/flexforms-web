@@ -132,6 +132,11 @@ public sealed class ContributorManagementAdminService(
             state.ErrorMessage = ContributorManagementMessages.UserNotFound;
             state.CreatedApplications = [];
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            logger.LogWarning("Application lookup for {Email} cancelled because the client aborted the request", state.Email);
+            throw;
+        }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to look up applications created by {Email}", state.Email);
