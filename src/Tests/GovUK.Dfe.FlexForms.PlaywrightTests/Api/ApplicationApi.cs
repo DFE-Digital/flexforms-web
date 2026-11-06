@@ -1,12 +1,15 @@
+using GovUK.Dfe.FlexForms.PlaywrightTests.Infrastructure;
 using Microsoft.Playwright;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Api;
 
 public static class ApplicationApi
 {
+    // Serialised: concurrent creates collide on the API's generated reference (see ApplicationCreationGate).
     public static Task<CreateApplicationResponse> CreateApplicationAsync(IAPIRequestContext request,
         CreateApplicationRequest body) =>
-        ApiBase.ApiRequestAsync<CreateApplicationResponse>(request, "/v1/applications", method: "POST", data: body);
+        ApplicationCreationGate.RunAsync(() =>
+            ApiBase.ApiRequestAsync<CreateApplicationResponse>(request, "/v1/applications", method: "POST", data: body));
 
     public static async Task<CreateApplicationResponse> CreateApplicationInStatusAsync(
         IAPIRequestContext request,
