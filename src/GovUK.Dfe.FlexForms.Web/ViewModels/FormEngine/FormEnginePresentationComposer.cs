@@ -256,6 +256,7 @@ public sealed class FormEnginePresentationComposer(
     {
         var formattedValues = FormatWithItemValue(context.FormData, fieldId, value);
         var isUploadField = LooksLikeUploadJson(value);
+        var field = FindFlowField(task, fieldId);
 
         if (formattedValues.Count == 0)
             return SummaryValueViewModel.NotAnswered;
@@ -263,7 +264,7 @@ public sealed class FormEnginePresentationComposer(
         if (formattedValues.Count == 1)
         {
             if (!isUploadField)
-                return FromStored(formattedValues[0]);
+                return AsStoredOrDate(field, formattedValues[0]);
 
             return TryBuildUploadValue(
                 value,
@@ -277,7 +278,7 @@ public sealed class FormEnginePresentationComposer(
         }
 
         if (!isUploadField)
-            return FromStoredList(formattedValues);
+            return AsStoredListOrDate(field, formattedValues);
 
         return TryBuildUploadValue(
             value,
@@ -683,7 +684,7 @@ public sealed class FormEnginePresentationComposer(
                 return SummaryValueViewModel.FromAutocompleteHtml(AutocompleteSummaryFormatter.Render(raw, summaryDisplay));
             }
 
-            return FromStored(formattedValues[0]);
+            return AsStoredOrDate(fieldConfig, formattedValues[0]);
         }
 
         if (isUploadField)
@@ -706,7 +707,7 @@ public sealed class FormEnginePresentationComposer(
                 return SummaryValueViewModel.FromHtmlList(items);
         }
 
-        return FromStoredList(formattedValues);
+        return AsStoredListOrDate(fieldConfig, formattedValues);
     }
 
     private static bool TryRenderAutocompleteItems(
@@ -883,6 +884,31 @@ public sealed class FormEnginePresentationComposer(
             files = [];
             return false;
         }
+    }
+
+    private static Field? FindFlowField(TaskModel task, string fieldId) =>
+        (task.Summary?.Flows ?? [])
+            .SelectMany(flow => flow.Pages ?? [])
+            .SelectMany(page => page.Fields)
+            .FirstOrDefault(field => field.FieldId == fieldId)
+        ?? (task.Pages ?? [])
+            .SelectMany(page => page.Fields)
+            .FirstOrDefault(field => field.FieldId == fieldId);
+
+    private static SummaryValueViewModel AsStoredOrDate(Field? field, string value) =>
+        field?.Type == "date" && DisplayHelpers.FormatStoredDate(value) is { } dateText
+            ? SummaryValueViewModel.FromText(dateText)
+            : FromStored(value);
+
+    private static SummaryValueViewModel AsStoredListOrDate(Field? field, IReadOnlyList<string> values)
+    {
+        if (field?.Type != "date")
+            return FromStoredList(values);
+
+        var dates = values.Select(value => DisplayHelpers.FormatStoredDate(value) ?? value).ToList();
+        return dates.Count == 1
+            ? SummaryValueViewModel.FromText(dates[0])
+            : FromStoredList(dates);
     }
 
     private static SummaryValueViewModel FromStored(string? value) =>
