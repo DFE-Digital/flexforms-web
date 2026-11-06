@@ -202,4 +202,32 @@ public class ContributorManagementAdminServiceTests
         Assert.True(state.HasError);
         Assert.Equal(ContributorManagementMessages.EmailLookupFailed + " (HTTP 500)", state.ErrorMessage);
     }
+
+    [Fact]
+    public async Task LookupByEmailAsync_ShouldRethrow_WhenClientAbortsTheRequest()
+    {
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+        var state = new ContributorManagementWorkState { Email = "owner@example.test" };
+        _users.GetCreatedApplicationsByEmailAsync("owner@example.test", Arg.Any<CancellationToken>())
+            .Throws(new TaskCanceledException());
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => _service.LookupByEmailAsync(state, cts.Token));
+
+        Assert.False(state.HasError);
+    }
+
+    [Fact]
+    public async Task LookupByEmailAsync_ShouldSetError_WhenCancelledWithoutClientAbort()
+    {
+        var state = new ContributorManagementWorkState { Email = "owner@example.test" };
+        _users.GetCreatedApplicationsByEmailAsync("owner@example.test", Arg.Any<CancellationToken>())
+            .Throws(new TaskCanceledException("timeout"));
+
+        await _service.LookupByEmailAsync(state, CancellationToken.None);
+
+        Assert.True(state.HasError);
+        Assert.Empty(state.CreatedApplications);
+    }
 }

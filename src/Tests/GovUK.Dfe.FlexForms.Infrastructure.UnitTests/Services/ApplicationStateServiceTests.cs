@@ -463,6 +463,29 @@ public class ApplicationStateServiceTests
     }
 
     [Fact]
+    public async Task LoadResponseDataIntoSessionAsync_DoesNotThrow_WhenBodyIsNeitherJsonNorBase64()
+    {
+        var application = new ApplicationDto
+        {
+            ApplicationId = Guid.NewGuid(),
+            ApplicationReference = "APP-102",
+            TemplateVersionId = Guid.NewGuid(),
+            LatestResponse = new ApplicationResponseDetailsDto
+            {
+                ResponseId = Guid.NewGuid(),
+                ResponseBody = "not-json-or-base64!",
+                CreatedOn = DateTime.UtcNow,
+                CreatedBy = Guid.NewGuid()
+            }
+        };
+        var service = CreateService(CreateSessionStore());
+
+        await service.LoadResponseDataIntoSessionAsync(application);
+
+        _applicationResponseService.DidNotReceive().StoreFormDataInSession(Arg.Any<Dictionary<string, object>>());
+    }
+
+    [Fact]
     public async Task LoadResponseDataIntoSessionAsync_ClearsData_WhenNoLatestResponse()
     {
         var applicationId = Guid.NewGuid();
