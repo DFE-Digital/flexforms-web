@@ -31,6 +31,10 @@ namespace GovUK.Dfe.FlexForms.Web.Utilities
             allowHttp: true,
             allowMailto: true,
             allowHeadings: true);
+        // HtmlSanitizer drops disallowed elements with their text, so `Column` would vanish without code.
+        private static readonly HtmlSanitizer SanitizerIntegrationMessage = CreateSanitizer(
+            allowHttp: false,
+            allowCode: true);
 
         private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(250);
 
@@ -92,7 +96,8 @@ namespace GovUK.Dfe.FlexForms.Web.Utilities
         private static HtmlSanitizer CreateSanitizer(
             bool allowHttp,
             bool allowMailto = false,
-            bool allowHeadings = false)
+            bool allowHeadings = false,
+            bool allowCode = false)
         {
             var s = new HtmlSanitizer();
 
@@ -106,6 +111,8 @@ namespace GovUK.Dfe.FlexForms.Web.Utilities
             s.AllowedTags.Add("ol");
             s.AllowedTags.Add("li");
             s.AllowedTags.Add("a");
+            if (allowCode)
+                s.AllowedTags.Add("code");
             if (allowHeadings)
             {
                 s.AllowedTags.Add("h1");
@@ -221,6 +228,34 @@ namespace GovUK.Dfe.FlexForms.Web.Utilities
             safe = EmptyParagraph.Replace(safe, string.Empty);
 
             return ApplyGovUkContentClasses(safe);
+        }
+
+        /// <summary>
+        /// Render Markdown sent by an external integration (e.g. a tenant function's file-validation
+        /// message). Paragraphs, line breaks, bold, italics, inline code, lists and https links only — no
+        /// headings, no raw HTML. A single paragraph is unwrapped (<c>isInline</c>) so it can follow a status label.
+        /// </summary>
+        public static (string html, bool isInline) RenderIntegrationMessage(string? markdown, int maxChars = 2000)
+        {
+            if (string.IsNullOrWhiteSpace(markdown))
+                return (string.Empty, true);
+
+            if (markdown.Length > maxChars)
+                markdown = markdown.Substring(0, maxChars);
+
+            var rawHtml = Markdig.Markdown.ToHtml(NormaliseWhitespace(markdown), Pipeline);
+            var safe = SanitizerIntegrationMessage.Sanitize(rawHtml);
+            safe = AnchorWithoutHref.Replace(safe, "$1");
+            safe = EmptyParagraph.Replace(safe, string.Empty);
+            if (string.IsNullOrWhiteSpace(safe))
+                return (string.Empty, true);
+
+            var isInline = ParagraphTag.Matches(safe).Count == 1 && !HasListBlock.IsMatch(safe);
+            if (!isInline)
+                return (ApplyGovUkContentClasses(safe), false);
+
+            var single = SingleParagraph.Match(safe);
+            return (ApplyGovUkContentClasses(single.Success ? single.Groups[1].Value : safe), true);
         }
 
         private static string ApplyGovUkContentClasses(string html)

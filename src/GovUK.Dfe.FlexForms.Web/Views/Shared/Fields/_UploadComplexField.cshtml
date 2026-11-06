@@ -267,7 +267,15 @@
                                     <span>@validationLabel</span>
                                     @if (!string.IsNullOrWhiteSpace(file.ValidationMessage))
                                     {
-                                        <span class="govuk-hint"> — @file.ValidationMessage</span>
+                                        var (messageHtml, messageIsInline) = MarkdownSafe.RenderIntegrationMessage(file.ValidationMessage);
+                                        if (messageIsInline)
+                                        {
+                                            <span class="govuk-hint"> — @Html.Raw(messageHtml)</span>
+                                        }
+                                        else
+                                        {
+                                            <div class="govuk-hint govuk-!-margin-top-1 govuk-!-margin-bottom-0">@Html.Raw(messageHtml)</div>
+                                        }
                                     }
                                 }
                                 else

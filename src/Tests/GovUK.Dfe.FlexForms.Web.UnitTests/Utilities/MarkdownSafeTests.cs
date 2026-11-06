@@ -23,6 +23,60 @@ public class MarkdownSafeTests
     }
 
     [Fact]
+    public void RenderIntegrationMessage_ShouldUnwrapSingleParagraph_ForInlineUse()
+    {
+        var (html, isInline) = MarkdownSafe.RenderIntegrationMessage("Sheet **Budget** is missing column Amount");
+
+        Assert.True(isInline);
+        Assert.Equal("Sheet <strong>Budget</strong> is missing column Amount", html);
+    }
+
+    [Fact]
+    public void RenderIntegrationMessage_ShouldKeepBlocks_ForListsAndParagraphs()
+    {
+        var (html, isInline) = MarkdownSafe.RenderIntegrationMessage(
+            "Sheet **Budget** has problems:\n\n- Column Amount is missing\n- Row 12: date is not valid\n\nSee [the guide](https://example.gov.uk/guide).");
+
+        Assert.False(isInline);
+        Assert.Contains("<ul class=\"govuk-list govuk-list--bullet\">", html);
+        Assert.Contains("<li>Column Amount is missing</li>", html);
+        Assert.Contains("<p class=\"govuk-body\">", html);
+        Assert.Contains("class=\"govuk-link\"", html);
+        Assert.Contains("href=\"https://example.gov.uk/guide\"", html);
+    }
+
+    [Fact]
+    public void RenderIntegrationMessage_ShouldKeepInlineCode()
+    {
+        var (html, _) = MarkdownSafe.RenderIntegrationMessage("Column `Amount` is missing");
+
+        Assert.Equal("Column <code>Amount</code> is missing", html);
+    }
+
+    [Theory]
+    [InlineData("<script>alert(1)</script>Bad", "<script")]
+    [InlineData("<img src=x onerror=alert(1)>", "<img")]
+    [InlineData("<a href=\"https://x.test\" onclick=\"alert(1)\">x</a>", "<a ")]
+    [InlineData("[click](javascript:alert(1))", "javascript:")]
+    [InlineData("[plain](http://example.com)", "http://example.com")]
+    [InlineData("# Big heading", "<h1")]
+    public void RenderIntegrationMessage_ShouldNotRenderUnsafeOrUnsupportedMarkup(string markdown, string forbidden)
+    {
+        var (html, _) = MarkdownSafe.RenderIntegrationMessage(markdown);
+
+        Assert.DoesNotContain(forbidden, html, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void RenderIntegrationMessage_ShouldReturnEmpty_WhenBlank()
+    {
+        var (html, isInline) = MarkdownSafe.RenderIntegrationMessage("   ");
+
+        Assert.Equal(string.Empty, html);
+        Assert.True(isInline);
+    }
+
+    [Fact]
     public void ToSafeHtml_ShouldRenderBoldLabelTightlyFollowedByValue()
     {
         // CommonMark would otherwise leave "**Constituency:**Wycombe" as literal asterisks.
