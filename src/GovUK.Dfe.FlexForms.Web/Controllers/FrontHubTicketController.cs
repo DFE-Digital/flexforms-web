@@ -17,6 +17,12 @@ namespace GovUK.Dfe.FlexForms.Web.Controllers
                 var resp = await hubAuthClient.CreateHubTicketAsync();
                 return Ok(resp);
             }
+            catch (ExternalApplicationsException ex) when (ex.StatusCode is 401 or 403)
+            {
+                // Expired or revoked API session; the page carries on without live notifications.
+                logger.LogInformation("SignalR hub ticket refused by the API with {StatusCode}", ex.StatusCode);
+                return StatusCode(ex.StatusCode);
+            }
             catch (Exception ex)
             {
                 logger.LogWarning(ex, "Failed to mint SignalR hub ticket");

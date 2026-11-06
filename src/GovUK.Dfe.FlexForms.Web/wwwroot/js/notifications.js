@@ -9,8 +9,15 @@ const antiForgeryToken = () => {
 };
 const PAGE_LOAD_AT_MS = Date.now();
 const HUB_TICKET_COOLDOWN_MS = 30_000;
+// hubauth cookie lasts 10 minutes; renew with headroom.
+const HUB_COOKIE_RENEW_MS = 8 * 60 * 1000;
+const HUB_START_MAX_BACKOFF_MS = 10 * 60 * 1000;
 let hubTicketInFlight = null;
 let hubTicketCooldownUntil = 0;
+let hubCookieRenewedAt = 0;
+let hubConnection = null;
+let hubStartRetryTimer = null;
+let hubStartAttempts = 0;
 
 function mapTypeToCss(type) {
     const normalize = (val) => {
@@ -224,7 +231,14 @@ async function ensureHubCookie() {
                 return false;
             }
 
-            await fetch(url, { credentials: "include" });
+            // Tickets are single use and expire after 60s, so a throttled background tab can redeem too late.
+            const redeemed = await fetch(url, { credentials: "include" });
+            if (!redeemed.ok) {
+                hubTicketCooldownUntil = Date.now() + HUB_TICKET_COOLDOWN_MS;
+                return false;
+            }
+
+            hubCookieRenewedAt = Date.now();
             return true;
         } catch {
             hubTicketCooldownUntil = Date.now() + HUB_TICKET_COOLDOWN_MS;
@@ -244,14 +258,15 @@ async function startHub() {
         return;
     }
 
-    if (window.__flexformsHubStarted) {
+    if (window.__flexformsHubStarted || typeof signalR === "undefined") {
         return;
     }
     window.__flexformsHubStarted = true;
 
     try {
         const ticketOk = await ensureHubCookie();
-        if (!ticketOk || typeof signalR === "undefined") {
+        if (!ticketOk) {
+            scheduleHubStartRetry();
             return;
         }
 
@@ -264,12 +279,17 @@ async function startHub() {
         connection.on("notification.dismissed", ({ id }) => window.removeFromUi(id));
         connection.on("notification.cleared", () => window.clearUi());
 
+        // Reconnect re-negotiates with the API, which needs a live hubauth cookie.
+        connection.onreconnecting(() => { void ensureHubCookie(); });
         connection.onreconnected(async () => { await ensureHubCookie(); });
-
-        // Renew hub cookie proactively (10min cookie >>> renew every ~8 min)
-        setInterval(() => { void ensureHubCookie(); }, 8 * 60 * 1000);
+        connection.onclose(() => {
+            hubConnection = null;
+            scheduleHubStartRetry();
+        });
 
         await connection.start();
+        hubConnection = connection;
+        hubStartAttempts = 0;
         // Render only notifications that were created very recently (to catch events created during navigation)
         try {
             const thresholdMs = 10000; // 10s window
@@ -286,9 +306,52 @@ async function startHub() {
         } catch { }
         await refreshUnreadCount();
     } catch {
-        window.__flexformsHubStarted = false;
+        hubConnection = null;
+        scheduleHubStartRetry();
     }
 }
+
+// Initial start can fail (expired session, ticket redeemed too late in a suspended tab). Retry with
+// backoff, and only while the tab is visible; the visibility listener picks it up otherwise.
+function scheduleHubStartRetry() {
+    window.__flexformsHubStarted = false;
+    if (hubStartRetryTimer) {
+        return;
+    }
+
+    const backoffMs = Math.min(HUB_TICKET_COOLDOWN_MS * 2 ** hubStartAttempts, HUB_START_MAX_BACKOFF_MS);
+    hubStartAttempts++;
+    const delayMs = Math.max(backoffMs, hubTicketCooldownUntil - Date.now());
+    hubStartRetryTimer = setTimeout(() => {
+        hubStartRetryTimer = null;
+        if (!document.hidden) {
+            void startHub();
+        }
+    }, delayMs);
+}
+
+// Renewal of an existing connection's cookie. Hidden tabs have their timers throttled, so renew
+// when the tab is visible again instead.
+setInterval(() => {
+    if (hubConnection && !document.hidden) {
+        void ensureHubCookie();
+    }
+}, HUB_COOKIE_RENEW_MS);
+
+document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+        return;
+    }
+    if (!hubConnection) {
+        if (!hubStartRetryTimer) {
+            void startHub();
+        }
+        return;
+    }
+    if (Date.now() - hubCookieRenewedAt >= HUB_COOKIE_RENEW_MS) {
+        void ensureHubCookie();
+    }
+});
 
 // Start on every page load
 document.addEventListener("DOMContentLoaded", startHub);

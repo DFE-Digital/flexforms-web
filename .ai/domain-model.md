@@ -14,7 +14,7 @@ Session keys: `Domain/Caching/FormSessionKeys.cs` — includes `CurrentAccumulat
 
 Web transforms UI state to API JSON (`question`, `dataType`, `value`, `completed`). Collection-flow values are nested JSON. Prism flattening comments in `flexforms-prism` `ResponseParser` claim alignment with Web `TransformToResponseJson`.
 
-Transport: Web may Base64-encode bodies; API stores JSON. Load errors on a row are usually **bad payload**, not a missing decode-on-read (**Historical** GitHub #59).
+Transport: saves (`ApplicationResponseService`) send Base64 and the API stores decoded JSON. Create sends raw `"{}"` and the API stores `InitialResponseBody` verbatim, so a caller that Base64-encodes on create (the Playwright `ApplicationBuilder` used to, `e30=`) leaves an encoded body until the first save. Every reader must accept both: `DashboardAnswerReader.DecodeResponseBody`, `ApplicationStatusService`, and `ApplicationStateService.LoadResponseDataIntoSessionAsync`. The last one used to parse raw only and logged `JsonReaderException: 'e' is an invalid start of a value` for those applications (**Verified**). Other load errors on a row are usually **bad payload** (**Historical** GitHub #59).
 
 ## Template Studio
 
