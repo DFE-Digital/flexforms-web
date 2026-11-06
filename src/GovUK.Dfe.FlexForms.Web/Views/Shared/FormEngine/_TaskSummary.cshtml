@@ -408,6 +408,10 @@
                                 var selectedOption = field.Options.FirstOrDefault(o => o.Value == fieldValue);
                                 @(selectedOption?.Label ?? fieldValue)
                             }
+                            else if (field.Type == "date" && DisplayHelpers.FormatStoredDate(fieldValue) is { } storedDate)
+                            {
+                                @storedDate
+                            }
                             else
                             {
                                 var displayVal = string.IsNullOrEmpty(formattedFieldValue) ? fieldValue : formattedFieldValue;

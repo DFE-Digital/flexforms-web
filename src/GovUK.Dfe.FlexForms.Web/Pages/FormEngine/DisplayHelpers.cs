@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Web;
@@ -9,6 +10,25 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine;
 
 public static partial class DisplayHelpers
 {
+    /// <summary>
+    /// Date answers are stored as yyyy-MM-dd. Summaries show them as dd-MM-yyyy, matching the Day/Month/Year entry boxes.
+    /// Returns null when the value is not a stored date, so the caller can keep the original text.
+    /// </summary>
+    public static string? FormatStoredDate(string? stored)
+    {
+        if (string.IsNullOrWhiteSpace(stored))
+            return null;
+
+        return DateTime.TryParseExact(
+            stored.Trim(),
+            "yyyy-MM-dd",
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out var date)
+            ? date.ToString("dd-MM-yyyy", CultureInfo.InvariantCulture)
+            : null;
+    }
+
     /// <summary>
     /// Expands JSON strings encoded within a dictionary's values into their corresponding JSON objects.
     /// When a value is a JsonElement of type String containing valid JSON, it will be deserialized into a JsonElement.

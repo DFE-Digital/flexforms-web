@@ -360,6 +360,22 @@ public class FormEnginePresentationComposerTests
     }
 
     [Fact]
+    public void BuildPreview_shows_date_fields_as_dd_MM_yyyy()
+    {
+        var date = Field("engagementDate", "date", "Engagement date");
+        var task = Task("t1", "Visit", pages: [Page("p1", [date])]);
+        var formData = new Dictionary<string, object> { ["engagementDate"] = "2026-12-05" };
+
+        _formatting.GetFieldValue("engagementDate", formData).Returns("2026-12-05");
+        _formatting.HasFieldValue("engagementDate", formData).Returns(true);
+
+        var rows = _composer.BuildPreview(Context(formData, Template(task)))
+            .Groups.Single().Tasks.Single().Rows;
+
+        Assert.Equal("05-12-2026", rows[0].Value.Text);
+    }
+
+    [Fact]
     public void BuildPreview_renders_autocomplete_and_multiple_complex_values()
     {
         var trustJson = """{"name":"Contoso Trust","postcode":"SW1A 1AA"}""";
