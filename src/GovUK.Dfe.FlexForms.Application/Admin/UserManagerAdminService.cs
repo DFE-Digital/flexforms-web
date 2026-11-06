@@ -64,6 +64,11 @@ public sealed class UserManagerAdminService(
                     .Where(name => !string.IsNullOrWhiteSpace(name)));
             }
         }
+        catch (ExternalApplicationsException ex) when (ex.StatusCode == 403)
+        {
+            // Delegated user managers (User:Manage) can open this page but role listing is Admin-only.
+            logger.LogInformation("Tenant roles not available to this user for the user filter; showing selected role only");
+        }
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Failed to load tenant roles for the user filter");

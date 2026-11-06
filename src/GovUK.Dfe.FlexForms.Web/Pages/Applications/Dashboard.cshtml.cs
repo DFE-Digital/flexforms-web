@@ -17,7 +17,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
-using System.Text.Json;
 using SystemTask = System.Threading.Tasks.Task;
 using StackExchange.Redis;
 
@@ -40,7 +39,6 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
         public string? Email { get; private set; }
         public string? FirstName { get; private set; }
         public string? LastName { get; private set; }
-        public string? OrganisationName { get; private set; }
         public IReadOnlyList<ApplicationWithCalculatedStatus> Applications { get; private set; } = Array.Empty<ApplicationWithCalculatedStatus>();
         public IReadOnlyList<CustomApplicationStatusDto> CustomStatuses { get; private set; } = [];
         public IReadOnlyList<DashboardColumn> Columns { get; private set; } = DashboardColumnResolver.DefaultColumns;
@@ -327,23 +325,6 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Applications
 
             FirstName = User.FindFirst(ClaimTypes.GivenName)?.Value;
             LastName = User.FindFirst(ClaimTypes.Surname)?.Value;
-
-            var orgJson = User.FindFirst("organisation")?.Value;
-            if (!string.IsNullOrEmpty(orgJson))
-            {
-                try
-                {
-                    using var doc = JsonDocument.Parse(orgJson);
-                    OrganisationName = doc.RootElement
-                        .GetProperty("name")
-                        .GetString();
-                }
-                catch (Exception ex)
-                {
-                    logger.LogWarning(ex, "Failed to parse organisation JSON for user {Email}", Email);
-                    OrganisationName = null;
-                }
-            }
         }
     }
 }
