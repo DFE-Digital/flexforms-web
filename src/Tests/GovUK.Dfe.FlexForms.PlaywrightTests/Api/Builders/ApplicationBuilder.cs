@@ -2,12 +2,14 @@ namespace GovUK.Dfe.FlexForms.PlaywrightTests.Api.Builders;
 
 public static class ApplicationBuilder
 {
-    /// <summary>API expects an encoded (base64) JSON response body on create.</summary>
-    private static readonly string EmptyEncodedResponseBody =
-        ApiBase.EncodeJson("{}");
+    /// <summary>
+    /// Create stores InitialResponseBody verbatim (unlike add-response, which Base64-decodes),
+    /// so send raw JSON exactly as the Web dashboard does.
+    /// </summary>
+    private const string EmptyResponseBody = "{}";
 
     public static CreateApplicationRequest CreateApplicationRequest(
         string templateId,
         string? initialResponseBody = null) =>
-        new(templateId, initialResponseBody ?? EmptyEncodedResponseBody);
+        new(templateId, initialResponseBody ?? EmptyResponseBody);
 }
