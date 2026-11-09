@@ -421,7 +421,7 @@ src/
 │   │   ├── ITenantSettingsAdmin + TenantSettingsAdminService
 │   │   ├── IUserManagerAdmin + UserManagerAdminService
 │   │   ├── IRoleManagerAdmin + RoleManagerAdminService
-│   │   ├── IDuplicateTenantAdmin + DuplicateTenantAdminService
+│   │   ├── INewTenantAdmin + NewTenantAdminService
 │   │   ├── IOrganisationSettingsAdmin + OrganisationSettingsAdminService
 │   │   ├── IAdminHome + AdminHomeService
 │   │   ├── ... (EventMappings, TemplateManager, CustomStatusLabels, ContributorManagement)
@@ -588,7 +588,7 @@ Hub: `/admin` (`CanAccessAdminArea`). Each admin page follows the [Clean Archite
 | Role Permissions | `/admin/role-manager-permissions` | Same | `IRoleManagerPermissionsAdmin` |
 | Organisation Settings | `/admin/organisation-settings` | Admin / SuperAdmin | `IOrganisationSettingsAdmin` |
 | Contributor Management | `/admin/contributor-management` | Admin / SuperAdmin | `IContributorManagementAdmin` |
-| Duplicate Tenant | `/admin/duplicate-tenant` | **SuperAdmin only** | `IDuplicateTenantAdmin` |
+| New Tenant | `/admin/new-tenant` | **SuperAdmin only** | `INewTenantAdmin` |
 | Tenant Settings | `/admin/tenant-settings` | Admin / SuperAdmin | `ITenantSettingsAdmin` |
 | Event Mappings | `/admin/event-mappings` | Admin / SuperAdmin | `IEventMappingsAdmin` |
 
