@@ -14,7 +14,8 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 [Authorize(Policy = AdminAccessHelper.CanManagePlatformTenantsPolicy)]
 public sealed class NewTenantModel(
     INewTenantAdmin newTenantAdmin,
-    ITenantRequestContext tenantRequestContext) : PageModel
+    ITenantRequestContext tenantRequestContext,
+    IHostEnvironment hostEnvironment) : PageModel
 {
     public Guid SourceTenantId { get; private set; }
 
@@ -122,6 +123,7 @@ public sealed class NewTenantModel(
             Hostname = Hostname,
             FrontendOrigin = FrontendOrigin,
             Scheme = Scheme,
+            TestAuthenticationAllowed = TestAuthenticationEnvironmentGate.IsAllowed(hostEnvironment),
             Settings = Settings
                 .Select(s => new NewTenantSettingDraft
                 {

@@ -42,13 +42,13 @@ public static class NewTenantMessages
         "ConnectionStrings" => "DefaultConnection for the tenant's application database. Every API request needs it.",
         "Authorization" => "Signs the tenant's user tokens. New values were generated for this tenant.",
         "AzureAd" => "Lets Web's service identity call the API for this tenant (token exchange). Needs TenantId and ClientId (or Audience).",
-        "Authentication" => "Which sign-in the tenant uses.",
-        "DfESignIn" => "DfE Sign-in client. The API needs DiscoveryEndpoint and ClientId to validate sign-ins. Web also derives token refresh settings from it.",
+        "Authentication" => "Which sign-in the tenant uses. Outside Production new tenants start on TestAuthentication; change Scheme to DfESignIn or EntraSso when the real client is ready.",
+        "DfESignIn" => "DfE Sign-in client, copied from the current tenant. Web derives token refresh settings from it whatever the scheme. To sign in with it, the API needs DiscoveryEndpoint and ClientId.",
         "EntraSso" => "Microsoft Entra sign-in client. The API needs Enabled true, TenantId and ClientId to validate sign-ins.",
-        "TestAuthentication" => "Test sign-in signing settings. New values were generated for this tenant; Api and Web must match.",
+        "TestAuthentication" => "Test sign-in, enabled by default. A new signing key, issuer and audience were generated for this tenant; Api and Web must match. Never offered in Production.",
         "TokenRefresh" => "Token refresh endpoints and client. Web checks these on every request.",
         "Email" => "GOV.UK Notify, needed to email the Test sign-in one-time password.",
-        "EmailTemplates" => "Needs a TestAuthPasswordEmail template id for the Test sign-in one-time password.",
+        "EmailTemplates" => "Fill in TestAuthPasswordEmail with the GOV.UK Notify template id for the Test sign-in one-time password.",
         _ => string.Empty
     };
 

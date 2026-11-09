@@ -93,7 +93,7 @@ public sealed class NewTenantAdminService(
             state.ErrorMessage = NewTenantMessages.SettingsLoadFailed;
         }
 
-        state.Scheme = ResolveScheme(source);
+        state.Scheme = ChooseScheme(ResolveScheme(source), state.TestAuthenticationAllowed);
         state.Settings = BuildDraft(source, state.Scheme, state.NewTenantId, state.SourceTenantName);
     }
 
@@ -179,6 +179,18 @@ public sealed class NewTenantAdminService(
     }
 
     /// <summary>
+    /// New tenants start on Test Authentication where the environment allows it, so they can be
+    /// signed into before a real IdP client exists. Elsewhere the current tenant's real scheme is kept.
+    /// </summary>
+    internal static string ChooseScheme(string sourceScheme, bool testAuthenticationAllowed)
+    {
+        if (testAuthenticationAllowed)
+            return TestAuthentication;
+
+        return sourceScheme == TestAuthentication ? DfESignIn : sourceScheme;
+    }
+
+    /// <summary>
     /// Mirrors Web's interactive scheme precedence: explicit <c>Authentication:Scheme</c>
     /// (Web row before Shared), then TestAuthentication / EntraSso <c>Enabled</c>, else DfE Sign-in.
     /// </summary>
@@ -243,6 +255,10 @@ public sealed class NewTenantAdminService(
             source.FirstOrDefault(s => IsCategory(s, "Authentication"))?.Target ?? WebTarget,
             new JsonObject { ["Scheme"] = scheme }.ToJsonString()));
 
+        // Always needed: it is the DfE Sign-in scheme's client, and otherwise the source Web derives
+        // token refresh from (validated on every request, whatever the scheme).
+        CopyOrPlaceholder(DfESignIn, SharedTarget, """{"Authority":"","DiscoveryEndpoint":"","ClientId":"","ClientSecret":""}""");
+
         switch (scheme)
         {
             case EntraSso:
@@ -252,31 +268,13 @@ public sealed class NewTenantAdminService(
             case TestAuthentication:
                 draft.AddRange(TestAuthenticationDrafts(source, newTenantId));
                 CopyOrPlaceholder("Email", ApiTarget, """{"Provider":"GovUkNotify","GovUkNotify":{"ApiKey":""}}""");
-                CopyOrPlaceholder(
-                    "EmailTemplates",
-                    ApiTarget,
-                    new JsonObject { [sourceTenantName] = new JsonObject { ["TestAuthPasswordEmail"] = "" } }.ToJsonString());
-                break;
-
-            default:
-                CopyOrPlaceholder(DfESignIn, SharedTarget, """{"Authority":"","DiscoveryEndpoint":"","ClientId":"","ClientSecret":""}""");
+                draft.AddRange(EmailTemplatesDrafts(source, sourceTenantName));
                 break;
         }
 
-        // Web builds token-refresh options on every request, from TokenRefresh or else DfESignIn.
         if (source.Any(s => IsCategory(s, "TokenRefresh")))
         {
             CopyOrPlaceholder("TokenRefresh", WebTarget, "{}");
-        }
-        else if (scheme != DfESignIn)
-        {
-            if (source.Any(s => IsCategory(s, DfESignIn)))
-                CopyOrPlaceholder(DfESignIn, SharedTarget, "{}");
-            else
-                draft.Add(Draft(
-                    "TokenRefresh",
-                    WebTarget,
-                    """{"TokenEndpoint":"","IntrospectionEndpoint":"","ClientId":"","ClientSecret":""}"""));
         }
 
         foreach (var category in CopiedCategories)
@@ -340,6 +338,40 @@ public sealed class NewTenantAdminService(
             root["JwtAudience"] = $"test-audience-{newTenantId:D}";
             yield return Draft(TestAuthentication, target, root.ToJsonString());
         }
+    }
+
+    /// <summary>
+    /// Copies EmailTemplates and makes sure the API can see a <c>TestAuthPasswordEmail</c> entry
+    /// (empty when the current tenant has none) so the one-time password email can be configured here.
+    /// </summary>
+    private static IEnumerable<NewTenantSettingDraft> EmailTemplatesDrafts(
+        IReadOnlyList<SourceSetting> source,
+        string sourceTenantName)
+    {
+        const string passwordEmail = "TestAuthPasswordEmail";
+        var rows = source.Where(s => IsCategory(s, "EmailTemplates")).ToList();
+        var apiRow = rows.FirstOrDefault(s => IsTarget(s, ApiTarget) || IsTarget(s, SharedTarget));
+
+        foreach (var row in rows.Where(r => r != apiRow))
+            yield return Draft("EmailTemplates", row.Target, row.SettingsJson);
+
+        var root = ParseObject(apiRow?.SettingsJson) ?? new JsonObject();
+        var products = root.Select(p => p.Value).OfType<JsonObject>().ToList();
+        if (!products.Any(p => p[passwordEmail] is JsonValue value
+                               && value.TryGetValue<string>(out var id)
+                               && !string.IsNullOrWhiteSpace(id)))
+        {
+            var product = products.FirstOrDefault();
+            if (product is null)
+            {
+                product = new JsonObject();
+                root[string.IsNullOrWhiteSpace(sourceTenantName) ? "Default" : sourceTenantName] = product;
+            }
+
+            product[passwordEmail] = "";
+        }
+
+        yield return Draft("EmailTemplates", apiRow?.Target ?? ApiTarget, root.ToJsonString());
     }
 
     private static NewTenantSettingDraft Draft(string category, string target, string json) =>

@@ -86,7 +86,9 @@
                 {
                     <h2 class="govuk-heading-m">Needed to run</h2>
                     <p class="govuk-body">
-                        Sign-in: <strong>@Model.Scheme</strong> (copied from the current tenant).
+                        Sign-in: <strong>@Model.Scheme</strong>@(Model.Scheme == NewTenantAdminService.TestAuthentication
+                            ? " (the default outside Production, with signing secrets generated for this tenant)"
+                            : " (copied from the current tenant)").
                         The API rejects the tenant if something here is missing.
                     </p>
                 }

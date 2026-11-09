@@ -17,8 +17,14 @@ public sealed class NewTenantWorkState
 
     public string FrontendOrigin { get; set; } = string.Empty;
 
-    /// <summary>Interactive sign-in scheme copied from the current tenant.</summary>
+    /// <summary>
+    /// Interactive sign-in scheme for the new tenant: Test Authentication when
+    /// <see cref="TestAuthenticationAllowed"/>, otherwise the current tenant's scheme.
+    /// </summary>
     public string Scheme { get; set; } = string.Empty;
+
+    /// <summary>Whether this environment allows Test Authentication (never Production).</summary>
+    public bool TestAuthenticationAllowed { get; set; }
 
     public List<NewTenantSettingDraft> Settings { get; set; } = [];
 

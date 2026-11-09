@@ -34,7 +34,55 @@ public class NewTenantAdminServiceTests
     }
 
     [Fact]
-    public async Task LoadDraftAsync_ShouldCopyOnlyMinimumRows_ForDfESignInTenant()
+    public async Task LoadDraftAsync_ShouldDefaultToTestAuthentication_WithGeneratedSecrets_WhenAllowed()
+    {
+        _state.TestAuthenticationAllowed = true;
+        GivenSourceSettings(
+            Row("Authentication", "Web", """{"Scheme":"DfESignIn"}"""),
+            Row("DfESignIn", "Shared", """{"Authority":"https://signin.example.test","ClientId":"dsi","ClientSecret":"__REDACTED__"}"""),
+            Row("Email", "Api", """{"Provider":"GovUkNotify","GovUkNotify":{"ApiKey":"__REDACTED__"}}"""),
+            Row("EmailTemplates", "Api", """{"Visits":{"ApplicationSubmitted":"t1"}}"""));
+
+        await _service.LoadDraftAsync(_state);
+
+        Assert.Equal(NewTenantAdminService.TestAuthentication, _state.Scheme);
+        Assert.Contains("\"Scheme\": \"TestAuthentication\"", _state.Settings.Single(s => s.Category == "Authentication").SettingsJson);
+
+        var testAuth = _state.Settings.Where(s => s.Category == "TestAuthentication").ToList();
+        Assert.Equal(["Api", "Web"], testAuth.Select(s => s.Target));
+        Assert.All(testAuth, s => Assert.False(s.IsOptional));
+        Assert.Equal(testAuth[0].SettingsJson, testAuth[1].SettingsJson);
+        var testAuthJson = JsonNode.Parse(testAuth[0].SettingsJson)!;
+        Assert.True(testAuthJson["Enabled"]!.GetValue<bool>());
+        Assert.True(testAuthJson["JwtSigningKey"]!.GetValue<string>().Length >= 32);
+        Assert.Equal(_state.NewTenantId.ToString(), testAuthJson["JwtIssuer"]!.GetValue<string>());
+
+        var dfeSignIn = _state.Settings.Single(s => s.Category == "DfESignIn");
+        Assert.False(dfeSignIn.IsOptional);
+        Assert.Contains("https://signin.example.test", dfeSignIn.SettingsJson);
+
+        Assert.False(_state.Settings.Single(s => s.Category == "Email").IsOptional);
+        var templates = JsonNode.Parse(_state.Settings.Single(s => s.Category == "EmailTemplates").SettingsJson)!;
+        Assert.Equal("t1", templates["Visits"]!["ApplicationSubmitted"]!.GetValue<string>());
+        Assert.Equal("", templates["Visits"]!["TestAuthPasswordEmail"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task LoadDraftAsync_ShouldLeaveOutTestAuthentication_WhenNotAllowed_EvenForTestAuthTenant()
+    {
+        GivenSourceSettings(
+            Row("Authentication", "Web", """{"Scheme":"TestAuthentication"}"""),
+            Row("TestAuthentication", "Web", """{"Enabled":true}"""),
+            Row("DfESignIn", "Shared", """{"Authority":"https://signin.example.test"}"""));
+
+        await _service.LoadDraftAsync(_state);
+
+        Assert.Equal(NewTenantAdminService.DfESignIn, _state.Scheme);
+        Assert.DoesNotContain(_state.Settings, s => s.Category is "TestAuthentication" or "EmailTemplates");
+    }
+
+    [Fact]
+    public async Task LoadDraftAsync_ShouldCopyOnlyMinimumRows_ForDfESignInTenant_WhenTestAuthenticationNotAllowed()
     {
         GivenSourceSettings(
             Row("ConnectionStrings", "Api", """{"DefaultConnection":"__REDACTED__"}"""),
@@ -70,6 +118,7 @@ public class NewTenantAdminServiceTests
     [Fact]
     public async Task LoadDraftAsync_ShouldAddTestAuthEmailAndTokenRefreshSource_ForTestAuthenticationTenant()
     {
+        _state.TestAuthenticationAllowed = true;
         GivenSourceSettings(
             Row("Authentication", "Web", """{"Scheme":"TestAuthentication"}"""),
             Row("TestAuthentication", "Web", """{"Enabled":true,"JwtSigningKey":"__REDACTED__","JwtIssuer":"old","JwtAudience":"old"}"""),
@@ -118,15 +167,17 @@ public class NewTenantAdminServiceTests
     }
 
     [Fact]
-    public async Task LoadDraftAsync_ShouldUseTokenRefreshPlaceholder_ForEntraTenantWithoutDfESignIn()
+    public async Task LoadDraftAsync_ShouldAddDfESignInPlaceholder_ForEntraTenantWithoutDfESignIn()
     {
         GivenSourceSettings(Row("EntraSso", "Shared", """{"Enabled":true,"TenantId":"t","ClientId":"c"}"""));
 
         await _service.LoadDraftAsync(_state);
 
         Assert.Equal(NewTenantAdminService.EntraSso, _state.Scheme);
-        Assert.Contains(_state.Settings, s => s.Category == "TokenRefresh" && s.Target == "Web");
-        Assert.DoesNotContain(_state.Settings, s => s.Category == "DfESignIn");
+        var dfeSignIn = _state.Settings.Single(s => s.Category == "DfESignIn");
+        Assert.False(dfeSignIn.IsOptional);
+        Assert.Contains("DiscoveryEndpoint", dfeSignIn.SettingsJson);
+        Assert.DoesNotContain(_state.Settings, s => s.Category == "TokenRefresh");
     }
 
     [Fact]
