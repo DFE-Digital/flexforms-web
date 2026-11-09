@@ -9,6 +9,6 @@ Local `Directory.Build.props` may point `LocalFlexFormsApiSrc` at sibling API. U
 
 Terraform: `terraform-azurerm-container-apps-hosting` (module version may differ from API). CI: `dotnet-ci.yml`, `deploy.yml`, `playwright.yml`, terraform workflow.
 
-Release Flow matches API (`docs/release-process.md`): main→dev, release branch→test, tagged image→prod. GitHub `production-build` vs `production` environments.
+Release Flow matches API (`docs/release-process.md`): main→dev, release branch→test, tagged image→prod. GitHub `production-build` vs `production` environments. Coupled go-lives can set `required_api_release` on the Web production deploy so Release waits until that API tag is Latest.
 
 Playwright is in the solution; Cypress under `src/Tests/GovUK.Dfe.FlexForms.CypressTests` is **not** in the `.sln`.

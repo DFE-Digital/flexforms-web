@@ -22,6 +22,8 @@ Authoring manuals in `docs/`. Template Studio is gated by FeatureManagement Targ
 
 Large JSON posts historically hit ASP.NET form value limits (400). If that returns, raise form/Kestrel limits rather than truncating templates.
 
-## Knowledge
+## Release
 
-Update `.ai/features/form-engine.md` when changing save/navigation/collection behaviour — those paths have caused data loss.
+Trunk-based: [`docs/release-process.md`](../docs/release-process.md). `deploy.yml` promotes tagged images to production (no rebuild).
+
+Optional production gate (**Verified** in `.github/workflows/deploy.yml`): workflow_dispatch input `required_api_release` (a flexforms-api production tag such as `v2.3.0`). After the production environment approval, the Release job polls `DFE-Digital/flexforms-api` (same org, sibling of this repo) until GitHub **Latest** is that tag or newer, then deploys Web. Blank input skips the wait (hotfixes, rollbacks, UI-only). The wait is ignored outside production. It times out after ~40 minutes.

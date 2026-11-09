@@ -5,6 +5,8 @@ name: Deploy to environment
 # tag vX.Y.Z-rc.N / vX.Y.Z (manual run, "Use workflow from: <tag>")
 #            -> no rebuild: deploy the image already built for that commit.
 #               Deploying to production creates/marks release vX.Y.Z as latest.
+#               Optional required_api_release: after production approval, wait until
+#               that flexforms-api tag (or newer) is GitHub Latest, then roll Web.
 
 on:
   push:
@@ -17,6 +19,11 @@ on:
         type: environment
         description: "Environment to deploy to. Production only accepts a release tag picked under 'Use workflow from'."
         required: true
+      required_api_release:
+        type: string
+        description: "Optional. Production only: wait after approval until this flexforms-api tag is Latest (e.g. v2.3.0). Leave blank for Web-only hotfixes and rollbacks."
+        required: false
+        default: ""
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.inputs.environment }}
@@ -42,6 +49,7 @@ jobs:
       mode: ${{ steps.var.outputs.mode }}
       release-candidate: ${{ steps.var.outputs.release-candidate }}
       release-version: ${{ steps.var.outputs.release-version }}
+      required-api-release: ${{ steps.var.outputs.required-api-release }}
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
@@ -51,6 +59,7 @@ jobs:
       - id: var
         env:
           INPUT_ENVIRONMENT: ${{ github.event.inputs.environment }}
+          INPUT_REQUIRED_API_RELEASE: ${{ github.event.inputs.required_api_release || '' }}
         run: |
           set -euo pipefail
           GIT_REF=${{ github.ref }}
@@ -103,6 +112,20 @@ jobs:
             RELEASE_CANDIDATE=true
           fi
 
+          REQUIRED_API_RELEASE=""
+          RAW_REQUIRED="${INPUT_REQUIRED_API_RELEASE//[[:space:]]/}"
+          if [[ -n "$RAW_REQUIRED" ]]; then
+            if [[ ! "$RAW_REQUIRED" =~ ^v?([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+              echo "::error ::required_api_release must be a production tag like v2.3.0, not an rc. Got '$RAW_REQUIRED'."
+              exit 1
+            fi
+            if [[ "$ENVIRONMENT_LOWER" != "production" ]]; then
+              echo "::warning ::required_api_release is ignored unless the environment is production."
+            else
+              REQUIRED_API_RELEASE="v${BASH_REMATCH[1]}"
+            fi
+          fi
+
           echo "environment=${ENVIRONMENT}" >> $GITHUB_OUTPUT
           echo "environment-lower=${ENVIRONMENT_LOWER}" >> $GITHUB_OUTPUT
           echo "branch=$GIT_BRANCH" >> $GITHUB_OUTPUT
@@ -111,6 +134,7 @@ jobs:
           echo "mode=${MODE}" >> $GITHUB_OUTPUT
           echo "release-candidate=${RELEASE_CANDIDATE}" >> $GITHUB_OUTPUT
           echo "release-version=${RELEASE_VERSION}" >> $GITHUB_OUTPUT
+          echo "required-api-release=${REQUIRED_API_RELEASE}" >> $GITHUB_OUTPUT
 
           {
             echo "### Deployment plan"
@@ -118,6 +142,7 @@ jobs:
             echo "- Environment: \`$ENVIRONMENT\`"
             echo "- Mode: \`$MODE\`"
             echo "- Release candidate: \`$RELEASE_CANDIDATE\`"
+            echo "- Wait for API: \`${REQUIRED_API_RELEASE:-no}\`"
           } >> $GITHUB_STEP_SUMMARY
 
   validate-packages:
@@ -243,7 +268,48 @@ jobs:
     environment: ${{ needs.set-env.outputs.environment }}
     permissions:
       id-token: write
+      contents: read
     steps:
+      - name: Wait for FlexForms API in production
+        if: needs.set-env.outputs.environment-lower == 'production' && needs.set-env.outputs.required-api-release != ''
+        timeout-minutes: 45
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REQUIRED: ${{ needs.set-env.outputs.required-api-release }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REPOSITORY" != */flexforms-web ]]; then
+            echo "::error ::Cannot derive flexforms-api repo from '$GITHUB_REPOSITORY'."
+            exit 1
+          fi
+          API_REPO="${GITHUB_REPOSITORY%/flexforms-web}/flexforms-api"
+          echo "Waiting until $API_REPO Latest is >= $REQUIRED"
+          echo "- Waiting for \`$API_REPO\` Latest >= \`$REQUIRED\`" >> "$GITHUB_STEP_SUMMARY"
+
+          deadline=$((SECONDS + 40 * 60))
+          while (( SECONDS < deadline )); do
+            if latest_json=$(gh release view --repo "$API_REPO" --json tagName,isPrerelease 2>/dev/null); then
+              latest=$(echo "$latest_json" | jq -r '.tagName')
+              is_pre=$(echo "$latest_json" | jq -r '.isPrerelease')
+              latest_plain="${latest#v}"
+              required_plain="${REQUIRED#v}"
+              if [[ "$is_pre" != "true" && "$latest_plain" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                highest=$(printf '%s\n%s\n' "$required_plain" "$latest_plain" | sort -V | tail -n1)
+                if [[ "$highest" == "$latest_plain" ]]; then
+                  echo "API production Latest is $latest (>= $REQUIRED)"
+                  echo "- API production Latest is \`$latest\` (>= \`$REQUIRED\`)" >> "$GITHUB_STEP_SUMMARY"
+                  exit 0
+                fi
+              fi
+              echo "API production Latest is $latest (need >= $REQUIRED)"
+            else
+              echo "Could not read $API_REPO Latest release yet"
+            fi
+            sleep 30
+          done
+          echo "::error ::Timed out waiting for $API_REPO Latest to be >= $REQUIRED. Promote that API release (or a newer one) to production, then re-run this workflow."
+          exit 1
+
       - name: Release
         uses: DFE-Digital/deploy-azure-container-apps-action/.github/actions/deploy@8e72e403f05ff9da09668207eef1d79e1ce9d1a7 # v5.2.1
         with:

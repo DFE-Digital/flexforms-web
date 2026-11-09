@@ -55,8 +55,11 @@ If the cherry-pick conflicts, the backport PR is opened as a draft with instruct
 
 1. Go to **Actions → Deploy to environment → Run workflow**.
 2. Under **Use workflow from**, open the **Tags** tab and pick the release candidate that passed test (e.g. `v2.3.0-rc.2`).
-3. Choose environment **production** and run it, then approve the production deployment when asked.
-4. The image already built and tested for that rc is deployed. Release `v2.3.0` is then created on the same commit and marked **Latest**.
+3. Choose environment **production**.
+4. If this Web release needs a new API in production, set **required_api_release** to that API production tag (e.g. `v2.3.0`). Leave it blank for Web-only hotfixes and rollbacks.
+5. Run the workflow, then approve the production deployment when asked.
+6. After approval, if you set **required_api_release**, the Release job waits until that flexforms-api tag (or a newer one) is marked **Latest**, then deploys Web. If the API is already live, it continues immediately. It fails after about 40 minutes if the API never gets there — promote the API and re-run Web.
+7. The image already built and tested for that rc is deployed. Release `v2.3.0` is then created on the same commit and marked **Latest**.
 
 Production can't be deployed from a branch. The workflow fails if you try.
 
@@ -70,7 +73,7 @@ The hotfix only contains that fix. Nothing merged to `main` since the release go
 
 ## Rolling back
 
-Run **Deploy to environment** from the tag of the previous release (e.g. `v2.2.0`) with environment **production**. That release is marked **Latest** again.
+Run **Deploy to environment** from the tag of the previous release (e.g. `v2.2.0`) with environment **production**. Leave **required_api_release** blank. That release is marked **Latest** again.
 
 ## What is in production?
 
@@ -80,10 +83,13 @@ Run **Deploy to environment** from the tag of the previous release (e.g. `v2.2.0
 
 ## Coordinating with flexforms-api
 
-The two repos are released separately with their own versions. When a feature spans both:
+The two repos are released separately with their own versions. Leave **required_api_release** blank unless Web actually needs the new API.
+
+When a feature spans both:
 
 - Cut both releases at the same time.
 - Promote the API before the web app, unless the web change is backwards compatible.
+- On the Web production deploy, set **required_api_release** to the API tag you are promoting (e.g. `v2.3.0`). Approve Web as usual; the Release job waits until that API release is **Latest** before rolling ACA. Do not use this for rollbacks or Web-only changes.
 
 ## Rules and one-time setup
 
