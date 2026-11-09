@@ -1,0 +1,131 @@
+@page "/admin/new-tenant"
+@using GovUK.Dfe.FlexForms.Application.Admin
+@model GovUK.Dfe.FlexForms.Web.Pages.Admin.NewTenantModel
+@{
+    ViewData["Title"] = "New tenant";
+}
+
+<div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+        <a asp-page="/Admin/Admin" class="govuk-back-link">Back to Admin</a>
+
+        @if (Model.HasError)
+        {
+            <div class="govuk-error-summary" data-module="govuk-error-summary">
+                <div role="alert">
+                    <h2 class="govuk-error-summary__title">There is a problem</h2>
+                    <div class="govuk-error-summary__body">
+                        <p class="govuk-body">@Model.ErrorMessage</p>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <govuk-error-summary />
+
+        <h1 class="govuk-heading-xl">New tenant</h1>
+        <p class="govuk-body">
+            Create a new tenant with only the settings it needs to run. Each setting below is prefilled from
+            <strong>@(string.IsNullOrWhiteSpace(Model.SourceTenantName) ? Model.SourceTenantId.ToString() : Model.SourceTenantName)</strong>
+            (<code>@Model.SourceTenantId</code>). Review and edit them before you create the tenant.
+        </p>
+        <p class="govuk-body">
+            <code>__REDACTED__</code> keeps the current tenant's value for that secret. Type a new value to replace it.
+            Token signing secrets have been generated for the new tenant.
+            Templates, users and any setting not listed here are added after the tenant exists.
+        </p>
+
+        <form method="post" novalidate>
+            <input type="hidden" asp-for="Scheme" />
+
+            <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.NewTenantId)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                <label class="govuk-label" asp-for="NewTenantId"></label>
+                <div class="govuk-hint">A new GUID is suggested. You can replace it with a known id.</div>
+                <span asp-validation-for="NewTenantId" class="govuk-error-message"></span>
+                <input class="govuk-input" asp-for="NewTenantId" type="text" spellcheck="false" autocomplete="off" />
+            </div>
+
+            <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.NewTenantName)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                <label class="govuk-label" asp-for="NewTenantName"></label>
+                <span asp-validation-for="NewTenantName" class="govuk-error-message"></span>
+                <input class="govuk-input govuk-!-width-two-thirds" asp-for="NewTenantName" type="text" autocomplete="off" />
+            </div>
+
+            <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.Hostname)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                <label class="govuk-label" asp-for="Hostname"></label>
+                <div class="govuk-hint">Host only, for example <code>newservice.dev-flexforms.education.gov.uk</code></div>
+                <span asp-validation-for="Hostname" class="govuk-error-message"></span>
+                <input class="govuk-input" asp-for="Hostname" type="text" spellcheck="false" autocomplete="off" />
+            </div>
+
+            <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.FrontendOrigin)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                <label class="govuk-label" asp-for="FrontendOrigin"></label>
+                <div class="govuk-hint">Absolute origin, for example <code>https://newservice.dev-flexforms.education.gov.uk</code></div>
+                <span asp-validation-for="FrontendOrigin" class="govuk-error-message"></span>
+                <input class="govuk-input" asp-for="FrontendOrigin" type="url" spellcheck="false" autocomplete="off" />
+            </div>
+
+            <span asp-validation-for="Settings" class="govuk-error-message"></span>
+
+            @foreach (var optionalSection in new[] { false, true })
+            {
+                if (!Model.Settings.Any(s => s.IsOptional == optionalSection))
+                {
+                    continue;
+                }
+
+                if (optionalSection)
+                {
+                    <h2 class="govuk-heading-m">Copied from the current tenant</h2>
+                    <p class="govuk-body">
+                        Not needed to create the tenant, but usually configured before go-live. Check each value suits the new tenant,
+                        or leave it blank to leave it out.
+                    </p>
+                }
+                else
+                {
+                    <h2 class="govuk-heading-m">Needed to run</h2>
+                    <p class="govuk-body">
+                        Sign-in: <strong>@Model.Scheme</strong>@(Model.Scheme == NewTenantAdminService.TestAuthentication
+                            ? " (the default outside Production, with signing secrets generated for this tenant)"
+                            : " (copied from the current tenant)").
+                        The API rejects the tenant if something here is missing.
+                    </p>
+                }
+
+                for (var i = 0; i < Model.Settings.Count; i++)
+                {
+                    var setting = Model.Settings[i];
+                    if (setting.IsOptional != optionalSection)
+                    {
+                        continue;
+                    }
+
+                    var jsonField = $"{nameof(Model.Settings)}[{i}].{nameof(NewTenantModel.SettingInput.SettingsJson)}";
+                    <div class="govuk-form-group @(ViewData.ModelState[jsonField]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                        <input type="hidden" asp-for="Settings[i].Category" />
+                        <input type="hidden" asp-for="Settings[i].Target" />
+                        <input type="hidden" asp-for="Settings[i].IsOptional" />
+                        <label class="govuk-label govuk-label--s" asp-for="Settings[i].SettingsJson">
+                            @setting.Category <span class="govuk-tag govuk-tag--grey">@setting.Target</span>
+                        </label>
+                        <div class="govuk-hint">@NewTenantMessages.Purpose(setting.Category, setting.IsOptional)</div>
+                        <span asp-validation-for="Settings[i].SettingsJson" class="govuk-error-message"></span>
+                        <textarea class="govuk-textarea govuk-!-font-family-monospace"
+                                  asp-for="Settings[i].SettingsJson"
+                                  rows="6"
+                                  spellcheck="false"
+                                  autocomplete="off"></textarea>
+                    </div>
+                }
+            }
+
+            <div class="govuk-button-group">
+                <button type="submit" class="govuk-button" data-module="govuk-button" id="create-tenant-button">
+                    Create tenant
+                </button>
+                <a asp-page="/Admin/Admin" class="govuk-link govuk-link--no-visited-state">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>

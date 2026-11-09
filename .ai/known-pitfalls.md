@@ -3,7 +3,7 @@
 1. **`StaleFormSessionException`.** Session answers are not per-application. File delete / upload / remove-item paths used to save without reloading API state. Two tabs → truncated `ResponseBody`. Guard lives in Application + `ExternalApiPageExceptionFilter`. Do not add a new save path that skips the guard.
 2. **Health without ShortCircuit** + telemetry reading `Session` → Redis GET on every probe → restart loop when Redis is down.
 3. **Single replica + Redis outage** = 100% connection refused. Prefer ≥2 web replicas in prod.
-4. **`TokenRefresh:TokenEndpoint` required** even for Entra-only tenants.
+4. **`TokenRefresh:TokenEndpoint` required** even for Entra-only and Test Authentication tenants: `CompositeAuthenticationSchemeStrategy` always builds the OIDC strategy, whose token-refresh service validates `TenantTokenRefreshOptionsAccessor` (TokenRefresh, or derived from DfESignIn). The New tenant page includes it for that reason.
 5. **Test Auth:** key length; Web Target overriding Shared; per-replica tenant-config cache delay; optional API URL rewrite to another environment.
 6. **Data Protection ring** must be shared across web replicas and **not** the API ring.
 7. **Forwarded headers** required behind ACA/Front Door or OIDC redirect URIs break.

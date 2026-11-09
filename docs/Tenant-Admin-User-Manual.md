@@ -2386,7 +2386,7 @@ You will **not** see these as a tenant Admin (by design):
 
 | Screen | Purpose |
 |--------|---------|
-| **New tenant** (`/admin/duplicate-tenant`) | Clone a tenant, including a new service name |
+| **New tenant** (`/admin/new-tenant`) | Create a tenant from the settings it needs to run, plus common pre-go-live settings (feature flags, file storage, sign-in clients, email and others), all prefilled from your tenant for you to edit. Outside Production the new tenant starts on Test Authentication with generated signing secrets. Templates, users, layout and other settings are added afterwards |
 | **Platform tenants** (`/admin/platform-tenants`) | List every tenant on the platform |
 | Assigning the **Admin** role in User Manager | Only SuperAdmins get Admin in the role dropdown |
 | **Reveal a secret leaf in Production** | API `POST .../settings/reveal` with a reason (audited). The Tenant Settings page never shows Production secrets as plaintext, even for SuperAdmin. See [14.4](#144-how-secrets-are-shown-and-saved). |
