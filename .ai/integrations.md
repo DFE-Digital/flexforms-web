@@ -8,6 +8,8 @@ All business calls: exchanged JWT + `X-Tenant-ID` + `x-correlationId` (+ optiona
 
 Startup: app-only Entra token → host-config.
 
+Web tenant configuration refresh (**Verified**): the admin pages refresh the API first, then await shared Web invalidation via `src/GovUK.Dfe.FlexForms.Web/Services/Tenant/TenantConfigurationCache.cs`. It uses raw Redis version keys from `src/GovUK.Dfe.FlexForms.Domain/Caching/FlexFormsCacheKeys.cs`; configuration payloads remain local. No API contract change is required. This fixes Web replica consistency only: confirm flexforms-api's refresh reaches all API replicas separately if stale effective configuration persists.
+
 ## SignalR
 
 Browser connects to **API** `{api-base}/hubs/notifications`, not Web. Ticket via `FrontHubTicketController` → `IHubAuthClient`. Cypress sets `window.Cypress` and skips the hub (WebSocket proxy issues).

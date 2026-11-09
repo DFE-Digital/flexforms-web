@@ -215,14 +215,14 @@ public sealed class OrganisationSettingsModel(
         SubmittedPanelTitle = SubmittedPanelTitle?.Trim() ?? string.Empty;
 
         var outcome = await organisationSettingsAdmin.SaveAsync(CaptureWorkState(), cancellationToken);
-        return MapOutcome(outcome);
+        return await MapOutcomeAsync(outcome, cancellationToken);
     }
 
-    private IActionResult MapOutcome(AdminPageOutcome outcome)
+    private async Task<IActionResult> MapOutcomeAsync(AdminPageOutcome outcome, CancellationToken cancellationToken)
     {
         if (outcome.RefreshLocalCaches)
         {
-            tenantConfigurationCache.Invalidate(TenantId);
+            await tenantConfigurationCache.InvalidateAsync(TenantId, cancellationToken);
             tenantIdResolver.InvalidateHostnameCache();
         }
 

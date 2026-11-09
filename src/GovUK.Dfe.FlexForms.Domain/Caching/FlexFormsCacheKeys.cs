@@ -17,4 +17,7 @@ public static class FlexFormsCacheKeys
 
     /// <summary>Raw Redis blacklist by application + original file name.</summary>
     public const string InfectedFileNamePrefix = "FlexForms:InfectedFileName:";
+
+    /// <summary>Raw Redis version markers for Web tenant configuration (bypasses KeyPrefix).</summary>
+    public const string WebTenantConfigurationVersionPrefix = "FlexForms:Web:TenantConfigurationVersion:";
 }

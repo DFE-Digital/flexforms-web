@@ -16,6 +16,8 @@ Playwright sets `window.Cypress = true` with `Context.AddInitScriptAsync` (`Play
 
 When adding PageModels, add Application use-case tests — not only PageModel tests.
 
+Tenant configuration regression coverage (**Verified**): `src/Tests/GovUK.Dfe.FlexForms.Web.UnitTests/Services/Tenant/TenantConfigurationCacheTests.cs` exercises independent Web caches against shared Redis-version semantics, including in-flight invalidation and Redis failures. `Pages/Admin/TenantConfigurationInvalidationTests.cs` verifies all three admin surfaces await invalidation before success. Run `dotnet test src\Tests\GovUK.Dfe.FlexForms.Web.UnitTests\GovUK.Dfe.FlexForms.Web.UnitTests.csproj --no-restore -p:SkipDockerCompose=true --filter "FullyQualifiedName~TenantConfiguration|FullyQualifiedName~CleanArchitectureGuardTests"`. `SkipDockerCompose=true` prevents the Web project's local-development build target from restarting containers.
+
 ## Template JSON
 
 Authoring manuals in `docs/`. Template Studio is gated by FeatureManagement Target Web.

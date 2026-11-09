@@ -25,6 +25,8 @@ Per-request overlays: `TenantAwareOpenIdConnectConfigurator`, `TenantAwareEntraS
 
 `TenantSessionBindingMiddleware` binds the signed-in session to its tenant. Re-read it and `TenantIdResolver` tests before changing resolver order.
 
+Tenant configuration cache versions (**Verified**): `src/GovUK.Dfe.FlexForms.Web/Services/Tenant/TenantConfigurationCache.cs` keeps configuration in process memory and stores only random version markers in shared Redis, under `FlexFormsCacheKeys.WebTenantConfigurationVersionPrefix` (`src/GovUK.Dfe.FlexForms.Domain/Caching/FlexFormsCacheKeys.cs`). Redis read failures must not be treated as missing markers or permission to reuse local configuration. No tenant secrets are serialized to this cache.
+
 ## Roles in UI
 
 `Security/AdminAccessHelper.cs`: SuperAdmin, Admin, User, plus Manage claims (`Template:Any:Manage`, …). Policies wrap those for admin folders.

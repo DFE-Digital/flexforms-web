@@ -198,7 +198,7 @@ public sealed class EventMappingsModel(
         var state = CaptureWorkState();
         var outcome = await execute(state);
         ApplyWorkState(state);
-        return MapOutcome(outcome);
+        return await MapOutcomeAsync(outcome);
     }
 
     private IActionResult StayWithTenantError(string? error)
@@ -254,7 +254,7 @@ public sealed class EventMappingsModel(
         }
     }
 
-    private IActionResult MapOutcome(AdminPageOutcome outcome)
+    private async Task<IActionResult> MapOutcomeAsync(AdminPageOutcome outcome)
     {
         foreach (var key in outcome.ModelStateKeysToRemove)
             ModelState.Remove(key);
@@ -270,7 +270,7 @@ public sealed class EventMappingsModel(
 
         if (outcome.RefreshLocalCaches)
         {
-            tenantConfigurationCache.Invalidate(TenantId);
+            await tenantConfigurationCache.InvalidateAsync(TenantId, HttpContext.RequestAborted);
             tenantIdResolver.InvalidateHostnameCache();
         }
 

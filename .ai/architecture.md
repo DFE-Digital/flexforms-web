@@ -17,6 +17,8 @@ Guards: `src/Tests/GovUK.Dfe.FlexForms.Web.UnitTests/Architecture/CleanArchitect
 
 `Program.cs` requires `PlatformBootstrap:Enabled`. `AddWebLayerServices()` → `AddInfrastructureDependencyGroup()`.
 
+Tenant configuration caching (**Verified**): `src/GovUK.Dfe.FlexForms.Web/Services/Tenant/TenantConfigurationCache.cs` remains a singleton local cache, but uses the existing shared `IConnectionMultiplexer` to check a tenant-specific Web version on every load. Only version markers go into Redis, not tenant configuration/secrets. Admin mutations await shared invalidation; API loads recheck the version before caching/returning. Redis errors propagate rather than serving unvalidated local state. Health endpoints still bypass this middleware.
+
 ## Middleware order (do not casually reorder)
 
 Forwarded headers → original host → correlation → platform tenant configuration → exception/HSTS/security headers → HTTPS (except health) → static files → routing → cookie → **session** → auth → `TenantSessionBindingMiddleware` → token management → activity-based refresh → permissions cache → authorization → template selection → telemetry → Razor Pages/controllers.

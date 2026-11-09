@@ -15,6 +15,8 @@ Tenant Admin hub: templates, users, roles, settings, event mappings, duplicate t
 
 PageModel → Admin service → Api.Client. PRG + TempData. Errors via `AdminApiErrorMapper` / `ExternalApiPageExceptionFilter`.
 
+Tenant configuration refresh (**Verified**): Organisation Settings, Tenant Settings mutations/refresh and Event Mappings await `ITenantConfigurationCache.InvalidateAsync` before reporting success. It changes a shared Redis version marker; each Web replica checks that marker before reusing local configuration. Sources: `src/GovUK.Dfe.FlexForms.Web/Pages/Admin/OrganisationSettings.cshtml.cs`, `TenantSettings.cshtml.cs`, `EventMappings.cshtml.cs`, and `Services/Tenant/TenantConfigurationCache.cs`. API refresh still happens first; this does not change API-side cache invalidation.
+
 Template Studio loads/saves template JSON through API version endpoints. Feature flag `TemplateStudio` in FeatureManagement Target **Web**.
 
 ## 4. Other repos

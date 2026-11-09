@@ -31,6 +31,8 @@ JWT tenant_id vs hostname. Test Auth environment gate. OTP on API.
 
 TokenEndpoint, forwarded headers, Data Protection, tenant-config cache minutes, Web vs Shared settings.
 
+Cross-replica tenant configuration (**Verified**): `src/GovUK.Dfe.FlexForms.Web/Services/Tenant/TenantConfigurationCache.cs` checks a shared Redis Web version on each request, retaining local configuration only while its version matches. Organisation Settings, Tenant Settings and Event Mappings publish invalidation after API refresh. In-flight loads retry if the version changed. The configured TTL still bounds refresh for external/API-only changes that do not publish Web invalidation; API-side refresh guarantees remain separate.
+
 ## 8. Tests
 
 Middleware and auth unit tests, Playwright TestService admin journeys.

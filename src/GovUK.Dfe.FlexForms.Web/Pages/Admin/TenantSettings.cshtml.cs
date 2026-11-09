@@ -252,11 +252,11 @@ public sealed class TenantSettingsModel(
         }
     }
 
-    private Task<IActionResult> MapOutcomeAsync(AdminPageOutcome outcome)
+    private async Task<IActionResult> MapOutcomeAsync(AdminPageOutcome outcome)
     {
         if (outcome.RefreshLocalCaches)
         {
-            tenantConfigurationCache.Invalidate(TenantId);
+            await tenantConfigurationCache.InvalidateAsync(TenantId, HttpContext.RequestAborted);
             tenantIdResolver.InvalidateHostnameCache();
         }
 
@@ -276,7 +276,7 @@ public sealed class TenantSettingsModel(
             _ => RedirectToPage()
         };
 
-        return Task.FromResult(result);
+        return result;
     }
 
     private bool TryResolveTenant(out string? error)
