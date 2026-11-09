@@ -41,10 +41,10 @@ public static class NewTenantMessages
     {
         "ConnectionStrings" => "DefaultConnection for the tenant's application database. Every API request needs it.",
         "Authorization" => "Signs the tenant's user tokens. New values were generated for this tenant.",
-        "AzureAd" => "Lets Web's service identity call the API for this tenant (token exchange).",
+        "AzureAd" => "Lets Web's service identity call the API for this tenant (token exchange). Needs TenantId and ClientId (or Audience).",
         "Authentication" => "Which sign-in the tenant uses.",
-        "DfESignIn" => "DfE Sign-in client. Web also derives token refresh settings from it.",
-        "EntraSso" => "Microsoft Entra sign-in client.",
+        "DfESignIn" => "DfE Sign-in client. The API needs DiscoveryEndpoint and ClientId to validate sign-ins. Web also derives token refresh settings from it.",
+        "EntraSso" => "Microsoft Entra sign-in client. The API needs Enabled true, TenantId and ClientId to validate sign-ins.",
         "TestAuthentication" => "Test sign-in signing settings. New values were generated for this tenant; Api and Web must match.",
         "TokenRefresh" => "Token refresh endpoints and client. Web checks these on every request.",
         "Email" => "GOV.UK Notify, needed to email the Test sign-in one-time password.",
@@ -56,7 +56,8 @@ public static class NewTenantMessages
     {
         "Template" or "ApplicationTemplates" =>
             "Template ids the current tenant owns are rejected, because a tenant can only map its own templates. "
-            + "Clear them (and use the new hostname as the key) unless they are shared legacy templates.",
+            + "Clear them (and use the new hostname as the key) unless they are shared legacy templates. "
+            + "If the new tenant uses a different database, leave mappings out and add them after creation.",
         "FileStorage" =>
             "Keeping __REDACTED__ reuses the current tenant's storage account and share.",
         "Email" =>

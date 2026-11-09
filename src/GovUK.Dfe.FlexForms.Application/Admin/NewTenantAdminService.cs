@@ -259,7 +259,7 @@ public sealed class NewTenantAdminService(
                 break;
 
             default:
-                CopyOrPlaceholder(DfESignIn, SharedTarget, """{"Authority":"","ClientId":"","ClientSecret":""}""");
+                CopyOrPlaceholder(DfESignIn, SharedTarget, """{"Authority":"","DiscoveryEndpoint":"","ClientId":"","ClientSecret":""}""");
                 break;
         }
 
