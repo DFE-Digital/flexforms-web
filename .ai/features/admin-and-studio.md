@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-Tenant Admin hub: templates, users, roles, settings, event mappings, duplicate tenant, reporting export, custom status labels.
+Tenant Admin hub: templates, users, roles, settings, event mappings, new tenant, reporting export, custom status labels.
 
 ## 2. Entry points
 
@@ -45,7 +45,9 @@ Template Studio preview (**Verified**): the preview keeps its template and answe
 
 ## 6. Edge cases
 
-Wrong FeatureManagement Target. EventMappings ≠ Prism contract. Duplicate tenant overlap of Shared/Api settings (API gate).
+Wrong FeatureManagement Target. EventMappings ≠ Prism contract.
+
+New tenant (**Verified**): `/admin/new-tenant` (`NewTenantModel` → `NewTenantAdminService`, SuperAdmin only) no longer clones. `BuildDraft` prefills only the minimum rows from the current tenant, chosen by its sign-in scheme (`ResolveScheme` mirrors `TenantAuthSchemeSelector` precedence): ConnectionStrings, Authorization (fresh secret, issuer and audience), AzureAd, Authentication, the scheme's provider, and TokenRefresh (or DfESignIn for non-DSI schemes so Web can derive token refresh). Test Authentication also gets fresh signing values on Api and Web, plus Email and EmailTemplates. Missing rows become empty placeholders. After those, `CopiedCategories` (FeatureManagement, FileStorage, Template, NotificationService, NotificationBanner, MassTransit, FrontendSettings, FormEngine, ExternalApplicationsApiClient, EntraSso, DfESignIn, Email, CacheSettings, ApplicationTerminology, ApplicationTemplates, ApplicationReference) are copied as-is when the current tenant has them, flagged `IsOptional`, and shown under "Copied from the current tenant". Copied template mappings are usually rejected by the API's ownership check, and the page hint says so. Each row is an editable JSON textarea; blank means "leave out", and `__REDACTED__` keeps the current tenant's value (the API restores it). The API's `NewTenantSettingsRequirements` is the authority and rejects anything else, so keep `BuildDraft` in step with it. API validation messages are shown as-is via `AdminApiErrorMapper`. Deploy Web and API together: the `payloadJson` shape changed on the same `POST .../clone` endpoint.
 
 ## 7. Tests
 

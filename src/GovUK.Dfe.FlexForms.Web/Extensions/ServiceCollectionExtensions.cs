@@ -82,7 +82,7 @@ namespace GovUK.Dfe.FlexForms.Web.Extensions
             services.AddScoped<IReportingExportAdmin, ReportingExportAdminService>();
             services.AddScoped<IEventMappingsAdmin, EventMappingsAdminService>();
             services.AddScoped<ITemplateManagerAdmin, TemplateManagerAdminService>();
-            services.AddScoped<IDuplicateTenantAdmin, DuplicateTenantAdminService>();
+            services.AddScoped<INewTenantAdmin, NewTenantAdminService>();
             services.AddScoped<IAdminHome, AdminHomeService>();
             services.AddScoped<IOrganisationSettingsAdmin, OrganisationSettingsAdminService>();
             services.AddScoped<IPrepareApplicationSubmittedPage, PrepareApplicationSubmittedPageService>();
