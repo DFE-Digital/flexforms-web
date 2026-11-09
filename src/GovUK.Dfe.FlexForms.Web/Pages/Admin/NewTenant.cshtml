@@ -51,6 +51,13 @@
                 <input class="govuk-input govuk-!-width-two-thirds" asp-for="NewTenantName" type="text" autocomplete="off" />
             </div>
 
+            <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.ServiceName)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
+                <label class="govuk-label" asp-for="ServiceName"></label>
+                <div class="govuk-hint">Shown in the header service navigation and page titles (<code>Layout:ServiceName</code>). Prefilled from the current tenant.</div>
+                <span asp-validation-for="ServiceName" class="govuk-error-message"></span>
+                <input class="govuk-input" asp-for="ServiceName" type="text" autocomplete="off" />
+            </div>
+
             <div class="govuk-form-group @(ViewData.ModelState[nameof(Model.Hostname)]?.Errors.Any() == true ? "govuk-form-group--error" : "")">
                 <label class="govuk-label" asp-for="Hostname"></label>
                 <div class="govuk-hint">Host only, for example <code>newservice.dev-flexforms.education.gov.uk</code></div>

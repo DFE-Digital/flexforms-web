@@ -37,6 +37,12 @@ public sealed class NewTenantModel(
     public string NewTenantName { get; set; } = string.Empty;
 
     [BindProperty]
+    [Required(ErrorMessage = NewTenantMessages.ServiceNameRequired)]
+    [StringLength(NewTenantAdminService.ServiceNameMaxLength, ErrorMessage = NewTenantMessages.ServiceNameTooLong)]
+    [Display(Name = "Service name")]
+    public string ServiceName { get; set; } = string.Empty;
+
+    [BindProperty]
     [Required(ErrorMessage = "Enter a hostname")]
     [StringLength(255, ErrorMessage = "Hostname must be 255 characters or fewer")]
     [Display(Name = "Hostname")]
@@ -82,6 +88,7 @@ public sealed class NewTenantModel(
         }
 
         NewTenantName = NewTenantName?.Trim() ?? string.Empty;
+        ServiceName = ServiceName?.Trim() ?? string.Empty;
         Hostname = Hostname?.Trim() ?? string.Empty;
         FrontendOrigin = FrontendOrigin?.Trim() ?? string.Empty;
 
@@ -120,6 +127,7 @@ public sealed class NewTenantModel(
             SourceTenantName = SourceTenantName,
             NewTenantId = NewTenantId,
             NewTenantName = NewTenantName,
+            ServiceName = ServiceName,
             Hostname = Hostname,
             FrontendOrigin = FrontendOrigin,
             Scheme = Scheme,
@@ -139,6 +147,7 @@ public sealed class NewTenantModel(
     {
         SourceTenantId = state.SourceTenantId;
         SourceTenantName = state.SourceTenantName;
+        ServiceName = state.ServiceName;
         Scheme = state.Scheme;
         Settings = state.Settings
             .Select(s => new SettingInput

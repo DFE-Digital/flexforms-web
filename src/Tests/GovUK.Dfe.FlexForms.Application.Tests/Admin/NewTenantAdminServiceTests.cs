@@ -27,6 +27,7 @@ public class NewTenantAdminServiceTests
             SourceTenantName = "Transfers",
             NewTenantId = Guid.NewGuid(),
             NewTenantName = "Transfers new",
+            ServiceName = "Apply to transfer",
             Hostname = "new.example.test",
             FrontendOrigin = "https://new.example.test",
             Settings = [new NewTenantSettingDraft { Category = "Authentication", Target = "Web", SettingsJson = """{"Scheme":"DfESignIn"}""" }]
@@ -68,6 +69,63 @@ public class NewTenantAdminServiceTests
     }
 
     [Fact]
+    public async Task LoadDraftAsync_ShouldPrefillServiceName_FromLayout_ThenTenantName()
+    {
+        _state.ServiceName = "";
+        GivenSourceSettings(
+            Row("Layout", "Shared", """{"ServiceName":"Shared name"}"""),
+            Row("Layout", "Web", """{"ServiceName":"Visit a school","Phase":"beta"}"""));
+
+        await _service.LoadDraftAsync(_state);
+
+        Assert.Equal("Visit a school", _state.ServiceName);
+
+        _state.ServiceName = "";
+        GivenSourceSettings();
+
+        await _service.LoadDraftAsync(_state);
+
+        Assert.Equal("Transfers", _state.ServiceName);
+    }
+
+    [Fact]
+    public void WithServiceName_ShouldOverwriteLayoutServiceName_AndKeepOtherKeys()
+    {
+        var rows = NewTenantAdminService.WithServiceName(
+            [
+                new NewTenantSettingDraft { Category = "Layout", Target = "Web", SettingsJson = """{"ServiceName":"Old","Phase":"beta"}""" },
+                new NewTenantSettingDraft { Category = "TokenRefresh", Target = "Web", SettingsJson = " " }
+            ],
+            "New service");
+
+        var layout = JsonNode.Parse(Assert.Single(rows).SettingsJson)!;
+        Assert.Equal("New service", layout["ServiceName"]!.GetValue<string>());
+        Assert.Equal("beta", layout["Phase"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void WithServiceName_ShouldAddWebLayout_WhenNoneIsLeft()
+    {
+        var rows = NewTenantAdminService.WithServiceName(
+            [new NewTenantSettingDraft { Category = "Layout", Target = "Web", SettingsJson = "" }],
+            "New service");
+
+        var layout = Assert.Single(rows);
+        Assert.Equal(("Layout", "Web"), (layout.Category, layout.Target));
+        Assert.Equal("New service", JsonNode.Parse(layout.SettingsJson)!["ServiceName"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void ValidateInput_ShouldReturnError_WhenServiceNameIsBlank()
+    {
+        _state.ServiceName = " ";
+
+        var errors = _service.ValidateInput(_state);
+
+        Assert.Contains(errors, e => e.FieldKey == "ServiceName" && e.Message == NewTenantMessages.ServiceNameRequired);
+    }
+
+    [Fact]
     public async Task LoadDraftAsync_ShouldLeaveOutTestAuthentication_WhenNotAllowed_EvenForTestAuthTenant()
     {
         GivenSourceSettings(
@@ -102,9 +160,9 @@ public class NewTenantAdminServiceTests
             ["ConnectionStrings", "Authorization", "AzureAd", "Authentication", "DfESignIn"],
             _state.Settings.Where(s => !s.IsOptional).Select(s => s.Category));
         Assert.Equal(
-            ["FileStorage", "EntraSso"],
+            ["Layout", "FileStorage", "EntraSso"],
             _state.Settings.Where(s => s.IsOptional).Select(s => s.Category));
-        Assert.DoesNotContain(_state.Settings, s => s.Category is "Layout" or "InternalServiceAuth");
+        Assert.DoesNotContain(_state.Settings, s => s.Category == "InternalServiceAuth");
         Assert.Equal("Shared", _state.Settings.Single(s => s.Category == "AzureAd").Target);
         Assert.Contains("__REDACTED__", _state.Settings.Single(s => s.Category == "ConnectionStrings").SettingsJson);
 
@@ -231,8 +289,10 @@ public class NewTenantAdminServiceTests
         using var payload = JsonDocument.Parse(Encoding.UTF8.GetString(Convert.FromBase64String(sent!.PayloadJson)));
         Assert.Equal("new.example.test", payload.RootElement.GetProperty("hostname").GetString());
         var settings = payload.RootElement.GetProperty("settings");
-        Assert.Equal(1, settings.GetArrayLength());
+        Assert.Equal(2, settings.GetArrayLength());
         Assert.Equal("Authentication", settings[0].GetProperty("category").GetString());
+        Assert.Equal("Layout", settings[1].GetProperty("category").GetString());
+        Assert.Contains("Apply to transfer", settings[1].GetProperty("settingsJson").GetString());
     }
 
     [Fact]

@@ -37,6 +37,9 @@ public sealed class NewTenantAdminService(
     public const string EntraSso = "EntraSso";
     public const string TestAuthentication = "TestAuthentication";
 
+    public const string LayoutCategory = "Layout";
+    public const int ServiceNameMaxLength = 200;
+
     /// <summary>
     /// Not needed to run but usually configured before go-live, so they are copied as-is when the
     /// current tenant has them (no placeholders). Must stay within the API's
@@ -44,6 +47,7 @@ public sealed class NewTenantAdminService(
     /// </summary>
     public static readonly IReadOnlyList<string> CopiedCategories =
     [
+        LayoutCategory,
         "FeatureManagement",
         "FileStorage",
         "Template",
@@ -93,6 +97,9 @@ public sealed class NewTenantAdminService(
             state.ErrorMessage = NewTenantMessages.SettingsLoadFailed;
         }
 
+        if (string.IsNullOrWhiteSpace(state.ServiceName))
+            state.ServiceName = ResolveServiceName(source) ?? state.SourceTenantName;
+
         state.Scheme = ChooseScheme(ResolveScheme(source), state.TestAuthenticationAllowed);
         state.Settings = BuildDraft(source, state.Scheme, state.NewTenantId, state.SourceTenantName);
     }
@@ -105,6 +112,11 @@ public sealed class NewTenantAdminService(
             errors.Add(new FormValidationError("NewTenantId", NewTenantMessages.TenantIdRequired));
         else if (state.NewTenantId == state.SourceTenantId)
             errors.Add(new FormValidationError("NewTenantId", NewTenantMessages.TenantIdMustDiffer));
+
+        if (string.IsNullOrWhiteSpace(state.ServiceName))
+            errors.Add(new FormValidationError("ServiceName", NewTenantMessages.ServiceNameRequired));
+        else if (state.ServiceName.Trim().Length > ServiceNameMaxLength)
+            errors.Add(new FormValidationError("ServiceName", NewTenantMessages.ServiceNameTooLong));
 
         for (var i = 0; i < state.Settings.Count; i++)
         {
@@ -144,8 +156,7 @@ public sealed class NewTenantAdminService(
             {
                 state.Hostname,
                 state.FrontendOrigin,
-                Settings = state.Settings
-                    .Where(s => !string.IsNullOrWhiteSpace(s.SettingsJson))
+                Settings = WithServiceName(state.Settings, state.ServiceName.Trim())
                     .Select(s => new { s.Category, s.Target, s.SettingsJson })
                     .ToList()
             };
@@ -176,6 +187,55 @@ public sealed class NewTenantAdminService(
             state.ErrorMessage = message;
             return AdminPageOutcome.Stay(errorMessage: message);
         }
+    }
+
+    /// <summary>The current tenant's <c>Layout:ServiceName</c> as Web reads it (Web row before Shared).</summary>
+    internal static string? ResolveServiceName(IReadOnlyList<SourceSetting> source) =>
+        source
+            .Where(s => IsCategory(s, LayoutCategory) && (IsTarget(s, WebTarget) || IsTarget(s, SharedTarget)))
+            .OrderByDescending(s => IsTarget(s, WebTarget))
+            .Select(s => ParseObject(s.SettingsJson)?["ServiceName"] is JsonValue value
+                         && value.TryGetValue<string>(out var name)
+                ? name.Trim()
+                : null)
+            .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name));
+
+    /// <summary>
+    /// The non-blank rows to send, with <paramref name="serviceName"/> written to the Layout row Web
+    /// reads (Web before Shared); a Web Layout row is added when the SuperAdmin left none.
+    /// </summary>
+    internal static List<NewTenantSettingDraft> WithServiceName(
+        IEnumerable<NewTenantSettingDraft> settings,
+        string serviceName)
+    {
+        var rows = settings
+            .Where(s => !string.IsNullOrWhiteSpace(s.SettingsJson))
+            .Select(s => new NewTenantSettingDraft
+            {
+                Category = s.Category,
+                Target = s.Target,
+                SettingsJson = s.SettingsJson,
+                IsOptional = s.IsOptional
+            })
+            .ToList();
+
+        var layout = rows
+            .Where(s => string.Equals(s.Category, LayoutCategory, StringComparison.OrdinalIgnoreCase)
+                        && (string.Equals(s.Target, WebTarget, StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(s.Target, SharedTarget, StringComparison.OrdinalIgnoreCase)))
+            .OrderByDescending(s => string.Equals(s.Target, WebTarget, StringComparison.OrdinalIgnoreCase))
+            .FirstOrDefault();
+
+        if (layout is null)
+        {
+            layout = new NewTenantSettingDraft { Category = LayoutCategory, Target = WebTarget };
+            rows.Add(layout);
+        }
+
+        var root = ParseObject(layout.SettingsJson) ?? new JsonObject();
+        root["ServiceName"] = serviceName;
+        layout.SettingsJson = root.ToJsonString();
+        return rows;
     }
 
     /// <summary>
