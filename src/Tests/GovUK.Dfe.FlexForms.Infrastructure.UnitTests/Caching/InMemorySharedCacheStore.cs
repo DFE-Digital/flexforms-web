@@ -67,7 +67,12 @@ internal sealed class InMemorySharedCacheStore : ISharedCacheStore
         }
     }
 
-    public Task InvalidateAsync(string cacheKey)
+    /// <summary>
+    /// Runs after an invalidation has been applied but before it returns, like a slow reply from Redis.
+    /// </summary>
+    public Func<Task>? AfterInvalidationApplied { get; set; }
+
+    public async Task InvalidateAsync(string cacheKey)
     {
         ThrowIf(FailInvalidations);
         lock (_sync)
@@ -76,7 +81,8 @@ internal sealed class InMemorySharedCacheStore : ISharedCacheStore
             _values.Remove(cacheKey);
         }
 
-        return Task.CompletedTask;
+        if (AfterInvalidationApplied is { } afterApplied)
+            await afterApplied();
     }
 
     private static void ThrowIf(bool fail)

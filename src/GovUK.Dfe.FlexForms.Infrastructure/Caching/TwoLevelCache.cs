@@ -39,8 +39,10 @@ public sealed class TwoLevelCache(
 
     private readonly ConcurrentDictionary<string, long> _generations = new();
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _fills = new();
-    private readonly ConcurrentDictionary<string, byte> _pendingInvalidations = new();
+    // Key -> number of the latest failed invalidation attempt for it. Attempt numbers only grow.
+    private readonly ConcurrentDictionary<string, long> _pendingInvalidations = new();
     private readonly Lock _sync = new();
+    private long _invalidationAttempts;
 
     public TimeSpan InvalidationRetryInterval { get; init; } = TimeSpan.FromSeconds(5);
 
@@ -92,13 +94,8 @@ public sealed class TwoLevelCache(
     public async Task RemoveAsync(string cacheKey)
     {
         // Redis first: a local read that starts after the memory copy is dropped must not find the old shared copy.
-        if (await TryInvalidateSharedAsync(cacheKey))
+        if (!await InvalidateSharedAsync(cacheKey))
         {
-            _pendingInvalidations.TryRemove(cacheKey, out _);
-        }
-        else
-        {
-            _pendingInvalidations.TryAdd(cacheKey, 0);
             Logger.LogWarning(
                 "Could not remove {CacheKey} from Redis; retrying every {RetryInterval} and bypassing the shared copy until then",
                 cacheKey,
@@ -120,12 +117,11 @@ public sealed class TwoLevelCache(
     {
         foreach (var cacheKey in _pendingInvalidations.Keys)
         {
-            if (!await TryInvalidateSharedAsync(cacheKey))
+            if (!await InvalidateSharedAsync(cacheKey))
             {
                 continue;
             }
 
-            _pendingInvalidations.TryRemove(cacheKey, out _);
             RemoveLocal(cacheKey);
             await PublishAsync(cacheKey);
             Logger.LogInformation("Removed {CacheKey} from Redis after an earlier failure", cacheKey);
@@ -146,6 +142,31 @@ public sealed class TwoLevelCache(
         {
             return;
         }
+    }
+
+    /// <summary>
+    /// Invalidates the Redis copy and keeps the pending marker in step. A success only clears a marker left by an
+    /// attempt that started no later than this one: a later save's failed attempt may have run while this one's reply
+    /// was in flight, after a refill of the entry this attempt deleted, and that save still needs retrying.
+    /// </summary>
+    private async Task<bool> InvalidateSharedAsync(string cacheKey)
+    {
+        var attempt = Interlocked.Increment(ref _invalidationAttempts);
+        if (!await TryInvalidateSharedAsync(cacheKey))
+        {
+            _pendingInvalidations.AddOrUpdate(cacheKey, attempt, (_, latest) => Math.Max(latest, attempt));
+            return false;
+        }
+
+        while (_pendingInvalidations.TryGetValue(cacheKey, out var latestFailure) && latestFailure <= attempt)
+        {
+            if (_pendingInvalidations.TryRemove(KeyValuePair.Create(cacheKey, latestFailure)))
+            {
+                break;
+            }
+        }
+
+        return true;
     }
 
     private async Task<bool> TryInvalidateSharedAsync(string cacheKey)

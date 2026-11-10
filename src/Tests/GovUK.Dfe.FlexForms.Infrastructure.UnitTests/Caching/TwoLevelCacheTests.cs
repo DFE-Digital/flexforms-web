@@ -190,6 +190,66 @@ public class TwoLevelCacheTests
     }
 
     [Fact]
+    public async Task SlowSuccessfulRetry_DoesNotClearAFailureFromALaterSave()
+    {
+        var saving = new Replica(_redis);
+        _redis.FailInvalidations = true;
+        await saving.Cache.RemoveAsync(Key);
+        _redis.FailInvalidations = false;
+
+        var retryApplied = new TaskCompletionSource();
+        var releaseRetryReply = new TaskCompletionSource();
+        _redis.AfterInvalidationApplied = async () =>
+        {
+            _redis.AfterInvalidationApplied = null;
+            retryApplied.SetResult();
+            await releaseRetryReply.Task;
+        };
+        var retry = saving.Cache.RetryPendingInvalidationsOnceAsync();
+        await retryApplied.Task;
+
+        await new Replica(_redis).Cache.GetOrAddAsync(Key, () => Task.FromResult("before second save"), Method);
+        _redis.FailInvalidations = true;
+        await saving.Cache.RemoveAsync(Key);
+        releaseRetryReply.SetResult();
+        await retry;
+
+        Assert.Equal(
+            "after second save",
+            await saving.Cache.GetOrAddAsync(Key, () => Task.FromResult("after second save"), Method));
+
+        _redis.FailInvalidations = false;
+        await saving.Cache.RetryPendingInvalidationsOnceAsync();
+        Assert.False(_redis.HasValue(Key));
+    }
+
+    [Fact]
+    public async Task OverlappingSuccessfulRemove_DoesNotClearAFailureFromALaterSave()
+    {
+        var saving = new Replica(_redis);
+        var firstApplied = new TaskCompletionSource();
+        var releaseFirstReply = new TaskCompletionSource();
+        _redis.AfterInvalidationApplied = async () =>
+        {
+            _redis.AfterInvalidationApplied = null;
+            firstApplied.SetResult();
+            await releaseFirstReply.Task;
+        };
+        var firstSave = saving.Cache.RemoveAsync(Key);
+        await firstApplied.Task;
+
+        await new Replica(_redis).Cache.GetOrAddAsync(Key, () => Task.FromResult("before second save"), Method);
+        _redis.FailInvalidations = true;
+        await saving.Cache.RemoveAsync(Key);
+        releaseFirstReply.SetResult();
+        await firstSave;
+
+        Assert.Equal(
+            "after second save",
+            await saving.Cache.GetOrAddAsync(Key, () => Task.FromResult("after second save"), Method));
+    }
+
+    [Fact]
     public async Task PendingInvalidation_IsRetriedInTheBackground()
     {
         var saving = new Replica(_redis);
