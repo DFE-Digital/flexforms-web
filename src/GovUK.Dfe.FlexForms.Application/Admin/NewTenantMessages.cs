@@ -13,6 +13,10 @@ public static class NewTenantMessages
 
     public const string SettingsRequired = "Enter at least one setting.";
 
+    public const string ServiceNameRequired = "Enter a service name";
+
+    public const string ServiceNameTooLong = "Service name must be 200 characters or fewer";
+
     public const string SettingsLoadFailed =
         "Could not load the current tenant's settings. Fill in each setting before creating the tenant.";
 
@@ -54,6 +58,8 @@ public static class NewTenantMessages
 
     private static string CopiedPurpose(string category) => category switch
     {
+        "Layout" =>
+            "Other layout options copied from the current tenant. ServiceName is always set from the Service name field above.",
         "Template" or "ApplicationTemplates" =>
             "Template ids the current tenant owns are rejected, because a tenant can only map its own templates. "
             + "Clear them (and use the new hostname as the key) unless they are shared legacy templates. "

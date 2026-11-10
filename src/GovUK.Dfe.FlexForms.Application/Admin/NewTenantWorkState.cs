@@ -13,6 +13,9 @@ public sealed class NewTenantWorkState
 
     public string NewTenantName { get; set; } = string.Empty;
 
+    /// <summary>Written to <c>Layout:ServiceName</c> on create.</summary>
+    public string ServiceName { get; set; } = string.Empty;
+
     public string Hostname { get; set; } = string.Empty;
 
     public string FrontendOrigin { get; set; } = string.Empty;

@@ -20,6 +20,12 @@ public static class UserPermissionsCache
     private static readonly TimeSpan CacheDuration = TimeSpan.FromSeconds(15);
 
     /// <summary>
+    /// Issuer on the permission and role claims added by <see cref="PermissionsClaimProvider"/>, so they can be
+    /// told apart from claims that came with the sign-in.
+    /// </summary>
+    public const string ClaimIssuer = "FlexForms.Permissions";
+
+    /// <summary>
     /// Builds the cache key for the authenticated user's permissions payload.
     /// Includes tenant id when present so multi-tenant sessions do not share grants.
     /// </summary>
@@ -101,7 +107,9 @@ public static class UserPermissionsCache
     }
 
     /// <summary>
-    /// Removes permission claims from the current principal so they can be rebuilt from fresh data.
+    /// Removes permission claims, and the role claims <see cref="PermissionsClaimProvider"/> added, from the current
+    /// principal so they can be rebuilt from fresh data. Leaving the roles in place would let a role revoked in the
+    /// last few seconds survive the refresh, because claims transformation only adds claims.
     /// </summary>
     public static void RemovePermissionClaims(ClaimsPrincipal user)
     {
@@ -110,7 +118,12 @@ public static class UserPermissionsCache
             return;
         }
 
-        foreach (var claim in identity.FindAll("permission").ToList())
+        var stale = identity.Claims
+            .Where(claim => claim.Type == "permission"
+                || (claim.Type == ClaimTypes.Role && claim.Issuer == ClaimIssuer))
+            .ToList();
+
+        foreach (var claim in stale)
         {
             identity.RemoveClaim(claim);
         }

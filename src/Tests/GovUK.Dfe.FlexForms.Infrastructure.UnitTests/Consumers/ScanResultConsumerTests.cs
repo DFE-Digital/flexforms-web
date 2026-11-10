@@ -471,14 +471,6 @@ public class ScanResultConsumerTests
         });
 
         var redis = CreateRedis(out var database, out var server);
-        server.Keys(pattern: Arg.Any<RedisValue>())
-            .Returns(callInfo =>
-            {
-                var pattern = callInfo.Arg<RedisValue>().ToString();
-                return pattern.Contains(FlexFormsCacheKeys.RedisKeyPrefix, StringComparison.Ordinal)
-                    ? new[] { new RedisKey($"{FlexFormsCacheKeys.RedisKeyPrefix}{applicationId}") }
-                    : Array.Empty<RedisKey>();
-            });
 
         var consumer = CreateConsumer(redis);
         var context = CreateContext(
@@ -506,9 +498,12 @@ public class ScanResultConsumerTests
             applicationId,
             Arg.Any<AddApplicationResponseRequest>(),
             Arg.Any<CancellationToken>());
-        await database.Received().KeyDeleteAsync(
-            Arg.Is<RedisKey>(k => k.ToString().Contains(applicationId.ToString(), StringComparison.Ordinal)),
-            Arg.Any<CommandFlags>());
+        server.DidNotReceiveWithAnyArgs().Keys();
+        Assert.Contains(
+            database.ReceivedCalls(),
+            call => call.GetMethodInfo().Name == nameof(IDatabase.StringSetAsync)
+                && call.GetArguments()[0] is RedisKey key
+                && key.ToString() == $"{FlexFormsCacheKeys.InfectedFilePrefix}{fileId}");
     }
 
     [Fact]
@@ -545,7 +540,6 @@ public class ScanResultConsumerTests
         database.KeyExistsAsync(Arg.Any<RedisKey>(), Arg.Any<CommandFlags>()).Returns(true);
 
         server = Substitute.For<IServer>();
-        server.Keys(pattern: Arg.Any<RedisValue>()).Returns(Array.Empty<RedisKey>());
 
         var redis = Substitute.For<IConnectionMultiplexer>();
         redis.GetDatabase().Returns(database);
