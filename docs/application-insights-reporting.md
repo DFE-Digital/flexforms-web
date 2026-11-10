@@ -54,7 +54,8 @@ Limitations:
 - This is a server sign-in session, not an exact "visit". Tabs in the same browser share one session.
 - Test Authentication tenants do not record a sign-in start time. Their sessions only end when the ASP.NET session ends.
 - Pages before sign-in get a session id that changes once the user signs in.
-- Requests that finish before the telemetry middleware runs have no session id. These are static files, sign-in redirects, errors loading the tenant, and the very first request before a session cookie exists.
+- Requests that finish before authentication has run have no session id. These are static files, sign-in callbacks, errors loading the tenant, and the very first request before a session cookie exists.
+- On the first request after sign-in, telemetry sent before the sign-in start time is recorded (token and activity checks) has no session id. The request itself has it.
 - `session_Id` mixes browser sessions (with cookie consent) and server sessions (without it). Count with `customDimensions.SessionId`.
 
 ## Sampling
@@ -105,7 +106,8 @@ requests
 | where timestamp > ago(7d)
 | where isnotempty(user_AuthenticatedId)
 | where tostring(customDimensions.IsStaticResource) != "true"
-| summarize Requests = sum(itemCount), Sessions = dcount(tostring(customDimensions.SessionId))
+| extend SessionId = tostring(customDimensions.SessionId)
+| summarize Requests = sum(itemCount), Sessions = dcountif(SessionId, isnotempty(SessionId))
     by user_AuthenticatedId, UserType = tostring(customDimensions.UserType)
 | order by Requests desc
 ```
@@ -132,7 +134,7 @@ requests
 | where tostring(customDimensions.UserType) != "InternalService"
 | extend TenantId = tostring(customDimensions.TenantId), SessionId = tostring(customDimensions.SessionId)
 | where isnotempty(SessionId)
-| summarize Sessions = dcount(SessionId, 4), Users = dcount(user_AuthenticatedId, 4) by TenantId
+| summarize Sessions = dcount(SessionId, 4), Users = dcountif(user_AuthenticatedId, isnotempty(user_AuthenticatedId), 4) by TenantId
 ```
 
 Signed-in vs anonymous vs automated requests:

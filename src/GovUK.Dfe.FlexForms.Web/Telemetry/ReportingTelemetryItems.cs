@@ -40,6 +40,24 @@ internal static class ReportingTelemetryItems
         context.Items[SessionIdItemKey] = Convert.ToHexStringLower(hash.AsSpan(0, SessionIdByteCount));
     }
 
+    /// <summary>
+    /// <see cref="BindSession"/> before the token, activity and permissions middleware, so their dependencies and
+    /// errors carry the session id too. Skipped for a signed-in user whose sign-in start time is not recorded yet
+    /// (first request after sign-in): <see cref="UserActivityTracker"/> records it later in the same request, and
+    /// the id would change. The late bind in <c>RequestTelemetryEnrichmentMiddleware</c> covers that case.
+    /// </summary>
+    public static void BindSessionEarly(HttpContext context, ISession session)
+    {
+        if (context.User.Identity?.IsAuthenticated == true
+            && session.IsAvailable
+            && string.IsNullOrEmpty(session.GetString(UserActivityTracker.SessionStartKey)))
+        {
+            return;
+        }
+
+        BindSession(context, session);
+    }
+
     public static string? GetSessionId(HttpContext context) =>
         context.Items.TryGetValue(SessionIdItemKey, out var value) ? value as string : null;
 }

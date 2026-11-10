@@ -815,6 +815,7 @@ app.UseStatusCodePages(ctx =>
 
 app.UseAuthentication();
 app.UseMiddleware<TenantSessionBindingMiddleware>();
+app.UseReportingSessionBinding();
 app.UseTokenManagementMiddleware();
 app.UseActivityBasedTokenRefresh(); // Session management: idle timeout 30min, absolute timeout 8hr, token refresh at 30min remaining
 app.UsePermissionsCache();

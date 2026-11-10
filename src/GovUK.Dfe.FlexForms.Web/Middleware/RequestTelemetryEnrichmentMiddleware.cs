@@ -72,8 +72,28 @@ public sealed class RequestTelemetryEnrichmentMiddleware(
     }
 }
 
+/// <summary>
+/// Binds the reporting session id straight after authentication, so telemetry from the token, activity and
+/// permissions middleware carries it. Same session-cookie guard as <see cref="RequestTelemetryEnrichmentMiddleware"/>.
+/// </summary>
+public sealed class ReportingSessionBindingMiddleware(RequestDelegate next, IOptions<SessionOptions> sessionOptions)
+{
+    private readonly string _sessionCookieName = sessionOptions.Value.Cookie.Name!;
+
+    public Task InvokeAsync(HttpContext context)
+    {
+        if (context.Request.Cookies.ContainsKey(_sessionCookieName))
+            ReportingTelemetryItems.BindSessionEarly(context, context.Session);
+
+        return next(context);
+    }
+}
+
 public static class RequestTelemetryEnrichmentMiddlewareExtensions
 {
     public static IApplicationBuilder UseRequestTelemetryEnrichment(this IApplicationBuilder app)
         => app.UseMiddleware<RequestTelemetryEnrichmentMiddleware>();
+
+    public static IApplicationBuilder UseReportingSessionBinding(this IApplicationBuilder app)
+        => app.UseMiddleware<ReportingSessionBindingMiddleware>();
 }

@@ -122,6 +122,37 @@ public class ReportingTelemetryItemsTests
     }
 
     [Fact]
+    public void BindSessionEarly_ShouldSkipASignedInUser_UntilTheSignInStartTimeIsRecorded()
+    {
+        var session = new FakeSession("aspnet-session-id");
+        var context = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "u")], "Cookies"))
+        };
+
+        ReportingTelemetryItems.BindSessionEarly(context, session);
+        Assert.Null(ReportingTelemetryItems.GetSessionId(context));
+
+        session.SetString("Session:StartTime", "2026-11-10T09:00:00.0000000Z");
+        ReportingTelemetryItems.BindSessionEarly(context, session);
+        ReportingTelemetryItems.BindSession(context, session);
+
+        var lateBound = ReportingTelemetryItems.GetSessionId(context);
+        Assert.NotNull(lateBound);
+        Assert.Equal(lateBound, Bind(session));
+    }
+
+    [Fact]
+    public void BindSessionEarly_ShouldBindAnonymousSessions()
+    {
+        var context = new DefaultHttpContext();
+
+        ReportingTelemetryItems.BindSessionEarly(context, new FakeSession("aspnet-session-id"));
+
+        Assert.NotNull(ReportingTelemetryItems.GetSessionId(context));
+    }
+
+    [Fact]
     public void BindTenant_ShouldIgnoreAnEmptyTenant()
     {
         var context = new DefaultHttpContext();

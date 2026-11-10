@@ -128,6 +128,20 @@ public class RequestTelemetryEnrichmentMiddlewareTests
         Assert.Null(ReportingTelemetryItems.GetSessionId(withoutCookie));
     }
 
+    [Fact]
+    public async Task ReportingSessionBinding_ShouldBindEarly_OnlyWhenThereIsASessionCookie()
+    {
+        var middleware = new ReportingSessionBindingMiddleware(_ => Task.CompletedTask, Options.Create(new SessionOptions()));
+        var withCookie = Request(new InMemorySession(), withSessionCookie: true);
+        var unavailable = new UnavailableSession();
+
+        await middleware.InvokeAsync(withCookie);
+        await middleware.InvokeAsync(Request(unavailable, withSessionCookie: false));
+
+        Assert.NotNull(ReportingTelemetryItems.GetSessionId(withCookie));
+        Assert.Equal(0, unavailable.Reads);
+    }
+
     private sealed class UnavailableSession : ISession
     {
         public int Reads { get; private set; }
