@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Security.Claims;
 using GovUK.Dfe.CoreLibs.Http.Interfaces;
 using GovUK.Dfe.CoreLibs.Http.Middlewares.RequestTelemetry;
 using GovUK.Dfe.FlexForms.Web.Middleware;
@@ -16,9 +17,13 @@ public class RequestTelemetryEnrichmentMiddlewareTests
 {
     private const string SessionCookieName = ".AspNetCore.Session";
 
-    private readonly FlexFormsRequestScope _scope = new();
+    private const string ReportingKey = "0123456789abcdef0123456789abcdef-test-key";
+    private static readonly Guid TenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
 
-    private async Task<bool> Invoke(HttpContext context)
+    private readonly FlexFormsRequestScope _scope = new();
+    private readonly RequestTelemetryContext _telemetry = new();
+
+    private async Task<bool> Invoke(HttpContext context, Guid? tenantId = null, string? reportingKey = ReportingKey)
     {
         var nextCalled = false;
         var middleware = new RequestTelemetryEnrichmentMiddleware(
@@ -28,16 +33,51 @@ public class RequestTelemetryEnrichmentMiddlewareTests
                 return Task.CompletedTask;
             },
             Options.Create(new SessionOptions()),
+            new ReportingUserIdGenerator(reportingKey),
             NullLogger<RequestTelemetryEnrichmentMiddleware>.Instance);
+
+        var tenantContext = Substitute.For<ITenantRequestContext>();
+        tenantContext.TenantId.Returns(tenantId);
 
         await middleware.InvokeAsync(
             context,
-            Substitute.For<ITenantRequestContext>(),
-            new RequestTelemetryContext(),
+            tenantContext,
+            _telemetry,
             _scope,
             Substitute.For<ICorrelationContext>());
 
         return nextCalled;
+    }
+
+    private static DefaultHttpContext SignedIn() => new()
+    {
+        User = new ClaimsPrincipal(new ClaimsIdentity(
+            [
+                new Claim(ClaimTypes.NameIdentifier, "dsi-user-1"),
+                new Claim(ClaimTypes.Email, "ada.lovelace@education.gov.uk")
+            ],
+            authenticationType: "Cookies"))
+    };
+
+    [Fact]
+    public async Task InvokeAsync_ShouldLogThePseudonymousReportingId_NotTheRawUserId()
+    {
+        await Invoke(SignedIn(), TenantId);
+
+        Assert.Equal(new ReportingUserIdGenerator(ReportingKey).Create(TenantId, "dsi-user-1"), _telemetry.UserId);
+        Assert.Equal(PiiMasking.MaskEmail("ada.lovelace@education.gov.uk"), _telemetry.UserEmail);
+        Assert.DoesNotContain(_telemetry.ToScopeDictionary().Values, v => v.ToString()!.Contains("dsi-user-1"));
+    }
+
+    [Theory]
+    [InlineData(true, null)]
+    [InlineData(false, ReportingKey)]
+    public async Task InvokeAsync_ShouldLogNoUserId_WithoutTenantOrKey(bool withTenant, string? reportingKey)
+    {
+        await Invoke(SignedIn(), withTenant ? TenantId : null, reportingKey);
+
+        Assert.Null(_telemetry.UserId);
+        Assert.NotNull(_telemetry.UserEmail);
     }
 
     private static DefaultHttpContext Request(ISession session, bool withSessionCookie)
@@ -71,6 +111,35 @@ public class RequestTelemetryEnrichmentMiddlewareTests
         Assert.True(nextCalled);
         Assert.Equal("template-1", _scope.TemplateId);
         Assert.Equal("LSP-20261102-004", _scope.ApplicationReference);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_ShouldBindAnOpaqueReportingSessionId_OnlyWhenThereIsASessionCookie()
+    {
+        var withCookie = Request(new InMemorySession(), withSessionCookie: true);
+        var withoutCookie = Request(new InMemorySession(), withSessionCookie: false);
+
+        await Invoke(withCookie);
+        await Invoke(withoutCookie);
+
+        var sessionId = ReportingTelemetryItems.GetSessionId(withCookie);
+        Assert.NotNull(sessionId);
+        Assert.NotEqual("session-1", sessionId);
+        Assert.Null(ReportingTelemetryItems.GetSessionId(withoutCookie));
+    }
+
+    [Fact]
+    public async Task ReportingSessionBinding_ShouldBindEarly_OnlyWhenThereIsASessionCookie()
+    {
+        var middleware = new ReportingSessionBindingMiddleware(_ => Task.CompletedTask, Options.Create(new SessionOptions()));
+        var withCookie = Request(new InMemorySession(), withSessionCookie: true);
+        var unavailable = new UnavailableSession();
+
+        await middleware.InvokeAsync(withCookie);
+        await middleware.InvokeAsync(Request(unavailable, withSessionCookie: false));
+
+        Assert.NotNull(ReportingTelemetryItems.GetSessionId(withCookie));
+        Assert.Equal(0, unavailable.Reads);
     }
 
     private sealed class UnavailableSession : ISession

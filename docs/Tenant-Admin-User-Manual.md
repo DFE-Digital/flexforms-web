@@ -2072,7 +2072,7 @@ Use this when the third-party API expects a static key in an `ApiKey` HTTP heade
 | `Placeholder` | No | Grey text in the search box. |
 | `AllowMultiple` | No | `true` to let the user pick more than one result. |
 | `MaxSelections` | No | `0` means no limit when multiple is allowed. |
-| `Label` | No | Used in “Is this the right {label}?” and collection item labels. Default `Item`. |
+| `Label` | No | Default name in “Is this the right {label}?” and summary item labels. A question can replace it with `complexField.label` in Template Studio. Default `Item`. |
 
 If one complex field has no `ApiKey`, FlexForms may reuse another field’s key in the same list, or `FormEngine:AcademiesApiKey`. Do not rely on that for a new API — set `ApiKey` on the field that needs it.
 

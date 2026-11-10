@@ -19,6 +19,12 @@
     
     // Get configuration from appsettings
     var configuration = ComplexFieldConfigurationService.GetConfiguration(complexFieldId);
+    var complexFieldLabel = AutocompleteDisplayExpression.FirstNonEmpty(
+        Model.Field.ComplexField?.Label,
+        configuration.Label);
+    var confirmationTitle = ComplexFieldConfirmationTitle.Format(
+        Model.Field.ComplexField?.ConfirmationTitle,
+        complexFieldLabel);
     
     // Generate unique IDs (never use label text — spaces break aria-labelledby tokenisation)
     var inputId = $"{Model.Id}-complex-field";
@@ -30,7 +36,7 @@
     var errorId = $"{inputId}-error";
     var labelText = !string.IsNullOrWhiteSpace(label)
         ? label
-        : (!string.IsNullOrWhiteSpace(configuration.Label) ? configuration.Label : "Search");
+        : (!string.IsNullOrWhiteSpace(complexFieldLabel) ? complexFieldLabel : "Search");
     var effectiveLabelClasses = string.IsNullOrWhiteSpace(label) ? "govuk-visually-hidden" : labelClasses;
     const string pageTitleElementId = "page-title";
     var labelIsVisuallyHidden = effectiveLabelClasses.Contains("govuk-visually-hidden", StringComparison.Ordinal);
@@ -274,8 +280,8 @@ else
                 displayFields: confirmationDisplayFields,
                 displayExpression: AutocompleteDisplayExpression.IsSpecified(confirmationDisplay) ? confirmationDisplay : null,
                 buttonId: "autocomplete-confirm-button",
-                title: $"Is this the right {@configuration.Label}?",
-                requiredMessage: $"Select yes if this is the right { @configuration.Label}")
+                title: confirmationTitle,
+                requiredMessage: $"Select yes if this is the right {complexFieldLabel}")
     </div>
 }
 
