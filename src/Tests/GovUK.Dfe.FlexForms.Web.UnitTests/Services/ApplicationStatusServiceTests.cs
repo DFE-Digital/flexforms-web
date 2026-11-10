@@ -1,11 +1,11 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Text;
-using GovUK.Dfe.CoreLibs.Caching.Interfaces;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
+using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Web.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
@@ -17,7 +17,7 @@ namespace GovUK.Dfe.FlexForms.Web.UnitTests.Services;
 public class ApplicationStatusServiceTests
 {
     private readonly ITemplatesClient _templates = Substitute.For<ITemplatesClient>();
-    private readonly ICacheService<IMemoryCacheType> _cache = Substitute.For<ICacheService<IMemoryCacheType>>();
+    private readonly ITwoLevelCache _cache = Substitute.For<ITwoLevelCache>();
     private readonly ApplicationStatusService _service;
 
     public ApplicationStatusServiceTests()
@@ -25,7 +25,8 @@ public class ApplicationStatusServiceTests
         _cache.GetOrAddAsync(
                 Arg.Any<string>(),
                 Arg.Any<Func<Task<ObservableCollection<CustomApplicationStatusDto>>>>(),
-                Arg.Any<string>())
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>())
             .Returns(call => call.Arg<Func<Task<ObservableCollection<CustomApplicationStatusDto>>>>()());
 
         _service = new ApplicationStatusService(_templates, NullLogger<ApplicationStatusService>.Instance, _cache);

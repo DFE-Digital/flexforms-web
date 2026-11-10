@@ -33,6 +33,10 @@ Per-request overlays: `TenantAwareOpenIdConnectConfigurator`, `TenantAwareEntraS
 
 `TenantSettingSecretPlaintextGate` + CSS masking. Masking is **not** authorization. Production SuperAdmin should see `__REDACTED__` and use reveal.
 
+## Telemetry pseudonymisation
+
+**Verified** in `Telemetry/ReportingUserIdGenerator.cs`. Application Insights user ids are HMAC-SHA256 of tenant id + `NameIdentifier` with host secret `Telemetry:ReportingUserIdKey` (Key Vault → Container App secret or API host-config, ≥32 chars, different per environment). They are pseudonymous personal data. The request log-scope `UserId` (`RequestTelemetryEnrichmentMiddleware`) uses the same id; don't put the raw `NameIdentifier` back in log scopes or `{UserId}` message properties. Missing key → no user id at all; never fall back to a raw id. Rotating the key changes every reporting id. Details: [`../docs/application-insights-reporting.md`](../docs/application-insights-reporting.md).
+
 ## Data Protection
 
 `SharedDataProtectionExtensions` — Azure Blob + Key Vault in deployed envs. Blob name must stay **`web-keys.xml`**, distinct from the API ring. Mismatch → `CookieProtection.Unprotect` failures and forced re-login.

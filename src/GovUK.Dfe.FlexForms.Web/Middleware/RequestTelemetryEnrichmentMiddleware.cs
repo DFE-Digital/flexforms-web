@@ -12,6 +12,7 @@ namespace GovUK.Dfe.FlexForms.Web.Middleware;
 public sealed class RequestTelemetryEnrichmentMiddleware(
     RequestDelegate next,
     IOptions<SessionOptions> sessionOptions,
+    ReportingUserIdGenerator reportingUserIdGenerator,
     ILogger<RequestTelemetryEnrichmentMiddleware> logger)
 {
     private readonly string _sessionCookieName = sessionOptions.Value.Cookie.Name!;
@@ -31,7 +32,10 @@ public sealed class RequestTelemetryEnrichmentMiddleware(
 
         if (context.User?.Identity?.IsAuthenticated == true)
         {
-            telemetry.UserId = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            // Pseudonymous reporting id, never the raw NameIdentifier: log scopes reach Application Insights.
+            telemetry.UserId = tenantRequestContext.TenantId is Guid tenantId
+                ? reportingUserIdGenerator.Create(tenantId, context.User.FindFirstValue(ClaimTypes.NameIdentifier))
+                : null;
             var rawEmail = context.User.FindFirstValue(ClaimTypes.Email)
                 ?? context.User.Identity?.Name;
             telemetry.UserEmail = string.IsNullOrWhiteSpace(rawEmail)
@@ -50,6 +54,8 @@ public sealed class RequestTelemetryEnrichmentMiddleware(
             var applicationReference = context.Session.GetString("ApplicationReference");
             if (!string.IsNullOrWhiteSpace(applicationReference))
                 flexFormsScope.ApplicationReference = applicationReference;
+
+            ReportingTelemetryItems.BindSession(context, context.Session);
         }
 
         telemetry.CorrelationId ??= correlationContext.CorrelationId.ToString();
@@ -66,8 +72,28 @@ public sealed class RequestTelemetryEnrichmentMiddleware(
     }
 }
 
+/// <summary>
+/// Binds the reporting session id straight after authentication, so telemetry from the token, activity and
+/// permissions middleware carries it. Same session-cookie guard as <see cref="RequestTelemetryEnrichmentMiddleware"/>.
+/// </summary>
+public sealed class ReportingSessionBindingMiddleware(RequestDelegate next, IOptions<SessionOptions> sessionOptions)
+{
+    private readonly string _sessionCookieName = sessionOptions.Value.Cookie.Name!;
+
+    public Task InvokeAsync(HttpContext context)
+    {
+        if (context.Request.Cookies.ContainsKey(_sessionCookieName))
+            ReportingTelemetryItems.BindSessionEarly(context, context.Session);
+
+        return next(context);
+    }
+}
+
 public static class RequestTelemetryEnrichmentMiddlewareExtensions
 {
     public static IApplicationBuilder UseRequestTelemetryEnrichment(this IApplicationBuilder app)
         => app.UseMiddleware<RequestTelemetryEnrichmentMiddleware>();
+
+    public static IApplicationBuilder UseReportingSessionBinding(this IApplicationBuilder app)
+        => app.UseMiddleware<ReportingSessionBindingMiddleware>();
 }

@@ -13,7 +13,8 @@ public interface ITenantConfigurationCache
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Removes a cached tenant configuration entry so the next load hits the platform API.
+    /// Removes this replica's cached tenant configuration entry so the next load hits the platform API.
+    /// Use <see cref="ITenantConfigurationInvalidator"/> after a settings change so every replica drops it.
     /// </summary>
     void Invalidate(Guid tenantId);
 }

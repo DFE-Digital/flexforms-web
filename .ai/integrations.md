@@ -43,3 +43,17 @@ Enter key behaviour lives in `_AutocompleteComplexField.cshtml`: while suggestio
 ## MassTransit
 
 Configured in bootstrap. Web is a **consumer** of scan results, not the scan publisher.
+
+## Application Insights (usage reporting)
+
+**Verified.** SDK 2.23 (`AddApplicationInsightsTelemetry`), `TenantAwareTelemetryChannel` for per-tenant resources, processors `HealthCheckTelemetryFilter` (drops probes) and `ClientAbortedRequestTelemetryProcessor`, and Serilog → `ExceptionTrackingTelemetryConverter` for traces/exceptions. Adaptive sampling is the SDK default (not overridden in repo config).
+
+`Telemetry/ReportingTelemetryInitializer.cs` (registered in `Program.cs` after `AddApplicationInsightsTelemetry`, so the SDK's `ai_session`/`ai_user`/synthetic initializers run first) adds:
+
+- `User.AuthenticatedUserId` + `ReportingUserId`: tenant-scoped HMAC-SHA256 of `NameIdentifier` (`ReportingUserIdGenerator`, key `Telemetry:ReportingUserIdKey`). No key, tenant or `NameIdentifier` → no id, never the raw value.
+- `SessionId` (and `Session.Id` when the browser `ai_session` did not set it): hash of the ASP.NET session's internal id + `UserActivityTracker` `Session:StartTime`. Bound only when a session cookie exists: early by `ReportingSessionBindingMiddleware` (after auth, before token/activity/permissions middleware; skipped on the first request after sign-in, before the start time is recorded) and again late by `RequestTelemetryEnrichmentMiddleware`, so the request row always has the final value.
+- `TenantId` (bound by `TenantConfigurationMiddleware`), `UserType` (existing roles / `service_type=internal`), `ServiceName`, and on requests `IsAuthenticated`, `IsHealthCheck`, `IsStaticResource`, `IsSyntheticTraffic` (true only when known).
+
+`RequestTelemetryEnrichmentMiddleware` puts the same reporting id (not the raw `NameIdentifier`) in the log-scope `UserId`, so traces and exceptions match `user_AuthenticatedId`; `UserEmail` stays masked. Log messages about the signed-in user use `ReportingUserIdGenerator.ForLogging` for `{UserId}`.
+
+The initializer never overwrites existing values and reads only `HttpContext.User`, request path/headers and `ReportingTelemetryItems` (`HttpContext.Items`). Reporting guide and KQL: [`../docs/application-insights-reporting.md`](../docs/application-insights-reporting.md).

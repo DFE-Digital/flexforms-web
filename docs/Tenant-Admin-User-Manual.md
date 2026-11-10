@@ -274,7 +274,7 @@ If the JSON is invalid, the save is rejected and you should see **There is a pro
 
 ![Error summary and messages under JSON Schema](images/05-template-validation-errors.png)
 
-After a successful save: **Template version created successfully**. You are advised to **Clear all caches** so everyone picks up the new version immediately.
+After a successful save: **Template version created successfully**. Every server picks up the new version straight away; **Clear all caches** is only needed if someone still sees the old one.
 
 #### Grant to all users
 
@@ -320,7 +320,7 @@ The underlying statuses stay the same (**Created**, **In progress**, **Submitted
 3. Enter the **Custom Status Value** (the label to show).
 4. Select **Save Overrides**.
 
-The cache refreshes immediately. Repeat for each base status you want to rename (for example “In progress” → “Draft”).
+The cache refreshes immediately on every server. Repeat for each base status you want to rename (for example “In progress” → “Draft”).
 
 ---
 
@@ -2370,11 +2370,11 @@ Previewing a not-live form as an admin shows: **THIS IS A PREVIEW OF {template n
 
 **Admin hub → System → Clear All Sessions & Caches**
 
-Use this after you publish a new template version if people still see the old questions or dashboard headings.
+Use this if people still see the old questions or dashboard headings after you publish a new template version. It clears **your own** session and the selected template's cached copy on every server. Other users' sessions are not touched, despite the button's name.
 
 You may need to choose the form again afterwards (**Forms** or Admin → Open / Preview).
 
-**Diagnostics** (when a template is selected) shows the active template name, id, version, cache key, and session tokens. Useful when raising a support ticket; not needed day to day.
+**Diagnostics** (when a template is selected) shows the active template name, id, version, cache key, and session tokens. The cache status describes only the server that answered your request. Useful when raising a support ticket; not needed day to day.
 
 Template Manager’s success message also offers **Clear all caches** after a new version.
 

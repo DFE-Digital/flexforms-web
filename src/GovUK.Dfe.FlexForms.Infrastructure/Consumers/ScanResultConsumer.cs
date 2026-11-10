@@ -194,9 +194,8 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Consumers
                         logger.LogWarning("File doesn't exist to delete, perhaps removed already. Error: {Error}", e.Message);
                     }
 
-                    // Clean up infected file from database and clear Redis cache
                     // Pass the original filename so we can match files by name (not just by blob storage ID)
-                    await RemoveInfectedFileFromDatabaseAndCacheAsync(reference, applicationId, fileId, originalFileName, requestedUserId.Value.ToString());
+                    await RemoveInfectedFileFromDatabaseAsync(reference, fileId, originalFileName);
 
                     // CRITICAL: Create blacklist entries for ALL database record IDs, not just the blob storage ID
                     // This ensures the web app's FilterInfectedFilesFromList can find and filter these files
@@ -212,10 +211,6 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Consumers
                     // This handles the case where the file was already deleted from the database
                     // before we could look up its database record ID
                     await CreateFilenameBlacklistEntryAsync(originalFileName, applicationId!.Value);
-
-                    // clean up collection flow sessions in Redis
-                    // This ensures infected files are removed from FlowProgress_* session keys
-                    await CleanupCollectionFlowSessionsAsync(applicationId ?? Guid.Empty, fileId, originalFileName);
 
                     // Create user notification about the infected file
                     await CreateMalwareNotificationAsync(
@@ -247,9 +242,9 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Consumers
         }
 
         /// <summary>
-        /// Removes infected file from database and clears all Redis cache to force fresh data load
+        /// Removes the infected file from the application's saved answers.
         /// </summary>
-        private async Task RemoveInfectedFileFromDatabaseAndCacheAsync(string reference, Guid? applicationId, Guid fileId, string fileName, string userId)
+        private async Task RemoveInfectedFileFromDatabaseAsync(string reference, Guid fileId, string fileName)
         {
             try
             {
@@ -275,9 +270,6 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Consumers
                     logger.LogInformation(
                         "No response data found for application {Reference}, skipping database cleanup",
                         reference);
-                    
-                    // Still clear cache and create blacklist even if no database data
-                    await ClearRedisCacheForApplicationAsync(application.ApplicationId, fileId, fileName);
                     return;
                 }
 
@@ -418,68 +410,13 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Consumers
                         fileId,
                         reference);
                 }
-
-                // Step 6: Clear ALL Redis cache keys for this application to force fresh load from cleaned DB
-                await ClearRedisCacheForApplicationAsync(application.ApplicationId, fileId, fileName);
             }
             catch (Exception ex)
             {
                 logger.LogError(ex,
-                    "Error cleaning up infected file {FileId} from database for application reference {Reference}. Continuing so Redis cleanup and notification can still run.",
+                    "Error cleaning up infected file {FileId} from database for application reference {Reference}. Continuing so the blacklist and notification can still run.",
                     fileId,
                     reference);
-            }
-        }
-
-        /// <summary>
-        /// Clears all Redis cache keys related to an application and creates a blacklist entry for the infected file.
-        /// The blacklist ensures the file is filtered out everywhere it appears.
-        /// </summary>
-        private async Task ClearRedisCacheForApplicationAsync(Guid applicationId, Guid fileId, string fileName)
-        {
-            try
-            {
-                var db = redis.GetDatabase();
-                var server = redis.GetServer(redis.GetEndPoints().First());
-
-                // Clear cache keys
-                var cacheKeys = server.Keys(pattern: $"{FlexFormsCacheKeys.RedisKeyPrefix}*{applicationId}*").ToList();
-
-                logger.LogInformation(
-                    "Found {Count} Redis cache key(s) to clear for application {ApplicationId}",
-                    cacheKeys.Count,
-                    applicationId);
-
-                foreach (var key in cacheKeys)
-                {
-                    await db.KeyDeleteAsync(key);
-                    logger.LogDebug("Deleted Redis cache key: {Key}", key);
-                }
-
-                // CRITICAL: Store the infected file ID in a blacklist for 24 hours
-                // This ensures the file is filtered out EVERYWHERE it appears, even in cached data
-                var infectedFileKey = $"{FlexFormsCacheKeys.InfectedFilePrefix}{fileId}";
-                var infectedFileData = JsonSerializer.Serialize(new
-                {
-                    FileId = fileId,
-                    FileName = fileName,
-                    ApplicationId = applicationId,
-                    MalwareName = "infected",
-                    RemovedAt = DateTimeOffset.UtcNow.ToString("o")
-                });
-                await db.StringSetAsync(infectedFileKey, infectedFileData, TimeSpan.FromHours(24));
-                
-                logger.LogInformation(
-                    "Successfully cleared {CacheCount} cache key(s) and created blacklist entry for infected file {FileId}",
-                    cacheKeys.Count,
-                    fileId);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex,
-                    "Error clearing Redis cache and sessions for application {ApplicationId}",
-                    applicationId);
-                // Don't re-throw - cache clearing failure shouldn't fail the entire process
             }
         }
 
@@ -608,117 +545,6 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Consumers
                 logger.LogError(ex,
                     "Error creating filename blacklist entry for '{OriginalFileName}'",
                     originalFileName);
-            }
-        }
-
-        /// <summary>
-        /// Clears infected files from all collection flow session data in Redis.
-        /// This ensures infected files are removed from FlowProgress_* keys so they don't get re-saved.
-        /// Matches by both file ID and original filename.
-        /// </summary>
-        private async Task CleanupCollectionFlowSessionsAsync(Guid applicationId, Guid fileId, string? originalFileName)
-        {
-            try
-            {
-                var db = redis.GetDatabase();
-                var server = redis.GetServer(redis.GetEndPoints().First());
-
-                // Find all FlowProgress session keys (collection flows)
-                var flowProgressKeys = server.Keys(pattern: "*FlowProgress_*").ToList();
-
-                logger.LogInformation(
-                    "Found {Count} FlowProgress session key(s) to check for infected file {FileId} ({OriginalFileName})",
-                    flowProgressKeys.Count,
-                    fileId,
-                    originalFileName);
-
-                int cleanedCount = 0;
-
-                foreach (var sessionKey in flowProgressKeys)
-                {
-                    var sessionData = await db.StringGetAsync(sessionKey);
-                    if (sessionData.IsNullOrEmpty)
-                        continue;
-
-                    try
-                    {
-                        // Parse the flow progress data
-                        var flowData = JsonSerializer.Deserialize<Dictionary<string, object>>((string)sessionData!);
-                        if (flowData == null)
-                            continue;
-
-                        bool modified = false;
-
-                        // Check each field in the flow progress
-                        foreach (var fieldKey in flowData.Keys.ToList())
-                        {
-                            var fieldValue = flowData[fieldKey]?.ToString();
-                            if (string.IsNullOrEmpty(fieldValue))
-                                continue;
-
-                            try
-                            {
-                                // Try to parse as file list
-                                var files = JsonSerializer.Deserialize<List<UploadDto>>(fieldValue);
-                                if (files != null)
-                                {
-                                    // Match by BOTH file ID and original filename
-                                    var infectedFiles = files.Where(f => 
-                                        f.Id == fileId || 
-                                        string.Equals(f.OriginalFileName, originalFileName, StringComparison.OrdinalIgnoreCase)
-                                    ).ToList();
-                                    
-                                    if (infectedFiles.Any())
-                                    {
-                                        // Remove all matching infected files
-                                        foreach (var infectedFile in infectedFiles)
-                                        {
-                                            files.Remove(infectedFile);
-                                            logger.LogInformation(
-                                                "Removed infected file {FileId} ({FileName}) from field {FieldKey} in session {SessionKey}",
-                                                infectedFile.Id,
-                                                infectedFile.OriginalFileName,
-                                                fieldKey,
-                                                sessionKey);
-                                        }
-                                        
-                                        // Update the field
-                                        flowData[fieldKey] = JsonSerializer.Serialize(files);
-                                        modified = true;
-                                    }
-                                }
-                            }
-                            catch (JsonException)
-                            {
-                                // Not a file list, skip
-                            }
-                        }
-
-                        // Save back to Redis if modified
-                        if (modified)
-                        {
-                            var updatedSessionData = JsonSerializer.Serialize(flowData);
-                            await db.StringSetAsync(sessionKey, updatedSessionData);
-                            cleanedCount++;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogWarning(ex, "Error processing session key {SessionKey}", sessionKey);
-                    }
-                }
-
-                logger.LogInformation(
-                    "Cleaned infected file {FileId} from {Count} collection flow session(s)",
-                    fileId,
-                    cleanedCount);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex,
-                    "Error cleaning collection flow sessions for infected file {FileId}",
-                    fileId);
-                // Don't re-throw - session cleanup failure shouldn't fail the entire process
             }
         }
 

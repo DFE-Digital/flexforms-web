@@ -17,6 +17,8 @@ PageModel → Admin service → Api.Client. PRG + TempData. Errors via `AdminApi
 
 Template Studio loads/saves template JSON through API version endpoints. Feature flag `TemplateStudio` in FeatureManagement Target **Web**. A search question's **Name in a sentence** writes `complexField.label` and overrides that search field's FormEngine Label. **Confirmation heading** writes `confirmationTitle`; blank keeps "Is this the right {name}?".
 
+Cache invalidation after admin changes (**Verified**) reaches every replica: settings pages call `ITenantConfigurationInvalidator` (in-memory tenant config, broadcast over Redis); templates and custom status labels use the two-level cache (memory, then Redis), so template saves (Template Manager, Template Studio), both **Clear all** handlers and status-label saves call `ITwoLevelCache.RemoveAsync` (templates via `ITemplateCacheInvalidator`), which deletes the Redis copy and drops the memory copy on every replica. **Clear All Sessions & Caches** clears only the admin's own session plus the selected template's cache entry. See `.ai/known-pitfalls.md` items 23–24.
+
 ## 4. Other repos
 
 API templates, users, roles, tenant admin, reporting export proxy to Prism.
