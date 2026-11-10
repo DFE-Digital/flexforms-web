@@ -21,6 +21,7 @@ Playwright parallel runs (**Verified** in test code; timings **Unverified** unti
 - Application creates go through `ApplicationCreationGate`. The API's reference generator (newest today + 1, unique index) is not safe for concurrent creates; two at once fail with a duplicate reference. This is the most likely cause of the "DB race condition" that got the first attempt at parallel runs reverted in #64 (**Unverified**).
 - The API rate-limits most commands per non-admin user (e.g. 5 creates and 15 saves per 30s) and returns 429. Tests don't retry on 429, so hitting a limit shows up as a failure. UI journeys that save a lot use admin (exempt) unless the role is what's being tested.
 - Don't share a browser context or session cookie between tests: overlapping requests on one session overwrite each other's session data (`.ai/known-pitfalls.md` #21).
+- Put shared settings back (status labels, tenant settings) through the admin pages, not the API. Only a save through Web clears the two-level cache (Redis copy plus every replica's memory copy); a change made straight through the API stays hidden behind the cached value until it expires, and other fixtures see the test's values.
 - `PW_ARTIFACTS` (`always` | `on-retry` | `off`) controls video and trace recording. CI uses `on-retry`.
 
 When adding PageModels, add Application use-case tests — not only PageModel tests.
