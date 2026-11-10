@@ -422,6 +422,10 @@ For new options, the saved value follows the text as you type. For existing opti
 
 Choose **What to search** (or which **Upload field** to use) from the search and upload fields set up for your organisation, under `FormEngine:ComplexFields` in Tenant settings. If the question uses one that isn't set up, a warning tells you; applicants would see an error until it is added.
 
+**Name in a sentence**, for search questions only, is the wording that replaces `{name}`. Leave it blank to keep the name from Tenant settings. The wording is used as you type it.
+
+**Confirmation heading** is the question above the chosen result, for example `Is this the correct {name}?`. Leave it blank to use "Is this the right {name}?".
+
 **How results are shown (optional)**, for search questions only, changes how this question shows its results without changing the tenant's setting for other questions:
 
 - **Each search result**: how each match in the list looks.

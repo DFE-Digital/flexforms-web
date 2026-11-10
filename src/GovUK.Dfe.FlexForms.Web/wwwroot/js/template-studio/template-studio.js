@@ -2435,6 +2435,27 @@
             config.id && !known
                 ? warningText('No ' + (type === 'upload' ? 'upload' : 'search') + ' field called "' + config.id + '" is set up for this tenant. Applicants will see an error until it is added in Tenant settings.')
                 : null,
+            type === 'search' ? textInput({
+                id: 'tpl-complex-label',
+                label: 'Name in a sentence',
+                hint: 'Replaces {name} in the confirmation heading. Leave blank to use the tenant name'
+                    + ((complexFieldConfig(config.id) || {}).label ? ': ' + complexFieldConfig(config.id).label : '') + '.',
+                value: config.label || '',
+                onInput: function (value) {
+                    if (value.trim()) config.label = value.trim(); else delete config.label;
+                    edited(path);
+                }
+            }) : null,
+            type === 'search' ? textInput({
+                id: 'tpl-complex-confirmation-title',
+                label: 'Confirmation heading',
+                hint: 'Leave blank for "Is this the right {name}?". {name} is the name in a sentence, for example "Is this the correct {name}?".',
+                value: config.confirmationTitle || '',
+                onInput: function (value) {
+                    if (value.trim()) config.confirmationTitle = value.trim(); else delete config.confirmationTitle;
+                    edited(path);
+                }
+            }) : null,
             type === 'search' ? searchDisplaySettings(path, config) : null
         ]);
     }

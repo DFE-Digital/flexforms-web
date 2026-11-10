@@ -29,3 +29,7 @@ Web calls API submit. File-validation banners update via SignalR; preview/submit
 ## Custom statuses
 
 Labels from API; Web dashboard columns are template-driven (`DashboardColumnResolver`).
+
+## Complex field name
+
+A search question can set `complexField.label`. That replaces the tenant `FormEngine:ComplexFields` Label in summary item labels and in the `{name}` part of the confirmation heading. Blank keeps the tenant Label. Template Studio edits it as **Name in a sentence**. `confirmationTitle` replaces the whole heading. Blank keeps "Is this the right {name}?".

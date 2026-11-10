@@ -15,7 +15,7 @@ Tenant Admin hub: templates, users, roles, settings, event mappings, new tenant,
 
 PageModel → Admin service → Api.Client. PRG + TempData. Errors via `AdminApiErrorMapper` / `ExternalApiPageExceptionFilter`.
 
-Template Studio loads/saves template JSON through API version endpoints. Feature flag `TemplateStudio` in FeatureManagement Target **Web**.
+Template Studio loads/saves template JSON through API version endpoints. Feature flag `TemplateStudio` in FeatureManagement Target **Web**. A search question's **Name in a sentence** writes `complexField.label` and overrides that search field's FormEngine Label. **Confirmation heading** writes `confirmationTitle`; blank keeps "Is this the right {name}?".
 
 ## 4. Other repos
 
