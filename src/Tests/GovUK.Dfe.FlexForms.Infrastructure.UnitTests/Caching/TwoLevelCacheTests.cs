@@ -139,12 +139,96 @@ public class TwoLevelCacheTests
         Assert.Equal(1, fetches);
     }
 
+    [Fact]
+    public async Task RedisReadFails_LoadsFromSource_AndDoesNotWrite()
+    {
+        _redis.FailReads = true;
+
+        var value = await new Replica(_redis).Cache.GetOrAddAsync(Key, () => Task.FromResult("from source"), Method);
+
+        Assert.Equal("from source", value);
+        Assert.Equal(0, _redis.Writes);
+    }
+
+    [Fact]
+    public async Task RedisWriteFails_StillReturnsTheValue_AndKeepsItInMemory()
+    {
+        _redis.FailWrites = true;
+        var replica = new Replica(_redis);
+        var fetches = 0;
+
+        await replica.Cache.GetOrAddAsync(Key, () => Task.FromResult($"v{++fetches}"), Method);
+        var second = await replica.Cache.GetOrAddAsync(Key, () => Task.FromResult($"v{++fetches}"), Method);
+
+        Assert.Equal("v1", second);
+        Assert.Equal(1, fetches);
+    }
+
+    [Fact]
+    public async Task RedisInvalidationFails_StillDropsMemory_AndPublishes()
+    {
+        var replica = new Replica(_redis);
+        await replica.Cache.GetOrAddAsync(Key, () => Task.FromResult("v1"), Method);
+        _redis.FailInvalidations = true;
+        _redis.FailReads = true;
+
+        await replica.Cache.RemoveAsync(Key);
+
+        Assert.Equal("v2", await replica.Cache.GetOrAddAsync(Key, () => Task.FromResult("v2"), Method));
+        Assert.Single(replica.Published);
+    }
+
+    [Fact]
+    public async Task StoredNull_IsTreatedAsAMiss()
+    {
+        _redis.Put(Key, "null"u8.ToArray());
+
+        var value = await new Replica(_redis).Cache.GetOrAddAsync(Key, () => Task.FromResult("from source"), Method);
+
+        Assert.Equal("from source", value);
+    }
+
+    [Fact]
+    public async Task RedisExpiry_UsesTheMethodDuration_OrTheDefault()
+    {
+        var settings = new CacheSettings
+        {
+            Memory = new MemoryCacheSettings { Durations = new() { [Method] = 30 } },
+            Redis = new RedisCacheSettings { DefaultDurationInSeconds = 300, Durations = new() { [Method] = 86_400 } }
+        };
+        var replica = new Replica(_redis, settings: settings);
+
+        await replica.Cache.GetOrAddAsync(Key, () => Task.FromResult("template"), Method);
+        Assert.Equal(TimeSpan.FromDays(1), _redis.LastWriteExpiry);
+
+        await replica.Cache.GetOrAddAsync("Other_key", () => Task.FromResult("other"), "OtherMethod");
+        Assert.Equal(TimeSpan.FromMinutes(5), _redis.LastWriteExpiry);
+    }
+
+    [Fact]
+    public async Task ContainsAsync_ReportsWhetherTheSharedCopyExists()
+    {
+        var replica = new Replica(_redis);
+
+        Assert.False(await replica.Cache.ContainsAsync(Key));
+        await replica.Cache.GetOrAddAsync(Key, () => Task.FromResult("v1"), Method);
+        Assert.True(await replica.Cache.ContainsAsync(Key));
+    }
+
+    [Fact]
+    public async Task ContainsAsync_WhenRedisIsUnavailable_Throws()
+    {
+        var replica = new Replica(_redis, redisAvailable: false);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => replica.Cache.ContainsAsync(Key));
+    }
+
     private sealed class Replica
     {
         private readonly IServiceProvider _services = Substitute.For<IServiceProvider>();
         private Action<RedisChannel, RedisValue>? _handler;
 
-        public Replica(ISharedCacheStore store, bool redisAvailable = true)
+        public Replica(ISharedCacheStore store, bool redisAvailable = true, CacheSettings? settings = null)
         {
             var subscriber = Substitute.For<ISubscriber>();
             subscriber
@@ -171,7 +255,7 @@ public class TwoLevelCacheTests
 
             Cache = new TwoLevelCache(
                 new MemoryCache(new MemoryCacheOptions()),
-                Options.Create(new CacheSettings
+                Options.Create(settings ?? new CacheSettings
                 {
                     Memory = new MemoryCacheSettings { DefaultDurationInSeconds = 60 },
                     Redis = new RedisCacheSettings { DefaultDurationInSeconds = 300 }
