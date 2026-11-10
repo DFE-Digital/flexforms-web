@@ -1,6 +1,9 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 
-namespace GovUK.Dfe.FlexForms.Web.Services;
+namespace GovUK.Dfe.FlexForms.Infrastructure.Caching;
 
 /// <summary>
 /// Sends a payload to every other Web replica over a Redis pub/sub channel and, as a hosted service,
@@ -8,7 +11,8 @@ namespace GovUK.Dfe.FlexForms.Web.Services;
 /// </summary>
 /// <remarks>
 /// Redis pub/sub does not queue: a replica that is disconnected when a message is sent never sees it,
-/// so every cache that relies on this must still expire on its own.
+/// so every cache that relies on this must still expire on its own. Redis is resolved on use, never at
+/// construction, so the app starts while Redis is unreachable.
 /// </remarks>
 public abstract class ReplicaBroadcastService(
     RedisChannel channel,
@@ -21,7 +25,9 @@ public abstract class ReplicaBroadcastService(
 
     protected ILogger Logger { get; } = logger;
 
-    internal TimeSpan SubscribeRetryDelay { get; init; } = TimeSpan.FromSeconds(30);
+    protected IServiceProvider Services { get; } = serviceProvider;
+
+    public TimeSpan SubscribeRetryDelay { get; init; } = TimeSpan.FromSeconds(30);
 
     /// <summary>
     /// Applies a payload published by another replica. Messages this replica sent are not passed here.
@@ -102,5 +108,5 @@ public abstract class ReplicaBroadcastService(
     }
 
     // Resolved per call: the CoreLibs registration connects on first resolve and throws while Redis is unreachable.
-    private IConnectionMultiplexer GetRedis() => serviceProvider.GetRequiredService<IConnectionMultiplexer>();
+    private IConnectionMultiplexer GetRedis() => Services.GetRequiredService<IConnectionMultiplexer>();
 }

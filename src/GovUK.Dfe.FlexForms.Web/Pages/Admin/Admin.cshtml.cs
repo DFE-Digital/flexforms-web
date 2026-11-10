@@ -1,7 +1,7 @@
 using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.CoreLibs.Caching.Helpers;
-using GovUK.Dfe.CoreLibs.Caching.Interfaces;
 using GovUK.Dfe.FlexForms.Application.Admin;
+using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.Caching;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Security;
@@ -20,7 +20,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
     [Authorize(Policy = AdminAccessHelper.CanAccessAdminAreaPolicy)]
     public class AdminModel(
         IAdminHome adminHome,
-        IAdvancedRedisCacheService redisCacheService,
+        ITwoLevelCache templateCache,
         ITemplateCacheInvalidator templateCacheInvalidator,
         IHttpContextAccessor httpContextAccessor,
         IInternalUserTokenStore tokenStore,
@@ -217,7 +217,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
 
             try
             {
-                return await redisCacheService.GetRawAsync(TemplateCacheKey) is not null
+                return await templateCache.ContainsAsync(TemplateCacheKey)
                     ? "Template cached"
                     : "Template not in cache";
             }

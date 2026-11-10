@@ -29,7 +29,7 @@ JWT tenant_id vs hostname. Test Auth environment gate. OTP on API.
 
 ## 7. Edge cases
 
-TokenEndpoint, forwarded headers, Data Protection, tenant-config cache minutes, Web vs Shared settings. Tenant config and hostname caches are per replica; admin saves clear them on every replica through `ITenantConfigurationInvalidator` (Redis pub/sub), but settings written straight to the API wait for cache expiry (`.ai/architecture.md`, Caches across replicas). Permission and role claims from `PermissionsClaimProvider` carry issuer `UserPermissionsCache.ClaimIssuer` and are rebuilt on every request (`.ai/known-pitfalls.md` item 25). Known gap (**Unverified**, not reproduced): `TenantAwareOpenIdConnectConfigurator` and `TenantAwareEntraSsoConfigurator` write tenant values into the scheme's shared options instance on each request, so simultaneous sign-ins for two tenants on one replica could see each other's ClientId/audience mid-flow. A fix needs per-tenant options instances and testing against each identity provider.
+TokenEndpoint, forwarded headers, Data Protection, tenant-config cache minutes, Web vs Shared settings. Tenant config and hostname caches are per replica; admin saves clear them on every replica through `ITenantConfigurationInvalidator` (Redis pub/sub), but settings written straight to the API wait for cache expiry (`.ai/architecture.md`, Caches across replicas). Permission and role claims from `PermissionsClaimProvider` carry issuer `UserPermissionsCache.ClaimIssuer` and are rebuilt on every request (`.ai/known-pitfalls.md` item 25).
 
 ## 8. Tests
 

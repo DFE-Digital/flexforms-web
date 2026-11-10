@@ -1,4 +1,5 @@
 using GovUK.Dfe.FlexForms.Domain.Caching;
+using GovUK.Dfe.FlexForms.Infrastructure.Caching;
 using StackExchange.Redis;
 
 namespace GovUK.Dfe.FlexForms.Web.Services.Tenant;

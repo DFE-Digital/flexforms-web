@@ -16,4 +16,7 @@ public interface ITwoLevelCache
     /// Deletes the shared copy and the in-memory copy on every replica. Call after the cached data changes.
     /// </summary>
     Task RemoveAsync(string cacheKey);
+
+    /// <summary>True when the shared copy exists. For diagnostics; throws when Redis is unavailable.</summary>
+    Task<bool> ContainsAsync(string cacheKey);
 }
