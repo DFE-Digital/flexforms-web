@@ -33,6 +33,7 @@ jobs:
     env:
       CI: true
       PW_ARTIFACTS_DIR: ${{ github.workspace }}/src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/test-results
+      PW_ARTIFACTS: on-retry
       BASE_URL: ${{ vars.PL_BASE_URL}}
       API_BASE_URL: ${{ vars.PL_API_BASE_URL }}
       SERVICE: TestService
@@ -77,7 +78,7 @@ jobs:
           --filter "FullyQualifiedName~.Tests.${{ env.SERVICE }}."
           --logger "trx;LogFileName=report.trx"
           --results-directory reports
-          -- NUnit.NumberOfTestWorkers=6
+          -- NUnit.NumberOfTestWorkers=4
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}

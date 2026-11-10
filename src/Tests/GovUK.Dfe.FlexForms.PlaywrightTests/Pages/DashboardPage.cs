@@ -1,3 +1,4 @@
+using GovUK.Dfe.FlexForms.PlaywrightTests.Infrastructure;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Components;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 using Microsoft.Playwright;
@@ -24,7 +25,19 @@ public sealed class DashboardPage : BasePage
         await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Go to dashboard" }).ClickAsync();
     }
 
-    public async Task StartNewApplicationAsync() => await StartNewApplicationButton().ClickAsync();
+    /// <summary>
+    /// Holds <see cref="ApplicationCreationGate"/> until the CreateApplication post has come back, so a
+    /// create from another fixture can't collide with this one on the generated reference.
+    /// </summary>
+    public Task StartNewApplicationAsync() =>
+        ApplicationCreationGate.RunAsync(() => Page.RunAndWaitForRequestFinishedAsync(
+            () => StartNewApplicationButton().ClickAsync(),
+            new PageRunAndWaitForRequestFinishedOptions
+            {
+                Predicate = request => request.Method == "POST"
+                                       && request.Url.Contains("handler=CreateApplication", StringComparison.OrdinalIgnoreCase),
+                Timeout = 30_000,
+            }));
 
     public async Task FilterApplicationsAsync() => await FilterApplicationsButton().ClickAsync();
 

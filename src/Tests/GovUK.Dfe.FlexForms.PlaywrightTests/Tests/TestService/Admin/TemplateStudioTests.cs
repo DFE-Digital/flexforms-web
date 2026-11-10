@@ -9,7 +9,6 @@ using static GovUK.Dfe.FlexForms.PlaywrightTests.Api.Builders.StudioTemplateBuil
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService.Admin;
 
 [TestFixture(Description = "Template Studio")]
-[NonParallelizable] // Saves new versions of the "template studio" template
 public sealed class TemplateStudioTests : PlaywrightTestBase
 {
     private string _templateId = null!;
