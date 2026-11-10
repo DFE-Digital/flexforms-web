@@ -1,8 +1,9 @@
 using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.FlexForms.Application.Admin;
+using GovUK.Dfe.FlexForms.Domain.Caching;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using GovUK.Dfe.CoreLibs.Caching.Helpers;
-using GovUK.Dfe.CoreLibs.Caching.Interfaces;
+using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using Microsoft.AspNetCore.Authorization;
@@ -18,7 +19,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
     [Authorize(Policy = AdminAccessHelper.CanManageTemplatesPolicy)]
     public class CustomStatusLabelOverridesModel(
         ICustomStatusLabelOverridesAdmin customStatusLabelOverridesAdmin,
-        ICacheService<IMemoryCacheType> cacheService) : PageModel
+        ITwoLevelCache cache) : PageModel
     {
         public bool ShowSuccess { get; set; }
         public bool HasError { get; set; }
@@ -106,8 +107,8 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
                 SelectedBaseStatus,
                 BaseStatusOverrideValue);
 
-            cacheService.Remove(
-                $"CustomApplicationStatuses_{CacheKeyHelper.GenerateHashedCacheKey(templateId.Value.ToString())}");
+            await cache.RemoveAsync(FlexFormsCacheKeys.CustomApplicationStatuses(
+                CacheKeyHelper.GenerateHashedCacheKey(templateId.Value.ToString())));
 
             return RedirectToPage(new { selectedTemplateId = templateId, success = true, status = appStatus });
         }

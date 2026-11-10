@@ -32,6 +32,9 @@ public static class PlatformBootstrapExtensions
         services.AddSingleton<IPlatformAccessTokenProvider, PlatformAccessTokenProvider>();
         services.AddSingleton<ITenantConfigurationCache, TenantConfigurationCache>();
         services.AddSingleton<TenantHostnameCache>();
+        services.AddSingleton<TenantConfigurationInvalidator>();
+        services.AddSingleton<ITenantConfigurationInvalidator>(sp => sp.GetRequiredService<TenantConfigurationInvalidator>());
+        services.AddHostedService(sp => sp.GetRequiredService<TenantConfigurationInvalidator>());
         services.AddScoped<TenantConfigurationLoader>();
         services.AddScoped<ITenantIdResolver, TenantIdResolver>();
         services.AddScoped<PlatformHostConfigurationBootstrapper>();
