@@ -25,22 +25,17 @@ public class HealthCheckTelemetryFilter(ITelemetryProcessor next) : ITelemetryPr
     public void Process(ITelemetry item)
     {
         // Only filter request telemetry
-        if (item is RequestTelemetry request)
+        if (item is RequestTelemetry request && IsHealthCheckPath(request.Url?.AbsolutePath))
         {
-            var requestPath = request.Url?.AbsolutePath ?? string.Empty;
-
-            // Skip telemetry for health check endpoints
-            foreach (var healthPath in HealthCheckPaths)
-            {
-                if (requestPath.Equals(healthPath, StringComparison.OrdinalIgnoreCase))
-                {
-                    return; // Don't send this telemetry
-                }
-            }
+            return; // Don't send this telemetry
         }
 
         // Continue processing other telemetry
         next.Process(item);
     }
+
+    internal static bool IsHealthCheckPath(string? path) =>
+        !string.IsNullOrEmpty(path)
+        && HealthCheckPaths.Any(healthPath => path.Equals(healthPath, StringComparison.OrdinalIgnoreCase));
 }
 

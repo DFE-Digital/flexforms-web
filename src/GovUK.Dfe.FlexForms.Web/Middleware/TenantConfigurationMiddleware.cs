@@ -71,6 +71,7 @@ public sealed class TenantConfigurationMiddleware(
             tenantRequestContext.TenantId = tenantConfig.TenantId;
             tenantRequestContext.TenantName = tenantConfig.TenantName;
             tenantRequestContext.TenantConfiguration = configuration;
+            ReportingTelemetryItems.BindTenant(context, tenantConfig.TenantId);
 
             var appInsightsConnectionString = TenantApplicationInsightsConnection.FromConfiguration(configuration);
             TenantApplicationInsightsConnection.BindToRequest(context, appInsightsConnectionString);

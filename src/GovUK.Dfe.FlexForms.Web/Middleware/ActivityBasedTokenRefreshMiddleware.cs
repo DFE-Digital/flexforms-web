@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using GovUK.Dfe.CoreLibs.Security.Configurations;
 using GovUK.Dfe.FlexForms.Api.Client.Security;
 using GovUK.Dfe.FlexForms.Web.Security;
+using GovUK.Dfe.FlexForms.Web.Telemetry;
 using Microsoft.Extensions.Options;
 
 namespace GovUK.Dfe.FlexForms.Web.Middleware;
@@ -21,7 +22,8 @@ public class ActivityBasedTokenRefreshMiddleware(
     ILogger<ActivityBasedTokenRefreshMiddleware> logger,
     IOptions<TokenRefreshSettings> tokenRefreshSettings,
     IOptions<TestAuthenticationOptions> testAuthOptions,
-    IOptions<EntraSsoOptions> entraSsoOptions)
+    IOptions<EntraSsoOptions> entraSsoOptions,
+    ReportingUserIdGenerator reportingUserIdGenerator)
 {
     private static readonly string[] SkipPaths =
     [
@@ -91,7 +93,7 @@ public class ActivityBasedTokenRefreshMiddleware(
             return true;
         }
 
-        var userId = authStrategy.GetUserId(context) ?? "Unknown";
+        var userId = reportingUserIdGenerator.ForLogging(context);
 
         if (activityTracker.HasSessionExpired(context, settings.AbsoluteTimeoutHours))
         {

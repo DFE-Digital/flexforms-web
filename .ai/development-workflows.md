@@ -6,6 +6,8 @@
 
 `PlatformBootstrap:Enabled=true`. User secrets flattened from `Platform` or legacy `Transfers` section in Development.
 
+`Telemetry:ReportingUserIdKey` is optional locally; without it Web prints a `[Configuration]` line and sends no pseudonymous user ids. Deployed environments set `Telemetry__ReportingUserIdKey` from Key Vault (see `docs/application-insights-reporting.md`).
+
 ## Tests
 
 `dotnet test GovUK.Dfe.FlexForms.Web.sln` — Domain, Application, Infrastructure.UnitTests, Web.UnitTests (includes architecture guards).

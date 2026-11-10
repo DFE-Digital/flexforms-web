@@ -194,6 +194,16 @@ builder.Services.AddSingleton<ITelemetryChannel, TenantAwareTelemetryChannel>();
 builder.Services.AddApplicationInsightsTelemetry(configuration);
 builder.Services.AddScoped<IJavaScriptSnippet, TenantJavaScriptSnippet>();
 
+// Registered after AddApplicationInsightsTelemetry so the SDK's session/user/synthetic initializers run first.
+var reportingUserIdGenerator = new ReportingUserIdGenerator(configuration[ReportingUserIdGenerator.ConfigurationKey]);
+if (!reportingUserIdGenerator.IsEnabled)
+{
+    Console.WriteLine(
+        $"[Configuration] {ReportingUserIdGenerator.ConfigurationKey} is not set (or shorter than {ReportingUserIdGenerator.MinimumKeyLength} characters); authenticated user ids will not be sent to Application Insights.");
+}
+builder.Services.AddSingleton(reportingUserIdGenerator);
+builder.Services.AddSingleton<Microsoft.ApplicationInsights.Extensibility.ITelemetryInitializer, ReportingTelemetryInitializer>();
+
 builder.Logging.AddFilter<Microsoft.Extensions.Logging.ApplicationInsights.ApplicationInsightsLoggerProvider>(
     (_, _) => false);
 

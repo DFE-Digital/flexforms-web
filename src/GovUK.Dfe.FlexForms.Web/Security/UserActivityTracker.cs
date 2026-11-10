@@ -11,7 +11,7 @@ namespace GovUK.Dfe.FlexForms.Web.Security;
 public class UserActivityTracker(ILogger<UserActivityTracker> logger) : IUserActivityTracker
 {
     private const string LastActivityKey = "Session:LastActivity";
-    private const string SessionStartKey = "Session:StartTime";
+    internal const string SessionStartKey = "Session:StartTime";
     private const string DateFormat = "o"; // ISO 8601 format for reliable parsing
 
     /// <inheritdoc />
