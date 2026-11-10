@@ -96,12 +96,13 @@ public static class UserPermissionsCache
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // Client navigated away / request aborted — expected, not a permissions failure.
-            logger?.LogDebug("Permissions refresh canceled for {UserId}", userId);
+            // No raw user id in logs; ReportingTelemetryInitializer stamps the pseudonymous id on these traces.
+            logger?.LogDebug("Permissions refresh canceled for the signed-in user");
             return null;
         }
         catch (Exception ex)
         {
-            logger?.LogError(ex, "Failed to refresh user permissions for {UserId}", userId);
+            logger?.LogError(ex, "Failed to refresh user permissions for the signed-in user");
             return null;
         }
     }
