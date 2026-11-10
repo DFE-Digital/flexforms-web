@@ -17,4 +17,7 @@ public static class FlexFormsCacheKeys
 
     /// <summary>Raw Redis blacklist by application + original file name.</summary>
     public const string InfectedFileNamePrefix = "FlexForms:InfectedFileName:";
+
+    /// <summary>Pub/sub channel that tells every Web replica to drop its cached tenant configuration.</summary>
+    public const string TenantConfigurationInvalidatedChannel = "FlexForms:TenantConfigurationInvalidated";
 }

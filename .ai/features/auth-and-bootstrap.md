@@ -29,7 +29,7 @@ JWT tenant_id vs hostname. Test Auth environment gate. OTP on API.
 
 ## 7. Edge cases
 
-TokenEndpoint, forwarded headers, Data Protection, tenant-config cache minutes, Web vs Shared settings.
+TokenEndpoint, forwarded headers, Data Protection, tenant-config cache minutes, Web vs Shared settings. Tenant config and hostname caches are per replica; admin saves clear them on every replica through `ITenantConfigurationInvalidator` (Redis pub/sub), but settings written straight to the API wait for cache expiry (`.ai/architecture.md`, Tenant configuration caching).
 
 ## 8. Tests
 

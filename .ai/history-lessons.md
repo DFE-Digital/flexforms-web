@@ -15,5 +15,6 @@ Lessons from past engineering work. Check the code before relying on **Historica
 | `applicationMetadata` fieldIds should validate on template save | **Historical** |
 | Template save requires a reporting-impact acknowledgement | **Verified** in Template Manager |
 | `docs/FlexForms-Process-Map.md` is the shareable end-to-end narrative | **Verified** |
+| Organisation settings saved on one Web replica stayed stale on the others for up to 10 minutes, because cache invalidation was in-process only; fixed with a Redis pub/sub broadcast | **Verified** — `TenantConfigurationInvalidator` |
 
 Collection-flow saves (multi and derived) are in the same risk class as file delete: they build from the session snapshot. Re-read `DerivedCollectionFlowService` and `SaveFormPageService` before changing them.

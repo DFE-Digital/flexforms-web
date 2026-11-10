@@ -353,7 +353,7 @@ The PageModel remains responsible for HTTP concerns that cannot cross into Appli
 - `[Authorize]` policies and `[BindProperty]` attributes
 - `TempData` read/write (PRG pattern)
 - Tenant resolution (`ITenantRequestContext`)
-- Local cache invalidation (`ITenantConfigurationCache`, `ITenantIdResolver`)
+- Tenant configuration cache invalidation across all replicas (`ITenantConfigurationInvalidator`)
 - `ModelState` manipulation and `Page()` / `RedirectToPage()` / `File()` return
 - Session reads for presentation (e.g. `FormSessionKeys`)
 - `HttpContext.User` claims extraction (passed as values into the use case)

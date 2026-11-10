@@ -23,6 +23,10 @@ Forwarded headers → original host → correlation → platform tenant configur
 
 Health: `/health`, `/healthz`, `/liveness` with `.ShortCircuit()` so probes never touch Redis session (**Verified** comment in `Program.cs` ~818).
 
+## Tenant configuration caching
+
+**Verified.** `TenantConfigurationLoader` caches each tenant's Web configuration in the singleton `TenantConfigurationCache`, and `TenantIdResolver` caches hostname → tenant in the singleton `TenantHostnameCache`. Both are per replica and expire after `PlatformBootstrap:TenantConfigurationCacheMinutes`. `TenantConfigurationInvalidator` (`Services/Tenant/`, registered in `PlatformBootstrapExtensions`) is both the `ITenantConfigurationInvalidator` that admin pages call after a change and a hosted service that subscribes to the Redis channel `FlexFormsCacheKeys.TenantConfigurationInvalidatedChannel`, so a change on one replica clears the caches on all of them. Messages carry the sender's instance id and the sender ignores its own. The cache drops the result of a load that overlapped an invalidation, so an in-flight read cannot put old values back. If Redis is unreachable, the save still succeeds, the subscription is retried every 30 seconds, and the other replicas fall back to cache expiry. See `.ai/known-pitfalls.md` item 23.
+
 ## Use-case quartet
 
 For each admin/form page: interface `I*`, `*Service`, `*WorkState`, `*Messages`. Outcomes: `AdminPageOutcome`, `FormEngineOutcome`. PageModels bind HTTP only.
