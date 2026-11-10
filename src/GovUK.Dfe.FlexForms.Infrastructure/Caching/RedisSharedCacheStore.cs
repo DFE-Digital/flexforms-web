@@ -13,7 +13,8 @@ public sealed class RedisSharedCacheStore(
     IConnectionMultiplexer redis,
     IOptions<CacheSettings> cacheSettings) : ISharedCacheStore
 {
-    // Longer than any fill can take; once it lapses the version restarts at 0, which is safe because no fill is still running.
+    // Versions are random, so expiry cannot recreate one a fill already saw; a lapsed version only matters to a fill
+    // that began before the invalidation and is still running a day later.
     private static readonly TimeSpan VersionLifetime = TimeSpan.FromDays(1);
 
     // 'or false' because a nil inside a Lua table ends the reply array; false is returned to the client as null.
@@ -21,8 +22,9 @@ public sealed class RedisSharedCacheStore(
         return { redis.call('GET', KEYS[1]) or false, redis.call('GET', KEYS[2]) or false }
         """;
 
+    // An empty ARGV[1] means the fill saw no version.
     private const string WriteIfUnchangedScript = """
-        if (redis.call('GET', KEYS[2]) or '0') == ARGV[1] then
+        if (redis.call('GET', KEYS[2]) or '') == ARGV[1] then
             redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
             return 1
         end
@@ -30,8 +32,7 @@ public sealed class RedisSharedCacheStore(
         """;
 
     private const string InvalidateScript = """
-        redis.call('INCR', KEYS[2])
-        redis.call('PEXPIRE', KEYS[2], ARGV[1])
+        redis.call('SET', KEYS[2], ARGV[1], 'PX', ARGV[2])
         redis.call('DEL', KEYS[1])
         return 1
         """;
@@ -42,21 +43,24 @@ public sealed class RedisSharedCacheStore(
     {
         var result = (RedisResult[])(await Database.ScriptEvaluateAsync(ReadScript, Keys(cacheKey)))!;
         var value = result[0].IsNull ? null : (byte[]?)result[0];
-        var version = result[1].IsNull ? 0 : (long)result[1];
+        var version = result[1].IsNull ? null : (string?)result[1];
         return new SharedCacheEntry(value, version);
     }
 
-    public async Task<bool> WriteIfUnchangedAsync(string cacheKey, byte[] value, long expectedVersion, TimeSpan expiry)
+    public async Task<bool> WriteIfUnchangedAsync(string cacheKey, byte[] value, string? expectedVersion, TimeSpan expiry)
     {
         var result = await Database.ScriptEvaluateAsync(
             WriteIfUnchangedScript,
             Keys(cacheKey),
-            [expectedVersion.ToString(System.Globalization.CultureInfo.InvariantCulture), value, (long)expiry.TotalMilliseconds]);
+            [expectedVersion ?? string.Empty, value, (long)expiry.TotalMilliseconds]);
         return (long)result == 1;
     }
 
     public Task InvalidateAsync(string cacheKey) =>
-        Database.ScriptEvaluateAsync(InvalidateScript, Keys(cacheKey), [(long)VersionLifetime.TotalMilliseconds]);
+        Database.ScriptEvaluateAsync(
+            InvalidateScript,
+            Keys(cacheKey),
+            [Guid.NewGuid().ToString("N"), (long)VersionLifetime.TotalMilliseconds]);
 
     private static RedisKey[] Keys(string cacheKey)
     {

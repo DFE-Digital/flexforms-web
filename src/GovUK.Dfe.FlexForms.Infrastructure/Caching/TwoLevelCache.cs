@@ -15,7 +15,9 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Caching;
 /// Reads from this replica's memory first, then the shared Redis copy (<see cref="ISharedCacheStore"/>), then the
 /// source. <see cref="RemoveAsync"/> invalidates the Redis copy and broadcasts the key so every replica drops its
 /// memory copy at once; a replica that misses the broadcast (pub/sub does not queue) keeps its copy for at most the
-/// short memory duration. If Redis is unavailable, reads go to the source and the app still starts.
+/// short memory duration. If Redis is unavailable, reads go to the source and the app still starts. If invalidating
+/// the Redis copy fails, the key is retried in the background and bypasses Redis on this replica until it succeeds,
+/// so a save made during a Redis blip cannot be undone by the old shared copy once Redis recovers.
 /// </summary>
 public sealed class TwoLevelCache(
     IMemoryCache memoryCache,
@@ -37,7 +39,10 @@ public sealed class TwoLevelCache(
 
     private readonly ConcurrentDictionary<string, long> _generations = new();
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _fills = new();
+    private readonly ConcurrentDictionary<string, byte> _pendingInvalidations = new();
     private readonly Lock _sync = new();
+
+    public TimeSpan InvalidationRetryInterval { get; init; } = TimeSpan.FromSeconds(5);
 
     public async Task<T> GetOrAddAsync<T>(
         string cacheKey,
@@ -87,20 +92,79 @@ public sealed class TwoLevelCache(
     public async Task RemoveAsync(string cacheKey)
     {
         // Redis first: a local read that starts after the memory copy is dropped must not find the old shared copy.
-        if (TryGetStore() is { } store)
+        if (await TryInvalidateSharedAsync(cacheKey))
         {
-            try
-            {
-                await store.InvalidateAsync(cacheKey);
-            }
-            catch (Exception ex)
-            {
-                Logger.LogWarning(ex, "Could not remove {CacheKey} from Redis; it stays until it expires", cacheKey);
-            }
+            _pendingInvalidations.TryRemove(cacheKey, out _);
+        }
+        else
+        {
+            _pendingInvalidations.TryAdd(cacheKey, 0);
+            Logger.LogWarning(
+                "Could not remove {CacheKey} from Redis; retrying every {RetryInterval} and bypassing the shared copy until then",
+                cacheKey,
+                InvalidationRetryInterval);
         }
 
         RemoveLocal(cacheKey);
         await PublishAsync(cacheKey);
+    }
+
+    protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
+        Task.WhenAll(base.ExecuteAsync(stoppingToken), RetryPendingInvalidationsAsync(stoppingToken));
+
+    /// <summary>
+    /// Retries every invalidation that failed. On success the other replicas are told again, because they may have
+    /// re-read the old shared copy after Redis recovered.
+    /// </summary>
+    internal async Task RetryPendingInvalidationsOnceAsync()
+    {
+        foreach (var cacheKey in _pendingInvalidations.Keys)
+        {
+            if (!await TryInvalidateSharedAsync(cacheKey))
+            {
+                continue;
+            }
+
+            _pendingInvalidations.TryRemove(cacheKey, out _);
+            RemoveLocal(cacheKey);
+            await PublishAsync(cacheKey);
+            Logger.LogInformation("Removed {CacheKey} from Redis after an earlier failure", cacheKey);
+        }
+    }
+
+    private async Task RetryPendingInvalidationsAsync(CancellationToken stoppingToken)
+    {
+        using var timer = new PeriodicTimer(InvalidationRetryInterval);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(stoppingToken))
+            {
+                await RetryPendingInvalidationsOnceAsync();
+            }
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            return;
+        }
+    }
+
+    private async Task<bool> TryInvalidateSharedAsync(string cacheKey)
+    {
+        if (TryGetStore() is not { } store)
+        {
+            return false;
+        }
+
+        try
+        {
+            await store.InvalidateAsync(cacheKey);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Could not remove {CacheKey} from Redis", cacheKey);
+            return false;
+        }
     }
 
     public async Task<bool> ContainsAsync(string cacheKey)
@@ -117,7 +181,8 @@ public sealed class TwoLevelCache(
 
     private async Task<T> LoadAsync<T>(string cacheKey, Func<Task<T>> fetchFunction, string methodName)
     {
-        var store = TryGetStore();
+        // A key whose Redis invalidation has not gone through yet may still have the old copy there.
+        var store = _pendingInvalidations.ContainsKey(cacheKey) ? null : TryGetStore();
         SharedCacheEntry? shared = null;
         if (store is not null)
         {

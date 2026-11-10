@@ -140,6 +140,74 @@ public class TwoLevelCacheTests
     }
 
     [Fact]
+    public async Task FillSpanningAVersionExpiryAndASave_DoesNotPutTheOldValueBack()
+    {
+        await new Replica(_redis).Cache.RemoveAsync(Key);
+        var slow = new Replica(_redis);
+        await slow.StartAsync();
+        var fetchStarted = new TaskCompletionSource();
+        var oldTemplate = new TaskCompletionSource<string>();
+        var inFlight = slow.Cache.GetOrAddAsync(Key, () =>
+        {
+            fetchStarted.SetResult();
+            return oldTemplate.Task;
+        }, Method);
+        await fetchStarted.Task;
+
+        _redis.ExpireVersion(Key);
+        var saving = new Replica(_redis);
+        await saving.Cache.RemoveAsync(Key);
+        slow.Deliver(saving.Published.Single());
+        oldTemplate.SetResult("old");
+        await inFlight;
+
+        Assert.False(_redis.HasValue(Key));
+        Assert.Equal("new", await new Replica(_redis).Cache.GetOrAddAsync(Key, () => Task.FromResult("new"), Method));
+    }
+
+    [Fact]
+    public async Task FailedInvalidation_BypassesTheOldSharedCopy_UntilTheRetrySucceeds()
+    {
+        var saving = new Replica(_redis);
+        await saving.Cache.GetOrAddAsync(Key, () => Task.FromResult("old"), Method);
+        _redis.FailInvalidations = true;
+
+        await saving.Cache.RemoveAsync(Key);
+        var whilePending = await saving.Cache.GetOrAddAsync(Key, () => Task.FromResult("new"), Method);
+
+        Assert.Equal("new", whilePending);
+        Assert.True(_redis.HasValue(Key));
+
+        await saving.Cache.RetryPendingInvalidationsOnceAsync();
+        Assert.True(_redis.HasValue(Key));
+
+        _redis.FailInvalidations = false;
+        await saving.Cache.RetryPendingInvalidationsOnceAsync();
+
+        Assert.False(_redis.HasValue(Key));
+        Assert.Equal(2, saving.Published.Count);
+        Assert.Equal("new", await new Replica(_redis).Cache.GetOrAddAsync(Key, () => Task.FromResult("new"), Method));
+    }
+
+    [Fact]
+    public async Task PendingInvalidation_IsRetriedInTheBackground()
+    {
+        var saving = new Replica(_redis);
+        await saving.StartAsync();
+        await saving.Cache.GetOrAddAsync(Key, () => Task.FromResult("old"), Method);
+        _redis.FailInvalidations = true;
+        await saving.Cache.RemoveAsync(Key);
+
+        _redis.FailInvalidations = false;
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (_redis.HasValue(Key) && DateTime.UtcNow < deadline)
+            await Task.Delay(10);
+        await saving.Cache.StopAsync(CancellationToken.None);
+
+        Assert.False(_redis.HasValue(Key));
+    }
+
+    [Fact]
     public async Task RedisReadFails_LoadsFromSource_AndDoesNotWrite()
     {
         _redis.FailReads = true;
@@ -263,7 +331,8 @@ public class TwoLevelCacheTests
                 _services,
                 NullLogger<TwoLevelCache>.Instance)
             {
-                SubscribeRetryDelay = TimeSpan.FromMilliseconds(10)
+                SubscribeRetryDelay = TimeSpan.FromMilliseconds(10),
+                InvalidationRetryInterval = TimeSpan.FromMilliseconds(20)
             };
         }
 

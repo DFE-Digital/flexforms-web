@@ -33,13 +33,13 @@ public class RedisSharedCacheStoreTests
         ScriptReturns(RedisResult.Create(
         [
             RedisResult.Create((RedisValue)Encoding.UTF8.GetBytes("payload")),
-            RedisResult.Create((RedisValue)"3")
+            RedisResult.Create((RedisValue)"v-3")
         ]));
 
         var entry = await _store.ReadAsync(Key);
 
         Assert.Equal("payload", Encoding.UTF8.GetString(entry.Value!));
-        Assert.Equal(3, entry.Version);
+        Assert.Equal("v-3", entry.Version);
         _redis.Received().GetDatabase(ConfiguredDatabase, Arg.Any<object?>());
         await _database.Received(1).ScriptEvaluateAsync(
             Arg.Any<string>(),
@@ -49,7 +49,7 @@ public class RedisSharedCacheStoreTests
     }
 
     [Fact]
-    public async Task ReadAsync_MissingValueAndVersion_AreNullAndZero()
+    public async Task ReadAsync_MissingValueAndVersion_AreNull()
     {
         ScriptReturns(RedisResult.Create(
         [
@@ -60,7 +60,7 @@ public class RedisSharedCacheStoreTests
         var entry = await _store.ReadAsync(Key);
 
         Assert.Null(entry.Value);
-        Assert.Equal(0, entry.Version);
+        Assert.Null(entry.Version);
     }
 
     [Theory]
@@ -71,30 +71,56 @@ public class RedisSharedCacheStoreTests
         ScriptReturns(RedisResult.Create((RedisValue)scriptResult));
         var value = Encoding.UTF8.GetBytes("payload");
 
-        var written = await _store.WriteIfUnchangedAsync(Key, value, 5, TimeSpan.FromMinutes(2));
+        var written = await _store.WriteIfUnchangedAsync(Key, value, "v-5", TimeSpan.FromMinutes(2));
 
         Assert.Equal(expected, written);
         await _database.Received(1).ScriptEvaluateAsync(
             Arg.Any<string>(),
             Arg.Is<RedisKey[]?>(keys => keys!.SequenceEqual(ExpectedKeys)),
-            Arg.Is<RedisValue[]?>(args => args![0] == "5"
+            Arg.Is<RedisValue[]?>(args => args![0] == "v-5"
                 && ((byte[])args[1]!).SequenceEqual(value)
                 && args[2] == 120_000),
             Arg.Any<CommandFlags>());
     }
 
     [Fact]
-    public async Task InvalidateAsync_RunsTheScriptWithAVersionLifetimeOfOneDay()
+    public async Task WriteIfUnchangedAsync_NoVersionIsSentAsEmpty()
     {
         ScriptReturns(RedisResult.Create((RedisValue)1));
 
-        await _store.InvalidateAsync(Key);
+        await _store.WriteIfUnchangedAsync(Key, [1], null, TimeSpan.FromMinutes(2));
 
         await _database.Received(1).ScriptEvaluateAsync(
             Arg.Any<string>(),
-            Arg.Is<RedisKey[]?>(keys => keys!.SequenceEqual(ExpectedKeys)),
-            Arg.Is<RedisValue[]?>(args => args![0] == (long)TimeSpan.FromDays(1).TotalMilliseconds),
+            Arg.Any<RedisKey[]?>(),
+            Arg.Is<RedisValue[]?>(args => args![0] == string.Empty),
             Arg.Any<CommandFlags>());
+    }
+
+    [Fact]
+    public async Task InvalidateAsync_SetsANewRandomVersionEachTime_ForOneDay()
+    {
+        ScriptReturns(RedisResult.Create((RedisValue)1));
+        var versions = new List<string>();
+        _database
+            .When(db => db.ScriptEvaluateAsync(
+                Arg.Any<string>(),
+                Arg.Is<RedisKey[]?>(keys => keys!.SequenceEqual(ExpectedKeys)),
+                Arg.Any<RedisValue[]?>(),
+                Arg.Any<CommandFlags>()))
+            .Do(call =>
+            {
+                var args = call.ArgAt<RedisValue[]?>(2)!;
+                versions.Add(args[0].ToString());
+                Assert.Equal((long)TimeSpan.FromDays(1).TotalMilliseconds, (long)args[1]);
+            });
+
+        await _store.InvalidateAsync(Key);
+        await _store.InvalidateAsync(Key);
+
+        Assert.Equal(2, versions.Count);
+        Assert.All(versions, version => Assert.Matches("^[0-9a-f]{32}$", version));
+        Assert.NotEqual(versions[0], versions[1]);
     }
 
     private void ScriptReturns(RedisResult result) =>

@@ -9,7 +9,7 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.UnitTests.Caching;
 internal sealed class InMemorySharedCacheStore : ISharedCacheStore
 {
     private readonly Dictionary<string, byte[]> _values = new();
-    private readonly Dictionary<string, long> _versions = new();
+    private readonly Dictionary<string, string> _versions = new();
     private readonly Lock _sync = new();
 
     public int Writes { get; private set; }
@@ -34,6 +34,13 @@ internal sealed class InMemorySharedCacheStore : ISharedCacheStore
             _values[cacheKey] = value;
     }
 
+    /// <summary>Simulates the version key's expiry.</summary>
+    public void ExpireVersion(string cacheKey)
+    {
+        lock (_sync)
+            _versions.Remove(cacheKey);
+    }
+
     public Task<SharedCacheEntry> ReadAsync(string cacheKey)
     {
         ThrowIf(FailReads);
@@ -45,7 +52,7 @@ internal sealed class InMemorySharedCacheStore : ISharedCacheStore
         }
     }
 
-    public Task<bool> WriteIfUnchangedAsync(string cacheKey, byte[] value, long expectedVersion, TimeSpan expiry)
+    public Task<bool> WriteIfUnchangedAsync(string cacheKey, byte[] value, string? expectedVersion, TimeSpan expiry)
     {
         ThrowIf(FailWrites);
         lock (_sync)
@@ -65,7 +72,7 @@ internal sealed class InMemorySharedCacheStore : ISharedCacheStore
         ThrowIf(FailInvalidations);
         lock (_sync)
         {
-            _versions[cacheKey] = _versions.GetValueOrDefault(cacheKey) + 1;
+            _versions[cacheKey] = Guid.NewGuid().ToString("N");
             _values.Remove(cacheKey);
         }
 
