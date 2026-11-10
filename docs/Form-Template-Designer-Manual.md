@@ -680,6 +680,8 @@ You **do not** put the API URL, API key, or OAuth client secret in the template.
 | JSON on `complexField` | Required | What it does |
 |------------------------|----------|----------------|
 | `id` | Yes | Must match a `ComplexFields` `Id` in FormEngine (e.g. `TrustComplexField`, `EstablishmentComplexField`, `MemberComplexField`). PascalCase. |
+| `label` | No | Name that replaces `{name}` in the confirmation heading, for example `"local authority"`. Leave it out to use the FormEngine `Label`. |
+| `confirmationTitle` | No | Whole confirmation heading, for example `"Is this the correct {name}?"`. Leave it out for "Is this the right {name}?". |
 | `dropdownDisplay` | No | How each search result is labelled in the dropdown (and in the box after the user chooses). Overrides the same setting in FormEngine when both are set. |
 | `confirmationDisplay` | No | How the chosen answer is shown on **check your answers** / preview, and which properties appear on “Is this the right …?”. Overrides FormEngine when set. |
 
