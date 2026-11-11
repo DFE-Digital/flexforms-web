@@ -40,7 +40,7 @@ public class FileValidationUiTests
     [Fact]
     public void StatusText_ShouldMapKnownStatuses()
     {
-        Assert.Equal("Validation pending", FileValidationUi.StatusText(FileValidationStatus.Pending));
+        Assert.Equal("Checks in progress", FileValidationUi.StatusText(FileValidationStatus.Pending));
         Assert.Equal("Validated", FileValidationUi.StatusText(FileValidationStatus.Passed));
         Assert.Equal("Validation failed", FileValidationUi.StatusText(FileValidationStatus.Failed));
     }

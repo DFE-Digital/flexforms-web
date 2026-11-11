@@ -60,7 +60,7 @@ window.renderOrUpdate = function (n, options) {
 
 function fileValidationStatusLabel(status) {
     const key = String(status ?? '').toLowerCase();
-    if (key === 'pending' || key === '1') return 'Validation pending';
+    if (key === 'pending' || key === '1') return 'Checks in progress';
     if (key === 'passed' || key === '2') return 'Validated';
     if (key === 'failed' || key === '3') return 'Validation failed';
     return '';
