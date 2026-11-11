@@ -12,6 +12,7 @@ public sealed class TemplateDisplayCopyResolver(
     IOptions<ApplicationPreviewOptions> preview,
     IOptions<ContributorsOptions> contributors,
     IOptions<TaskListOptions> taskList,
+    IOptions<FileValidationOptions> fileValidation,
     IRequestAppConfiguration configuration) : ITemplateDisplayCopy
 {
     public string Singular =>
@@ -107,6 +108,15 @@ public sealed class TemplateDisplayCopyResolver(
 
     public string ViewButtonText =>
         Text(Copy?.TaskList?.ViewButtonText, taskList.Value.ViewButtonText, $"View {Singular}");
+
+    public string FileValidationPendingText =>
+        Text(Copy?.FileValidation?.FileValidationPendingText, fileValidation.Value.FileValidationPendingText, "Validation pending");
+
+    public string FileValidationPassedText =>
+        Text(Copy?.FileValidation?.FileValidationPassedText, fileValidation.Value.FileValidationPassedText, "Validated");
+
+    public string FileValidationFailedText =>
+        Text(Copy?.FileValidation?.FileValidationFailedText, fileValidation.Value.FileValidationFailedText, "Validation failed");
 
     private TemplateDisplayCopy? Copy => templateCopy.Template?.DisplayCopy;
 

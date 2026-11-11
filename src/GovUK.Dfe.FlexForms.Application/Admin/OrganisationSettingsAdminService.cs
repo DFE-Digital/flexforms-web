@@ -27,6 +27,7 @@ public sealed class OrganisationSettingsAdminService(
     private const string CategoryApplicationPreview = "ApplicationPreview";
     private const string CategoryContributors = "Contributors";
     private const string CategoryTaskList = "TaskList";
+    private const string CategoryFileValidation = "FileValidation";
     private const string CategoryApplicationSubmittedPage = "ApplicationSubmittedPage";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -134,6 +135,17 @@ public sealed class OrganisationSettingsAdminService(
                 {
                     ReviewButtonText = state.TaskListReviewButtonText,
                     ViewButtonText = state.TaskListViewButtonText
+                },
+                cancellationToken);
+
+            await UpsertCategoryAsync(
+                state.TenantId,
+                CategoryFileValidation,
+                new
+                {
+                    FileValidationPendingText = state.FileValidationPendingText,
+                    FileValidationPassedText = state.FileValidationPassedText,
+                    FileValidationFailedText = state.FileValidationFailedText
                 },
                 cancellationToken);
 
@@ -263,6 +275,16 @@ public sealed class OrganisationSettingsAdminService(
                     state.TaskListReviewButtonText = reviewButton;
                 if (TryGetString(root, "ViewButtonText", out var viewButton))
                     state.TaskListViewButtonText = viewButton;
+            }
+
+            else if (string.Equals(category, CategoryFileValidation, StringComparison.OrdinalIgnoreCase))
+            {
+                if (TryGetString(root, "FileValidationPendingText", out var pendingText))
+                    state.FileValidationPendingText = pendingText;
+                if (TryGetString(root, "FileValidationPassedText", out var passedText))
+                    state.FileValidationPassedText = passedText;
+                if (TryGetString(root, "FileValidationFailedText", out var failedText))
+                    state.FileValidationFailedText = failedText;
             }
             else if (string.Equals(category, CategoryApplicationSubmittedPage, StringComparison.OrdinalIgnoreCase))
             {

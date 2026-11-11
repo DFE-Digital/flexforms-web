@@ -257,6 +257,7 @@ public class TemplateDisplayCopyResolverTests
             Microsoft.Extensions.Options.Options.Create(preview ?? new ApplicationPreviewOptions()),
             Microsoft.Extensions.Options.Options.Create(contributors ?? new ContributorsOptions()),
             Microsoft.Extensions.Options.Options.Create(taskList ?? new TaskListOptions()),
+            Microsoft.Extensions.Options.Options.Create(new FileValidationOptions()),
             configuration);
     }
 

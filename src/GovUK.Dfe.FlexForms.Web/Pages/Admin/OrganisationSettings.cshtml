@@ -312,6 +312,28 @@
 
             <div class="govuk-summary-card">
                 <div class="govuk-summary-card__title-wrapper">
+                    <h2 class="govuk-summary-card__title">File validation status messages</h2>
+                </div>
+                <div class="govuk-summary-card__content">
+                    <p class="govuk-body">Default labels for the file validation status messages. A template can override them in Template Studio.</p>
+                    <p class="govuk-hint">Leave blank to use the default messages.</p>
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="FileValidationPendingText">Pending</label>
+                        <input class="govuk-input" asp-for="FileValidationPendingText" autocomplete="off" />
+                    </div>
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="FileValidationPassedText">Passed</label>
+                        <input class="govuk-input" asp-for="FileValidationPassedText" autocomplete="off" />
+                    </div>
+                    <div class="govuk-form-group">
+                        <label class="govuk-label" asp-for="FileValidationFailedText">Failed</label>
+                        <input class="govuk-input" asp-for="FileValidationFailedText" autocomplete="off" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="govuk-summary-card">
+                <div class="govuk-summary-card__title-wrapper">
                     <h2 class="govuk-summary-card__title">Application submitted page</h2>
                 </div>
                 <div class="govuk-summary-card__content">

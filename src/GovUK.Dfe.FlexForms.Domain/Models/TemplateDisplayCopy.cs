@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
 
@@ -23,6 +24,9 @@ public class TemplateDisplayCopy
 
     [JsonPropertyName("taskList")]
     public TemplateTaskListCopy? TaskList { get; set; }
+
+    [JsonPropertyName("fileValidation")]
+    public TemplateFileValidationCopy? FileValidation { get; set; }
 
     [JsonPropertyName("submittedPage")]
     public TemplateSubmittedPageCopy? SubmittedPage { get; set; }
@@ -128,4 +132,19 @@ public class TemplateSubmittedPageCopy
 
     [JsonPropertyName("bodyMarkdown")]
     public string? BodyMarkdown { get; set; }
+}
+
+//add another section specifically for filevalidation. We want to be able to override the text for the file validation status messages. The section should have three properties: Pending, Passed, and Failed. Each property should be a string that represents the text to display for that status.
+
+[ExcludeFromCodeCoverage]
+public class TemplateFileValidationCopy
+{
+    [JsonPropertyName("fileValidationPendingText")]
+    public string? FileValidationPendingText { get; set; }
+
+    [JsonPropertyName("fileValidationPassedText")]
+    public string? FileValidationPassedText { get; set; }
+
+    [JsonPropertyName("fileValidationFailedText")]
+    public string? FileValidationFailedText { get; set; }
 }

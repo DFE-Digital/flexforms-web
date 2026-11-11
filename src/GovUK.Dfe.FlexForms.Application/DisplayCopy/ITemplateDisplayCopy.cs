@@ -35,4 +35,8 @@ public interface ITemplateDisplayCopy
 
     string ReviewButtonText { get; }
     string ViewButtonText { get; }
+
+    string FileValidationPendingText { get; }
+    string FileValidationPassedText { get; }
+    string FileValidationFailedText { get; }
 }

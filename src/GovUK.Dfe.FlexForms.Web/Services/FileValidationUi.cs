@@ -1,6 +1,6 @@
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
-using Microsoft.Extensions.Configuration;
+using GovUK.Dfe.FlexForms.Application.DisplayCopy;
 
 namespace GovUK.Dfe.FlexForms.Web.Services;
 
@@ -34,11 +34,11 @@ public static class FileValidationUi
             .ToList();
     }
 
-    public static string StatusText(FileValidationStatus status) => status switch
+    public static string StatusText(FileValidationStatus status, ITemplateDisplayCopy? displayCopy = null) => status switch
     {
-        FileValidationStatus.Pending => "Validation pending",
-        FileValidationStatus.Passed => "Validated",
-        FileValidationStatus.Failed => "Validation failed",
+        FileValidationStatus.Pending => displayCopy?.FileValidationPendingText ?? "Validation pending",
+        FileValidationStatus.Passed => displayCopy?.FileValidationPassedText ?? "Validated",
+        FileValidationStatus.Failed => displayCopy?.FileValidationFailedText ?? "Validation failed",
         _ => string.Empty
     };
 

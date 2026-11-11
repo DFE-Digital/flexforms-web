@@ -260,7 +260,7 @@
                             <td class="govuk-table__cell">@(System.IO.Path.GetExtension(file.OriginalFileName)?.TrimStart('.').ToUpperInvariant() ?? "Unknown")</td>
                             <td class="govuk-table__cell" data-file-validation-status="@file.Id">
                                 @{
-                                    var validationLabel = GovUK.Dfe.FlexForms.Web.Services.FileValidationUi.StatusText(file.ValidationStatus);
+                                    var validationLabel = GovUK.Dfe.FlexForms.Web.Services.FileValidationUi.StatusText(file.ValidationStatus, DisplayCopy);
                                 }
                                 @if (!string.IsNullOrWhiteSpace(validationLabel))
                                 {
