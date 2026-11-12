@@ -353,7 +353,7 @@ The PageModel remains responsible for HTTP concerns that cannot cross into Appli
 - `[Authorize]` policies and `[BindProperty]` attributes
 - `TempData` read/write (PRG pattern)
 - Tenant resolution (`ITenantRequestContext`)
-- Local cache invalidation (`ITenantConfigurationCache`, `ITenantIdResolver`)
+- Cache invalidation across all replicas (`ITenantConfigurationInvalidator`, `ITemplateCacheInvalidator`, `ITwoLevelCache`)
 - `ModelState` manipulation and `Page()` / `RedirectToPage()` / `File()` return
 - Session reads for presentation (e.g. `FormSessionKeys`)
 - `HttpContext.User` claims extraction (passed as values into the use case)
@@ -421,7 +421,7 @@ src/
 │   │   ├── ITenantSettingsAdmin + TenantSettingsAdminService
 │   │   ├── IUserManagerAdmin + UserManagerAdminService
 │   │   ├── IRoleManagerAdmin + RoleManagerAdminService
-│   │   ├── IDuplicateTenantAdmin + DuplicateTenantAdminService
+│   │   ├── INewTenantAdmin + NewTenantAdminService
 │   │   ├── IOrganisationSettingsAdmin + OrganisationSettingsAdminService
 │   │   ├── IAdminHome + AdminHomeService
 │   │   ├── ... (EventMappings, TemplateManager, CustomStatusLabels, ContributorManagement)
@@ -588,7 +588,7 @@ Hub: `/admin` (`CanAccessAdminArea`). Each admin page follows the [Clean Archite
 | Role Permissions | `/admin/role-manager-permissions` | Same | `IRoleManagerPermissionsAdmin` |
 | Organisation Settings | `/admin/organisation-settings` | Admin / SuperAdmin | `IOrganisationSettingsAdmin` |
 | Contributor Management | `/admin/contributor-management` | Admin / SuperAdmin | `IContributorManagementAdmin` |
-| Duplicate Tenant | `/admin/duplicate-tenant` | **SuperAdmin only** | `IDuplicateTenantAdmin` |
+| New Tenant | `/admin/new-tenant` | **SuperAdmin only** | `INewTenantAdmin` |
 | Tenant Settings | `/admin/tenant-settings` | Admin / SuperAdmin | `ITenantSettingsAdmin` |
 | Event Mappings | `/admin/event-mappings` | Admin / SuperAdmin | `IEventMappingsAdmin` |
 

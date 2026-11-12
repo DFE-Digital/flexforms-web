@@ -12,14 +12,12 @@ namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService.Admin;
 public sealed class ViewApplicationsTests : PlaywrightTestBase
 {
     private CreateApplicationResponse _application = null!;
-    private CreateApplicationResponse _applicationToDelete = null!;
 
     [OneTimeSetUp]
     public async Task CreateApplicationAsync()
     {
         var createRequest = ApplicationBuilder.CreateApplicationRequest(ApiConfig.TemplateId);
         _application = await ApplicationApi.CreateApplicationAsync(ApiClient, createRequest);
-        _applicationToDelete = await ApplicationApi.CreateApplicationAsync(ApiClient, createRequest);
     }
 
     [SetUp]
@@ -56,25 +54,28 @@ public sealed class ViewApplicationsTests : PlaywrightTestBase
         var viewApplications = new ViewApplications(Page);
         var dashboardPage = new DashboardPage(Page);
 
+        var applicationToDelete = await ApplicationApi.CreateApplicationAsync(
+            ApiClient, ApplicationBuilder.CreateApplicationRequest(ApiConfig.TemplateId));
+
         await viewApplications.SelectATemplateAsync(TestData.DefaultTemplateName);
-        await viewApplications.DeleteApplicationAsync(_applicationToDelete.ApplicationReference);
+        await viewApplications.DeleteApplicationAsync(applicationToDelete.ApplicationReference);
         await viewApplications.SummaryCards
-            .WithReference(_applicationToDelete.ApplicationReference)
+            .WithReference(applicationToDelete.ApplicationReference)
             .HasText("Deleted")
             .VerifyAsync();
 
         await dashboardPage.GoToAllApplicationsAsync();
         await dashboardPage.ApplicationsTable
-            .WithReference(_applicationToDelete.ApplicationReference)
+            .WithReference(applicationToDelete.ApplicationReference)
             .ColumnHasValue("Status", "Deleted")
             .VerifyAsync();
 
         // users should not be able to access deleted applications
         await LoginAsync("default");
-        await dashboardPage.ExpectApplicationNotPresentAsync(_applicationToDelete.ApplicationReference);
+        await dashboardPage.ExpectApplicationNotPresentAsync(applicationToDelete.ApplicationReference);
 
         var taskList = new TaskListPage(Page);
-        await taskList.GoToAsync(_applicationToDelete.ApplicationReference);
+        await taskList.GoToAsync(applicationToDelete.ApplicationReference);
         await new ErrorPage(Page).ExpectPageNotFoundAsync();
     }
 }

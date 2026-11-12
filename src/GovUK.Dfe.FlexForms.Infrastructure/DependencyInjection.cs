@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using GovUK.Dfe.FlexForms.Application.DisplayCopy;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
+using GovUK.Dfe.FlexForms.Infrastructure.Caching;
 using GovUK.Dfe.FlexForms.Infrastructure.Parsers;
 using GovUK.Dfe.FlexForms.Infrastructure.Providers;
 using GovUK.Dfe.FlexForms.Infrastructure.Services;
@@ -32,6 +33,11 @@ public static class DependencyInjection
         services.AddScoped<IComplexFieldRenderer, AutocompleteComplexFieldRenderer>();
         services.AddScoped<IComplexFieldRenderer, CompositeComplexFieldRenderer>();
         services.AddScoped<IComplexFieldRenderer, UploadComplexFieldRenderer>();
+        services.AddMemoryCache();
+        services.AddSingleton<ISharedCacheStore, RedisSharedCacheStore>();
+        services.AddSingleton<TwoLevelCache>();
+        services.AddSingleton<ITwoLevelCache>(sp => sp.GetRequiredService<TwoLevelCache>());
+        services.AddHostedService(sp => sp.GetRequiredService<TwoLevelCache>());
         services.AddSingleton<ITemplateStore, ApiTemplateStore>();
         services.AddSingleton<IFormTemplateParser, JsonFormTemplateParser>();
         services.AddScoped<IFormTemplateProvider, FormTemplateProvider>();

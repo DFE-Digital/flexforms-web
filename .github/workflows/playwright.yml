@@ -33,6 +33,7 @@ jobs:
     env:
       CI: true
       PW_ARTIFACTS_DIR: ${{ github.workspace }}/src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/test-results
+      PW_ARTIFACTS: on-retry
       BASE_URL: ${{ vars.PL_BASE_URL}}
       API_BASE_URL: ${{ vars.PL_API_BASE_URL }}
       SERVICE: TestService
@@ -77,15 +78,15 @@ jobs:
           --filter "FullyQualifiedName~.Tests.${{ env.SERVICE }}."
           --logger "trx;LogFileName=report.trx"
           --results-directory reports
-          -- NUnit.NumberOfTestWorkers=6
+          -- NUnit.NumberOfTestWorkers=4
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: playwright-report-${{ inputs.environment }}
-          path: src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/reports
-          retention-days: 14
+          path: src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/reports/*.trx
+          retention-days: 5
 
       - name: Upload test results
         if: ${{ failure() }}
@@ -93,7 +94,7 @@ jobs:
         with:
           name: playwright-results-${{ inputs.environment }}
           path: src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/test-results
-          retention-days: 14
+          retention-days: 5
 
       - name: Report results to Teams
         if: always()

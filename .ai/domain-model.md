@@ -6,6 +6,8 @@ This Domain layer models **templates**, not EA aggregates (those live in the API
 
 Under `Domain/Models/`: `FormTemplate`, `Task`, `Page`, `Field`, conditional-logic types, collection/derived flow configuration (`MultiCollectionFlowConfiguration`, `DerivedCollectionFlowConfiguration`).
 
+`ComplexField.Label` (**Verified**) is an optional sentence name for one search question, stored as `complexField.label`. Blank keeps the tenant `FormEngine:ComplexFields` Label. Summary item labels use it as written. `ComplexField.ConfirmationTitle` (**Verified**) is an optional confirmation heading, stored as `confirmationTitle`. `{name}` is replaced with that sentence name. Blank keeps "Is this the right {name}?".
+
 `Domain/FormEngine/`: `FormRouteParser`, `FormStepPolicy`, `CheckboxValueNormalizer`.
 
 Session keys: `Domain/Caching/FormSessionKeys.cs` — includes `CurrentAccumulatedApplicationId`. Accumulated answers historically used a **single session key** for the browser session, not per application.

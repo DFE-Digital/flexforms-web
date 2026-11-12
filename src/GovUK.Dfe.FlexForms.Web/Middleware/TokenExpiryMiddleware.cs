@@ -1,5 +1,6 @@
 using GovUK.Dfe.CoreLibs.Security.Configurations;
 using GovUK.Dfe.FlexForms.Web.Security;
+using GovUK.Dfe.FlexForms.Web.Telemetry;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -15,23 +16,28 @@ namespace GovUK.Dfe.FlexForms.Web.Middleware
         private readonly ILogger<TokenExpiryMiddleware> _logger;
         private readonly IOptions<TestAuthenticationOptions> _testAuthOptions;
         private readonly IOptions<EntraSsoOptions> _entraSsoOptions;
+        private readonly ReportingUserIdGenerator _reportingUserIdGenerator;
         private static readonly TimeSpan ExpiryThreshold = TimeSpan.FromMinutes(10);
 
         public TokenExpiryMiddleware(
             RequestDelegate next, 
             ILogger<TokenExpiryMiddleware> logger,
             IOptions<TestAuthenticationOptions> testAuthOptions,
-            IOptions<EntraSsoOptions> entraSsoOptions)
+            IOptions<EntraSsoOptions> entraSsoOptions,
+            ReportingUserIdGenerator reportingUserIdGenerator)
         {
             _next = next;
             _logger = logger;
             _testAuthOptions = testAuthOptions;
             _entraSsoOptions = entraSsoOptions;
+            _reportingUserIdGenerator = reportingUserIdGenerator;
         }
 
         public async Task InvokeAsync(HttpContext context)
         {
-            var userId = context.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "Anonymous";
+            var userId = context.User?.Identity?.IsAuthenticated == true
+                ? _reportingUserIdGenerator.ForLogging(context)
+                : "Anonymous";
             var requestPath = context.Request.Path;
 
             // Skip token expiry checks when test authentication is the active interactive scheme

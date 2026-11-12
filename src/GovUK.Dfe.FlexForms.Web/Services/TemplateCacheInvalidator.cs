@@ -1,11 +1,11 @@
 using GovUK.Dfe.CoreLibs.Caching.Helpers;
-using GovUK.Dfe.CoreLibs.Caching.Interfaces;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
+using GovUK.Dfe.FlexForms.Domain.Caching;
 
 namespace GovUK.Dfe.FlexForms.Web.Services;
 
 /// <summary>
-/// Drops this instance's cached copy of a template after a new version is saved, then reloads it.
+/// Drops every cached copy of a template (Redis, and memory on every replica) after a new version is saved, then reloads it.
 /// </summary>
 public interface ITemplateCacheInvalidator
 {
@@ -14,18 +14,18 @@ public interface ITemplateCacheInvalidator
 
 public sealed class TemplateCacheInvalidator(
     IFormTemplateProvider formTemplateProvider,
-    ICacheService<IMemoryCacheType> cacheService,
+    ITwoLevelCache cache,
     ILogger<TemplateCacheInvalidator> logger) : ITemplateCacheInvalidator
 {
     public async Task InvalidateAsync(string templateId)
     {
         try
         {
-            var cacheKey = $"FormTemplate_{CacheKeyHelper.GenerateHashedCacheKey(templateId)}";
+            var cacheKey = FlexFormsCacheKeys.FormTemplate(CacheKeyHelper.GenerateHashedCacheKey(templateId));
             logger.LogInformation("Attempting to invalidate cache for template {TemplateId} with key {CacheKey}",
                 templateId, cacheKey);
 
-            cacheService.Remove(cacheKey);
+            await cache.RemoveAsync(cacheKey);
             logger.LogInformation("Successfully invalidated cache for template {TemplateId} with key {CacheKey}",
                 templateId, cacheKey);
 

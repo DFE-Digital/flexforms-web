@@ -1,8 +1,8 @@
 using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.CoreLibs.Caching.Helpers;
-using GovUK.Dfe.CoreLibs.Caching.Interfaces;
 using GovUK.Dfe.FlexForms.Application.Admin;
-using GovUK.Dfe.FlexForms.Domain.Models;
+using GovUK.Dfe.FlexForms.Application.Interfaces;
+using GovUK.Dfe.FlexForms.Domain.Caching;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Security;
 using GovUK.Dfe.FlexForms.Web.Services;
@@ -20,7 +20,8 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
     [Authorize(Policy = AdminAccessHelper.CanAccessAdminAreaPolicy)]
     public class AdminModel(
         IAdminHome adminHome,
-        ICacheService<IMemoryCacheType> cacheService,
+        ITwoLevelCache templateCache,
+        ITemplateCacheInvalidator templateCacheInvalidator,
         IHttpContextAccessor httpContextAccessor,
         IInternalUserTokenStore tokenStore,
         ITemplateSelectionService templateSelectionService,
@@ -106,12 +107,12 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
 
             try
             {
+                var templateId = HttpContext.Session.GetString("TemplateId");
                 HttpContext.Session.Clear();
 
-                if (!string.IsNullOrEmpty(TemplateCacheKey))
+                if (!string.IsNullOrEmpty(templateId))
                 {
-                    cacheService.Remove(TemplateCacheKey);
-                    logger.LogInformation("Cleared template cache for key: {CacheKey}", TemplateCacheKey);
+                    await templateCacheInvalidator.InvalidateAsync(templateId);
                 }
 
                 ShowSuccess = true;
@@ -216,18 +217,9 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
 
             try
             {
-                var factoryCalled = false;
-
-                await cacheService.GetOrAddAsync<FormTemplate>(
-                    TemplateCacheKey,
-                    async () =>
-                    {
-                        factoryCalled = true;
-                        return null!;
-                    },
-                    nameof(GetCacheStatusAsync));
-
-                return !factoryCalled ? "Template cached" : "Template not in cache";
+                return await templateCache.ContainsAsync(TemplateCacheKey)
+                    ? "Template cached"
+                    : "Template not in cache";
             }
             catch
             {
@@ -240,7 +232,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
             TestToken = HttpContext.Session.GetString("TestAuth:Token");
             TemplateId = HttpContext.Session.GetString("TemplateId");
             if (!string.IsNullOrEmpty(TemplateId))
-                TemplateCacheKey = $"FormTemplate_{CacheKeyHelper.GenerateHashedCacheKey(TemplateId)}";
+                TemplateCacheKey = FlexFormsCacheKeys.FormTemplate(CacheKeyHelper.GenerateHashedCacheKey(TemplateId));
         }
 
         private AdminHomeWorkState CaptureWorkState() =>

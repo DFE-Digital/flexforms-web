@@ -16,8 +16,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 public sealed class OrganisationSettingsModel(
     IOrganisationSettingsAdmin organisationSettingsAdmin,
     ITenantRequestContext tenantRequestContext,
-    ITenantConfigurationCache tenantConfigurationCache,
-    ITenantIdResolver tenantIdResolver) : PageModel
+    ITenantConfigurationInvalidator tenantConfigurationInvalidator) : PageModel
 {
     public Guid TenantId { get; private set; }
 
@@ -230,15 +229,14 @@ public sealed class OrganisationSettingsModel(
         SubmittedPanelTitle = SubmittedPanelTitle?.Trim() ?? string.Empty;
 
         var outcome = await organisationSettingsAdmin.SaveAsync(CaptureWorkState(), cancellationToken);
-        return MapOutcome(outcome);
+        return await MapOutcomeAsync(outcome);
     }
 
-    private IActionResult MapOutcome(AdminPageOutcome outcome)
+    private async Task<IActionResult> MapOutcomeAsync(AdminPageOutcome outcome)
     {
         if (outcome.RefreshLocalCaches)
         {
-            tenantConfigurationCache.Invalidate(TenantId);
-            tenantIdResolver.InvalidateHostnameCache();
+            await tenantConfigurationInvalidator.InvalidateAsync(TenantId);
         }
 
         if (outcome.SuccessMessage != null)

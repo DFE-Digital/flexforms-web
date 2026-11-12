@@ -22,6 +22,8 @@ public abstract class PlaywrightTestBase : PageTest
 {
     private string _artifactsDirectory = null!;
     private Timer? _timeoutWatchdog;
+    private bool _recordArtifacts;
+    private bool _recordTrace;
 
     protected ApiConfig ApiConfig { get; private set; } = null!;
 
@@ -85,12 +87,16 @@ public abstract class PlaywrightTestBase : PageTest
     public override BrowserNewContextOptions ContextOptions()
     {
         _artifactsDirectory = CurrentTestArtifactsDirectory();
+        _recordArtifacts = ShouldRecordArtifacts();
+
+        // Traces are local only. A trace keeps every request header and a DOM snapshot of every page
+        _recordTrace = _recordArtifacts && !IsCi;
 
         var options = new BrowserNewContextOptions(Playwright.Devices["Desktop Chrome"])
         {
             BaseURL = ServiceConfig.Url,
             IgnoreHTTPSErrors = true,
-            RecordVideoDir = _artifactsDirectory,
+            RecordVideoDir = _recordArtifacts ? _artifactsDirectory : null,
         };
 
         var zapProxy = TestEnvironment.OptionalEnvironmentVariable("ZAP_PROXY");
@@ -119,12 +125,15 @@ public abstract class PlaywrightTestBase : PageTest
         Page.SetDefaultTimeout(10_000);
         Page.SetDefaultNavigationTimeout(15_000);
 
-        await Context.Tracing.StartAsync(new TracingStartOptions
+        if (_recordTrace)
         {
-            Screenshots = true,
-            Snapshots = true,
-            Sources = true,
-        });
+            await Context.Tracing.StartAsync(new TracingStartOptions
+            {
+                Screenshots = true,
+                Snapshots = true,
+                Sources = true,
+            });
+        }
 
         _timeoutWatchdog = new Timer(
             _ => _ = Context.CloseAsync(),
@@ -143,15 +152,18 @@ public abstract class PlaywrightTestBase : PageTest
 
         var passed = TestOk();
 
-        try
+        if (_recordTrace)
         {
-            await Context.Tracing.StopAsync(passed
-                ? null
-                : new TracingStopOptions { Path = Path.Combine(_artifactsDirectory, "trace.zip") });
-        }
-        catch
-        {
-            // Best-effort: a watchdog-forced close may already have invalidated the context.
+            try
+            {
+                await Context.Tracing.StopAsync(passed
+                    ? null
+                    : new TracingStopOptions { Path = Path.Combine(_artifactsDirectory, "trace.zip") });
+            }
+            catch
+            {
+                // Best-effort: a watchdog-forced close may already have invalidated the context.
+            }
         }
 
         if (!passed)
@@ -192,6 +204,30 @@ public abstract class PlaywrightTestBase : PageTest
     protected Task LoginAsync(string? userName = null) => Login.LoginAsync(Page, userName);
 
     protected Task AuthenticateAsync(string? userName = null) => Login.AuthenticateAsync(Page, userName);
+
+    /// <summary>
+    /// Whether this attempt records a video (and, locally, a trace). Both cost CPU on every test, and on
+    /// a pass they are deleted anyway, so CI records them only on a retry (Playwright's "on-first-retry"):
+    /// a test that fails every attempt still leaves a video from its last attempt.
+    /// A first attempt that fails and then passes on retry loses nothing either - the passing retry
+    /// deletes the shared artifacts folder. Set <c>PW_ARTIFACTS</c> to <c>always</c>, <c>on-retry</c>
+    /// or <c>off</c> to override. Defaults: <c>on-retry</c> in CI, <c>always</c> locally (where there
+    /// are no retries). The screenshot on failure is always taken.
+    /// </summary>
+    private static bool ShouldRecordArtifacts()
+    {
+        var mode = TestEnvironment.OptionalEnvironmentVariable("PW_ARTIFACTS")?.Trim().ToLowerInvariant();
+        mode ??= IsCi ? "on-retry" : "always";
+
+        return mode switch
+        {
+            "off" => false,
+            "on-retry" => TestContext.CurrentContext.CurrentRepeatCount > 0,
+            _ => true,
+        };
+    }
+
+    private static bool IsCi => !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI"));
 
     private static bool IsHeadedModeEnabled()
     {

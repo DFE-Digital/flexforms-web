@@ -27,6 +27,16 @@ public class HealthCheckTelemetryFilterTests
         Assert.Contains(next.Items, i => i is TraceTelemetry);
     }
 
+    [Theory]
+    [InlineData("/health", true)]
+    [InlineData("/READINESS", true)]
+    [InlineData("/health/extra", false)]
+    [InlineData(null, false)]
+    public void IsHealthCheckPath_ShouldMatchProbePathsExactly(string? path, bool expected)
+    {
+        Assert.Equal(expected, HealthCheckTelemetryFilter.IsHealthCheckPath(path));
+    }
+
     private sealed class RecordingProcessor : ITelemetryProcessor
     {
         public List<ITelemetry> Items { get; } = [];

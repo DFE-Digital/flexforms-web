@@ -1,5 +1,6 @@
 using GovUK.Dfe.FlexForms.Application.Diagnostics;
 using GovUK.Dfe.FlexForms.Web.Security;
+using GovUK.Dfe.FlexForms.Web.Telemetry;
 using GovUK.Dfe.FlexForms.Web.Tenancy;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using Microsoft.AspNetCore.Authentication;
@@ -14,7 +15,8 @@ namespace GovUK.Dfe.FlexForms.Web.Middleware;
 public class PermissionsCacheMiddleware(
     RequestDelegate next,
     IMemoryCache cache,
-    IUsersClient usersClient)
+    IUsersClient usersClient,
+    ReportingUserIdGenerator reportingUserIdGenerator)
 {
     public const string PermissionsCacheKeyPrefix = "UserPermissions_";
 
@@ -69,7 +71,10 @@ public class PermissionsCacheMiddleware(
                 }
                 catch (ExternalApplicationsException ex) when (ex.StatusCode == 403)
                 {
-                    logger?.LogWarning(ex, "Permission denied fetching permissions for {UserId}", userId);
+                    logger?.LogWarning(
+                        ex,
+                        "Permission denied fetching permissions for {UserId}",
+                        reportingUserIdGenerator.ForLogging(context));
                 }
                 catch (HttpRequestException ex) when (ex.Message.Contains("403") || ex.Message.Contains("Forbidden"))
                 {

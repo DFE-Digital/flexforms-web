@@ -250,7 +250,7 @@
                         }
                         @if (Model.IsSuperAdmin)
                         {
-            <a asp-page="/Admin/DuplicateTenant" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="go-to-duplicate-tenant-button">
+                            <a asp-page="/Admin/NewTenant" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="go-to-new-tenant-button">
                                 New tenant
                             </a>
                             <a asp-page="/Admin/PlatformTenants" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="go-to-platform-tenants-button">
@@ -307,7 +307,7 @@
                     <h2 class="govuk-summary-card__title">System</h2>
                 </div>
                 <div class="govuk-summary-card__content">
-                    <p class="govuk-body">Clear cached data and session state. You may need to re-select a template afterwards.</p>
+                    <p class="govuk-body">Clears your own session and the selected template's shared cached copy. Other users' sessions are not affected. You may need to re-select a template afterwards.</p>
                     <div class="govuk-button-group">
                         <form method="post" asp-page-handler="ClearAll" style="display: inline;">
                             <button type="submit" class="govuk-button govuk-button--warning" data-module="govuk-button" id="clear-all-sessions-button">

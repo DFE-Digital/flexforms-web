@@ -455,6 +455,22 @@ public class FieldFormattingServiceTests
     }
 
     [Fact]
+    public void GetFieldItemLabel_uses_the_question_label_when_set()
+    {
+        _configurationService.GetConfiguration("LocalAuthorityComplexField").Returns(new ComplexFieldConfiguration
+        {
+            Id = "LocalAuthorityComplexField",
+            Label = "Local authority"
+        });
+
+        var service = CreateService();
+        var template = CreateTemplate("localAuthority", "LocalAuthorityComplexField");
+        template.TaskGroups[0].Tasks[0].Pages![0].Fields[0].ComplexField!.Label = "local authority";
+
+        Assert.Equal("local authority", service.GetFieldItemLabel("localAuthority", template));
+    }
+
+    [Fact]
     public void GetFieldItemLabel_returns_default_when_field_not_found()
     {
         var service = CreateService();

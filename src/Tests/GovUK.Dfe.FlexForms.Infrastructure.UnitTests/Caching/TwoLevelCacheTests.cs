@@ -1,0 +1,413 @@
+using GovUK.Dfe.CoreLibs.Caching.Settings;
+using GovUK.Dfe.FlexForms.Infrastructure.Caching;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using NSubstitute;
+using StackExchange.Redis;
+
+namespace GovUK.Dfe.FlexForms.Infrastructure.UnitTests.Caching;
+
+public class TwoLevelCacheTests
+{
+    private const string Key = "FormTemplate_abc123";
+    private const string Method = "GetTemplateAsync";
+
+    private readonly InMemorySharedCacheStore _redis = new();
+
+    [Fact]
+    public async Task SecondRead_IsServedFromMemory()
+    {
+        var replica = new Replica(_redis);
+        var fetches = 0;
+
+        await replica.Cache.GetOrAddAsync(Key, () => Task.FromResult($"v{++fetches}"), Method);
+        var second = await replica.Cache.GetOrAddAsync(Key, () => Task.FromResult($"v{++fetches}"), Method);
+
+        Assert.Equal("v1", second);
+        Assert.Equal(1, fetches);
+    }
+
+    [Fact]
+    public async Task AnotherReplica_ReadsTheSharedCopy_WithoutFetching()
+    {
+        await new Replica(_redis).Cache.GetOrAddAsync(Key, () => Task.FromResult("v1"), Method);
+
+        var fromOther = await new Replica(_redis).Cache.GetOrAddAsync(
+            Key, () => Task.FromResult("fetched again"), Method);
+
+        Assert.Equal("v1", fromOther);
+    }
+
+    [Fact]
+    public async Task RemoveAsync_InvalidatesRedis_DropsMemory_AndPublishes()
+    {
+        var replica = new Replica(_redis);
+        await replica.Cache.GetOrAddAsync(Key, () => Task.FromResult("v1"), Method);
+
+        await replica.Cache.RemoveAsync(Key);
+
+        Assert.False(_redis.HasValue(Key));
+        Assert.Equal("v2", await replica.Cache.GetOrAddAsync(Key, () => Task.FromResult("v2"), Method));
+        Assert.StartsWith($"{Key}|", Assert.Single(replica.Published).ToString());
+    }
+
+    [Fact]
+    public async Task OldFetchFinishingAfterRemoval_DoesNotPutTheOldValueBackInRedis()
+    {
+        var slow = new Replica(_redis);
+        await slow.StartAsync();
+        var fetchStarted = new TaskCompletionSource();
+        var oldTemplate = new TaskCompletionSource<string>();
+        var inFlight = slow.Cache.GetOrAddAsync(Key, () =>
+        {
+            fetchStarted.SetResult();
+            return oldTemplate.Task;
+        }, Method);
+        await fetchStarted.Task;
+
+        var saving = new Replica(_redis);
+        await saving.Cache.RemoveAsync(Key);
+        slow.Deliver(saving.Published.Single());
+        oldTemplate.SetResult("old");
+        await inFlight;
+
+        Assert.False(_redis.HasValue(Key));
+        var fresh = await new Replica(_redis).Cache.GetOrAddAsync(Key, () => Task.FromResult("new"), Method);
+        Assert.Equal("new", fresh);
+        Assert.Equal("new", await slow.Cache.GetOrAddAsync(Key, () => Task.FromResult("new"), Method));
+    }
+
+    [Fact]
+    public async Task MessageFromAnotherReplica_DropsThisReplicasMemoryCopy()
+    {
+        var saving = new Replica(_redis);
+        var other = new Replica(_redis);
+        await other.StartAsync();
+        await other.Cache.GetOrAddAsync(Key, () => Task.FromResult("v1"), Method);
+
+        await saving.Cache.RemoveAsync(Key);
+        other.Deliver(saving.Published.Single());
+
+        Assert.Equal("v2", await other.Cache.GetOrAddAsync(Key, () => Task.FromResult("v2"), Method));
+    }
+
+    [Fact]
+    public async Task OwnMessage_IsIgnored()
+    {
+        var replica = new Replica(_redis);
+        await replica.StartAsync();
+        await replica.Cache.RemoveAsync(Key);
+        await replica.Cache.GetOrAddAsync(Key, () => Task.FromResult("v1"), Method);
+
+        replica.Deliver(replica.Published.Single());
+
+        Assert.Equal("v1", await replica.Cache.GetOrAddAsync(Key, () => Task.FromResult("v2"), Method));
+    }
+
+    [Fact]
+    public async Task RedisUnavailable_DoesNotStopStartup_AndReadsFallBackToTheSource()
+    {
+        var replica = new Replica(_redis, redisAvailable: false);
+
+        await replica.Cache.StartAsync(CancellationToken.None);
+        var value = await replica.Cache.GetOrAddAsync(Key, () => Task.FromResult("from source"), Method);
+        await replica.Cache.RemoveAsync(Key);
+        await replica.Cache.StopAsync(CancellationToken.None);
+
+        Assert.Equal("from source", value);
+        Assert.Equal(0, _redis.Writes);
+    }
+
+    [Fact]
+    public async Task ConcurrentMisses_OnOneReplica_FetchOnce()
+    {
+        var replica = new Replica(_redis);
+        var fetches = 0;
+        var release = new TaskCompletionSource<string>();
+
+        var reads = Enumerable.Range(0, 5)
+            .Select(_ => replica.Cache.GetOrAddAsync(Key, () =>
+            {
+                Interlocked.Increment(ref fetches);
+                return release.Task;
+            }, Method))
+            .ToList();
+        release.SetResult("v1");
+
+        Assert.All(await Task.WhenAll(reads), value => Assert.Equal("v1", value));
+        Assert.Equal(1, fetches);
+    }
+
+    [Fact]
+    public async Task FillSpanningAVersionExpiryAndASave_DoesNotPutTheOldValueBack()
+    {
+        await new Replica(_redis).Cache.RemoveAsync(Key);
+        var slow = new Replica(_redis);
+        await slow.StartAsync();
+        var fetchStarted = new TaskCompletionSource();
+        var oldTemplate = new TaskCompletionSource<string>();
+        var inFlight = slow.Cache.GetOrAddAsync(Key, () =>
+        {
+            fetchStarted.SetResult();
+            return oldTemplate.Task;
+        }, Method);
+        await fetchStarted.Task;
+
+        _redis.ExpireVersion(Key);
+        var saving = new Replica(_redis);
+        await saving.Cache.RemoveAsync(Key);
+        slow.Deliver(saving.Published.Single());
+        oldTemplate.SetResult("old");
+        await inFlight;
+
+        Assert.False(_redis.HasValue(Key));
+        Assert.Equal("new", await new Replica(_redis).Cache.GetOrAddAsync(Key, () => Task.FromResult("new"), Method));
+    }
+
+    [Fact]
+    public async Task FailedInvalidation_BypassesTheOldSharedCopy_UntilTheRetrySucceeds()
+    {
+        var saving = new Replica(_redis);
+        await saving.Cache.GetOrAddAsync(Key, () => Task.FromResult("old"), Method);
+        _redis.FailInvalidations = true;
+
+        await saving.Cache.RemoveAsync(Key);
+        var whilePending = await saving.Cache.GetOrAddAsync(Key, () => Task.FromResult("new"), Method);
+
+        Assert.Equal("new", whilePending);
+        Assert.True(_redis.HasValue(Key));
+
+        await saving.Cache.RetryPendingInvalidationsOnceAsync();
+        Assert.True(_redis.HasValue(Key));
+
+        _redis.FailInvalidations = false;
+        await saving.Cache.RetryPendingInvalidationsOnceAsync();
+
+        Assert.False(_redis.HasValue(Key));
+        Assert.Equal(2, saving.Published.Count);
+        Assert.Equal("new", await new Replica(_redis).Cache.GetOrAddAsync(Key, () => Task.FromResult("new"), Method));
+    }
+
+    [Fact]
+    public async Task SlowSuccessfulRetry_DoesNotClearAFailureFromALaterSave()
+    {
+        var saving = new Replica(_redis);
+        _redis.FailInvalidations = true;
+        await saving.Cache.RemoveAsync(Key);
+        _redis.FailInvalidations = false;
+
+        var retryApplied = new TaskCompletionSource();
+        var releaseRetryReply = new TaskCompletionSource();
+        _redis.AfterInvalidationApplied = async () =>
+        {
+            _redis.AfterInvalidationApplied = null;
+            retryApplied.SetResult();
+            await releaseRetryReply.Task;
+        };
+        var retry = saving.Cache.RetryPendingInvalidationsOnceAsync();
+        await retryApplied.Task;
+
+        await new Replica(_redis).Cache.GetOrAddAsync(Key, () => Task.FromResult("before second save"), Method);
+        _redis.FailInvalidations = true;
+        await saving.Cache.RemoveAsync(Key);
+        releaseRetryReply.SetResult();
+        await retry;
+
+        Assert.Equal(
+            "after second save",
+            await saving.Cache.GetOrAddAsync(Key, () => Task.FromResult("after second save"), Method));
+
+        _redis.FailInvalidations = false;
+        await saving.Cache.RetryPendingInvalidationsOnceAsync();
+        Assert.False(_redis.HasValue(Key));
+    }
+
+    [Fact]
+    public async Task OverlappingSuccessfulRemove_DoesNotClearAFailureFromALaterSave()
+    {
+        var saving = new Replica(_redis);
+        var firstApplied = new TaskCompletionSource();
+        var releaseFirstReply = new TaskCompletionSource();
+        _redis.AfterInvalidationApplied = async () =>
+        {
+            _redis.AfterInvalidationApplied = null;
+            firstApplied.SetResult();
+            await releaseFirstReply.Task;
+        };
+        var firstSave = saving.Cache.RemoveAsync(Key);
+        await firstApplied.Task;
+
+        await new Replica(_redis).Cache.GetOrAddAsync(Key, () => Task.FromResult("before second save"), Method);
+        _redis.FailInvalidations = true;
+        await saving.Cache.RemoveAsync(Key);
+        releaseFirstReply.SetResult();
+        await firstSave;
+
+        Assert.Equal(
+            "after second save",
+            await saving.Cache.GetOrAddAsync(Key, () => Task.FromResult("after second save"), Method));
+    }
+
+    [Fact]
+    public async Task PendingInvalidation_IsRetriedInTheBackground()
+    {
+        var saving = new Replica(_redis);
+        await saving.StartAsync();
+        await saving.Cache.GetOrAddAsync(Key, () => Task.FromResult("old"), Method);
+        _redis.FailInvalidations = true;
+        await saving.Cache.RemoveAsync(Key);
+
+        _redis.FailInvalidations = false;
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (_redis.HasValue(Key) && DateTime.UtcNow < deadline)
+            await Task.Delay(10);
+        await saving.Cache.StopAsync(CancellationToken.None);
+
+        Assert.False(_redis.HasValue(Key));
+    }
+
+    [Fact]
+    public async Task RedisReadFails_LoadsFromSource_AndDoesNotWrite()
+    {
+        _redis.FailReads = true;
+
+        var value = await new Replica(_redis).Cache.GetOrAddAsync(Key, () => Task.FromResult("from source"), Method);
+
+        Assert.Equal("from source", value);
+        Assert.Equal(0, _redis.Writes);
+    }
+
+    [Fact]
+    public async Task RedisWriteFails_StillReturnsTheValue_AndKeepsItInMemory()
+    {
+        _redis.FailWrites = true;
+        var replica = new Replica(_redis);
+        var fetches = 0;
+
+        await replica.Cache.GetOrAddAsync(Key, () => Task.FromResult($"v{++fetches}"), Method);
+        var second = await replica.Cache.GetOrAddAsync(Key, () => Task.FromResult($"v{++fetches}"), Method);
+
+        Assert.Equal("v1", second);
+        Assert.Equal(1, fetches);
+    }
+
+    [Fact]
+    public async Task RedisInvalidationFails_StillDropsMemory_AndPublishes()
+    {
+        var replica = new Replica(_redis);
+        await replica.Cache.GetOrAddAsync(Key, () => Task.FromResult("v1"), Method);
+        _redis.FailInvalidations = true;
+        _redis.FailReads = true;
+
+        await replica.Cache.RemoveAsync(Key);
+
+        Assert.Equal("v2", await replica.Cache.GetOrAddAsync(Key, () => Task.FromResult("v2"), Method));
+        Assert.Single(replica.Published);
+    }
+
+    [Fact]
+    public async Task StoredNull_IsTreatedAsAMiss()
+    {
+        _redis.Put(Key, "null"u8.ToArray());
+
+        var value = await new Replica(_redis).Cache.GetOrAddAsync(Key, () => Task.FromResult("from source"), Method);
+
+        Assert.Equal("from source", value);
+    }
+
+    [Fact]
+    public async Task RedisExpiry_UsesTheMethodDuration_OrTheDefault()
+    {
+        var settings = new CacheSettings
+        {
+            Memory = new MemoryCacheSettings { Durations = new() { [Method] = 30 } },
+            Redis = new RedisCacheSettings { DefaultDurationInSeconds = 300, Durations = new() { [Method] = 86_400 } }
+        };
+        var replica = new Replica(_redis, settings: settings);
+
+        await replica.Cache.GetOrAddAsync(Key, () => Task.FromResult("template"), Method);
+        Assert.Equal(TimeSpan.FromDays(1), _redis.LastWriteExpiry);
+
+        await replica.Cache.GetOrAddAsync("Other_key", () => Task.FromResult("other"), "OtherMethod");
+        Assert.Equal(TimeSpan.FromMinutes(5), _redis.LastWriteExpiry);
+    }
+
+    [Fact]
+    public async Task ContainsAsync_ReportsWhetherTheSharedCopyExists()
+    {
+        var replica = new Replica(_redis);
+
+        Assert.False(await replica.Cache.ContainsAsync(Key));
+        await replica.Cache.GetOrAddAsync(Key, () => Task.FromResult("v1"), Method);
+        Assert.True(await replica.Cache.ContainsAsync(Key));
+    }
+
+    [Fact]
+    public async Task ContainsAsync_WhenRedisIsUnavailable_Throws()
+    {
+        var replica = new Replica(_redis, redisAvailable: false);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => replica.Cache.ContainsAsync(Key));
+    }
+
+    private sealed class Replica
+    {
+        private readonly IServiceProvider _services = Substitute.For<IServiceProvider>();
+        private Action<RedisChannel, RedisValue>? _handler;
+
+        public Replica(ISharedCacheStore store, bool redisAvailable = true, CacheSettings? settings = null)
+        {
+            var subscriber = Substitute.For<ISubscriber>();
+            subscriber
+                .PublishAsync(TwoLevelCache.Channel, Arg.Do<RedisValue>(Published.Add), Arg.Any<CommandFlags>())
+                .Returns(1L);
+            subscriber
+                .SubscribeAsync(
+                    TwoLevelCache.Channel,
+                    Arg.Do<Action<RedisChannel, RedisValue>>(handler =>
+                    {
+                        _handler = handler;
+                        Subscribed.TrySetResult();
+                    }),
+                    Arg.Any<CommandFlags>())
+                .Returns(Task.CompletedTask);
+
+            var multiplexer = Substitute.For<IConnectionMultiplexer>();
+            multiplexer.GetSubscriber(Arg.Any<object?>()).Returns(subscriber);
+            var unavailable = new RedisConnectionException(ConnectionFailureType.UnableToConnect, "Redis is down");
+            _services.GetService(typeof(IConnectionMultiplexer))
+                .Returns(_ => redisAvailable ? multiplexer : throw unavailable);
+            _services.GetService(typeof(ISharedCacheStore))
+                .Returns(_ => redisAvailable ? store : throw unavailable);
+
+            Cache = new TwoLevelCache(
+                new MemoryCache(new MemoryCacheOptions()),
+                Options.Create(settings ?? new CacheSettings
+                {
+                    Memory = new MemoryCacheSettings { DefaultDurationInSeconds = 60 },
+                    Redis = new RedisCacheSettings { DefaultDurationInSeconds = 300 }
+                }),
+                _services,
+                NullLogger<TwoLevelCache>.Instance)
+            {
+                SubscribeRetryDelay = TimeSpan.FromMilliseconds(10),
+                InvalidationRetryInterval = TimeSpan.FromMilliseconds(20)
+            };
+        }
+
+        public TwoLevelCache Cache { get; }
+
+        public List<RedisValue> Published { get; } = [];
+
+        public TaskCompletionSource Subscribed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task StartAsync()
+        {
+            await Cache.StartAsync(CancellationToken.None);
+            await Subscribed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+
+        public void Deliver(RedisValue message) => _handler!(TwoLevelCache.Channel, message);
+    }
+}

@@ -1,9 +1,10 @@
 using GovUK.Dfe.CoreLibs.Caching.Helpers;
-using GovUK.Dfe.CoreLibs.Caching.Interfaces;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
+using GovUK.Dfe.FlexForms.Application.Interfaces;
+using GovUK.Dfe.FlexForms.Domain.Caching;
 using System.ComponentModel;
 using System.Text.Json;
 
@@ -13,9 +14,9 @@ namespace GovUK.Dfe.FlexForms.Web.Services
     {
         private readonly ITemplatesClient _templatesClient;
         private readonly ILogger<ApplicationStatusService> _logger;
-        private readonly ICacheService<IMemoryCacheType> _cacheService;
+        private readonly ITwoLevelCache _cacheService;
 
-        public ApplicationStatusService(ITemplatesClient templatesClient, ILogger<ApplicationStatusService> logger, ICacheService<IMemoryCacheType> cacheService)
+        public ApplicationStatusService(ITemplatesClient templatesClient, ILogger<ApplicationStatusService> logger, ITwoLevelCache cacheService)
         {
             _templatesClient = templatesClient;
             _logger = logger;
@@ -29,7 +30,8 @@ namespace GovUK.Dfe.FlexForms.Web.Services
                 return new List<CustomApplicationStatusDto>();
             }
 
-            var cacheKey = $"CustomApplicationStatuses_{CacheKeyHelper.GenerateHashedCacheKey(templateId.ToString())}";
+            var cacheKey = FlexFormsCacheKeys.CustomApplicationStatuses(
+                CacheKeyHelper.GenerateHashedCacheKey(templateId.ToString()));
             var methodName = nameof(GetCustomApplicationStatusesAsync);
             try
             {

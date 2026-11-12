@@ -8,8 +8,9 @@ namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService;
 [TestFixture(Description = "Conditional navigation")]
 public sealed class ConditionalNavigationTests : PlaywrightTestBase
 {
+    // Admin, because the API rate-limits saved answers per user (15 per 30s) and exempts admins.
     [SetUp]
-    public async Task LoginAsDefaultUserAsync() => await LoginAsync();
+    public async Task LoginAsAdminAsync() => await LoginAsync("admin");
 
     [TestCase(TestName =
         "a question that returns to the summary lists its follow-up there and blocks completion until it is answered")]
@@ -115,7 +116,7 @@ public sealed class ConditionalNavigationTests : PlaywrightTestBase
     private async Task<string> CreateApplicationAsync()
     {
         var application = await ApplicationApi.CreateApplicationAsync(
-            ApiClient,
+            AdminApiClient,
             ApplicationBuilder.CreateApplicationRequest(ApiConfig.TemplateId));
 
         return application.ApplicationReference;
