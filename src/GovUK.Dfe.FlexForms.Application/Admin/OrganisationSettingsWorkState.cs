@@ -60,6 +60,10 @@ public sealed class OrganisationSettingsWorkState
     public string? TaskListReviewButtonText { get; set; }
     public string? TaskListViewButtonText { get; set; }
 
+    public string? FileValidationPendingText { get; set; }
+    public string? FileValidationPassedText { get; set; }
+    public string? FileValidationFailedText { get; set; }
+
     public string? SubmittedPanelTitle { get; set; }
 
     public string? SubmittedBodyMarkdown { get; set; }

@@ -51,6 +51,7 @@ public class ApplicationTerminologyProviderTests
             Options.Create(new ApplicationPreviewOptions()),
             Options.Create(new ContributorsOptions()),
             Options.Create(new TaskListOptions()),
+            Options.Create(new FileValidationOptions()),
             Substitute.For<IRequestAppConfiguration>()));
 }
 

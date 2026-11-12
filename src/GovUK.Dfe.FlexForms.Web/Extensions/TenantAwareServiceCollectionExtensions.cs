@@ -64,6 +64,7 @@ public static class TenantAwareServiceCollectionExtensions
         AddTenantOptions<ApplicationPreviewOptions>(services, "ApplicationPreview");
         AddTenantOptions<ContributorsOptions>(services, "Contributors");
         AddTenantOptions<TaskListOptions>(services, "TaskList");
+        AddTenantOptions<FileValidationOptions>(services, "FileValidation");
         AddTenantOptions<TokenRefreshSettings>(services, "TokenRefresh");
         AddTenantOptions<InternalServiceAuthOptions>(services, InternalServiceAuthOptions.SectionName);
         AddTenantOptions<TestAuthenticationOptions>(services, TestAuthenticationOptions.SectionName);

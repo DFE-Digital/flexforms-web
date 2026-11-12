@@ -151,6 +151,18 @@ public sealed class OrganisationSettingsModel(
 
     [BindProperty]
     [StringLength(200)]
+    public string? FileValidationPendingText { get; set; }
+
+    [BindProperty]
+    [StringLength(200)]
+    public string? FileValidationPassedText { get; set; }
+
+    [BindProperty]
+    [StringLength(200)]
+    public string? FileValidationFailedText { get; set; }
+
+    [BindProperty]
+    [StringLength(200)]
     public string? SubmittedPanelTitle { get; set; }
 
     [BindProperty]
@@ -211,6 +223,9 @@ public sealed class OrganisationSettingsModel(
         ContributorsCurrentHeading = ContributorsCurrentHeading?.Trim() ?? string.Empty;
         TaskListReviewButtonText = TaskListReviewButtonText?.Trim() ?? string.Empty;
         TaskListViewButtonText = TaskListViewButtonText?.Trim() ?? string.Empty;
+        FileValidationPendingText = FileValidationPendingText?.Trim() ?? string.Empty;
+        FileValidationPassedText = FileValidationPassedText?.Trim() ?? string.Empty;
+        FileValidationFailedText = FileValidationFailedText?.Trim() ?? string.Empty;
         SubmittedPanelTitle = SubmittedPanelTitle?.Trim() ?? string.Empty;
 
         var outcome = await organisationSettingsAdmin.SaveAsync(CaptureWorkState(), cancellationToken);
@@ -276,6 +291,9 @@ public sealed class OrganisationSettingsModel(
             ContributorsCurrentHeading = ContributorsCurrentHeading,
             TaskListReviewButtonText = TaskListReviewButtonText,
             TaskListViewButtonText = TaskListViewButtonText,
+            FileValidationPendingText = FileValidationPendingText,
+            FileValidationPassedText = FileValidationPassedText,
+            FileValidationFailedText = FileValidationFailedText,
             SubmittedPanelTitle = SubmittedPanelTitle,
             SubmittedBodyMarkdown = SubmittedBodyMarkdown
         };
@@ -314,6 +332,9 @@ public sealed class OrganisationSettingsModel(
         ContributorsCurrentHeading = state.ContributorsCurrentHeading;
         TaskListReviewButtonText = state.TaskListReviewButtonText;
         TaskListViewButtonText = state.TaskListViewButtonText;
+        FileValidationPendingText = state.FileValidationPendingText;
+        FileValidationPassedText = state.FileValidationPassedText;
+        FileValidationFailedText = state.FileValidationFailedText;
         SubmittedPanelTitle = state.SubmittedPanelTitle;
         SubmittedBodyMarkdown = state.SubmittedBodyMarkdown;
         if (state.HasError)

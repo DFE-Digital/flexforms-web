@@ -664,6 +664,7 @@ builder.Services.Configure<DashboardOptions>(configuration.GetSection("Dashboard
 builder.Services.Configure<ApplicationPreviewOptions>(configuration.GetSection("ApplicationPreview"));
 builder.Services.Configure<ContributorsOptions>(configuration.GetSection("Contributors"));
 builder.Services.Configure<TaskListOptions>(configuration.GetSection("TaskList"));
+builder.Services.Configure<FileValidationOptions>(configuration.GetSection("FileValidation"));
 
 builder.Services.AddTenantAwareOptionsAccessors(configuration);
 
