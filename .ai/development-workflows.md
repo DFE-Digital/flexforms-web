@@ -24,7 +24,8 @@ Playwright parallel runs (**Verified** in test code; timings **Unverified** unti
 - The API rate-limits most commands per non-admin user (e.g. 5 creates and 15 saves per 30s) and returns 429. Tests don't retry on 429, so hitting a limit shows up as a failure. UI journeys that save a lot use admin (exempt) unless the role is what's being tested.
 - Don't share a browser context or session cookie between tests: overlapping requests on one session overwrite each other's session data (`.ai/known-pitfalls.md` #21).
 - Put shared settings back (status labels, tenant settings) through the admin pages, not the API. Only a save through Web clears the two-level cache (Redis copy plus every replica's memory copy); a change made straight through the API stays hidden behind the cached value until it expires, and other fixtures see the test's values.
-- `PW_ARTIFACTS` (`always` | `on-retry` | `off`) controls video and trace recording. CI uses `on-retry`.
+- `PW_ARTIFACTS` (`always` | `on-retry` | `off`) controls video recording. CI uses `on-retry`. Locally a Playwright trace is recorded with the video; in CI it never is (**Verified** in `PlaywrightTestBase.ContextOptions`), because a trace keeps every request header (the authentication interceptor's `x-service-api-key`) and a DOM snapshot of every page.
+- Workflow artifacts in this repository are public. `playwright.yml` uploads the TRX file as the report artifact and, on failure, `test-results/` (videos and screenshots); retention is 5 days.
 
 When adding PageModels, add Application use-case tests — not only PageModel tests.
 

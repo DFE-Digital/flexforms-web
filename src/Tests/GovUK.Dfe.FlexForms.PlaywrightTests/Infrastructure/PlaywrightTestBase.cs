@@ -23,6 +23,7 @@ public abstract class PlaywrightTestBase : PageTest
     private string _artifactsDirectory = null!;
     private Timer? _timeoutWatchdog;
     private bool _recordArtifacts;
+    private bool _recordTrace;
 
     protected ApiConfig ApiConfig { get; private set; } = null!;
 
@@ -88,6 +89,9 @@ public abstract class PlaywrightTestBase : PageTest
         _artifactsDirectory = CurrentTestArtifactsDirectory();
         _recordArtifacts = ShouldRecordArtifacts();
 
+        // Traces are local only. A trace keeps every request header and a DOM snapshot of every page
+        _recordTrace = _recordArtifacts && !IsCi;
+
         var options = new BrowserNewContextOptions(Playwright.Devices["Desktop Chrome"])
         {
             BaseURL = ServiceConfig.Url,
@@ -121,7 +125,7 @@ public abstract class PlaywrightTestBase : PageTest
         Page.SetDefaultTimeout(10_000);
         Page.SetDefaultNavigationTimeout(15_000);
 
-        if (_recordArtifacts)
+        if (_recordTrace)
         {
             await Context.Tracing.StartAsync(new TracingStartOptions
             {
@@ -148,7 +152,7 @@ public abstract class PlaywrightTestBase : PageTest
 
         var passed = TestOk();
 
-        if (_recordArtifacts)
+        if (_recordTrace)
         {
             try
             {
@@ -202,9 +206,9 @@ public abstract class PlaywrightTestBase : PageTest
     protected Task AuthenticateAsync(string? userName = null) => Login.AuthenticateAsync(Page, userName);
 
     /// <summary>
-    /// Whether this attempt records a video and a trace. Both cost CPU on every test, and on a pass
-    /// they are deleted anyway, so CI records them only on a retry (Playwright's "on-first-retry"):
-    /// a test that fails every attempt still leaves a video and trace from its last attempt.
+    /// Whether this attempt records a video (and, locally, a trace). Both cost CPU on every test, and on
+    /// a pass they are deleted anyway, so CI records them only on a retry (Playwright's "on-first-retry"):
+    /// a test that fails every attempt still leaves a video from its last attempt.
     /// A first attempt that fails and then passes on retry loses nothing either - the passing retry
     /// deletes the shared artifacts folder. Set <c>PW_ARTIFACTS</c> to <c>always</c>, <c>on-retry</c>
     /// or <c>off</c> to override. Defaults: <c>on-retry</c> in CI, <c>always</c> locally (where there
@@ -213,7 +217,7 @@ public abstract class PlaywrightTestBase : PageTest
     private static bool ShouldRecordArtifacts()
     {
         var mode = TestEnvironment.OptionalEnvironmentVariable("PW_ARTIFACTS")?.Trim().ToLowerInvariant();
-        mode ??= string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI")) ? "always" : "on-retry";
+        mode ??= IsCi ? "on-retry" : "always";
 
         return mode switch
         {
@@ -222,6 +226,8 @@ public abstract class PlaywrightTestBase : PageTest
             _ => true,
         };
     }
+
+    private static bool IsCi => !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI"));
 
     private static bool IsHeadedModeEnabled()
     {
