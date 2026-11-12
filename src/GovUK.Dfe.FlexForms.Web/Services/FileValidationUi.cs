@@ -36,7 +36,7 @@ public static class FileValidationUi
 
     public static string StatusText(FileValidationStatus status) => status switch
     {
-        FileValidationStatus.Pending => "Validation pending",
+        FileValidationStatus.Pending => "Checks in progress",
         FileValidationStatus.Passed => "Validated",
         FileValidationStatus.Failed => "Validation failed",
         _ => string.Empty

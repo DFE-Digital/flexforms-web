@@ -2,6 +2,10 @@
 
 All notable changes to this service will be documented in this file.
 
+## [2.2.15]
+### Notes
+- Updated upload validation status text descriptions.
+
 ## [2.2.14] - Merge branch 'main' of https://github.com/DFE-Digital/flexforms-web
 ### Notes
 - No release notes provided.
