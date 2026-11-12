@@ -85,8 +85,8 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: playwright-report-${{ inputs.environment }}
-          path: src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/reports
-          retention-days: 14
+          path: src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/reports/*.trx
+          retention-days: 5
 
       - name: Upload test results
         if: ${{ failure() }}
@@ -94,7 +94,7 @@ jobs:
         with:
           name: playwright-results-${{ inputs.environment }}
           path: src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/test-results
-          retention-days: 14
+          retention-days: 5
 
       - name: Report results to Teams
         if: always()
