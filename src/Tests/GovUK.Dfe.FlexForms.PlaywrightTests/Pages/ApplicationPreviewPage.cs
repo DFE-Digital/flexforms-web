@@ -22,6 +22,17 @@ public sealed class ApplicationPreviewPage(IPage page) : BasePage(page)
         await Assertions.Expect(LeadApplicantSubmitMessage(singular)).ToBeVisibleAsync();
     }
 
+    /// <summary>
+    /// The lead applicant gets the submit section. Its button is disabled until every task is complete,
+    /// so this checks the button is there rather than that it can be pressed.
+    /// </summary>
+    public async Task ExpectLeadApplicantCanSubmitAsync(string singular)
+    {
+        await Assertions.Expect(Preview()).ToBeVisibleAsync();
+        await Assertions.Expect(SubmitApplicationButton()).ToBeVisibleAsync();
+        await Assertions.Expect(LeadApplicantSubmitMessage(singular)).ToHaveCountAsync(0);
+    }
+
     public async Task ExpectSubmittedAsync(string submitMessage = "submitted")
     {
         await Assertions.Expect(Page).ToHaveURLAsync(new Regex(@"/application-submitted/"));
