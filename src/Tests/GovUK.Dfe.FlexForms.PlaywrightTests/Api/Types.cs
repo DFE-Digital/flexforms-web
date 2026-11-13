@@ -80,6 +80,8 @@ public sealed record TenantUsersResult(IReadOnlyList<TenantUserDto>? Items);
 
 public sealed record TenantRoleDto(string RoleId, string Name, bool IsSystem);
 
+public sealed record RolePermissionGrant(string ResourceType, string ResourceKey, string AccessType);
+
 
 public sealed record CreateUserRoleRequest(string Email, string Name, string Role, string[] TemplateIds);
 

@@ -1,9 +1,12 @@
+using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Pages;
 
 public sealed class AdminPage(IPage page) : BasePage(page)
 {
+    public const string NoTemplateAccessText = "You do not have access to this template";
+
     public async Task GoToAsync() => await Page.GotoAsync("/admin");
 
     public async Task MakeTemplateLiveAsync(string templateName) =>
@@ -17,6 +20,43 @@ public sealed class AdminPage(IPage page) : BasePage(page)
 
     public async Task ExpectTemplateNotLiveAsync(string templateName) =>
         await ExpectTemplateStatusAsync(templateName, "Not live");
+
+    public async Task ExpectTemplateAccessAsync(string templateName)
+    {
+        var row = TemplateRow(templateName);
+        await Assertions.Expect(row).ToHaveAttributeAsync("data-template-access", "true");
+        await Assertions.Expect(row.GetByText(NoTemplateAccessText)).ToHaveCountAsync(0);
+    }
+
+    /// <summary>The template is greyed out: every button on its row is disabled and the row says why.</summary>
+    public async Task ExpectNoTemplateAccessAsync(string templateName)
+    {
+        var row = TemplateRow(templateName);
+        await Assertions.Expect(row).ToHaveAttributeAsync("data-template-access", "false");
+        await Assertions.Expect(row.GetByText(NoTemplateAccessText)).ToBeVisibleAsync();
+
+        var buttons = row.GetByRole(AriaRole.Button);
+        await Assertions.Expect(buttons).Not.ToHaveCountAsync(0);
+        foreach (var button in await buttons.AllAsync())
+        {
+            await Assertions.Expect(button).ToBeDisabledAsync();
+        }
+    }
+
+    /// <summary>
+    /// Posts the Open (or Preview) form on <paramref name="rowTemplateName"/>'s row with another template's id,
+    /// as someone getting past the disabled buttons would.
+    /// </summary>
+    public async Task OpenTemplateByIdAsync(string rowTemplateName, string templateId)
+    {
+        var form = TemplateRow(rowTemplateName).Locator("form[action*='handler=OpenTemplate']");
+        await form.Locator("input[name='templateId']")
+            .EvaluateAsync("(input, id) => { input.value = id; }", templateId);
+        await form.GetByRole(AriaRole.Button).ClickAsync();
+    }
+
+    public async Task ExpectErrorAsync(string message) =>
+        await Assertions.Expect(Page.Locator(".govuk-error-summary")).ToContainTextAsync(message);
 
     private async Task ClickTemplateActionAsync(string templateName, string action)
     {
@@ -37,7 +77,11 @@ public sealed class AdminPage(IPage page) : BasePage(page)
     private ILocator TemplateRow(string templateName) =>
         TemplateTable().GetByRole(AriaRole.Row).Filter(new LocatorFilterOptions
         {
-            Has = Page.GetByRole(AriaRole.Cell, new PageGetByRoleOptions { Name = templateName }),
+            // The name cell also holds the version, and a plain substring match would let "default" match other names.
+            Has = Page.GetByRole(AriaRole.Cell, new PageGetByRoleOptions
+            {
+                NameRegex = new Regex($@"^{Regex.Escape(templateName)}(\s|$)", RegexOptions.IgnoreCase),
+            }),
         });
 
     private ILocator TemplateTable() =>
