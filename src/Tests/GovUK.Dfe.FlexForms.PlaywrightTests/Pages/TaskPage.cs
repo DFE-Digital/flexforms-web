@@ -35,10 +35,19 @@ public abstract class TaskPage(IPage page) : FormPage(page)
 
     public async Task ExpectCompletedAsync() => await Assertions.Expect(TaskStatus()).ToContainTextAsync("Completed");
 
+    /// <summary>A checkboxes answer on the task summary is a list of the ticked options' labels, in order.</summary>
+    public async Task ExpectListAnswerAsync(string fieldId, params string[] items) =>
+        await Assertions.Expect(SummaryAnswer(fieldId).Locator("li")).ToHaveTextAsync(items);
+
+    public async Task ExpectTextAnswerAsync(string fieldId, string text) =>
+        await Assertions.Expect(SummaryAnswer(fieldId)).ToHaveTextAsync(text);
+
     private string RequiredTaskId =>
         TaskId ?? throw new InvalidOperationException($"{GetType().Name} does not set {nameof(TaskId)}.");
 
     private ILocator SummaryRow(string fieldId) => ById($"field-{fieldId.ToLowerInvariant()}");
+
+    private ILocator SummaryAnswer(string fieldId) => SummaryRow(fieldId).Locator(".govuk-summary-list__value");
 
     private ILocator ChangeLink(string fieldId) => ById($"field-{fieldId.ToLowerInvariant()}-change-link");
 

@@ -9,11 +9,26 @@ public sealed class StandardFieldsTask(IPage page) : TaskPage(page)
     public const string EducationDetailsPage = "education-details-page";
     public const string RegionPage = "region-page";
 
+    public const string Topics = "topics";
+    public const string ProposedDate = "proposedDate";
+
+    /// <summary>The topics <see cref="AnswerAllQuestionsAsync"/> ticks, in the order the summaries list them.</summary>
+    public static readonly string[] AnsweredTopics = ["Governance", "Education"];
+
+    public const string AnsweredProposedDate = "05-11-2025";
+
     protected override string TaskItem => "group-standard-fields-task-complete-standard-fields";
 
     protected override string TaskId => "standard-fields";
 
     public async Task CompleteAsync()
+    {
+        await AnswerAllQuestionsAsync();
+        await MarkCompleteAsync();
+    }
+
+    /// <summary>Answers every question and stops on the task summary, before marking it complete.</summary>
+    public async Task AnswerAllQuestionsAsync()
     {
         await ByIdData("fullName").FillAsync("Test User");
         await SaveAndContinueAsync();
@@ -29,18 +44,17 @@ public sealed class StandardFieldsTask(IPage page) : TaskPage(page)
         await ConfirmYesAndContinueAsync();
         await ByIdData("followUpDetails").FillAsync("Follow Up Details");
         await SaveAndContinueAsync();
-        await ByIdData("topics_-2").CheckAsync();
-        await ByIdData("topics_-3").CheckAsync();
-        await SaveAndContinueAsync();
+        await SelectTopicsAsync(AnsweredTopics);
         await GiveGovernanceDetailsAsync("Governance Details");
         await GiveEducationDetailsAsync("Education Details");
         await ByIdData("region").SelectOptionAsync("South West");
         await SaveAndContinueAsync();
-        await EnterDateAsync("Data_proposedDate", "11", "11", "2025");
+        await EnterDateAsync("Data_proposedDate", "05", "11", "2025");
         await SaveAndContinueAsync();
-
-        await MarkCompleteAndSaveAsync();
+        await ExpectSummaryAsync();
     }
+
+    public async Task MarkCompleteAsync() => await MarkCompleteAndSaveAsync();
 
     public async Task SelectTopicsAsync(params string[] topics)
     {

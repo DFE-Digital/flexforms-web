@@ -39,6 +39,24 @@ public sealed class ApplicationPreviewPage(IPage page) : BasePage(page)
         await Assertions.Expect(SubmittedHeading(submitMessage)).ToBeVisibleAsync();
     }
 
+    /// <summary>A checkboxes answer is a list of the ticked options' labels, in order, not the stored values.</summary>
+    public async Task ExpectListAnswerAsync(params string[] items)
+    {
+        var answer = Preview().Locator(".govuk-summary-list__value").Filter(new LocatorFilterOptions
+        {
+            Has = Page.Locator("li").Filter(new LocatorFilterOptions { HasTextRegex = ExactText(items[0]) }),
+        });
+
+        await Assertions.Expect(answer.Locator("li")).ToHaveTextAsync(items);
+    }
+
+    public async Task ExpectTextAnswerAsync(string text) =>
+        await Assertions.Expect(Preview().Locator(".govuk-summary-list__value")
+                .Filter(new LocatorFilterOptions { HasTextRegex = ExactText(text) }))
+            .ToHaveCountAsync(1);
+
+    private static Regex ExactText(string text) => new($@"^\s*{Regex.Escape(text)}\s*$");
+
     private ILocator Preview() => Page.Locator("[data-application-preview=\"true\"]");
 
     private ILocator SubmitApplicationButton() => ById("submit-application-button");
