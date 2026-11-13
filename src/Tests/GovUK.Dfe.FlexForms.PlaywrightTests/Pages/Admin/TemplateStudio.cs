@@ -107,7 +107,10 @@ public sealed class TemplateStudio(IPage page) : BasePage(page)
 
     private async Task ExpandSettingsSectionAsync(string title)
     {
-        var heading = Page.Locator(".govuk-accordion .govuk-accordion__section-button")
+        // Before GOV.UK Frontend starts the accordion, the heading is a <span> with the same class and no
+        // aria-expanded, so waiting for the class alone can skip the click and leave the section closed.
+        // The <button> only exists once the accordion has started.
+        var heading = Page.Locator(".govuk-accordion button.govuk-accordion__section-button")
             .Filter(new LocatorFilterOptions { HasText = title });
         await heading.WaitForAsync();
         if (await heading.GetAttributeAsync("aria-expanded") == "false")

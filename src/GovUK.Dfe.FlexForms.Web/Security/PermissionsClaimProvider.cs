@@ -35,14 +35,15 @@ public class PermissionsClaimProvider(
                 claims.AddRange(authData.Permissions.Select(p =>
                     new Claim(
                         "permission",
-                        $"{p.ResourceType}:{p.ResourceKey}:{p.AccessType}"
-                    )));
+                        $"{p.ResourceType}:{p.ResourceKey}:{p.AccessType}",
+                        ClaimValueTypes.String,
+                        UserPermissionsCache.ClaimIssuer)));
             }
 
             if (authData.Roles?.Any() == true)
             {
                 claims.AddRange(authData.Roles.Select(role =>
-                    new Claim(ClaimTypes.Role, role)));
+                    new Claim(ClaimTypes.Role, role, ClaimValueTypes.String, UserPermissionsCache.ClaimIssuer)));
             }
 
             return Task.FromResult<IEnumerable<Claim>>(claims);

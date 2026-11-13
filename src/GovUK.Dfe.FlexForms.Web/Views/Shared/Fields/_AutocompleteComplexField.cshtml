@@ -19,6 +19,12 @@
     
     // Get configuration from appsettings
     var configuration = ComplexFieldConfigurationService.GetConfiguration(complexFieldId);
+    var complexFieldLabel = AutocompleteDisplayExpression.FirstNonEmpty(
+        Model.Field.ComplexField?.Label,
+        configuration.Label);
+    var confirmationTitle = ComplexFieldConfirmationTitle.Format(
+        Model.Field.ComplexField?.ConfirmationTitle,
+        complexFieldLabel);
     
     // Generate unique IDs (never use label text — spaces break aria-labelledby tokenisation)
     var inputId = $"{Model.Id}-complex-field";
@@ -30,7 +36,7 @@
     var errorId = $"{inputId}-error";
     var labelText = !string.IsNullOrWhiteSpace(label)
         ? label
-        : (!string.IsNullOrWhiteSpace(configuration.Label) ? configuration.Label : "Search");
+        : (!string.IsNullOrWhiteSpace(complexFieldLabel) ? complexFieldLabel : "Search");
     var effectiveLabelClasses = string.IsNullOrWhiteSpace(label) ? "govuk-visually-hidden" : labelClasses;
     const string pageTitleElementId = "page-title";
     var labelIsVisuallyHidden = effectiveLabelClasses.Contains("govuk-visually-hidden", StringComparison.Ordinal);
@@ -274,8 +280,8 @@ else
                 displayFields: confirmationDisplayFields,
                 displayExpression: AutocompleteDisplayExpression.IsSpecified(confirmationDisplay) ? confirmationDisplay : null,
                 buttonId: "autocomplete-confirm-button",
-                title: $"Is this the right {@configuration.Label}?",
-                requiredMessage: $"Select yes if this is the right { @configuration.Label}")
+                title: confirmationTitle,
+                requiredMessage: $"Select yes if this is the right {complexFieldLabel}")
     </div>
 }
 
@@ -982,48 +988,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 console.log('Autocomplete complex field initialized successfully');
                 enhanceAutocompleteAccessibility();
-                
-                // Add backup event listeners for debugging onConfirm issues
-                setTimeout(function() {
-                    const autocompleteInput = container.querySelector('.autocomplete__input');
-                    if (autocompleteInput) {
-                        // Listen for Enter key as backup
-                        autocompleteInput.addEventListener('keydown', function(e) {
-                            if (e.key === 'Enter') {
-                                console.log('Enter key pressed on autocomplete input');
-                                console.log('Current input value:', this.value);
-                                
-                                // Check if there's a highlighted option
-                                const highlightedOption = container.querySelector('.autocomplete__option--focused');
-                                if (highlightedOption) {
-                                    console.log('Highlighted option found:', highlightedOption.textContent);
-                                    // Try to trigger selection manually if onConfirm doesn't work
-                                    // This is a backup mechanism
-                                    const optionText = highlightedOption.textContent.trim();
-                                    if (optionText) {
-                                        console.log('Manually triggering selection for:', optionText);
-                                        // Clear input as backup
-                                        setTimeout(() => {
-                                            this.value = '';
-                                            this.dispatchEvent(new Event('input', { bubbles: true }));
-                                            console.log('Backup input clearing triggered');
-                                        }, 50);
-                                    }
-                                }
-                            }
-                        });
-                        
-                        // Listen for click events on options
-                        container.addEventListener('click', function(e) {
-                            if (e.target.closest('.autocomplete__option')) {
-                                console.log('Option clicked:', e.target.closest('.autocomplete__option').textContent);
-                            }
-                        });
-                        
-                        console.log('Backup event listeners added for debugging');
-                    }
-                }, 200);
-                
+
                 // Mark this container as initialized
                 container.dataset.initialized = 'true';
                 
@@ -1033,6 +998,40 @@ document.addEventListener('DOMContentLoaded', function() {
                     const menuEl = container.querySelector('.autocomplete__menu');
                     if (autocompleteInput) {
                         enhanceAutocompleteAccessibility();
+
+                        // Enter without Arrow Down often has no focused option yet (menu open from typing).
+                        // Without this, Enter activates the Search submit button and clears the typed query.
+                        // With a focused option, accessible-autocomplete confirms itself; we only block form submit.
+                        autocompleteInput.addEventListener('keydown', function(e) {
+                            if (e.key !== 'Enter') {
+                                return;
+                            }
+
+                            const menu = container.querySelector('.autocomplete__menu');
+                            const options = menu
+                                ? Array.from(menu.querySelectorAll('.autocomplete__option:not(.autocomplete__option--no-results)'))
+                                : [];
+                            const menuOpen = options.length > 0
+                                && menu
+                                && menu.style.display !== 'none'
+                                && !menu.classList.contains('autocomplete__menu--hidden');
+
+                            if (!menuOpen) {
+                                return;
+                            }
+
+                            // Stop Enter from submitting the form while suggestions are visible.
+                            e.preventDefault();
+
+                            const focused = menu.querySelector('.autocomplete__option--focused');
+                            if (focused) {
+                                return;
+                            }
+
+                            // No keyboard highlight yet — select the first suggestion (same as a mouse click).
+                            options[0].click();
+                        });
+
                         // Ensure the visible input participates in unobtrusive validation by giving it a name
                         try { autocompleteInput.setAttribute('name', `Data[${actualFieldId}_query]`); } catch {}
                         autocompleteInput.classList.add('govuk-input');

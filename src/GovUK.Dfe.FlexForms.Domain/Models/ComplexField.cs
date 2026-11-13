@@ -13,6 +13,20 @@ namespace GovUK.Dfe.FlexForms.Domain.Models
         public string Id { get; set; } = string.Empty;
 
         /// <summary>
+        /// Name used in sentences such as "Is this the right local authority?".
+        /// When empty, the tenant <c>FormEngine:ComplexFields</c> Label is used.
+        /// </summary>
+        [JsonPropertyName("label")]
+        public string? Label { get; set; }
+
+        /// <summary>
+        /// Confirmation heading, for example "Is this the correct {name}?".
+        /// <c>{name}</c> is the sentence name. When empty, "Is this the right {name}?" is used.
+        /// </summary>
+        [JsonPropertyName("confirmationTitle")]
+        public string? ConfirmationTitle { get; set; }
+
+        /// <summary>
         /// Expression for each autocomplete dropdown row, e.g. <c>displayName + " - " + constituencyName</c>.
         /// Overrides the matching tenant setting when set. Empty keeps the built-in dropdown layout.
         /// Supports Markdown (line breaks, bold, etc.).

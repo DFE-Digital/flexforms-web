@@ -17,8 +17,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 public sealed class EventMappingsModel(
     IEventMappingsAdmin eventMappingsAdmin,
     ITenantRequestContext tenantRequestContext,
-    ITenantConfigurationCache tenantConfigurationCache,
-    ITenantIdResolver tenantIdResolver) : PageModel
+    ITenantConfigurationInvalidator tenantConfigurationInvalidator) : PageModel
 {
     public Guid TenantId { get; private set; }
 
@@ -198,7 +197,7 @@ public sealed class EventMappingsModel(
         var state = CaptureWorkState();
         var outcome = await execute(state);
         ApplyWorkState(state);
-        return MapOutcome(outcome);
+        return await MapOutcomeAsync(outcome);
     }
 
     private IActionResult StayWithTenantError(string? error)
@@ -254,7 +253,7 @@ public sealed class EventMappingsModel(
         }
     }
 
-    private IActionResult MapOutcome(AdminPageOutcome outcome)
+    private async Task<IActionResult> MapOutcomeAsync(AdminPageOutcome outcome)
     {
         foreach (var key in outcome.ModelStateKeysToRemove)
             ModelState.Remove(key);
@@ -270,8 +269,7 @@ public sealed class EventMappingsModel(
 
         if (outcome.RefreshLocalCaches)
         {
-            tenantConfigurationCache.Invalidate(TenantId);
-            tenantIdResolver.InvalidateHostnameCache();
+            await tenantConfigurationInvalidator.InvalidateAsync(TenantId);
         }
 
         if (outcome.SuccessMessage != null)

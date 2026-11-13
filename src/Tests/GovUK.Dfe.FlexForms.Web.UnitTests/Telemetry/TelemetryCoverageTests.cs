@@ -27,10 +27,46 @@ public class HealthCheckTelemetryFilterTests
         Assert.Contains(next.Items, i => i is TraceTelemetry);
     }
 
+    [Theory]
+    [InlineData("/health", true)]
+    [InlineData("/READINESS", true)]
+    [InlineData("/health/extra", false)]
+    [InlineData(null, false)]
+    public void IsHealthCheckPath_ShouldMatchProbePathsExactly(string? path, bool expected)
+    {
+        Assert.Equal(expected, HealthCheckTelemetryFilter.IsHealthCheckPath(path));
+    }
+
     private sealed class RecordingProcessor : ITelemetryProcessor
     {
         public List<ITelemetry> Items { get; } = [];
         public void Process(ITelemetry item) => Items.Add(item);
+    }
+}
+
+public class ClientAbortedRequestTelemetryProcessorTests
+{
+    [Fact]
+    public void Process_ShouldMark499AsSuccess_AndLeaveOtherFailuresAlone()
+    {
+        var next = new List<ITelemetry>();
+        var processor = new ClientAbortedRequestTelemetryProcessor(new ListProcessor(next));
+        var aborted = new RequestTelemetry { ResponseCode = "499", Success = false };
+        var forbidden = new RequestTelemetry { ResponseCode = "403", Success = false };
+
+        processor.Process(aborted);
+        processor.Process(forbidden);
+        processor.Process(new TraceTelemetry("keep"));
+
+        Assert.True(aborted.Success);
+        Assert.Equal("499", aborted.ResponseCode);
+        Assert.False(forbidden.Success);
+        Assert.Equal(3, next.Count);
+    }
+
+    private sealed class ListProcessor(List<ITelemetry> items) : ITelemetryProcessor
+    {
+        public void Process(ITelemetry item) => items.Add(item);
     }
 }
 

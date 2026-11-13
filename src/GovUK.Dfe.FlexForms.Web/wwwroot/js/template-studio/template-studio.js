@@ -217,7 +217,15 @@
         .catch(function () { return null; });
 
     function enhance(scope) {
-        if (!govuk || !scope) return;
+        if (!scope) return;
+        // This script runs before the page template's GOV.UK Frontend <script type="module"> tags exist, so
+        // govukFrontendUrl() falls back to a separate, unversioned copy. That copy can still be loading after the
+        // page's initAll() has run, so a panel drawn in between would never be started. Start it once loaded.
+        // Starting a component twice is safe: GOV.UK Frontend skips it.
+        if (!govuk) {
+            void govukReady.then(function (module) { if (module) enhance(scope); });
+            return;
+        }
         var options = { scope: scope, onError: function () { } };
         govuk.createAll(govuk.Radios, undefined, options);
         govuk.createAll(govuk.Checkboxes, undefined, options);
@@ -1907,11 +1915,15 @@
                 checked: root.contributorPattern !== false,
                 onChange: function (checked) {
                     root.contributorPattern = checked;
-                    if (!checked) delete root.contributorRoleId;
+                    // Someone who can't pick a role could not restore it after turning invitations back on.
+                    if (!checked && data.canChooseContributorRole !== false) delete root.contributorRoleId;
                     restructured();
                 }
             }),
-            root.contributorPattern !== false ? selectInput({
+            root.contributorPattern !== false && data.canChooseContributorRole === false
+                ? h('p', { class: 'govuk-body', id: 'tpl-contributor-role-admin-only', text: 'Only an Admin can change the role for invited contributors. Any role already chosen is kept.' })
+                : null,
+            root.contributorPattern !== false && data.canChooseContributorRole !== false ? selectInput({
                 id: 'tpl-contributor-role',
                 label: 'Role for invited contributors',
                 hint: 'User can edit the application. Any other role can only view it and its files.',
@@ -2423,6 +2435,27 @@
             config.id && !known
                 ? warningText('No ' + (type === 'upload' ? 'upload' : 'search') + ' field called "' + config.id + '" is set up for this tenant. Applicants will see an error until it is added in Tenant settings.')
                 : null,
+            type === 'search' ? textInput({
+                id: 'tpl-complex-label',
+                label: 'Name in a sentence',
+                hint: 'Replaces {name} in the confirmation heading. Leave blank to use the tenant name'
+                    + ((complexFieldConfig(config.id) || {}).label ? ': ' + complexFieldConfig(config.id).label : '') + '.',
+                value: config.label || '',
+                onInput: function (value) {
+                    if (value.trim()) config.label = value.trim(); else delete config.label;
+                    edited(path);
+                }
+            }) : null,
+            type === 'search' ? textInput({
+                id: 'tpl-complex-confirmation-title',
+                label: 'Confirmation heading',
+                hint: 'Leave blank for "Is this the right {name}?". {name} is the name in a sentence, for example "Is this the correct {name}?".',
+                value: config.confirmationTitle || '',
+                onInput: function (value) {
+                    if (value.trim()) config.confirmationTitle = value.trim(); else delete config.confirmationTitle;
+                    edited(path);
+                }
+            }) : null,
             type === 'search' ? searchDisplaySettings(path, config) : null
         ]);
     }

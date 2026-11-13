@@ -17,8 +17,7 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 public sealed class TenantSettingsModel(
     ITenantSettingsAdmin tenantSettingsAdmin,
     ITenantRequestContext tenantRequestContext,
-    ITenantConfigurationCache tenantConfigurationCache,
-    ITenantIdResolver tenantIdResolver,
+    ITenantConfigurationInvalidator tenantConfigurationInvalidator,
     IHostEnvironment hostEnvironment) : PageModel
 {
     public static readonly string[] ValidTargets = TenantSettingsAdminService.ValidTargets;
@@ -252,12 +251,11 @@ public sealed class TenantSettingsModel(
         }
     }
 
-    private Task<IActionResult> MapOutcomeAsync(AdminPageOutcome outcome)
+    private async Task<IActionResult> MapOutcomeAsync(AdminPageOutcome outcome)
     {
         if (outcome.RefreshLocalCaches)
         {
-            tenantConfigurationCache.Invalidate(TenantId);
-            tenantIdResolver.InvalidateHostnameCache();
+            await tenantConfigurationInvalidator.InvalidateAsync(TenantId);
         }
 
         if (outcome.SuccessMessage != null)
@@ -266,7 +264,7 @@ public sealed class TenantSettingsModel(
         if (outcome.ErrorMessage != null)
             TempData["TenantSettingsError"] = outcome.ErrorMessage;
 
-        IActionResult result = outcome.Kind switch
+        return outcome.Kind switch
         {
             AdminPageOutcomeKind.FileDownload => File(
                 outcome.FileBytes!,
@@ -275,8 +273,6 @@ public sealed class TenantSettingsModel(
             AdminPageOutcomeKind.StayOnPage => Page(),
             _ => RedirectToPage()
         };
-
-        return Task.FromResult(result);
     }
 
     private bool TryResolveTenant(out string? error)

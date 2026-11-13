@@ -201,7 +201,8 @@ public class TemplateStudioModel(
     public async Task<IActionResult> OnPostSelectTemplateAsync(CancellationToken cancellationToken)
     {
         var templates = await templateSelectionService.GetSelectableTemplatesAsync(cancellationToken);
-        if (templates.FirstOrDefault(template => template.TemplateId == SelectedTemplateId) is { } template)
+        if (templates.FirstOrDefault(template => template.TemplateId == SelectedTemplateId) is { } template
+            && HasTemplateAccess(template.TemplateId))
         {
             await templateSelectionService.SelectTemplateAsync(HttpContext, template, cancellationToken);
             HttpContext.Session.Remove(TemplateVersionSessionKey);
@@ -247,20 +248,21 @@ public class TemplateStudioModel(
         string? requestedVersion = null)
     {
         TenantTemplates = await templateSelectionService.GetSelectableTemplatesAsync(cancellationToken);
+        var accessibleTemplates = TenantTemplates.Where(item => HasTemplateAccess(item.TemplateId)).ToList();
         TemplateDto? template;
         if (requestedTemplateId is Guid requested)
         {
-            template = TenantTemplates.FirstOrDefault(item => item.TemplateId == requested);
+            template = accessibleTemplates.FirstOrDefault(item => item.TemplateId == requested);
         }
         else
         {
             var sessionTemplateId = templateSelectionService.GetSelectedTemplateId(HttpContext);
             template = Guid.TryParse(sessionTemplateId, out var sessionId)
-                ? TenantTemplates.FirstOrDefault(item => item.TemplateId == sessionId)
+                ? accessibleTemplates.FirstOrDefault(item => item.TemplateId == sessionId)
                 : null;
         }
 
-        if (template is null && selectFirstWhenNone && TenantTemplates.FirstOrDefault() is { } first)
+        if (template is null && selectFirstWhenNone && accessibleTemplates.FirstOrDefault() is { } first)
         {
             await templateSelectionService.SelectTemplateAsync(HttpContext, first, cancellationToken);
             HttpContext.Session.Remove(TemplateVersionSessionKey);
@@ -294,6 +296,9 @@ public class TemplateStudioModel(
         return state;
     }
 
+    public bool HasTemplateAccess(Guid templateId) =>
+        AdminAccessHelper.HasTemplateAccess(User, templateId);
+
     private string SuggestVersion(TemplateManagerWorkState state) =>
         state.AvailableVersions.Count == 0
             ? StarterFormTemplateSchema.DefaultVersionNumber
@@ -305,6 +310,11 @@ public class TemplateStudioModel(
     /// </summary>
     private async Task<int?> CountApplicationsAsync(Guid templateId, CancellationToken cancellationToken)
     {
+        // Listing applications needs Admin or Application:Any:Read; template managers get an unknown count,
+        // which Template Studio treats as in use.
+        if (!AdminAccessHelper.CanReadAnyApplication(User))
+            return null;
+
         try
         {
             var page = await applicationsClient.GetApplicationsByTemplateAsync(
@@ -371,12 +381,17 @@ public class TemplateStudioModel(
             eventMappings = ReadEventMappingReferences(schemaJson, state.CurrentTemplateJson)
                 .Select(reference => new { fieldId = reference.FieldId, eventType = reference.EventType, mappingId = reference.MappingId }),
             contributorRoles = await ContributorRolesAsync(cancellationToken),
+            canChooseContributorRole = AdminAccessHelper.IsAdmin(User),
             validateUrl = Url.Page("/Admin/TemplateStudio", "Validate")
         });
     }
 
     private async Task<IReadOnlyList<object>> ContributorRolesAsync(CancellationToken cancellationToken)
     {
+        // Listing roles is Admin/SuperAdmin only.
+        if (!AdminAccessHelper.IsAdmin(User))
+            return [];
+
         try
         {
             var roles = await rolesClient.ListAsync(cancellationToken);

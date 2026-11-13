@@ -155,6 +155,27 @@ public class UserManagerAdminServiceTests
     }
 
     [Fact]
+    public async Task LoadAsync_ShouldKeepTheSelectedRole_WhenRoleListingIsForbidden()
+    {
+        _roles.ListAsync(Arg.Any<CancellationToken>())
+            .ThrowsAsync(new ExternalApplicationsException("Forbidden.", 403, "", null!, null!));
+        _state.Role = "Caseworker";
+
+        await _service.LoadAsync(_state);
+
+        Assert.Equal(["Caseworker"], _state.AvailableRoles);
+        Assert.False(_state.HasError);
+        await _users.Received(1).GetTenantUsersAsync(
+            Arg.Any<int?>(),
+            Arg.Any<int?>(),
+            Arg.Any<Guid?>(),
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task RemoveAsync_ShouldRedirect_WhenApiSucceeds()
     {
         var userId = Guid.NewGuid();

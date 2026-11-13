@@ -9,8 +9,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.ComponentModel.DataAnnotations;
 using Task = System.Threading.Tasks.Task;
-using GovUK.Dfe.CoreLibs.Caching.Interfaces;
-using GovUK.Dfe.CoreLibs.Caching.Helpers;
 
 namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
 
@@ -21,7 +19,6 @@ public class TemplateManagerModel(
     ITemplateCacheInvalidator templateCacheInvalidator,
     ITemplateManagerAdmin templateManagerAdmin,
     ITemplateSelectionService templateSelectionService,
-    ICacheService<IMemoryCacheType> cacheService,
     ILogger<TemplateManagerModel> logger) : PageModel
 {
     private const string TemplateVersionSessionKey = "TemplateVersionNumber";
@@ -244,9 +241,7 @@ public class TemplateManagerModel(
 
             if (!string.IsNullOrEmpty(templateId))
             {
-                var cacheKey = $"FormTemplate_{CacheKeyHelper.GenerateHashedCacheKey(templateId)}";
-                cacheService.Remove(cacheKey);
-                logger.LogInformation("Cleared template cache for key: {CacheKey}", cacheKey);
+                await templateCacheInvalidator.InvalidateAsync(templateId);
             }
 
             logger.LogInformation("Successfully cleared all sessions and caches from TemplateManager");

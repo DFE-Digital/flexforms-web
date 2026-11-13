@@ -14,18 +14,14 @@ public sealed class ContributorManagementTests : PlaywrightTestBase
     private readonly string _contributorEmail = AuthUsers.ResolveAuthUser("default").Email;
     private readonly string _leadApplicantEmail = AuthUsers.ResolveAuthUser("admin").Email;
 
-    [OneTimeSetUp]
-    public async Task CreateApplicationWithContributorAsync()
+    [SetUp]
+    public async Task AdminLoginAndNavigateToContributorManagementAsync()
     {
         var createRequest = ApplicationBuilder.CreateApplicationRequest(ApiConfig.TemplateId);
         _application = await ApplicationApi.CreateApplicationAsync(AdminApiClient, createRequest);
         await ApplicationApi.AddContributorToApplicationAsync(AdminApiClient, _application.ApplicationId,
             _contributorEmail);
-    }
 
-    [SetUp]
-    public async Task AdminLoginAndNavigateToContributorManagementAsync()
-    {
         await LoginAsync("admin");
         var adminPage = new AdminPage(Page);
         await adminPage.GoToAsync();

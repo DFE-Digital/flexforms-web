@@ -205,6 +205,8 @@ For each template you see:
 - **Open** (if live) or **Preview** (if not live)
 - **Make live** or **Make not live**
 
+Template managers see every template here, but the buttons are greyed out with **You do not have access to this template** on templates they have not been given access to in User Manager.
+
 **Open / Preview** selects that template in your session and takes you into the service as that form.
 
 End users only see **live** forms they have been granted. Admins and Template Managers can still open not-live forms to preview them (an orange preview banner appears).
@@ -272,7 +274,7 @@ If the JSON is invalid, the save is rejected and you should see **There is a pro
 
 ![Error summary and messages under JSON Schema](images/05-template-validation-errors.png)
 
-After a successful save: **Template version created successfully**. You are advised to **Clear all caches** so everyone picks up the new version immediately.
+After a successful save: **Template version created successfully**. Every server picks up the new version straight away; **Clear all caches** is only needed if someone still sees the old one.
 
 #### Grant to all users
 
@@ -297,6 +299,8 @@ Title: **Choose a form**
 
 Admins see live and not-live forms (not-live labelled for preview). End users only see live forms they can access.
 
+Template managers see every form, but can only choose the ones they have been given access to. The others are greyed out with **You do not have access to this template**. To give access, edit the user in **User Manager** and tick the form.
+
 Select a form, then **Go to dashboard**.
 
 ---
@@ -311,12 +315,12 @@ Title: **Admin - Custom Status Overrides**
 
 The underlying statuses stay the same (**Created**, **In progress**, **Submitted**, **Deleted**). You only change the **words people see** on dashboards, listings, and filters.
 
-1. Choose a **Template**.
+1. Choose a **Template**. Template managers can only choose templates they have been given access to; the others are greyed out.
 2. Choose a **Base Status**.
 3. Enter the **Custom Status Value** (the label to show).
 4. Select **Save Overrides**.
 
-The cache refreshes immediately. Repeat for each base status you want to rename (for example “In progress” → “Draft”).
+The cache refreshes immediately on every server. Repeat for each base status you want to rename (for example “In progress” → “Draft”).
 
 ---
 
@@ -583,7 +587,7 @@ You cannot rename, delete, or edit permissions on system roles.
 | Button | What you get | Typical use |
 |--------|----------------|-------------|
 | **Create Caseworker role** | Read all applications and files in the tenant (`Application:Any:Read` and `ApplicationFiles:Any:Read`) | Staff who list and review everyone’s applications, without becoming Admin |
-| **Create Template Manager role** | Manage templates (`Template:Any:Manage`) | Content owners who version forms and go live, without User Manager or Tenant Settings |
+| **Create Template Manager role** | Manage templates (`Template:Any:Manage`). Template managers see every form but only work in the ones they create or are given in User Manager, including forms that are not live yet | Content owners who version forms, test them and go live, without User Manager or Tenant Settings |
 
 Then assign the role on **Add user** / **Edit user**.
 
@@ -1984,9 +1988,11 @@ Under **Event mappings**, bind **File uploaded** to the event your function alre
 
 | Surface | Behaviour |
 |---------|-----------|
-| Upload Status column | Validation pending / Validated / Validation failed |
-| Preview submit | Disabled when any blocking file remains; names are listed |
+| Upload Status column | Validation pending / Validated / Validation failed, followed by the function's `message` |
+| Preview submit | Disabled when any blocking file remains; names and messages are listed |
 | Banner and Notifications | Live update when the function posts a result |
+
+The function's `message` can use **Markdown**: paragraphs, line breaks, `**bold**`, `*italics*`, `` `inline code` ``, bullet and numbered lists, and `https` links. It is rendered on the upload page, the preview submit check and the live banner. Raw HTML and headings are not shown, and the **Notifications** list page shows the message as plain text. Keep it under 1000 characters; longer messages are cut off.
 
 Technical contract: [flexforms-api README — File validation](https://github.com/DFE-Digital/flexforms-api#file-validation-callback-tenant-integrations).
 
@@ -2066,7 +2072,7 @@ Use this when the third-party API expects a static key in an `ApiKey` HTTP heade
 | `Placeholder` | No | Grey text in the search box. |
 | `AllowMultiple` | No | `true` to let the user pick more than one result. |
 | `MaxSelections` | No | `0` means no limit when multiple is allowed. |
-| `Label` | No | Used in “Is this the right {label}?” and collection item labels. Default `Item`. |
+| `Label` | No | Default name in “Is this the right {label}?” and summary item labels. A question can replace it with `complexField.label` in Template Studio. Default `Item`. |
 
 If one complex field has no `ApiKey`, FlexForms may reuse another field’s key in the same list, or `FormEngine:AcademiesApiKey`. Do not rely on that for a new API — set `ApiKey` on the field that needs it.
 
@@ -2105,6 +2111,32 @@ Use this when the third-party API does **not** take an API key. FlexForms first 
 Do **not** put `ApiKey` on a client-credentials field. The two auth types are alternatives, not combined.
 
 Certificate / managed-identity login for the search API is not supported here. If the provider only offers those, talk to the platform team.
+
+#### Upload fields
+
+An upload question also needs an entry in `ComplexFields`, with `FieldType` set to `upload`. No API settings are needed.
+
+```json
+{
+  "ComplexFields": [
+    {
+      "Id": "UploadDocumentsComplexField",
+      "FieldType": "upload",
+      "AllowMultiple": true,
+      "MaxSelections": 3
+    }
+  ]
+}
+```
+
+| Property | Required | What it does |
+|----------|----------|----------------|
+| `Id` | Yes | Must match `complexField.id` in the template. |
+| `FieldType` | Yes | `upload`. |
+| `AllowMultiple` | Recommended | `true` so the task summary lists each uploaded file. It does not limit or allow uploads. |
+| `MaxSelections` | No | The most files an applicant can upload to one question. `0` (the default) means no limit. |
+
+When an applicant reaches the limit, the upload box is replaced with a message asking them to delete a file first. Uploads over the limit are rejected, and a page that somehow has too many files can't be saved. The limit applies to every question that uses this `Id`, so use a separate `Id` for questions that need a different limit.
 
 #### Query URL tips
 
@@ -2338,11 +2370,11 @@ Previewing a not-live form as an admin shows: **THIS IS A PREVIEW OF {template n
 
 **Admin hub → System → Clear All Sessions & Caches**
 
-Use this after you publish a new template version if people still see the old questions or dashboard headings.
+Use this if people still see the old questions or dashboard headings after you publish a new template version. It clears **your own** session and the selected template's cached copy on every server. Other users' sessions are not touched, despite the button's name.
 
 You may need to choose the form again afterwards (**Forms** or Admin → Open / Preview).
 
-**Diagnostics** (when a template is selected) shows the active template name, id, version, cache key, and session tokens. Useful when raising a support ticket; not needed day to day.
+**Diagnostics** (when a template is selected) shows the active template name, id, version, cache key, and session tokens. The cache status describes only the server that answered your request. Useful when raising a support ticket; not needed day to day.
 
 Template Manager’s success message also offers **Clear all caches** after a new version.
 
@@ -2354,7 +2386,7 @@ You will **not** see these as a tenant Admin (by design):
 
 | Screen | Purpose |
 |--------|---------|
-| **New tenant** (`/admin/duplicate-tenant`) | Clone a tenant, including a new service name |
+| **New tenant** (`/admin/new-tenant`) | Create a tenant with its service name and the settings it needs to run, plus common pre-go-live settings (feature flags, file storage, sign-in clients, email and others), all prefilled from your tenant for you to edit. Outside Production the new tenant starts on Test Authentication with generated signing secrets. Templates, users, layout and other settings are added afterwards |
 | **Platform tenants** (`/admin/platform-tenants`) | List every tenant on the platform |
 | Assigning the **Admin** role in User Manager | Only SuperAdmins get Admin in the role dropdown |
 | **Reveal a secret leaf in Production** | API `POST .../settings/reveal` with a reason (audited). The Tenant Settings page never shows Production secrets as plaintext, even for SuperAdmin. See [14.4](#144-how-secrets-are-shown-and-saved). |

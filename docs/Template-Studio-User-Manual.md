@@ -56,7 +56,7 @@ You need permission to manage templates: the **Admin** or **SuperAdmin** role, o
 
 1. Go to **Admin**.
 2. In **Template Management**, select **Template Studio**. It opens the template you last worked on, or the first template if you haven't chosen one.
-3. To edit a different template, choose it in **Choose a template to edit** and select **Open template**.
+3. To edit a different template, choose it in **Choose a template to edit** and select **Open template**. If you are not an Admin, you can only open templates you have been given access to. The others are greyed out with **You do not have access to this template**. Ask your administrator to give you access in User Manager.
 4. To start from an earlier version, choose it in **Choose a version to start from** and select **Open version**. Your new version is still numbered after the latest one.
 
 If you have unsaved changes, your browser asks you to confirm before it opens another template or version.
@@ -147,6 +147,8 @@ This is shown only when **Let applicants invite contributors** is ticked.
 Leave **Role for invited contributors** on **User** when invited people should be able to edit the application. That is the same access they get today.
 
 Choose a custom role from Role Manager when they should only view the application and its files. Admin, SuperAdmin and Administrator are not in the list.
+
+Only an Admin or SuperAdmin can change this setting. Template managers see a note instead, and the role already chosen is kept when they save a new version.
 
 - People invited after you save a new version get that role, if they do not already belong to the tenant.
 - Someone who is already in the tenant keeps their current role. They still get view-only access to that application when the chosen role is not User.
@@ -419,6 +421,10 @@ For new options, the saved value follows the text as you type. For existing opti
 ![Search settings: choose what to search, and format checks](images/ts-21-search-settings.png)
 
 Choose **What to search** (or which **Upload field** to use) from the search and upload fields set up for your organisation, under `FormEngine:ComplexFields` in Tenant settings. If the question uses one that isn't set up, a warning tells you; applicants would see an error until it is added.
+
+**Name in a sentence**, for search questions only, is the wording that replaces `{name}`. Leave it blank to keep the name from Tenant settings. The wording is used as you type it.
+
+**Confirmation heading** is the question above the chosen result, for example `Is this the correct {name}?`. Leave it blank to use "Is this the right {name}?".
 
 **How results are shown (optional)**, for search questions only, changes how this question shows its results without changing the tenant's setting for other questions:
 

@@ -4,6 +4,7 @@
 @inject IHttpContextAccessor httpContext;
 @inject GovUK.Dfe.FlexForms.Web.Interfaces.IFormErrorStore FormErrorStore
 @inject GovUK.Dfe.FlexForms.Application.Interfaces.IInfectedFileStore infectedFileStore
+@inject GovUK.Dfe.FlexForms.Application.Interfaces.IComplexFieldConfigurationService ComplexFieldConfigurationService
 @using Microsoft.AspNetCore.Http.Extensions
 @using Microsoft.AspNetCore.Http
 @using System.Linq
@@ -39,6 +40,12 @@
     // ⭐ CRITICAL: Filter out infected files using Redis blacklist
     // This ensures infected files are never shown on the upload page, even if they're in session/database
     files = FilterInfectedFilesFromList(files?.ToList() ?? new List<UploadDto>());
+
+    var complexFieldId = Model.Field.ComplexField?.Id;
+    var maxFiles = string.IsNullOrWhiteSpace(complexFieldId)
+        ? 0
+        : Math.Max(0, ComplexFieldConfigurationService.GetConfiguration(complexFieldId).MaxSelections);
+    var fileLimitReached = maxFiles > 0 && files.Count() >= maxFiles;
 }
 
 @functions {
@@ -161,7 +168,19 @@
         }
 
         <p class="govuk-body">Give the file a clear, descriptive name. Files up to 10MB are accepted.</p>
+        @if (maxFiles > 0)
+        {
+            <p class="govuk-body" id="upload-limit-@fieldId">You can upload up to @maxFiles @(maxFiles == 1 ? "file" : "files").</p>
+        }
 
+        @if (fileLimitReached)
+        {
+            <div class="govuk-inset-text" id="upload-limit-reached-@fieldId">
+                You have uploaded the maximum number of files. Delete a file to upload a different one.
+            </div>
+        }
+        else
+        {
         <form method="post" asp-page="/FormEngine/RenderForm" asp-route-referenceNumber="@referenceNumber" asp-route-taskId="@taskId" asp-route-pageId="@actualPageId" asp-page-handler="UploadFile" enctype="multipart/form-data">
             <input type="hidden" name="ApplicationId" value="@applicationId" />
             <input type="hidden" name="FieldId" value="@fieldId" />
@@ -200,6 +219,7 @@
 
             <button class="govuk-button" type="submit" id="submit-upload-file-@fieldId">Upload file</button>
         </form>
+        }
     </div>
 </div>
 <div class="govuk-grid-row">
@@ -247,7 +267,15 @@
                                     <span>@validationLabel</span>
                                     @if (!string.IsNullOrWhiteSpace(file.ValidationMessage))
                                     {
-                                        <span class="govuk-hint"> — @file.ValidationMessage</span>
+                                        var (messageHtml, messageIsInline) = MarkdownSafe.RenderIntegrationMessage(file.ValidationMessage);
+                                        if (messageIsInline)
+                                        {
+                                            <span class="govuk-hint"> — @Html.Raw(messageHtml)</span>
+                                        }
+                                        else
+                                        {
+                                            <div class="govuk-hint govuk-!-margin-top-1 govuk-!-margin-bottom-0">@Html.Raw(messageHtml)</div>
+                                        }
                                     }
                                 }
                                 else

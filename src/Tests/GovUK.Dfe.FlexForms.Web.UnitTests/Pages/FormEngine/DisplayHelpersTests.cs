@@ -9,6 +9,14 @@ public class DisplayHelpersTests
     private readonly IFixture _fixture = new Fixture();
 
     [Fact]
+    public void FormatStoredDate_shows_an_iso_date_as_dd_MM_yyyy()
+    {
+        Assert.Equal("05-12-2026", DisplayHelpers.FormatStoredDate("2026-12-05"));
+        Assert.Null(DisplayHelpers.FormatStoredDate("not-a-date"));
+        Assert.Null(DisplayHelpers.FormatStoredDate("  "));
+    }
+
+    [Fact]
     public void ExpandEncodedJson_when_itemData_is_null_then_return_null()
     {
         Dictionary<string, object>? itemData = null;

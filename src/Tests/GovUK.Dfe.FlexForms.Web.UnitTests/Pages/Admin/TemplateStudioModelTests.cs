@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums;
@@ -49,7 +50,10 @@ public class TemplateStudioModelTests
             _admin, _selection, _validation, _cacheInvalidator, _complexFields, _eventMappings, _applications, _roles, NullLogger<TemplateStudioModel>.Instance);
         GivenApplicationCount(Task.FromResult(new PagedResultOfApplicationDto { TotalCount = 4 }));
 
-        var httpContext = new DefaultHttpContext();
+        var httpContext = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Role, "Admin")], "Test"))
+        };
         httpContext.Features.Set<ISessionFeature>(new StubSessionFeature { Session = _session });
         _model.PageContext = new PageContext
         {
@@ -123,6 +127,45 @@ public class TemplateStudioModelTests
         Assert.Null(Assert.IsType<RedirectToPageResult>(result).PageName);
         await _selection.Received(1).SelectTemplateAsync(Arg.Any<HttpContext>(), other, Arg.Any<CancellationToken>());
         Assert.Null(_session.GetString("TemplateVersionNumber"));
+    }
+
+    [Fact]
+    public async Task OnGetAsync_ShouldOpenTheFirstTemplateTheManagerHasAccessTo()
+    {
+        var granted = new TemplateDto { TemplateId = Guid.NewGuid(), Name = "Visits", CreatedOn = DateTime.UtcNow };
+        _selection.GetSelectableTemplatesAsync(Arg.Any<CancellationToken>()).Returns([_template, granted]);
+        _selection.GetSelectedTemplateId(Arg.Any<HttpContext>()).Returns(_template.TemplateId.ToString());
+        GivenTemplateManager(granted.TemplateId);
+
+        await _model.OnGetAsync(null, false, CancellationToken.None);
+
+        Assert.Equal(granted.TemplateId, _model.SelectedTemplateId);
+        Assert.False(_model.HasTemplateAccess(_template.TemplateId));
+        Assert.True(_model.HasTemplateAccess(granted.TemplateId));
+        Assert.Equal(2, _model.TenantTemplates.Count);
+    }
+
+    [Fact]
+    public async Task OnGetAsync_ShouldOpenNothing_WhenTheManagerHasNoTemplateAccess()
+    {
+        GivenTemplateManager();
+
+        await _model.OnGetAsync(null, false, CancellationToken.None);
+
+        Assert.Null(_model.SelectedTemplate);
+        Assert.Single(_model.TenantTemplates);
+        await _admin.DidNotReceiveWithAnyArgs().LoadTemplateDataAsync(default!, default, default);
+    }
+
+    [Fact]
+    public async Task OnPostSelectTemplateAsync_ShouldIgnoreATemplateTheManagerHasNoAccessTo()
+    {
+        GivenTemplateManager();
+        _model.SelectedTemplateId = _template.TemplateId;
+
+        await _model.OnPostSelectTemplateAsync(CancellationToken.None);
+
+        await _selection.DidNotReceiveWithAnyArgs().SelectTemplateAsync(default!, default!, default);
     }
 
     [Fact]
@@ -219,6 +262,34 @@ public class TemplateStudioModelTests
     }
 
     [Fact]
+    public async Task OnGetAsync_ShouldNotAskTheApiForTheApplicationCount_WhenTheManagerCannotListApplications()
+    {
+        GivenTemplateManager(_template.TemplateId);
+        GivenStoredVersion("1.0.3");
+
+        await _model.OnGetAsync(null, false, CancellationToken.None);
+
+        using var data = JsonDocument.Parse(_model.StudioDataJson);
+        Assert.Equal(JsonValueKind.Null, data.RootElement.GetProperty("applicationCount").ValueKind);
+        await _applications.DidNotReceiveWithAnyArgs().GetApplicationsByTemplateAsync(
+            default, default, default, default, default, default, default, default, default, default, default);
+    }
+
+    [Fact]
+    public async Task OnGetAsync_ShouldNotListRoles_WhenTheUserIsNotAnAdmin()
+    {
+        GivenTemplateManager(_template.TemplateId);
+        GivenStoredVersion("1.0.3");
+
+        await _model.OnGetAsync(null, false, CancellationToken.None);
+
+        using var data = JsonDocument.Parse(_model.StudioDataJson);
+        Assert.False(data.RootElement.GetProperty("canChooseContributorRole").GetBoolean());
+        Assert.Equal(0, data.RootElement.GetProperty("contributorRoles").GetArrayLength());
+        await _roles.DidNotReceiveWithAnyArgs().ListAsync(default);
+    }
+
+    [Fact]
     public async Task OnPostSaveAsync_ShouldCompareWithTheStoredVersion_NotTheEditedOne_WhenRedisplaying()
     {
         GivenStoredVersion("1.0.3");
@@ -231,6 +302,13 @@ public class TemplateStudioModelTests
 
         using var data = JsonDocument.Parse(_model.StudioDataJson);
         Assert.Equal(StoredSchema, data.RootElement.GetProperty("baselineSchemaJson").GetString());
+    }
+
+    private void GivenTemplateManager(params Guid[] grantedTemplateIds)
+    {
+        var claims = new List<Claim> { new("permission", "Template:Any:Manage") };
+        claims.AddRange(grantedTemplateIds.Select(id => new Claim("permission", $"Template:{id}:Write")));
+        _model.PageContext.HttpContext.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "Test"));
     }
 
     private void GivenApplicationCount(Task<PagedResultOfApplicationDto> result) =>

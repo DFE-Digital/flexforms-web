@@ -9,8 +9,15 @@ const antiForgeryToken = () => {
 };
 const PAGE_LOAD_AT_MS = Date.now();
 const HUB_TICKET_COOLDOWN_MS = 30_000;
+// hubauth cookie lasts 10 minutes; renew with headroom.
+const HUB_COOKIE_RENEW_MS = 8 * 60 * 1000;
+const HUB_START_MAX_BACKOFF_MS = 10 * 60 * 1000;
 let hubTicketInFlight = null;
 let hubTicketCooldownUntil = 0;
+let hubCookieRenewedAt = 0;
+let hubConnection = null;
+let hubStartRetryTimer = null;
+let hubStartAttempts = 0;
 
 function mapTypeToCss(type) {
     const normalize = (val) => {
@@ -59,6 +66,62 @@ function fileValidationStatusLabel(status) {
     return '';
 }
 
+// File-validation messages are Markdown from the tenant function. Web renders them with MarkdownSafe
+// (Markdig without raw HTML + HtmlSanitizer allow-list); the browser only inserts that output.
+async function renderValidationMessage(markdown) {
+    try {
+        const res = await fetch('/file-validation/message/render', {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+                'RequestVerificationToken': antiForgeryToken() ?? ''
+            },
+            body: JSON.stringify({ message: markdown })
+        });
+        return res.ok ? await res.json() : null;
+    } catch {
+        return null;
+    }
+}
+
+// Shows the message as plain text straight away, then swaps in the rendered HTML. Inline results
+// replace the text in place; block results (lists, several paragraphs) are appended to blockParent.
+function appendValidationMessage(inlineParent, blockParent, detail, { prefix = '', inlineClass = '', blockClass = '' } = {}) {
+    const fallback = document.createElement('span');
+    if (inlineClass) fallback.className = inlineClass;
+    fallback.textContent = `${prefix}${detail}`;
+    inlineParent.appendChild(fallback);
+
+    void renderValidationMessage(detail).then(rendered => {
+        if (!rendered?.html || !fallback.isConnected) return;
+
+        const content = document.createElement('div');
+        content.innerHTML = rendered.html;
+
+        if (rendered.isInline) {
+            const node = document.createElement('span');
+            if (inlineClass) node.className = inlineClass;
+            node.append(prefix, ...content.childNodes);
+            fallback.replaceWith(node);
+            return;
+        }
+
+        if (blockClass) content.className = blockClass;
+        fallback.remove();
+        blockParent.appendChild(content);
+    });
+}
+
+function splitFileValidationDetail(notification) {
+    if (String(notification?.category ?? '').toLowerCase() !== 'file-validation') return null;
+    const meta = notification.metadata || {};
+    const detail = String(meta.message || meta.Message || '').trim();
+    const message = String(notification.message ?? '');
+    if (!detail || !message.endsWith(detail)) return null;
+    return { lead: message.slice(0, message.length - detail.length).trimEnd(), detail };
+}
+
 function isApplicationPreviewPage() {
     return Boolean(document.querySelector('[data-application-preview]'));
 }
@@ -81,10 +144,11 @@ function applyFileValidationStatus(notification, options) {
             labelSpan.textContent = label;
             cell.appendChild(labelSpan);
             if (detail) {
-                const hint = document.createElement('span');
-                hint.className = 'govuk-hint';
-                hint.textContent = ` — ${detail}`;
-                cell.appendChild(hint);
+                appendValidationMessage(cell, cell, detail, {
+                    prefix: ' — ',
+                    inlineClass: 'govuk-hint',
+                    blockClass: 'govuk-hint govuk-!-margin-top-1 govuk-!-margin-bottom-0'
+                });
             }
         }
     }
@@ -118,21 +182,29 @@ function renderSingleNotification(notification, options) {
         return node;
     };
     const message = String(notification.message ?? '');
+    const validationDetail = splitFileValidationDetail(notification);
+    const appendDetail = (heading, blockParent) => {
+        if (!validationDetail) return;
+        appendValidationMessage(heading, blockParent, validationDetail.detail, { prefix: ' ' });
+    };
 
     if (map.banner === 'error-summary') {
         const alert = el('div');
         alert.setAttribute('role', 'alert');
         const body = el('div', 'govuk-error-summary__body');
         const heading = el('p', 'govuk-notification-banner__heading');
-        heading.append(el('span', 'govuk-visually-hidden', 'Error: '), message);
+        heading.append(el('span', 'govuk-visually-hidden', 'Error: '), validationDetail?.lead ?? message);
         body.appendChild(heading);
+        appendDetail(heading, body);
         alert.append(el('h2', 'govuk-error-summary__title', map.title), body);
         wrapper.replaceChildren(alert);
     } else {
         const header = el('div', 'govuk-notification-banner__header');
         header.appendChild(el('h2', 'govuk-notification-banner__title', map.title));
         const content = el('div', 'govuk-notification-banner__content');
-        content.appendChild(el('p', 'govuk-notification-banner__heading', message));
+        const heading = el('p', 'govuk-notification-banner__heading', validationDetail?.lead ?? message);
+        content.appendChild(heading);
+        appendDetail(heading, content);
         wrapper.replaceChildren(header, content);
     }
 
@@ -224,7 +296,14 @@ async function ensureHubCookie() {
                 return false;
             }
 
-            await fetch(url, { credentials: "include" });
+            // Tickets are single use and expire after 60s, so a throttled background tab can redeem too late.
+            const redeemed = await fetch(url, { credentials: "include" });
+            if (!redeemed.ok) {
+                hubTicketCooldownUntil = Date.now() + HUB_TICKET_COOLDOWN_MS;
+                return false;
+            }
+
+            hubCookieRenewedAt = Date.now();
             return true;
         } catch {
             hubTicketCooldownUntil = Date.now() + HUB_TICKET_COOLDOWN_MS;
@@ -244,14 +323,15 @@ async function startHub() {
         return;
     }
 
-    if (window.__flexformsHubStarted) {
+    if (window.__flexformsHubStarted || typeof signalR === "undefined") {
         return;
     }
     window.__flexformsHubStarted = true;
 
     try {
         const ticketOk = await ensureHubCookie();
-        if (!ticketOk || typeof signalR === "undefined") {
+        if (!ticketOk) {
+            scheduleHubStartRetry();
             return;
         }
 
@@ -264,12 +344,17 @@ async function startHub() {
         connection.on("notification.dismissed", ({ id }) => window.removeFromUi(id));
         connection.on("notification.cleared", () => window.clearUi());
 
+        // Reconnect re-negotiates with the API, which needs a live hubauth cookie.
+        connection.onreconnecting(() => { void ensureHubCookie(); });
         connection.onreconnected(async () => { await ensureHubCookie(); });
-
-        // Renew hub cookie proactively (10min cookie >>> renew every ~8 min)
-        setInterval(() => { void ensureHubCookie(); }, 8 * 60 * 1000);
+        connection.onclose(() => {
+            hubConnection = null;
+            scheduleHubStartRetry();
+        });
 
         await connection.start();
+        hubConnection = connection;
+        hubStartAttempts = 0;
         // Render only notifications that were created very recently (to catch events created during navigation)
         try {
             const thresholdMs = 10000; // 10s window
@@ -286,9 +371,52 @@ async function startHub() {
         } catch { }
         await refreshUnreadCount();
     } catch {
-        window.__flexformsHubStarted = false;
+        hubConnection = null;
+        scheduleHubStartRetry();
     }
 }
+
+// Initial start can fail (expired session, ticket redeemed too late in a suspended tab). Retry with
+// backoff, and only while the tab is visible; the visibility listener picks it up otherwise.
+function scheduleHubStartRetry() {
+    window.__flexformsHubStarted = false;
+    if (hubStartRetryTimer) {
+        return;
+    }
+
+    const backoffMs = Math.min(HUB_TICKET_COOLDOWN_MS * 2 ** hubStartAttempts, HUB_START_MAX_BACKOFF_MS);
+    hubStartAttempts++;
+    const delayMs = Math.max(backoffMs, hubTicketCooldownUntil - Date.now());
+    hubStartRetryTimer = setTimeout(() => {
+        hubStartRetryTimer = null;
+        if (!document.hidden) {
+            void startHub();
+        }
+    }, delayMs);
+}
+
+// Renewal of an existing connection's cookie. Hidden tabs have their timers throttled, so renew
+// when the tab is visible again instead.
+setInterval(() => {
+    if (hubConnection && !document.hidden) {
+        void ensureHubCookie();
+    }
+}, HUB_COOKIE_RENEW_MS);
+
+document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+        return;
+    }
+    if (!hubConnection) {
+        if (!hubStartRetryTimer) {
+            void startHub();
+        }
+        return;
+    }
+    if (Date.now() - hubCookieRenewedAt >= HUB_COOKIE_RENEW_MS) {
+        void ensureHubCookie();
+    }
+});
 
 // Start on every page load
 document.addEventListener("DOMContentLoaded", startHub);

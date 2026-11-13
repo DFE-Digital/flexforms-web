@@ -165,7 +165,9 @@ namespace GovUK.Dfe.FlexForms.Infrastructure.Services
 
             if (field?.ComplexField != null && !string.IsNullOrEmpty(field.ComplexField.Id))
             {
-                // Get configuration from the service to determine the appropriate label
+                if (!string.IsNullOrWhiteSpace(field.ComplexField.Label))
+                    return field.ComplexField.Label.Trim();
+
                 var configuration = _complexFieldConfigurationService.GetConfiguration(field.ComplexField.Id);
                 return configuration.Label;
             }

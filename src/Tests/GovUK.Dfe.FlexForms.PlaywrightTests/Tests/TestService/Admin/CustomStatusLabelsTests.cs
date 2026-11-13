@@ -49,6 +49,20 @@ public sealed class CustomStatusLabelsTests : PlaywrightTestBase
             AdminApiClient, createRequest, ApplicationStatus.Deleted);
     }
 
+    [TearDown]
+    public async Task RestoreBaseStatusLabelsThroughUiAsync()
+    {
+        var statusOverridesPage = new CustomStatusLabelOverridesPage(Page);
+
+        await LoginAsync("admin");
+        await statusOverridesPage.GoToAsync(ApiConfig.TemplateId);
+
+        foreach (var (status, label) in BaseStatusLabels)
+        {
+            await statusOverridesPage.SaveCustomStatusLabelAsync(status, label);
+        }
+    }
+
     [OneTimeTearDown]
     public async Task RestoreBaseStatusLabelsAsync()
     {
