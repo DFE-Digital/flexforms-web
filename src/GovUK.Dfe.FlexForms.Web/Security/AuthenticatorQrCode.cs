@@ -11,11 +11,19 @@ public static class AuthenticatorQrCode
     private const string AuthenticatorUriPrefix = "otpauth://totp/";
 
     /// <summary>
-    /// <c>true</c> for an <c>otpauth://totp/</c> URI. Pages post the URI back to redraw the QR code, so anything else
-    /// is rejected rather than drawn.
+    /// Real URIs (issuer, email of up to 254 characters, 32 character key) stay well under this. It is far below
+    /// the 1,663 bytes a QR code holds at error correction level Q, so <see cref="ToPngDataUri"/> cannot overflow.
+    /// </summary>
+    public const int MaxAuthenticatorUriLength = 1024;
+
+    /// <summary>
+    /// <c>true</c> for an <c>otpauth://totp/</c> URI short enough to draw. Pages post the URI back to redraw the QR
+    /// code, so anything else is rejected rather than drawn.
     /// </summary>
     public static bool IsAuthenticatorUri(string? value)
-        => value is not null && value.StartsWith(AuthenticatorUriPrefix, StringComparison.Ordinal);
+        => value is not null
+           && value.Length <= MaxAuthenticatorUriLength
+           && value.StartsWith(AuthenticatorUriPrefix, StringComparison.Ordinal);
 
     public static string ToPngDataUri(string authenticatorUri)
     {

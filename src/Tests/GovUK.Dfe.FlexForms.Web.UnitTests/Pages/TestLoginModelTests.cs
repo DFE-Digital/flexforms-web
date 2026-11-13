@@ -452,6 +452,20 @@ public class TestLoginModelTests
     }
 
     [Fact]
+    public async Task OnPostConfirmSetupCodeAsync_treats_an_oversized_posted_uri_as_expired_instead_of_failing()
+    {
+        var model = CreateSettingUpModel(password: "123456");
+        model.AuthenticatorUri = "otpauth://totp/" + new string('a', 10_000);
+
+        Assert.IsType<PageResult>(await model.OnPostConfirmSetupCodeAsync());
+
+        Assert.True(model.UsingSetupCode);
+        Assert.Null(model.QrCodeDataUri);
+        Assert.Equal(TestLoginModel.SetupExpiredMessage, model.ErrorMessage);
+        await _tokensClient.DidNotReceiveWithAnyArgs().ConfirmTestAuthAuthenticatorInviteSetupAsync(default!, default);
+    }
+
+    [Fact]
     public async Task OnPostConfirmSetupCodeAsync_returns_not_found_when_test_auth_not_active()
     {
         var model = CreateSettingUpModel(password: "123456", testAuthEnabled: "false");

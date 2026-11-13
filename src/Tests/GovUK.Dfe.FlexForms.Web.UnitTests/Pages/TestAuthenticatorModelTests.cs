@@ -4,6 +4,7 @@ using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.CoreLibs.Security.Configurations;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Web.Pages;
+using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.FlexForms.Web.Tenancy;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -143,6 +144,29 @@ public class TestAuthenticatorModelTests
         Assert.Equal(TestAuthenticatorModel.SetupExpiredMessage, model.ErrorMessage);
         Assert.Null(model.QrCodeDataUri);
         await _usersClient.DidNotReceiveWithAnyArgs().ConfirmMyTestAuthAuthenticatorSetupAsync(default!, default);
+    }
+
+    [Fact]
+    public async Task OnPostConfirmAsync_treats_an_oversized_posted_uri_as_expired_instead_of_failing()
+    {
+        var model = CreateSettingUpModel(code: "123456");
+        model.AuthenticatorUri = "otpauth://totp/" + new string('a', 10_000);
+
+        Assert.IsType<PageResult>(await model.OnPostConfirmAsync());
+
+        Assert.Equal(TestAuthenticatorModel.SetupExpiredMessage, model.ErrorMessage);
+        Assert.Null(model.QrCodeDataUri);
+        await _usersClient.DidNotReceiveWithAnyArgs().ConfirmMyTestAuthAuthenticatorSetupAsync(default!, default);
+    }
+
+    [Fact]
+    public void AuthenticatorQrCode_draws_the_longest_accepted_uri()
+    {
+        var longest = "otpauth://totp/" + new string('a', AuthenticatorQrCode.MaxAuthenticatorUriLength - 15);
+
+        Assert.True(AuthenticatorQrCode.IsAuthenticatorUri(longest));
+        Assert.StartsWith("data:image/png;base64,", AuthenticatorQrCode.ToPngDataUri(longest));
+        Assert.False(AuthenticatorQrCode.IsAuthenticatorUri(longest + "a"));
     }
 
     [Fact]
