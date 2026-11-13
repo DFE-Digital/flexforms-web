@@ -80,6 +80,10 @@ public sealed class FileUploadTests : PlaywrightTestBase
         await _uploadField.ExpectFileCountAsync(0);
     }
 
+    [OneTimeTearDown]
+    public async Task ClearTheDefaultUsersNotificationsAsync() =>
+        await Notifications.ClearAllNotificationsAsync(ApiClient);
+
     private async Task GoToUploadPageAsync() =>
         await new ConfiguredFieldsTask(Page).GoToAsync(_application.ApplicationReference, ConfiguredFieldsTask.UploadPage);
 }

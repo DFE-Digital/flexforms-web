@@ -21,6 +21,11 @@ public sealed class NotificationsPage(IPage page) : BasePage(page)
         await Assertions.Expect(NotificationRow(message))
             .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = timeout });
 
+    /// <summary>A notification shown as a banner on whatever page is open, rather than on the notifications page.</summary>
+    public async Task ExpectBannerAsync(string message, float? timeout = null) =>
+        await Assertions.Expect(Page.Locator(".notification-item").Filter(new LocatorFilterOptions { HasText = message }))
+            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions { Timeout = timeout });
+
     public async Task ExpectNotificationNotVisibleAsync(string message) =>
         await Assertions.Expect(NotificationRow(message)).Not.ToBeVisibleAsync();
 
