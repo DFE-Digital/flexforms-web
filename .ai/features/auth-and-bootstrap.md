@@ -25,7 +25,7 @@ API `HostConfigController`, `TenantConfigController`, `TokensController`. CoreLi
 
 ## 6. Rules
 
-JWT tenant_id vs hostname. Test Auth environment gate. OTP on API.
+JWT tenant_id vs hostname. Test Auth environment gate. OTP on API. Test Auth users can also sign in with an authenticator app they enrolled at `/TestAuthenticator`; the emailed password is always still offered (`.ai/security.md`, Test Authentication sign-in methods).
 
 ## 7. Edge cases
 

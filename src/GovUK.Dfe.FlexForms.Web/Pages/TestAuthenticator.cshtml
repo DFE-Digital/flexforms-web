@@ -1,0 +1,144 @@
+@page
+@model TestAuthenticatorModel
+@{
+    ViewData["Title"] = "Authenticator app";
+    var codeError = Html.ValidationMessageFor(m => m.Code);
+    var hasCodeError = !ViewData.ModelState.IsValid && ViewData.ModelState.TryGetValue(nameof(Model.Code), out var codeState) && codeState.Errors.Count > 0;
+    var isEnrolled = Model.Status?.IsEnrolled == true;
+}
+
+<div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+        @if (!string.IsNullOrEmpty(Model.SuccessMessage))
+        {
+            <div class="govuk-notification-banner govuk-notification-banner--success" role="alert"
+                 aria-labelledby="authenticator-success-title" data-module="govuk-notification-banner">
+                <div class="govuk-notification-banner__header">
+                    <h2 class="govuk-notification-banner__title" id="authenticator-success-title">Success</h2>
+                </div>
+                <div class="govuk-notification-banner__content">
+                    <p class="govuk-notification-banner__heading" id="authenticator-success-message">@Model.SuccessMessage</p>
+                </div>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(Model.ErrorMessage) || hasCodeError)
+        {
+            <div class="govuk-error-summary" aria-labelledby="error-summary-title" role="alert" data-module="govuk-error-summary">
+                <h2 class="govuk-error-summary__title" id="error-summary-title">There is a problem</h2>
+                <div class="govuk-error-summary__body">
+                    <ul class="govuk-list govuk-error-summary__list">
+                        @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+                        {
+                            <li>@Model.ErrorMessage</li>
+                        }
+                        @if (hasCodeError)
+                        {
+                            <li><a href="#Code">@codeError</a></li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        }
+
+        <h1 class="govuk-heading-xl">Authenticator app</h1>
+
+        <div class="govuk-warning-text">
+            <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+            <strong class="govuk-warning-text__text">
+                <span class="govuk-warning-text__assistive">Warning</span>
+                This is for test authentication only. It is not available in production.
+            </strong>
+        </div>
+
+        <p class="govuk-body">
+            An authenticator app lets you sign in to this service as <strong>@Model.Email</strong> without waiting for an
+            emailed one-time password. You can still choose to get a password by email on the sign in page.
+        </p>
+
+        @if (Model.SettingUp)
+        {
+            <h2 class="govuk-heading-m">Set up your authenticator app</h2>
+
+            <ol class="govuk-list govuk-list--number">
+                <li>Open an authenticator app on your phone, for example Microsoft Authenticator or Google Authenticator.</li>
+                <li>Scan the QR code, or enter the key below.</li>
+                <li>Enter the 6 digit code the app shows.</li>
+            </ol>
+
+            @if (!string.IsNullOrEmpty(Model.QrCodeDataUri))
+            {
+                <p class="govuk-body">
+                    <img src="@Model.QrCodeDataUri" alt="QR code for setting up your authenticator app" id="authenticator-qr-code" width="200" height="200" />
+                </p>
+            }
+
+            <p class="govuk-body">
+                Key: <code class="app-authenticator-key" id="authenticator-shared-key">@Model.FormattedSharedKey</code>
+            </p>
+
+            <p class="govuk-body">This expires in 10 minutes. You do not need to save the key.</p>
+
+            <form method="post" asp-page-handler="Confirm">
+                <input type="hidden" asp-for="SharedKey" />
+                <input type="hidden" asp-for="AuthenticatorUri" />
+
+                <div class="govuk-form-group @(hasCodeError ? "govuk-form-group--error" : "")">
+                    <label class="govuk-label govuk-label--s" for="Code">Code from your authenticator app</label>
+                    @if (hasCodeError)
+                    {
+                        <p id="code-error" class="govuk-error-message">
+                            <span class="govuk-visually-hidden">Error:</span>
+                            @codeError
+                        </p>
+                    }
+                    <input class="govuk-input govuk-input--width-5 @(hasCodeError ? "govuk-input--error" : "")"
+                           id="Code"
+                           name="Code"
+                           type="text"
+                           inputmode="numeric"
+                           pattern="[0-9]*"
+                           maxlength="6"
+                           autocomplete="one-time-code"
+                           spellcheck="false"
+                           aria-describedby="@(hasCodeError ? "code-error" : null)">
+                </div>
+
+                <button type="submit" class="govuk-button" data-module="govuk-button" id="authenticator-confirm-button">
+                    Confirm
+                </button>
+            </form>
+
+            <p class="govuk-body">
+                <a class="govuk-link" href="@Url.Page("/TestAuthenticator")" id="authenticator-cancel-link">Cancel</a>
+            </p>
+        }
+        else if (isEnrolled)
+        {
+            <div class="govuk-inset-text" id="authenticator-enrolled-message">
+                You have an authenticator app set up@(Model.Status?.EnrolledOnUtc is { } enrolledOn ? $" since {enrolledOn:d MMMM yyyy}" : "").
+            </div>
+
+            <form method="post" asp-page-handler="Begin">
+                <p class="govuk-body">If you have a new phone, set up your authenticator app again. The current one keeps working until you confirm a code from the new one.</p>
+                <button type="submit" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="authenticator-replace-button">
+                    Set up again
+                </button>
+            </form>
+
+            <form method="post" asp-page-handler="Remove">
+                <button type="submit" class="govuk-button govuk-button--warning" data-module="govuk-button" id="authenticator-remove-button">
+                    Remove authenticator app
+                </button>
+            </form>
+        }
+        else
+        {
+            <form method="post" asp-page-handler="Begin">
+                <button type="submit" class="govuk-button" data-module="govuk-button" id="authenticator-begin-button">
+                    Set up an authenticator app
+                </button>
+            </form>
+        }
+    </div>
+</div>

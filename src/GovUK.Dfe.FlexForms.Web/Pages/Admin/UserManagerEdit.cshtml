@@ -1,6 +1,8 @@
 @page "/admin/user-manager/edit"
 @model GovUK.Dfe.FlexForms.Web.Pages.Admin.UserManagerEditModel
 @using GovUK.Dfe.FlexForms.Web.Security
+@inject Microsoft.Extensions.Options.IOptions<GovUK.Dfe.CoreLibs.Security.Configurations.TestAuthenticationOptions> TestAuthOptions
+@inject Microsoft.Extensions.Options.IOptions<GovUK.Dfe.CoreLibs.Security.Configurations.EntraSsoOptions> EntraSsoOptions
 @{
     ViewData["Title"] = "Edit user";
 }
@@ -31,6 +33,15 @@
                 <dd class="govuk-summary-list__value">@Model.UserEmail</dd>
             </div>
         </dl>
+
+        @if (TenantAuthSchemeSelector.IsTestAuthenticationActive(ViewContext.HttpContext, TestAuthOptions, EntraSsoOptions))
+        {
+            <p class="govuk-body">
+                <a asp-page="/Admin/UserManagerAuthenticatorCode" asp-route-email="@Model.UserEmail" class="govuk-link" id="user-manager-edit-authenticator-code">
+                    Create an authenticator app setup code for this user
+                </a>
+            </p>
+        }
 
         <form method="post">
             <input type="hidden" asp-for="UserId" />

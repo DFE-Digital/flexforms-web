@@ -200,7 +200,7 @@ Generic CoreLibs keys and more KQL examples: `DfE.CoreLibs.Http/ExceptionHandler
 `DynamicAuthenticationSchemeProvider` / composite strategy (priority):
 
 1. Internal service headers (`x-service-email` + API key)
-2. Test authentication (when enabled)
+2. Test authentication (when enabled): emailed one-time password, or an authenticator app the user set up at `/TestAuthenticator`
 3. **Entra SSO** when tenant `EntraSso:Enabled`
 4. Else **DfE Sign-In OIDC**
 
