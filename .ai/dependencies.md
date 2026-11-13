@@ -1,6 +1,6 @@
 # Dependencies (Web)
 
-- **flexforms-api** — TenantConfig, all writes, Api.Client NuGet (e.g. 0.0.54 in Application csproj; versions drift — check the file).
+- **flexforms-api** — TenantConfig, all writes, Api.Client NuGet (e.g. 0.0.58-prerelease.10 in Application csproj; versions drift — check the file). From 0.0.58 the client is net10.0 only and brings CoreLibs Contracts 2.x (2.0.2 for the authenticator setup-code endpoints).
 - **DfE.CoreLibs** — Security, Http, Caching, Messaging, Contracts, Testing.
 - **rsd-file-scanner-function / rsd-clamav-api** — indirect via bus.
 - **flexforms-prism** — no package reference; reporting UI talks to API.

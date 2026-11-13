@@ -11,6 +11,17 @@
 
 Cookies are the authenticate scheme. Callbacks: `/signin-oidc`, `/signin-entra`, and test `/TestLogin`.
 
+## Test Authentication sign-in methods
+
+**Verified** in `Pages/TestLogin.cshtml.cs`, `Pages/TestAuthenticator.cshtml.cs`.
+
+- `/TestLogin` asks for an email and a method: **Email me a one-time password** (default, `Input.Method=email`), **Use my authenticator app** (`authenticator`) or **I have an authenticator app setup code** (`setup-code`).
+- Setup code path: `OnPostRedeemSetupCodeAsync` calls `ITokensClient.RedeemTestAuthAuthenticatorInviteAsync` (the API consumes the code and returns the key and QR URI), then `OnPostConfirmSetupCodeAsync` calls `ConfirmTestAuthAuthenticatorInviteSetupAsync` and, when valid, signs the user in through `TestAuthenticationService.AuthenticateAsync`. The QR helper is `Security/AuthenticatorQrCode` (shared with `/TestAuthenticator`). The API decides who may create codes; Web only shows the page where Test Authentication is active.
+- Admins create codes at `/admin/user-manager/authenticator-code` (`CanManageUsersPolicy`, 404 unless Test Authentication is active) through `ITestAuthAuthenticatorCodeAdmin` → `IUsersClient.CreateTestAuthAuthenticatorInviteAsync`. The code is shown once and not stored by Web. Links appear on User Manager and Edit user only where Test Authentication is active. The email password stays available from every step (resend, and "Email me a one-time password instead" on the authenticator step), including after enrolment.
+- Choosing the authenticator makes no API call until a code is entered, and a wrong code and "no authenticator enrolled" show the same message, so the page does not reveal who has enrolled. The code goes to `ITokensClient.VerifyTestAuthAuthenticatorCodeAsync` (service token); a valid code signs in through the same `TestAuthenticationService.AuthenticateAsync` as the email password.
+- `/TestAuthenticator` (`[Authorize]`, 404 unless Test Authentication is active) lets the signed-in user set up, replace or remove their authenticator through `IUsersClient` `/v1/me/test-auth-authenticator*` (user token, so the API takes the email from the JWT). It is linked only from the Admin hub's Users & Roles card ("Authenticator app" button, shown only when Test Authentication is active), not from the main navigation. Non-admins enrol through a setup code, or can still open `/TestAuthenticator` directly once signed in.
+- The API holds the pending secret. The page posts the key and `otpauth://` URI back only to show the QR code again after a wrong code; it rejects a posted URI that is not `otpauth://totp/`. The QR code is a PNG data URI (CSP allows `img-src data:`).
+
 Per-request overlays: `TenantAwareOpenIdConnectConfigurator`, `TenantAwareEntraSsoConfigurator`. Placeholder OIDC authority exists until tenant overlay runs — required so `ConfigurationManager` is not null at startup.
 
 ## Token exchange and refresh

@@ -6,6 +6,8 @@
 
 `PlatformBootstrap:Enabled=true`. User secrets flattened from `Platform` or legacy `Transfers` section in Development.
 
+To build against an unreleased `GovUK.Dfe.FlexForms.Api.Client`, create `src/GovUK.Dfe.FlexForms.Application/GovUK.Dfe.FlexForms.Application.csproj.user` (gitignored by `*.user`; MSBuild imports it automatically). In it, `<PackageReference Remove="GovUK.Dfe.FlexForms.Api.Client" />` and add a `ProjectReference` to `$(LocalFlexFormsApiSrc)GovUK.Dfe.FlexForms.Api.Client\GovUK.Dfe.FlexForms.Api.Client.csproj` (`LocalFlexFormsApiSrc` comes from `Directory.Build.props`). The Application project is the one that references the package, so a swap only in the Web project leaves both copies in the graph. If the sibling client needs an unpublished CoreLibs package, every project in the graph needs a source for it (a `NuGet.Config` above both repos works); per-project restore properties are not enough. Delete the `.user` file before relying on CI parity.
+
 `Telemetry:ReportingUserIdKey` is optional locally; without it Web prints a `[Configuration]` line and sends no pseudonymous user ids. Deployed environments set `Telemetry__ReportingUserIdKey` from Key Vault (see `docs/application-insights-reporting.md`).
 
 ## Tests

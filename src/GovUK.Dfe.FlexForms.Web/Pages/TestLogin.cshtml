@@ -6,6 +6,10 @@
     var passwordError = Html.ValidationMessageFor(m => m.Input.Password);
     var hasEmailError = !ViewData.ModelState.IsValid && ViewData.ModelState.TryGetValue("Input.Email", out var emailState) && emailState.Errors.Count > 0;
     var hasPasswordError = !ViewData.ModelState.IsValid && ViewData.ModelState.TryGetValue("Input.Password", out var passwordState) && passwordState.Errors.Count > 0;
+    var setupCodeError = Html.ValidationMessageFor(m => m.Input.SetupCode);
+    var hasSetupCodeError = !ViewData.ModelState.IsValid && ViewData.ModelState.TryGetValue("Input.SetupCode", out var setupCodeState) && setupCodeState.Errors.Count > 0;
+    var authenticatorChosen = Model.Input.Method == TestLoginModel.AuthenticatorMethod;
+    var setupCodeChosen = Model.Input.Method == TestLoginModel.SetupCodeMethod;
 }
 
 <div class="govuk-grid-row">
@@ -20,7 +24,7 @@
             </strong>
         </div>
 
-        @if (!string.IsNullOrEmpty(Model.ErrorMessage) || hasEmailError || hasPasswordError)
+        @if (!string.IsNullOrEmpty(Model.ErrorMessage) || hasEmailError || hasPasswordError || hasSetupCodeError)
         {
             <div class="govuk-error-summary" aria-labelledby="error-summary-title" role="alert" data-module="govuk-error-summary">
                 <h2 class="govuk-error-summary__title" id="error-summary-title">
@@ -40,21 +44,183 @@
                         {
                             <li><a href="#Input.Password">@passwordError</a></li>
                         }
+                        @if (hasSetupCodeError)
+                        {
+                            <li><a href="#Input.SetupCode">@setupCodeError</a></li>
+                        }
                     </ul>
                 </div>
             </div>
         }
 
-        @if (!Model.PasswordSent)
+        @if (Model.SettingUpFromCode)
+        {
+            <h2 class="govuk-heading-m">Set up your authenticator app</h2>
+
+            <ol class="govuk-list govuk-list--number">
+                <li>Open an authenticator app on your phone, for example Microsoft Authenticator or Google Authenticator.</li>
+                <li>Scan the QR code, or enter the key below.</li>
+                <li>Enter the 6 digit code the app shows. This signs you in as <strong>@Model.Input.Email</strong>.</li>
+            </ol>
+
+            @if (!string.IsNullOrEmpty(Model.QrCodeDataUri))
+            {
+                <p class="govuk-body">
+                    <img src="@Model.QrCodeDataUri" alt="QR code for setting up your authenticator app" id="setup-code-qr-code" width="200" height="200" />
+                </p>
+            }
+
+            <p class="govuk-body">
+                Key: <code id="setup-code-shared-key">@Model.FormattedSharedKey</code>
+            </p>
+
+            <p class="govuk-body">This expires in 10 minutes.</p>
+
+            <form method="post" asp-page="/TestLogin" asp-page-handler="ConfirmSetupCode" asp-route-returnUrl="@Model.ReturnUrl">
+                <input type="hidden" name="Input.Email" value="@Model.Input.Email" />
+                <input type="hidden" name="SharedKey" value="@Model.SharedKey" />
+                <input type="hidden" name="AuthenticatorUri" value="@Model.AuthenticatorUri" />
+
+                <div class="govuk-form-group @(hasPasswordError ? "govuk-form-group--error" : "")">
+                    <label class="govuk-label govuk-label--s" for="Input.Password">Code from your authenticator app</label>
+                    @if (hasPasswordError)
+                    {
+                        <p id="password-error" class="govuk-error-message">
+                            <span class="govuk-visually-hidden">Error:</span>
+                            @passwordError
+                        </p>
+                    }
+                    <input class="govuk-input govuk-input--width-5 @(hasPasswordError ? "govuk-input--error" : "")"
+                           id="Input.Password"
+                           name="Input.Password"
+                           type="text"
+                           inputmode="numeric"
+                           pattern="[0-9]*"
+                           maxlength="6"
+                           autocomplete="one-time-code"
+                           spellcheck="false"
+                           aria-describedby="@(hasPasswordError ? "password-error" : null)">
+                </div>
+
+                <button type="submit" class="govuk-button" data-module="govuk-button" id="test-login-setup-code-confirm-button">
+                    Confirm and sign in
+                </button>
+            </form>
+
+            <p class="govuk-body">
+                <a class="govuk-link" href="@Url.Page("/TestLogin", new { returnUrl = Model.ReturnUrl })" id="test-login-change-email">Start again</a>
+            </p>
+        }
+        else if (Model.UsingSetupCode)
+        {
+            <form method="post" asp-page="/TestLogin" asp-page-handler="RedeemSetupCode" asp-route-returnUrl="@Model.ReturnUrl">
+                <input type="hidden" name="Input.Email" value="@Model.Input.Email" />
+
+                <div class="govuk-form-group @(hasSetupCodeError ? "govuk-form-group--error" : "")">
+                    <label class="govuk-label govuk-label--m" for="Input.SetupCode">
+                        Enter your setup code
+                    </label>
+                    <div class="govuk-hint" id="setup-code-hint">
+                        An administrator gave you this code to set up an authenticator app for <strong>@Model.Input.Email</strong>. For example, ABCDE-FGHJK.
+                    </div>
+                    @if (hasSetupCodeError)
+                    {
+                        <p id="setup-code-error" class="govuk-error-message">
+                            <span class="govuk-visually-hidden">Error:</span>
+                            @setupCodeError
+                        </p>
+                    }
+                    <input class="govuk-input govuk-input--width-10 @(hasSetupCodeError ? "govuk-input--error" : "")"
+                           id="Input.SetupCode"
+                           name="Input.SetupCode"
+                           type="text"
+                           maxlength="32"
+                           autocomplete="off"
+                           spellcheck="false"
+                           aria-describedby="@(hasSetupCodeError ? "setup-code-hint setup-code-error" : "setup-code-hint")">
+                </div>
+
+                <button type="submit" class="govuk-button" data-module="govuk-button" id="test-login-setup-code-button">
+                    Continue
+                </button>
+            </form>
+
+            <form method="post" asp-page="/TestLogin" asp-route-returnUrl="@Model.ReturnUrl">
+                <input type="hidden" name="Input.Email" value="@Model.Input.Email" />
+                <input type="hidden" name="Input.Method" value="@TestLoginModel.EmailMethod" />
+                <p class="govuk-body">
+                    <button type="submit" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="test-login-setup-code-use-email-button">
+                        Email me a one-time password instead
+                    </button>
+                </p>
+            </form>
+
+            <p class="govuk-body">
+                <a class="govuk-link" href="@Url.Page("/TestLogin", new { returnUrl = Model.ReturnUrl })" id="test-login-change-email">Use a different email address</a>
+            </p>
+        }
+        else if (Model.UsingAuthenticator)
+        {
+            <div class="govuk-inset-text" id="authenticator-message">
+                Open the authenticator app you set up for <strong>@Model.Input.Email</strong> on this service.
+            </div>
+
+            <form method="post" asp-page="/TestLogin" asp-page-handler="VerifyAuthenticator" asp-route-returnUrl="@Model.ReturnUrl">
+                <input type="hidden" name="Input.Email" value="@Model.Input.Email" />
+
+                <div class="govuk-form-group @(hasPasswordError ? "govuk-form-group--error" : "")">
+                    <label class="govuk-label govuk-label--m" for="Input.Password">
+                        Enter the code from your authenticator app
+                    </label>
+                    <div class="govuk-hint" id="password-hint">
+                        This is the 6 digit code currently shown in the app.
+                    </div>
+                    @if (hasPasswordError)
+                    {
+                        <p id="password-error" class="govuk-error-message">
+                            <span class="govuk-visually-hidden">Error:</span>
+                            @passwordError
+                        </p>
+                    }
+                    <input class="govuk-input govuk-input--width-5 @(hasPasswordError ? "govuk-input--error" : "")"
+                           id="Input.Password"
+                           name="Input.Password"
+                           type="text"
+                           inputmode="numeric"
+                           pattern="[0-9]*"
+                           maxlength="6"
+                           autocomplete="one-time-code"
+                           spellcheck="false"
+                           aria-describedby="@(hasPasswordError ? "password-hint password-error" : "password-hint")">
+                </div>
+
+                <button type="submit" class="govuk-button" data-module="govuk-button" id="test-login-authenticator-verify-button">
+                    Sign in
+                </button>
+            </form>
+
+            <form method="post" asp-page="/TestLogin" asp-route-returnUrl="@Model.ReturnUrl">
+                <input type="hidden" name="Input.Email" value="@Model.Input.Email" />
+                <input type="hidden" name="Input.Method" value="@TestLoginModel.EmailMethod" />
+                <p class="govuk-body">
+                    Cannot use your authenticator app?
+                    <button type="submit" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="test-login-use-email-button">
+                        Email me a one-time password instead
+                    </button>
+                </p>
+            </form>
+
+            <p class="govuk-body">
+                <a class="govuk-link" href="@Url.Page("/TestLogin", new { returnUrl = Model.ReturnUrl })" id="test-login-change-email">Use a different email address</a>
+            </p>
+        }
+        else if (!Model.PasswordSent)
         {
             <form method="post" asp-page="/TestLogin" asp-route-returnUrl="@Model.ReturnUrl">
                 <div class="govuk-form-group @(hasEmailError ? "govuk-form-group--error" : "")">
                     <label class="govuk-label govuk-label--m" for="Input.Email">
                         Enter your email address
                     </label>
-                    <div class="govuk-hint" id="email-hint">
-                        We will email you a one-time password to sign in.
-                    </div>
                     @if (hasEmailError)
                     {
                         <p id="email-error" class="govuk-error-message">
@@ -69,7 +235,44 @@
                            value="@Model.Input.Email"
                            autocomplete="email"
                            spellcheck="false"
-                           aria-describedby="@(hasEmailError ? "email-hint email-error" : "email-hint")">
+                           aria-describedby="@(hasEmailError ? "email-error" : null)">
+                </div>
+
+                <div class="govuk-form-group">
+                    <fieldset class="govuk-fieldset" aria-describedby="method-hint">
+                        <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">
+                            How do you want to sign in?
+                        </legend>
+                        <div class="govuk-hint" id="method-hint">
+                            You can only use an authenticator app if you have already set one up for this email address on this service.
+                        </div>
+                        <div class="govuk-radios" data-module="govuk-radios">
+                            <div class="govuk-radios__item">
+                                <input class="govuk-radios__input" id="Input.Method" name="Input.Method" type="radio"
+                                       value="@TestLoginModel.EmailMethod" @(authenticatorChosen || setupCodeChosen ? "" : "checked")>
+                                <label class="govuk-label govuk-radios__label" for="Input.Method">
+                                    Email me a one-time password
+                                </label>
+                            </div>
+                            <div class="govuk-radios__item">
+                                <input class="govuk-radios__input" id="Input.Method-authenticator" name="Input.Method" type="radio"
+                                       value="@TestLoginModel.AuthenticatorMethod" @(authenticatorChosen ? "checked" : "")>
+                                <label class="govuk-label govuk-radios__label" for="Input.Method-authenticator">
+                                    Use my authenticator app
+                                </label>
+                            </div>
+                            <div class="govuk-radios__item">
+                                <input class="govuk-radios__input" id="Input.Method-setup-code" name="Input.Method" type="radio"
+                                       value="@TestLoginModel.SetupCodeMethod" @(setupCodeChosen ? "checked" : "")>
+                                <label class="govuk-label govuk-radios__label" for="Input.Method-setup-code">
+                                    I have an authenticator app setup code
+                                </label>
+                                <div class="govuk-hint govuk-radios__hint">
+                                    Use this if you cannot receive email and an administrator has given you a setup code.
+                                </div>
+                            </div>
+                        </div>
+                    </fieldset>
                 </div>
 
                 <button type="submit" class="govuk-button" data-module="govuk-button" id="test-login-button">
@@ -119,10 +322,22 @@
 
             <form method="post" asp-page="/TestLogin" asp-route-returnUrl="@Model.ReturnUrl">
                 <input type="hidden" name="Input.Email" value="@Model.Input.Email" />
+                <input type="hidden" name="Input.Method" value="@TestLoginModel.EmailMethod" />
                 <p class="govuk-body">
                     Not received it?
                     <button type="submit" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="test-login-resend-button">
                         Send a new password
+                    </button>
+                </p>
+            </form>
+
+            <form method="post" asp-page="/TestLogin" asp-route-returnUrl="@Model.ReturnUrl">
+                <input type="hidden" name="Input.Email" value="@Model.Input.Email" />
+                <input type="hidden" name="Input.Method" value="@TestLoginModel.AuthenticatorMethod" />
+                <p class="govuk-body">
+                    Set up an authenticator app already?
+                    <button type="submit" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="test-login-use-authenticator-button">
+                        Use your authenticator app instead
                     </button>
                 </p>
             </form>
@@ -146,6 +361,11 @@
                 <p class="govuk-body">
                     Enter your email address and we will email you a one-time password. Enter that password to sign in
                     as that user. This feature is only available when test authentication is enabled in the application configuration.
+                </p>
+                <p class="govuk-body">
+                    If you cannot receive email, you can use an authenticator app instead, as long as you set one up for your
+                    email address on this service. To set one up, ask an administrator for a one-time setup code.
+                    Administrators can also set up their own from Admin, under Users &amp; Roles, Authenticator app.
                 </p>
             </div>
         </details>
