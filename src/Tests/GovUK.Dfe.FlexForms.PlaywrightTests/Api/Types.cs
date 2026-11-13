@@ -39,7 +39,7 @@ public sealed record AddContributorRequest(string Email, string Name);
 
 public sealed record CustomApplicationStatusRequest(ApplicationStatus ApplicationStatus, string Label);
 
-public sealed record UploadDto(string Id, string ApplicationId);
+public sealed record UploadDto(string Id, string ApplicationId, string? OriginalFileName = null);
 
 public sealed record ExchangeTokenRequest([property: JsonPropertyName("accessToken")] string AccessToken);
 

@@ -67,4 +67,34 @@ public sealed class ApplicationPreviewPage(IPage page) : BasePage(page)
 
     private ILocator SubmittedHeading(string submitMessage) =>
         Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = submitMessage });
+
+    private const string FileValidationBlocksSubmitText = "You cannot submit until uploaded files pass validation.";
+
+    /// <summary>The submit button is replaced by a problem listing the file, with the validator's message.</summary>
+    public async Task ExpectFileValidationBlocksSubmitAsync(string fileName)
+    {
+        await Assertions.Expect(Preview()).ToBeVisibleAsync();
+        await Assertions.Expect(FileValidationErrorSummary().GetByText(FileValidationBlocksSubmitText,
+            new LocatorGetByTextOptions { Exact = true })).ToBeVisibleAsync();
+        await Assertions.Expect(BlockingFile(fileName)).ToBeVisibleAsync();
+        await Assertions.Expect(SubmitApplicationButton()).ToBeDisabledAsync();
+    }
+
+    public async Task ExpectFileValidationDoesNotBlockSubmitAsync()
+    {
+        await Assertions.Expect(Preview()).ToBeVisibleAsync();
+        await Assertions.Expect(Page.GetByText(FileValidationBlocksSubmitText,
+            new PageGetByTextOptions { Exact = true })).ToHaveCountAsync(0);
+    }
+
+    /// <summary>The file's entry in the list of files stopping the submit, including the validator's message.</summary>
+    public ILocator BlockingFile(string fileName) =>
+        FileValidationErrorSummary().Locator(".govuk-error-summary__list > li")
+            .Filter(new LocatorFilterOptions { HasText = fileName });
+
+    private ILocator FileValidationErrorSummary() => Page.Locator(".govuk-error-summary")
+        .Filter(new LocatorFilterOptions
+        {
+            Has = Page.GetByText(FileValidationBlocksSubmitText, new PageGetByTextOptions { Exact = true }),
+        });
 }
