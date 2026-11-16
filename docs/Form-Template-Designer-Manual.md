@@ -684,6 +684,7 @@ You **do not** put the API URL, API key, or OAuth client secret in the template.
 | `confirmationTitle` | No | Whole confirmation heading, for example `"Is this the correct {name}?"`. Leave it out for "Is this the right {name}?". |
 | `dropdownDisplay` | No | How each search result is labelled in the dropdown (and in the box after the user chooses). Overrides the same setting in FormEngine when both are set. |
 | `confirmationDisplay` | No | How the chosen answer is shown on **check your answers** / preview, and which properties appear on “Is this the right …?”. Overrides FormEngine when set. |
+| `validationStatusText` | No | Upload fields only. Object with `pending`, `passed` and `failed` text shown in the Status column of the uploaded files table. Each upload question has its own. Blank or missing keys keep the defaults: `Validation pending`, `Validated`, `Validation failed`. Example: `"validationStatusText": { "passed": "Checked" }`. |
 
 If both display properties are omitted, FlexForms keeps the built-in Trusts/Academies layout:
 

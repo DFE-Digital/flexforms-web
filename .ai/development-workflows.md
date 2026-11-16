@@ -10,6 +10,8 @@
 
 ## Tests
 
+The Web project's `BuildDockerImage` target runs `docker compose` after build when `LocalDevelopment` is `true`. If Docker isn't set up (or on CI-like runs), build and test with `-p:SkipDockerCompose=true`, for example `dotnet test src/Tests/GovUK.Dfe.FlexForms.Web.UnitTests -p:SkipDockerCompose=true` (**Verified**).
+
 `dotnet test GovUK.Dfe.FlexForms.Web.sln` — Domain, Application, Infrastructure.UnitTests, Web.UnitTests (includes architecture guards).
 
 Playwright: NUnit project, product journeys (Transfers, Visits, TestService). Cypress optional/out of solution.

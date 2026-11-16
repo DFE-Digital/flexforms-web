@@ -426,6 +426,8 @@ Choose **What to search** (or which **Upload field** to use) from the search and
 
 **Confirmation heading** is the question above the chosen result, for example `Is this the correct {name}?`. Leave it blank to use "Is this the right {name}?".
 
+**File check status text**, for upload questions only, sets the words shown next to each uploaded file: **Waiting for the file check**, **File check passed** and **File check failed**. Leave a box blank to keep the default (`Validation pending`, `Validated`, `Validation failed`). Each upload question has its own text, so two upload questions in one template can differ.
+
 **How results are shown (optional)**, for search questions only, changes how this question shows its results without changing the tenant's setting for other questions:
 
 - **Each search result**: how each match in the list looks.

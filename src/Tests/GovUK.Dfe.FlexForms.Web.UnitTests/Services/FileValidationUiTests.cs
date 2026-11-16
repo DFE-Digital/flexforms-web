@@ -2,6 +2,7 @@ using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Web.Services;
 using Microsoft.Extensions.Configuration;
+using GovUK.Dfe.FlexForms.Domain.Models;
 
 namespace GovUK.Dfe.FlexForms.Web.UnitTests.Services;
 
@@ -43,5 +44,29 @@ public class FileValidationUiTests
         Assert.Equal("Validation pending", FileValidationUi.StatusText(FileValidationStatus.Pending));
         Assert.Equal("Validated", FileValidationUi.StatusText(FileValidationStatus.Passed));
         Assert.Equal("Validation failed", FileValidationUi.StatusText(FileValidationStatus.Failed));
+    }
+
+    [Fact]
+    public void StatusText_ShouldUseOverridesAndTrim()
+    {
+        var overrides = new FileValidationStatusText { Pending = "  Checking  ", Passed = "Safe", Failed = "Rejected" };
+
+        Assert.Equal("Checking", FileValidationUi.StatusText(FileValidationStatus.Pending, overrides));
+        Assert.Equal("Safe", FileValidationUi.StatusText(FileValidationStatus.Passed, overrides));
+        Assert.Equal("Rejected", FileValidationUi.StatusText(FileValidationStatus.Failed, overrides));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void StatusText_ShouldFallBackToDefaultWhenOverrideBlank(string? value)
+    {
+        var overrides = new FileValidationStatusText { Pending = value, Passed = value, Failed = value };
+
+        Assert.Equal("Validation pending", FileValidationUi.StatusText(FileValidationStatus.Pending, overrides));
+        Assert.Equal("Validated", FileValidationUi.StatusText(FileValidationStatus.Passed, overrides));
+        Assert.Equal("Validation failed", FileValidationUi.StatusText(FileValidationStatus.Failed, overrides));
+        Assert.Equal("Validated", FileValidationUi.StatusText(FileValidationStatus.Passed, null));
     }
 }
