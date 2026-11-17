@@ -15,5 +15,7 @@ This repo is the **form engine and admin UX**. It does not own TenantConfig rows
 | Files / malware banners | `integrations.md` |
 | Redis / health / cookies | `known-pitfalls.md`, `history-lessons.md` |
 | Application Insights / usage reporting | `integrations.md`, [`../docs/application-insights-reporting.md`](../docs/application-insights-reporting.md) |
+| Anything cross-repo, contracts, topics, auth matrix | `ecosystem.md` |
+| Where is X in the code? | `code-map.md` |
 
 Canonical cross-repo narrative for humans: [`../docs/FlexForms-Process-Map.md`](../docs/FlexForms-Process-Map.md).
