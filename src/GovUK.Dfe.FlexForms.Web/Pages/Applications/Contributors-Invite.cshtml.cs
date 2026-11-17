@@ -1,8 +1,10 @@
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics.CodeAnalysis;
+using GovUK.Dfe.FlexForms.Application.Contributors;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
+using GovUK.Dfe.FlexForms.Domain.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -18,6 +20,8 @@ public class ContributorsInviteModel(
     IContributorService contributorService,
     IApplicationStateService applicationStateService,
     IContributorPatternService contributorPatternService,
+    ITemplateManagementService templateManagementService,
+    IComplexFieldConfigurationService complexFieldConfigurationService,
     IRequestAppConfiguration requestConfiguration,
     ILogger<ContributorsInviteModel> logger) : PageModel
 {
@@ -35,6 +39,23 @@ public class ContributorsInviteModel(
     [Display(Name = "Name")]
     public string Name { get; set; } = string.Empty;
 
+    /// <summary>Always granted; shown checked and disabled on the page.</summary>
+    public bool CanViewApplication => true;
+
+    [BindProperty]
+    public bool CanChangeApplication { get; set; }
+
+    [BindProperty]
+    public bool CanViewUploadedFiles { get; set; }
+
+    [BindProperty]
+    public bool CanUploadFiles { get; set; }
+
+    [BindProperty]
+    public bool CanDeleteUploadedFiles { get; set; }
+
+    public bool ShowFilePermissions { get; private set; }
+
     public Guid? ApplicationId { get; private set; }
     public bool HasError { get; private set; }
     public string? ErrorMessage { get; private set; }
@@ -44,8 +65,6 @@ public class ContributorsInviteModel(
     /// </summary>
     public async Task<IActionResult> OnGetAsync()
     {
-
-        // Ensure we have a valid application ID
         var (applicationId, application) = await applicationStateService.EnsureApplicationIdAsync(ReferenceNumber);
 
         var redirect = await RedirectIfContributorPatternDisabledAsync(application);
@@ -55,6 +74,7 @@ public class ContributorsInviteModel(
         }
 
         ApplicationId = applicationId;
+        await LoadPermissionOptionsAsync(application, applyTemplateDefaults: true);
         return Page();
     }
 
@@ -72,28 +92,39 @@ public class ContributorsInviteModel(
         }
 
         ApplicationId = applicationId;
+        await LoadPermissionOptionsAsync(application, applyTemplateDefaults: false);
 
         if (!ModelState.IsValid)
         {
             return Page();
         }
 
-        // Create invitation request
+        if (!ShowFilePermissions)
+        {
+            CanViewUploadedFiles = false;
+            CanUploadFiles = false;
+            CanDeleteUploadedFiles = false;
+        }
+
         var inviteRequest = new AddContributorRequest
         {
             Email = EmailAddress,
-            Name = Name
+            Name = Name,
+            Permissions = new ContributorInvitePermissions
+            {
+                ApplicationWrite = CanChangeApplication,
+                ApplicationFilesRead = CanViewUploadedFiles || CanUploadFiles || CanDeleteUploadedFiles,
+                ApplicationFilesWrite = CanUploadFiles,
+                ApplicationFilesDelete = CanDeleteUploadedFiles
+            }
         };
 
-        // Send the invitation
         await contributorService.InviteContributorAsync(applicationId.Value, inviteRequest);
 
         logger.LogInformation("Successfully invited contributor {Name} ({Email}) to application {ApplicationId}",
             Name, EmailAddress, applicationId.Value);
 
-        // Redirect back to contributors page
         return RedirectToPage("/Applications/Contributors", new { referenceNumber = ReferenceNumber });
-
     }
 
     /// <summary>
@@ -111,6 +142,38 @@ public class ContributorsInviteModel(
         }
 
         return RedirectToPage("/Applications/Contributors", new { referenceNumber = ReferenceNumber });
+    }
+
+    private async Task LoadPermissionOptionsAsync(ApplicationDto? application, bool applyTemplateDefaults)
+    {
+        var templateId = HttpContext.Session.GetString("TemplateId") ?? requestConfiguration["Template:Id"] ?? string.Empty;
+        var template = await templateManagementService.LoadTemplateAsync(templateId, application);
+        ShowFilePermissions = TemplateUploadFieldDetector.HasUploadFields(template, complexFieldConfigurationService);
+
+        if (!applyTemplateDefaults)
+            return;
+
+        ApplyTemplateDefaults(template);
+    }
+
+    private void ApplyTemplateDefaults(FormTemplate template)
+    {
+        var fullEdit = ContributorInviteDefaultAccess.IsFullEditByDefault(template.ContributorRoleId);
+
+        CanChangeApplication = fullEdit;
+
+        if (!ShowFilePermissions)
+        {
+            CanViewUploadedFiles = false;
+            CanUploadFiles = false;
+            CanDeleteUploadedFiles = false;
+            return;
+        }
+
+        // View files is selected for both full-edit and view-only defaults when the form has uploads.
+        CanViewUploadedFiles = true;
+        CanUploadFiles = fullEdit;
+        CanDeleteUploadedFiles = fullEdit;
     }
 
     private async Task<IActionResult?> RedirectIfContributorPatternDisabledAsync(ApplicationDto? application = null)

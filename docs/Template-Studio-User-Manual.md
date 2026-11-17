@@ -129,7 +129,7 @@ Select the template name at the top of the structure.
 | **Do applicants have to answer questions unless you say otherwise?** | The default for questions that don't say whether they must be answered. |
 | **Use the page heading as the question when a page has one question** | Hides the question label on single-question pages so it isn't repeated under the heading. |
 | **Let applicants invite contributors** | Turns contributor invitations on or off. |
-| **Role for invited contributors** | Shown when invitations are on. **User** can edit the application. Any other role can only view it. |
+| **Role for invited contributors** | Shown when invitations are on. Sets the **tenant membership role** for people who are not already in the tenant. What they can do on that application is chosen by the lead applicant when they invite them. |
 
 Below these, the rest of Template settings is split into four groups, in this order. Each group has its own heading and opens and closes in sections:
 
@@ -144,14 +144,18 @@ Below these, the rest of Template settings is split into four groups, in this or
 
 This is shown only when **Let applicants invite contributors** is ticked.
 
-Leave **Role for invited contributors** on **User** when invited people should be able to edit the application. That is the same access they get today.
+**Role for invited contributors** is the tenant membership role given to someone who is invited and is not already in the tenant. It is not what decides whether they can edit that application.
 
-Choose a custom role from Role Manager when they should only view the application and its files. Admin, SuperAdmin and Administrator are not in the list.
+When the lead applicant invites someone, they choose what that person can do on **that application** (view, change, and — if the form has file uploads — view, upload or delete files). **View this application** is always included. Those choices are set only at invite time.
+
+The invite page pre-selects checkboxes from this setting: **User** (or none) starts with full access selected; any other role starts with view-only selected. The lead can change the ticks before sending.
+
+Leave **Role for invited contributors** on **User** for a normal applicant-style membership and full-access invite defaults. Choose a custom role from Role Manager when new invitees should join the tenant with that role and start from view-only invite defaults. Admin, SuperAdmin and Administrator are not in the list. Custom roles used here must not themselves grant Application or ApplicationFiles Write or Delete.
 
 Only an Admin or SuperAdmin can change this setting. Template managers see a note instead, and the role already chosen is kept when they save a new version.
 
-- People invited after you save a new version get that role, if they do not already belong to the tenant.
-- Someone who is already in the tenant keeps their current role. They still get view-only access to that application when the chosen role is not User.
+- People invited after you save a new version get that membership role, if they do not already belong to the tenant.
+- Someone who is already in the tenant keeps their current membership role. What they can do on the application still comes from the permissions chosen on the invite.
 - People who were invited before the change keep the access they already have.
 - If the saved role is later deleted, the list shows **Saved role (no longer available)**. New invitations are rejected until you choose another role. They are not given the User role instead.
 
@@ -851,7 +855,7 @@ New applications use the latest saved version. Applications already started keep
 | The preview says "There's nothing to preview" | The preview ended. Select **Preview task** in Template Studio again. |
 | A search question in the preview has a text box | The preview doesn't search other services. Type the result you'd pick. |
 | A page I didn't expect is hidden | Look for **Shown by a rule** on it, and check the rule on the Rules tab. |
-| Invited contributors can still edit | The role is **User**, or none is chosen. Choose a custom role and save a new version. People invited before that keep the access they already have. |
+| Invited contributors can still edit | The lead applicant chose **Change this application** (or file upload/delete) when they invited them. Access is set per invite, not by this template role alone. People invited before keep the access they already have. |
 | A saved contributor role says it is no longer available | The role was deleted or is not allowed. Choose another role. New invitations are rejected until you do. |
 | Version number rejected | Use three numbers, for example 1.2.1, that haven't been used before. |
 | I made a mistake | Use **Undo**, or leave without saving to discard all your changes. |

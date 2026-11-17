@@ -18,6 +18,8 @@ Saving a template version in admin does not change in-flight applications. Users
 
 Shown when template JSON `contributorPattern` is true (`ContributorPatternService`). Invites go through the API.
 
+Invite page (`Contributors-Invite`) lets the lead applicant choose direct Application / ApplicationFiles grants for that invite (**Verified**). **View this application** is always on. Defaults follow the template `contributorRoleId` (`ContributorInviteDefaultAccess`): User / omitted → Change and all file options selected; any other role → view-only (Change off; View uploaded files on when the form has uploads). File options are shown only when the template has an upload field (`TemplateUploadFieldDetector`). Upload or delete without “view files” still sends files Read. Permissions are invite-time only; template `contributorRoleId` still sets tenant membership on the API.
+
 ## File summary display
 
 Task summary filenames for complex uploads require tenant FormEngine `ComplexFields` `AllowMultiple: true`. Missing config → blank names though upload succeeded. Refresh tenant settings after changing FormEngine JSON.
