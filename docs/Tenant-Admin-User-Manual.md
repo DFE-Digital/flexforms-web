@@ -438,6 +438,8 @@ Title: **Edit user**
 
 Name and email are read-only. You can change **Role** and **Forms this user can access**, then **Save**.
 
+Where the tenant uses Test Authentication, the page also has a **Sign-in lock** section above the role, with its own save button (see 8.9).
+
 Changing only form access does **not** change the person’s role. The access audit trail records that as form access updated, not as a new role assignment.
 
 ### 8.4 User-level permissions
@@ -473,6 +475,9 @@ Typical actions:
 | **FormAccessUpdated** | Their form (template) list was changed without a role change |
 | **MembershipDeactivated** | They were removed from the tenant |
 | **TestAuthAuthenticatorSetupCodeCreated** | An admin created an authenticator app setup code for them (test environments only, see 8.8) |
+| **TestAuthSignInLocked** | An admin locked them out of sign-in (test environments only, see 8.9) |
+| **TestAuthSignInUnlocked** | An admin unlocked their sign-in (see 8.9) |
+| **TestAuthTemporaryLockoutCleared** | An admin used **Unlock now** after they entered too many wrong authenticator app codes (see 8.9) |
 
 ### 8.6 Grant to all vs User Manager
 
@@ -586,6 +591,27 @@ Things to know:
 - Every code appears in the access audit trail as **TestAuthAuthenticatorSetupCodeCreated** (see 8.5).
 - To set up, replace or remove **your own** authenticator app, use **Admin → Users & Roles → Authenticator app**.
 - Codes are for the tenant you are signed in to. A SuperAdmin or platform engineer who needs a code for another tenant, without signing in to it, can create one by hand in Redis: see `docs/test-auth-authenticator-setup-codes.md` in the flexforms-api repository.
+
+### 8.9 Sign-in locks (test environments only)
+
+Page: `/admin/user-manager/edit`, section **Sign-in lock**
+
+Only shown where the tenant uses Test Authentication (never in Production).
+
+**Temporary lock.** If someone enters 5 wrong authenticator app codes, their authenticator sign-in is locked for up to 15 minutes, counted from their first wrong code. The sign in page tells them how many minutes to wait and that they can get a one-time password by email instead. The **Status** row shows **Temporarily locked** and when it unlocks. Select **Unlock now** to let them try again straight away.
+
+**Lock a user out.** Tick **Lock this user out of sign-in** and select **Save sign-in lock**. While locked:
+
+- they cannot sign in with a one-time password by email, an authenticator app or a setup code. No email is sent
+- the sign in page tells them their account has been locked and to contact their tenant administrator
+- the lock never ends on its own. **Status** shows **Locked by an administrator**, with when and by whom
+
+To unlock them, untick the box and select **Save sign-in lock**. That also removes any temporary lock.
+
+- Saving this section does not change the user's role or forms, and saving the role does not change the lock.
+- A lock stops new sign-ins. Someone who is already signed in stays signed in until their session ends.
+- You cannot lock yourself out. Only a **SuperAdmin** can lock or unlock another administrator.
+- Every change appears in the access audit trail (see 8.5).
 
 ---
 
