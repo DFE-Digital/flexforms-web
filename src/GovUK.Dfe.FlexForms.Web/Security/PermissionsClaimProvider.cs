@@ -40,6 +40,19 @@ public class PermissionsClaimProvider(
                         UserPermissionsCache.ClaimIssuer)));
             }
 
+            // Must re-emit invite-scope markers; they are not in Permissions (non-ResourceType).
+            // Without them, role ApplicationFiles:Any:Read would authorize downloads the invite denied.
+            if (authData.InviteScopedApplicationKeys?.Any() == true)
+            {
+                claims.AddRange(authData.InviteScopedApplicationKeys
+                    .Where(key => !string.IsNullOrWhiteSpace(key))
+                    .Select(key => new Claim(
+                        "permission",
+                        $"ContributorInvite:{key.Trim()}:Scope",
+                        ClaimValueTypes.String,
+                        UserPermissionsCache.ClaimIssuer)));
+            }
+
             if (authData.Roles?.Any() == true)
             {
                 claims.AddRange(authData.Roles.Select(role =>
