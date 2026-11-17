@@ -55,6 +55,17 @@ public sealed class AdminPage(IPage page) : BasePage(page)
         await form.GetByRole(AriaRole.Button).ClickAsync();
     }
 
+    /// <summary>Presses Open (live) or Preview (not live) on the template's row.</summary>
+    public async Task OpenTemplateAsync(string templateName) =>
+        await TemplateRow(templateName).Locator("form[action*='handler=OpenTemplate']")
+            .GetByRole(AriaRole.Button).ClickAsync();
+
+    public async Task ExpectSectionAsync(string title) =>
+        await Assertions.Expect(SectionTitle(title)).ToBeVisibleAsync();
+
+    public async Task ExpectNoSectionAsync(string title) =>
+        await Assertions.Expect(SectionTitle(title)).ToHaveCountAsync(0);
+
     public async Task ExpectErrorAsync(string message) =>
         await Assertions.Expect(Page.Locator(".govuk-error-summary")).ToContainTextAsync(message);
 
@@ -83,6 +94,9 @@ public sealed class AdminPage(IPage page) : BasePage(page)
                 NameRegex = new Regex($@"^{Regex.Escape(templateName)}(\s|$)", RegexOptions.IgnoreCase),
             }),
         });
+
+    private ILocator SectionTitle(string title) =>
+        Page.Locator("h2.govuk-summary-card__title").GetByText(title, new LocatorGetByTextOptions { Exact = true });
 
     private ILocator TemplateTable() =>
         Page.GetByRole(AriaRole.Table).Filter(new LocatorFilterOptions

@@ -5,6 +5,7 @@ public static class TestData
     public const string DefaultTemplateName = "default";
     public const string LiveSwitchOnlyTemplateName = "live switch only";
     public const string TemplateStudioTemplateName = "template studio";
+    public const string TemplateManagerNoAccessTemplateName = "template manager no access";
     public const string User2DisplayName = "Test Automation User 2";
     public const string UserRoleName = "User";
 }

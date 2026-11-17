@@ -5,11 +5,14 @@ namespace GovUK.Dfe.FlexForms.PlaywrightTests.Api;
 public static class Users
 {
     public static async Task AddUserToRoleAsync(IAPIRequestContext request, string email, string name, string role,
-        string templateName)
+        params string[] templateNames)
     {
-        var templateId = await Templates.GetTemplateIdByNameAsync(request, templateName);
+        var templateIds = new string[templateNames.Length];
+        for (var i = 0; i < templateNames.Length; i++)
+        {
+            templateIds[i] = await Templates.GetTemplateIdByNameAsync(request, templateNames[i]);
+        }
 
-        var templateIds = new[] { templateId };
         var body = new CreateUserRoleRequest(email, name, role, templateIds);
         await AssignUserRoleAsync(request, body);
     }
