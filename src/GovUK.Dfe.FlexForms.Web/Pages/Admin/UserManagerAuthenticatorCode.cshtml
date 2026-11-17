@@ -1,0 +1,92 @@
+@page "/admin/user-manager/authenticator-code"
+@model GovUK.Dfe.FlexForms.Web.Pages.Admin.UserManagerAuthenticatorCodeModel
+@{
+    ViewData["Title"] = "Authenticator app setup code";
+    var emailError = ViewData.ModelState[nameof(Model.Email)]?.Errors.FirstOrDefault();
+}
+
+<div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+        <a asp-page="/Admin/UserManager" class="govuk-back-link">Back to User Manager</a>
+
+        @if (!string.IsNullOrEmpty(Model.ErrorMessage) || emailError is not null)
+        {
+            <div class="govuk-error-summary" aria-labelledby="error-summary-title" role="alert" data-module="govuk-error-summary">
+                <h2 class="govuk-error-summary__title" id="error-summary-title">There is a problem</h2>
+                <div class="govuk-error-summary__body">
+                    <ul class="govuk-list govuk-error-summary__list">
+                        @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+                        {
+                            <li id="authenticator-code-error">@Model.ErrorMessage</li>
+                        }
+                        @if (emailError is not null)
+                        {
+                            <li><a href="#Email">@emailError.ErrorMessage</a></li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        }
+
+        <h1 class="govuk-heading-xl">Authenticator app setup code</h1>
+
+        <div class="govuk-warning-text">
+            <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+            <strong class="govuk-warning-text__text">
+                <span class="govuk-warning-text__assistive">Warning</span>
+                Anyone with this code can set up an authenticator app and sign in as this user. Only give it to them directly.
+            </strong>
+        </div>
+
+        <p class="govuk-body">
+            Use this for testers who cannot receive the one-time password email. They choose
+            "I have an authenticator app setup code" on the sign in page, enter the code and scan a QR code with their phone.
+        </p>
+        <p class="govuk-body">
+            The code works once, for 24 hours. Creating a new code replaces any unused one, and setting up with a code
+            replaces an authenticator app the user already had. Only a SuperAdmin can create a code for another administrator.
+            Every code is recorded in the access audit.
+        </p>
+
+        @if (!string.IsNullOrEmpty(Model.Code))
+        {
+            <div class="govuk-panel govuk-panel--confirmation" id="authenticator-code-panel">
+                <h2 class="govuk-panel__title">Setup code</h2>
+                <div class="govuk-panel__body">
+                    <strong id="authenticator-code" class="govuk-!-font-size-48">@Model.Code</strong>
+                    <br />
+                    <span class="govuk-!-font-size-19">for @Model.Email, until @Model.ExpiresAtUtc?.ToString("d MMMM yyyy 'at' HH:mm 'UTC'")</span>
+                </div>
+            </div>
+            <p class="govuk-body">This code will not be shown again.</p>
+        }
+
+        <form method="post">
+            <div class="govuk-form-group @(emailError is not null ? "govuk-form-group--error" : "")">
+                <label class="govuk-label govuk-label--m" for="Email">Email address</label>
+                <div class="govuk-hint" id="email-hint">The user does not need to have signed in before.</div>
+                @if (emailError is not null)
+                {
+                    <p id="email-error" class="govuk-error-message">
+                        <span class="govuk-visually-hidden">Error:</span> @emailError.ErrorMessage
+                    </p>
+                }
+                <input class="govuk-input @(emailError is not null ? "govuk-input--error" : "")"
+                       id="Email"
+                       name="Email"
+                       type="email"
+                       value="@Model.Email"
+                       autocomplete="off"
+                       spellcheck="false"
+                       aria-describedby="@(emailError is not null ? "email-hint email-error" : "email-hint")" />
+            </div>
+
+            <div class="govuk-button-group">
+                <button type="submit" class="govuk-button" data-module="govuk-button" id="authenticator-code-create-button">
+                    @(string.IsNullOrEmpty(Model.Code) ? "Create setup code" : "Create a new code")
+                </button>
+                <a asp-page="/Admin/UserManager" class="govuk-link">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
