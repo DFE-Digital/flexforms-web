@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.CoreLibs.Security.Authorization;
 using GovUK.Dfe.FlexForms.Web.Security;
@@ -48,6 +49,46 @@ public class UserPermissionsCacheTests
         Assert.True(user.IsInRole("SignInRole"));
         Assert.False(user.IsInRole("Admin"));
         Assert.DoesNotContain(user.Claims, claim => claim.Type == "permission");
+    }
+
+    [Fact]
+    public async Task InviteScopedApplicationKeys_AreEmittedAsContributorInviteScopeClaims()
+    {
+        var user = SignedInUser();
+        var applicationKey = Guid.NewGuid().ToString();
+        _cache.Set(
+            UserPermissionsCache.GetCacheKey(user),
+            new UserAuthorizationDto
+            {
+                Roles = ["Caseworker"],
+                Permissions =
+                [
+                    new UserPermissionDto
+                    {
+                        ResourceType = ResourceType.Application,
+                        ResourceKey = applicationKey,
+                        AccessType = AccessType.Read
+                    },
+                    new UserPermissionDto
+                    {
+                        ResourceType = ResourceType.ApplicationFiles,
+                        ResourceKey = "Any",
+                        AccessType = AccessType.Read
+                    }
+                ],
+                InviteScopedApplicationKeys = [applicationKey]
+            });
+
+        await _transformation.TransformAsync(user);
+
+        Assert.Contains(
+            user.Claims,
+            c => c.Type == "permission"
+                 && c.Value == $"ContributorInvite:{applicationKey}:Scope"
+                 && c.Issuer == UserPermissionsCache.ClaimIssuer);
+        Assert.Contains(
+            user.Claims,
+            c => c.Type == "permission" && c.Value == $"ApplicationFiles:Any:Read");
     }
 
     private void Cache(ClaimsPrincipal user, string[] roles) =>
