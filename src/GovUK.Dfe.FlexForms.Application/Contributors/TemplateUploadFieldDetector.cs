@@ -41,12 +41,31 @@ public static class TemplateUploadFieldDetector
         {
             foreach (var task in group.Tasks ?? [])
             {
-                foreach (var page in task.Pages ?? [])
+                foreach (var field in EnumerateFieldsOnPages(task.Pages))
+                    yield return field;
+
+                // Collection / derived flows keep their pages on Summary, not Task.Pages.
+                foreach (var flow in task.Summary?.Flows ?? [])
                 {
-                    foreach (var field in page.Fields ?? [])
+                    foreach (var field in EnumerateFieldsOnPages(flow.Pages))
+                        yield return field;
+                }
+
+                foreach (var flow in task.Summary?.DerivedFlows ?? [])
+                {
+                    foreach (var field in EnumerateFieldsOnPages(flow.Pages))
                         yield return field;
                 }
             }
+        }
+    }
+
+    private static IEnumerable<Field> EnumerateFieldsOnPages(IEnumerable<Page>? pages)
+    {
+        foreach (var page in pages ?? [])
+        {
+            foreach (var field in page.Fields ?? [])
+                yield return field;
         }
     }
 }
