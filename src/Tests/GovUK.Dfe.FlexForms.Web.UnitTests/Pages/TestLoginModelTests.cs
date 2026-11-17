@@ -228,10 +228,276 @@ public class TestLoginModelTests
         await _testAuthenticationService.DidNotReceiveWithAnyArgs().AuthenticateAsync(default!, default!);
     }
 
+    [Fact]
+    public async Task OnPostAsync_with_authenticator_method_shows_code_field_without_sending_email()
+    {
+        var model = CreateModel(method: TestLoginModel.AuthenticatorMethod);
+
+        var result = await model.OnPostAsync();
+
+        Assert.IsType<PageResult>(result);
+        Assert.True(model.UsingAuthenticator);
+        Assert.False(model.PasswordSent);
+        await _tokensClient.DidNotReceiveWithAnyArgs().SendTestAuthPasswordAsync(default!, default);
+        await _tokensClient.DidNotReceiveWithAnyArgs().VerifyTestAuthAuthenticatorCodeAsync(default!, default);
+    }
+
+    [Fact]
+    public async Task OnPostAsync_with_email_method_sends_password_after_choosing_authenticator()
+    {
+        var model = CreateModel(method: TestLoginModel.EmailMethod);
+
+        await model.OnPostAsync();
+
+        Assert.True(model.PasswordSent);
+        Assert.False(model.UsingAuthenticator);
+        await _tokensClient.ReceivedWithAnyArgs(1).SendTestAuthPasswordAsync(default!, default);
+    }
+
+    [Fact]
+    public async Task OnPostAsync_with_unknown_method_falls_back_to_email()
+    {
+        var model = CreateModel(method: "something-else");
+
+        await model.OnPostAsync();
+
+        Assert.True(model.PasswordSent);
+        Assert.Equal(TestLoginModel.EmailMethod, model.Input.Method);
+    }
+
+    [Fact]
+    public async Task OnPostVerifyAuthenticatorAsync_signs_in_and_redirects_when_code_valid()
+    {
+        _tokensClient.VerifyTestAuthAuthenticatorCodeAsync(Arg.Any<VerifyTestAuthAuthenticatorCodeRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new VerifyTestAuthPasswordResponse(true));
+        var model = CreateModel(password: " 654321 ");
+
+        var redirect = Assert.IsType<RedirectResult>(await model.OnPostVerifyAuthenticatorAsync());
+
+        Assert.Equal("/applications/dashboard", redirect.Url);
+        await _tokensClient.Received(1).VerifyTestAuthAuthenticatorCodeAsync(
+            Arg.Is<VerifyTestAuthAuthenticatorCodeRequest>(r => r.Email == Email && r.Code == "654321"),
+            Arg.Any<CancellationToken>());
+        await _tokensClient.DidNotReceiveWithAnyArgs().VerifyTestAuthPasswordAsync(default!, default);
+        await _testAuthenticationService.Received(1).AuthenticateAsync(Email, Arg.Any<HttpContext>());
+    }
+
+    [Fact]
+    public async Task OnPostVerifyAuthenticatorAsync_shows_error_and_does_not_sign_in_when_code_wrong()
+    {
+        _tokensClient.VerifyTestAuthAuthenticatorCodeAsync(Arg.Any<VerifyTestAuthAuthenticatorCodeRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new VerifyTestAuthPasswordResponse(false));
+        var model = CreateModel(password: "654321");
+
+        var result = await model.OnPostVerifyAuthenticatorAsync();
+
+        Assert.IsType<PageResult>(result);
+        Assert.True(model.UsingAuthenticator);
+        Assert.Equal(TestLoginModel.AuthenticatorMethod, model.Input.Method);
+        AssertPasswordError(model, TestLoginModel.InvalidAuthenticatorCodeMessage);
+        await _testAuthenticationService.DidNotReceiveWithAnyArgs().AuthenticateAsync(default!, default!);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("12345")]
+    [InlineData("12a456")]
+    public async Task OnPostVerifyAuthenticatorAsync_rejects_code_that_is_not_six_digits_without_calling_api(string? code)
+    {
+        var model = CreateModel(password: code);
+
+        Assert.IsType<PageResult>(await model.OnPostVerifyAuthenticatorAsync());
+
+        AssertPasswordError(model, TestLoginModel.AuthenticatorCodeFormatMessage);
+        await _tokensClient.DidNotReceiveWithAnyArgs().VerifyTestAuthAuthenticatorCodeAsync(default!, default);
+    }
+
+    [Theory]
+    [InlineData(500, TestLoginModel.AuthenticatorVerifyFailedMessage)]
+    [InlineData(403, TestLoginModel.NotEnabledMessage)]
+    public async Task OnPostVerifyAuthenticatorAsync_shows_error_when_api_fails(int statusCode, string expectedMessage)
+    {
+        _tokensClient.VerifyTestAuthAuthenticatorCodeAsync(Arg.Any<VerifyTestAuthAuthenticatorCodeRequest>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(ApiException(statusCode));
+        var model = CreateModel(password: "654321");
+
+        Assert.IsType<PageResult>(await model.OnPostVerifyAuthenticatorAsync());
+
+        Assert.Equal(expectedMessage, model.ErrorMessage);
+        await _testAuthenticationService.DidNotReceiveWithAnyArgs().AuthenticateAsync(default!, default!);
+    }
+
+    [Fact]
+    public async Task OnPostVerifyAuthenticatorAsync_returns_not_found_when_test_auth_not_active()
+    {
+        var model = CreateModel(testAuthEnabled: "false", password: "654321");
+
+        Assert.IsType<NotFoundResult>(await model.OnPostVerifyAuthenticatorAsync());
+        await _tokensClient.DidNotReceiveWithAnyArgs().VerifyTestAuthAuthenticatorCodeAsync(default!, default);
+    }
+
+    [Fact]
+    public async Task OnPostAsync_with_setup_code_method_shows_setup_code_field_without_calling_api()
+    {
+        var model = CreateModel(method: TestLoginModel.SetupCodeMethod);
+
+        Assert.IsType<PageResult>(await model.OnPostAsync());
+
+        Assert.True(model.UsingSetupCode);
+        Assert.False(model.PasswordSent);
+        await _tokensClient.DidNotReceiveWithAnyArgs().SendTestAuthPasswordAsync(default!, default);
+        await _tokensClient.DidNotReceiveWithAnyArgs().RedeemTestAuthAuthenticatorInviteAsync(default!, default);
+    }
+
+    [Fact]
+    public async Task OnPostRedeemSetupCodeAsync_shows_qr_code_when_code_accepted()
+    {
+        _tokensClient.RedeemTestAuthAuthenticatorInviteAsync(Arg.Any<RedeemTestAuthAuthenticatorInviteRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new BeginTestAuthAuthenticatorSetupResponse(SharedKey, AuthenticatorUri));
+        var model = CreateModel(setupCode: " abcde-fghjk ");
+
+        Assert.IsType<PageResult>(await model.OnPostRedeemSetupCodeAsync());
+
+        Assert.True(model.SettingUpFromCode);
+        Assert.False(model.UsingSetupCode);
+        Assert.Equal(SharedKey, model.SharedKey);
+        Assert.StartsWith("data:image/png;base64,", model.QrCodeDataUri);
+        Assert.Null(model.Input.SetupCode);
+        await _tokensClient.Received(1).RedeemTestAuthAuthenticatorInviteAsync(
+            Arg.Is<RedeemTestAuthAuthenticatorInviteRequest>(r => r.Email == Email && r.InviteCode == "abcde-fghjk"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task OnPostRedeemSetupCodeAsync_requires_a_code()
+    {
+        var model = CreateModel(setupCode: "  ");
+
+        Assert.IsType<PageResult>(await model.OnPostRedeemSetupCodeAsync());
+
+        AssertError(model, SetupCodeKey, TestLoginModel.SetupCodeRequiredMessage);
+        await _tokensClient.DidNotReceiveWithAnyArgs().RedeemTestAuthAuthenticatorInviteAsync(default!, default);
+    }
+
+    [Fact]
+    public async Task OnPostRedeemSetupCodeAsync_shows_field_error_when_code_rejected()
+    {
+        _tokensClient.RedeemTestAuthAuthenticatorInviteAsync(Arg.Any<RedeemTestAuthAuthenticatorInviteRequest>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(ApiException(400));
+        var model = CreateModel(setupCode: "WRONG");
+
+        Assert.IsType<PageResult>(await model.OnPostRedeemSetupCodeAsync());
+
+        Assert.True(model.UsingSetupCode);
+        Assert.False(model.SettingUpFromCode);
+        AssertError(model, SetupCodeKey, TestLoginModel.InvalidSetupCodeMessage);
+    }
+
+    [Theory]
+    [InlineData(403, TestLoginModel.NotEnabledMessage)]
+    [InlineData(500, TestLoginModel.SetupCodeFailedMessage)]
+    public async Task OnPostRedeemSetupCodeAsync_shows_error_when_api_fails(int statusCode, string expectedMessage)
+    {
+        _tokensClient.RedeemTestAuthAuthenticatorInviteAsync(Arg.Any<RedeemTestAuthAuthenticatorInviteRequest>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(ApiException(statusCode));
+        var model = CreateModel(setupCode: "ABCDE-FGHJK");
+
+        Assert.IsType<PageResult>(await model.OnPostRedeemSetupCodeAsync());
+
+        Assert.Equal(expectedMessage, model.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task OnPostConfirmSetupCodeAsync_signs_in_when_app_code_valid()
+    {
+        _tokensClient.ConfirmTestAuthAuthenticatorInviteSetupAsync(Arg.Any<VerifyTestAuthAuthenticatorCodeRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new VerifyTestAuthPasswordResponse(true));
+        var model = CreateSettingUpModel(password: " 123456 ");
+
+        var redirect = Assert.IsType<RedirectResult>(await model.OnPostConfirmSetupCodeAsync());
+
+        Assert.Equal("/applications/dashboard", redirect.Url);
+        await _tokensClient.Received(1).ConfirmTestAuthAuthenticatorInviteSetupAsync(
+            Arg.Is<VerifyTestAuthAuthenticatorCodeRequest>(r => r.Email == Email && r.Code == "123456"),
+            Arg.Any<CancellationToken>());
+        await _testAuthenticationService.Received(1).AuthenticateAsync(Email, Arg.Any<HttpContext>());
+    }
+
+    [Fact]
+    public async Task OnPostConfirmSetupCodeAsync_keeps_showing_qr_code_when_app_code_wrong()
+    {
+        _tokensClient.ConfirmTestAuthAuthenticatorInviteSetupAsync(Arg.Any<VerifyTestAuthAuthenticatorCodeRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new VerifyTestAuthPasswordResponse(false));
+        var model = CreateSettingUpModel(password: "123456");
+
+        Assert.IsType<PageResult>(await model.OnPostConfirmSetupCodeAsync());
+
+        Assert.True(model.SettingUpFromCode);
+        Assert.NotNull(model.QrCodeDataUri);
+        AssertPasswordError(model, TestLoginModel.InvalidSetupConfirmCodeMessage);
+        await _testAuthenticationService.DidNotReceiveWithAnyArgs().AuthenticateAsync(default!, default!);
+    }
+
+    [Fact]
+    public async Task OnPostConfirmSetupCodeAsync_rejects_posted_uri_that_is_not_otpauth()
+    {
+        var model = CreateSettingUpModel(password: "123456");
+        model.AuthenticatorUri = "https://example.com";
+
+        Assert.IsType<PageResult>(await model.OnPostConfirmSetupCodeAsync());
+
+        Assert.True(model.UsingSetupCode);
+        Assert.Equal(TestLoginModel.SetupExpiredMessage, model.ErrorMessage);
+        await _tokensClient.DidNotReceiveWithAnyArgs().ConfirmTestAuthAuthenticatorInviteSetupAsync(default!, default);
+    }
+
+    [Fact]
+    public async Task OnPostConfirmSetupCodeAsync_treats_an_oversized_posted_uri_as_expired_instead_of_failing()
+    {
+        var model = CreateSettingUpModel(password: "123456");
+        model.AuthenticatorUri = "otpauth://totp/" + new string('a', 10_000);
+
+        Assert.IsType<PageResult>(await model.OnPostConfirmSetupCodeAsync());
+
+        Assert.True(model.UsingSetupCode);
+        Assert.Null(model.QrCodeDataUri);
+        Assert.Equal(TestLoginModel.SetupExpiredMessage, model.ErrorMessage);
+        await _tokensClient.DidNotReceiveWithAnyArgs().ConfirmTestAuthAuthenticatorInviteSetupAsync(default!, default);
+    }
+
+    [Fact]
+    public async Task OnPostConfirmSetupCodeAsync_returns_not_found_when_test_auth_not_active()
+    {
+        var model = CreateSettingUpModel(password: "123456", testAuthEnabled: "false");
+
+        Assert.IsType<NotFoundResult>(await model.OnPostConfirmSetupCodeAsync());
+        await _tokensClient.DidNotReceiveWithAnyArgs().ConfirmTestAuthAuthenticatorInviteSetupAsync(default!, default);
+    }
+
+    private const string SetupCodeKey = "Input.SetupCode";
+    private const string SharedKey = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
+    private const string AuthenticatorUri = "otpauth://totp/Transfers%20%28Test%29:tester%40education.gov.uk?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
+
+    private TestLoginModel CreateSettingUpModel(string? password, string testAuthEnabled = "true")
+    {
+        var model = CreateModel(testAuthEnabled: testAuthEnabled, password: password, method: TestLoginModel.SetupCodeMethod);
+        model.SharedKey = SharedKey;
+        model.AuthenticatorUri = AuthenticatorUri;
+        return model;
+    }
+
+    private static void AssertError(TestLoginModel model, string key, string expectedMessage)
+    {
+        Assert.True(model.ModelState.TryGetValue(key, out var entry));
+        Assert.Contains(entry!.Errors, e => e.ErrorMessage == expectedMessage);
+    }
+
     private TestLoginModel CreateModel(
         string testAuthEnabled = "true",
         string environment = "Development",
-        string? password = null)
+        string? password = null,
+        string? method = null,
+        string? setupCode = null)
     {
         var services = new ServiceCollection();
         services.AddScoped<ITenantRequestContext>(_ => new TenantRequestContext
@@ -256,7 +522,13 @@ public class TestLoginModelTests
             NullLogger<TestLoginModel>.Instance)
         {
             PageContext = new PageContext { HttpContext = httpContext },
-            Input = new TestLoginModel.InputModel { Email = Email, Password = password }
+            Input = new TestLoginModel.InputModel
+            {
+                Email = Email,
+                Password = password,
+                Method = method ?? TestLoginModel.EmailMethod,
+                SetupCode = setupCode
+            }
         };
     }
 

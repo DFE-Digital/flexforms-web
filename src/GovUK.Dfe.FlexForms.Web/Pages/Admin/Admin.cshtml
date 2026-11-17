@@ -1,5 +1,7 @@
 @page "/admin"
 @model GovUK.Dfe.FlexForms.Web.Pages.Admin.AdminModel
+@inject Microsoft.Extensions.Options.IOptions<GovUK.Dfe.CoreLibs.Security.Configurations.TestAuthenticationOptions> TestAuthOptions
+@inject Microsoft.Extensions.Options.IOptions<GovUK.Dfe.CoreLibs.Security.Configurations.EntraSsoOptions> EntraSsoOptions
 @{
     ViewData["Title"] = "Admin";
 }
@@ -190,6 +192,12 @@
                         {
                             <a asp-page="/Admin/RoleManager" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="go-to-role-manager-button">
                                 Role Manager
+                            </a>
+                        }
+                        @if (GovUK.Dfe.FlexForms.Web.Security.TenantAuthSchemeSelector.IsTestAuthenticationActive(ViewContext.HttpContext, TestAuthOptions, EntraSsoOptions))
+                        {
+                            <a asp-page="/TestAuthenticator" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="go-to-test-authenticator-button">
+                                Authenticator app
                             </a>
                         }
                     </div>

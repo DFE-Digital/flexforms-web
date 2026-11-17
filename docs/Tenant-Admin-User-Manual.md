@@ -140,7 +140,7 @@ What you see depends on your role. A full tenant Admin typically sees:
 |------|----------------|
 | **Tenant templates** | List of forms, Live / Not live, Open / Preview, Make live / Make not live |
 | **Template Management** | Create a new template, Template Manager, Choose / preview templates, Custom Status Labels |
-| **Users & Roles** | User Manager (and Role Manager / Contributor management for Admin) |
+| **Users & Roles** | User Manager (and Role Manager / Contributor management for Admin). Where the tenant uses Test Authentication, also **Authenticator app**, to set up your own authenticator app for signing in (see 8.8) |
 | **Applications** | Browse every application for a chosen template |
 | **Tenant Admin** | Organisation settings, Event mappings, Tenant Settings (including email placeholder mappings) |
 | **System** | Clear All Sessions & Caches, plus optional diagnostics |
@@ -472,6 +472,7 @@ Typical actions:
 | **RoleAssigned** | A user was created or their role changed |
 | **FormAccessUpdated** | Their form (template) list was changed without a role change |
 | **MembershipDeactivated** | They were removed from the tenant |
+| **TestAuthAuthenticatorSetupCodeCreated** | An admin created an authenticator app setup code for them (test environments only, see 8.8) |
 
 ### 8.6 Grant to all vs User Manager
 
@@ -548,6 +549,28 @@ Invite/remove of extra people on **one application** is done from that applicati
 In Template Studio, **Role for invited contributors** chooses what those people can do. Leave it as **User** and they can edit the application. Choose any other custom role and they can only view that application and its files. Admin, SuperAdmin and Administrator cannot be chosen. People already invited keep the access they have. See the [Template Studio user manual](Template-Studio-User-Manual.md#41-role-for-invited-contributors).
 
 Admins and SuperAdmins can also look up who is on an application, or look up a user by email to see the applications they created and who they invited, at **Admin → Users & Roles → Contributor management** (`/admin/contributor-management`). Custom User Manager roles cannot open this page.
+
+### 8.8 Authenticator app setup codes (test environments only)
+
+Page: `/admin/user-manager/authenticator-code`  
+Title: **Authenticator app setup code**
+
+Only shown where the tenant uses Test Authentication (never in Production). On the sign in page, testers normally get a one-time password by email. If they cannot receive email they can sign in with an authenticator app instead, but they need to set one up first. Use a setup code for that:
+
+1. In User Manager, select **Create authenticator setup code** (or, on **Edit user**, **Create an authenticator app setup code for this user**).
+2. Enter their email address. They do not need to have signed in before.
+3. Select **Create setup code** and give them the code (for example `ABCDE-FGHJK`) directly, for example in a Teams message to them only.
+4. They choose **I have an authenticator app setup code** on the sign in page, enter the code, scan the QR code with an authenticator app and enter the 6 digit code it shows. This signs them in, and from then on they can choose **Use my authenticator app**.
+
+Things to know:
+
+- Anyone with the code can set up an app and sign in as that person, so treat it like a password.
+- A code works **once**, for **24 hours**, and is shown only when you create it. Creating another code for the same email replaces an unused one.
+- Setting up with a code replaces any authenticator app the person already had, so this is also how you help someone who lost their phone.
+- Tenant admins and User Manager roles can create codes for ordinary users and for themselves. Only a **SuperAdmin** can create a code for another administrator.
+- Every code appears in the access audit trail as **TestAuthAuthenticatorSetupCodeCreated** (see 8.5).
+- To set up, replace or remove **your own** authenticator app, use **Admin → Users & Roles → Authenticator app**.
+- Codes are for the tenant you are signed in to. A SuperAdmin or platform engineer who needs a code for another tenant, without signing in to it, can create one by hand in Redis: see `docs/test-auth-authenticator-setup-codes.md` in the flexforms-api repository.
 
 ---
 
