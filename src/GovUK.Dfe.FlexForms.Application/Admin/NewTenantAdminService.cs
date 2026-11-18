@@ -50,7 +50,6 @@ public sealed class NewTenantAdminService(
         LayoutCategory,
         "FeatureManagement",
         "FileStorage",
-        "Template",
         "NotificationService",
         "NotificationBanner",
         "MassTransit",
