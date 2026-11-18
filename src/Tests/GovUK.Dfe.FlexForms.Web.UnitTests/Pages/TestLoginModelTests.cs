@@ -474,6 +474,90 @@ public class TestLoginModelTests
         await _tokensClient.DidNotReceiveWithAnyArgs().ConfirmTestAuthAuthenticatorInviteSetupAsync(default!, default);
     }
 
+    [Fact]
+    public async Task OnPostAsync_tells_a_locked_user_to_contact_their_administrator_and_shows_no_password_field()
+    {
+        _tokensClient.SendTestAuthPasswordAsync(Arg.Any<SendTestAuthPasswordRequest>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(ApiException(StatusCodes.Status423Locked));
+        var model = CreateModel();
+
+        Assert.IsType<PageResult>(await model.OnPostAsync());
+
+        Assert.False(model.PasswordSent);
+        Assert.Equal(TestLoginModel.PermanentLockoutMessage, model.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task OnPostVerifyAsync_tells_a_locked_user_to_contact_their_administrator()
+    {
+        _tokensClient.VerifyTestAuthPasswordAsync(Arg.Any<VerifyTestAuthPasswordRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new VerifyTestAuthPasswordResponse(false, IsLockedOut: true, IsPermanentLockout: true));
+        var model = CreateModel(password: "123456");
+
+        Assert.IsType<PageResult>(await model.OnPostVerifyAsync());
+
+        Assert.Equal(TestLoginModel.PermanentLockoutMessage, model.ErrorMessage);
+        await _testAuthenticationService.DidNotReceiveWithAnyArgs().AuthenticateAsync(default!, default!);
+    }
+
+    [Theory]
+    [InlineData(30, "1 minute")]
+    [InlineData(60, "1 minute")]
+    [InlineData(61, "2 minutes")]
+    [InlineData(840, "14 minutes")]
+    public async Task OnPostVerifyAuthenticatorAsync_says_how_long_a_temporary_lockout_lasts(int seconds, string wait)
+    {
+        _tokensClient.VerifyTestAuthAuthenticatorCodeAsync(Arg.Any<VerifyTestAuthAuthenticatorCodeRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new VerifyTestAuthPasswordResponse(false, IsLockedOut: true, RetryAfterSeconds: seconds));
+        var model = CreateModel(password: "654321", method: TestLoginModel.AuthenticatorMethod);
+
+        Assert.IsType<PageResult>(await model.OnPostVerifyAuthenticatorAsync());
+
+        Assert.Equal(TestLoginModel.TemporaryLockoutMessage(seconds), model.ErrorMessage);
+        Assert.Contains($"in {wait},", model.ErrorMessage);
+        Assert.Null(model.Input.Password);
+        await _testAuthenticationService.DidNotReceiveWithAnyArgs().AuthenticateAsync(default!, default!);
+    }
+
+    [Fact]
+    public async Task OnPostVerifyAuthenticatorAsync_tells_a_manually_locked_user_to_contact_their_administrator()
+    {
+        _tokensClient.VerifyTestAuthAuthenticatorCodeAsync(Arg.Any<VerifyTestAuthAuthenticatorCodeRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new VerifyTestAuthPasswordResponse(false, IsLockedOut: true, IsPermanentLockout: true));
+        var model = CreateModel(password: "654321", method: TestLoginModel.AuthenticatorMethod);
+
+        Assert.IsType<PageResult>(await model.OnPostVerifyAuthenticatorAsync());
+
+        Assert.Equal(TestLoginModel.PermanentLockoutMessage, model.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task OnPostRedeemSetupCodeAsync_tells_a_locked_user_to_contact_their_administrator()
+    {
+        _tokensClient.RedeemTestAuthAuthenticatorInviteAsync(Arg.Any<RedeemTestAuthAuthenticatorInviteRequest>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(ApiException(StatusCodes.Status423Locked));
+        var model = CreateModel(setupCode: "ABCDE-FGHJK");
+
+        Assert.IsType<PageResult>(await model.OnPostRedeemSetupCodeAsync());
+
+        Assert.False(model.SettingUpFromCode);
+        Assert.Equal(TestLoginModel.PermanentLockoutMessage, model.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task OnPostConfirmSetupCodeAsync_tells_a_locked_user_to_contact_their_administrator()
+    {
+        _tokensClient.ConfirmTestAuthAuthenticatorInviteSetupAsync(Arg.Any<VerifyTestAuthAuthenticatorCodeRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new VerifyTestAuthPasswordResponse(false, IsLockedOut: true, IsPermanentLockout: true));
+        var model = CreateSettingUpModel(password: "123456");
+
+        Assert.IsType<PageResult>(await model.OnPostConfirmSetupCodeAsync());
+
+        Assert.False(model.SettingUpFromCode);
+        Assert.Equal(TestLoginModel.PermanentLockoutMessage, model.ErrorMessage);
+        await _testAuthenticationService.DidNotReceiveWithAnyArgs().AuthenticateAsync(default!, default!);
+    }
+
     private const string SetupCodeKey = "Input.SetupCode";
     private const string SharedKey = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
     private const string AuthenticatorUri = "otpauth://totp/Transfers%20%28Test%29:tester%40education.gov.uk?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";

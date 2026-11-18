@@ -70,15 +70,6 @@
             </div>
         }
 
-        <div class="govuk-button-group">
-            <a asp-page="/Admin/UserManagerAdd" class="govuk-button" data-module="govuk-button">Add new user</a>
-            @if (GovUK.Dfe.FlexForms.Web.Security.TenantAuthSchemeSelector.IsTestAuthenticationActive(ViewContext.HttpContext, TestAuthOptions, EntraSsoOptions))
-            {
-                <a asp-page="/Admin/UserManagerAuthenticatorCode" class="govuk-button govuk-button--secondary" data-module="govuk-button" id="user-manager-authenticator-code">
-                    Create authenticator setup code
-                </a>
-            }
-        </div>
 
         <details class="govuk-details user-manager__filters-container" data-module="govuk-details" @(Model.ShowFiltersPanel ? "open" : null)>
             <summary class="govuk-details__summary user-manager__filters-summary">
