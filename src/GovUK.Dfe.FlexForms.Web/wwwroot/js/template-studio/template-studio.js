@@ -1749,8 +1749,13 @@
         ];
     }
 
+    function contributorSingular(root) {
+        var fromTemplate = root && root.displayCopy && root.displayCopy.terminology && root.displayCopy.terminology.singular;
+        return lib.resolvedSingular(fromTemplate || data.organisationTerminologySingular);
+    }
+
     function contributorRoleChoices(root) {
-        return lib.contributorRoleChoices(data.contributorRoles, root.contributorRoleId);
+        return lib.contributorRoleChoices(data.contributorRoles, root.contributorRoleId, contributorSingular(root));
     }
 
     function copyValue(section, property) {
@@ -1926,7 +1931,7 @@
             root.contributorPattern !== false && data.canChooseContributorRole !== false ? selectInput({
                 id: 'tpl-contributor-role',
                 label: 'Role for invited contributors',
-                hint: 'User can edit the application. Any other role can only view it and its files.',
+                hint: 'User can edit the ' + contributorSingular(root) + '. Any other role can only view it and its files.',
                 value: lib.contributorRoleSelectValue(root.contributorRoleId, data.contributorRoles),
                 items: contributorRoleChoices(root),
                 onChange: function (value) {

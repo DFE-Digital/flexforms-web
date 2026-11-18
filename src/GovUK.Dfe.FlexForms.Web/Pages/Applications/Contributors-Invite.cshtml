@@ -58,7 +58,7 @@
                     Email address
                 </label>
                 <div id="EmailAddress-hint" class="govuk-hint">
-                    This will only be used to invite them to contribute to the application
+                    This will only be used to invite them to contribute to the @DisplayCopy.Singular
                 </div>
                 
                 @if (ViewData.ModelState.ContainsKey(nameof(Model.EmailAddress)) && ViewData.ModelState[nameof(Model.EmailAddress)]!.Errors.Count > 0)
@@ -80,10 +80,10 @@
             <div class="govuk-form-group">
                 <fieldset class="govuk-fieldset" aria-describedby="permissions-hint">
                     <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">
-                        What can they do on this application?
+                        What can they do on this @DisplayCopy.Singular?
                     </legend>
                     <div id="permissions-hint" class="govuk-hint">
-                        Choose what this person will be able to do on this application.
+                        Choose what this person will be able to do on this @DisplayCopy.Singular.
                     </div>
                     <div class="govuk-checkboxes" data-module="govuk-checkboxes">
                         <div class="govuk-checkboxes__item">
@@ -95,7 +95,7 @@
                                    checked
                                    disabled>
                             <label class="govuk-label govuk-checkboxes__label" for="CanViewApplication">
-                                View this application
+                                View this @DisplayCopy.Singular
                             </label>
                         </div>
 
@@ -104,7 +104,7 @@
                                    asp-for="CanChangeApplication"
                                    id="CanChangeApplication">
                             <label class="govuk-label govuk-checkboxes__label" for="CanChangeApplication">
-                                Change this application
+                                Change this @DisplayCopy.Singular
                             </label>
                         </div>
 

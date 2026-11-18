@@ -551,18 +551,18 @@ A legacy `ExternalApplicationsApiClient:DefaultTemplateId` tenant setting is onl
 
 Invite/remove of extra people on **one application** is done from that application’s task list when the template has `"contributorPattern": true`.
 
-On the invite page, the lead applicant chooses what the invitee can do on **that application**:
+On the invite page, the lead applicant chooses what the invitee can do on **that application** (wording uses the form’s singular term from the template or Organisation settings, for example “visit”):
 
-- **View this application** (always included)
-- **Change this application**
+- **View this …** (always included)
+- **Change this …**
 - If the form has file uploads: **View uploaded files**, **Upload files**, and **Delete uploaded files**
 
-Those choices are set only when the person is invited. They are not changed later from this screen.
+Those choices are set only when the person is invited. They are not changed later from this screen. On the contributors list, each invitee appears as a card that shows the permissions they were given.
 
 The checkboxes are pre-selected from the template’s **Role for invited contributors**:
 
 - **User** (or none chosen) → all options selected (full access)
-- Any other role → view only (**View this application**, and **View uploaded files** when the form has uploads)
+- Any other role → view only (**View this …**, and **View uploaded files** when the form has uploads)
 
 The lead can still change the ticks before sending the invite.
 
@@ -577,7 +577,7 @@ Title: **Authenticator app setup code**
 
 Only shown where the tenant uses Test Authentication (never in Production). On the sign in page, testers normally get a one-time password by email. If they cannot receive email they can sign in with an authenticator app instead, but they need to set one up first. Use a setup code for that:
 
-1. In User Manager, select **Create authenticator setup code** (or, on **Edit user**, **Create an authenticator app setup code for this user**).
+1. Open the person in **Edit user**, then select **Create an authenticator app setup code for this user**.
 2. Enter their email address. They do not need to have signed in before.
 3. Select **Create setup code** and give them the code (for example `ABCDE-FGHJK`) directly, for example in a Teams message to them only.
 4. They choose **I have an authenticator app setup code** on the sign in page, enter the code, scan the QR code with an authenticator app and enter the 6 digit code it shows. This signs them in, and from then on they can choose **Use my authenticator app**.

@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics.CodeAnalysis;
 using GovUK.Dfe.FlexForms.Application.Contributors;
+using GovUK.Dfe.FlexForms.Application.DisplayCopy;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Request;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
@@ -24,6 +25,7 @@ public class ContributorsInviteModel(
     ITemplateManagementService templateManagementService,
     IComplexFieldConfigurationService complexFieldConfigurationService,
     IRequestAppConfiguration requestConfiguration,
+    ITemplateCopyContext templateCopyContext,
     ILogger<ContributorsInviteModel> logger) : PageModel
 {
     [BindProperty(SupportsGet = true, Name = "referenceNumber")]
@@ -149,6 +151,7 @@ public class ContributorsInviteModel(
     {
         var templateId = HttpContext.Session.GetString("TemplateId") ?? requestConfiguration["Template:Id"] ?? string.Empty;
         var template = await templateManagementService.LoadTemplateAsync(templateId, application);
+        templateCopyContext.Use(template);
         ShowFilePermissions = TemplateUploadFieldDetector.HasUploadFields(template, complexFieldConfigurationService);
 
         if (!applyTemplateDefaults)

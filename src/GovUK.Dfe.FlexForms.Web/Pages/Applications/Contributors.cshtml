@@ -1,4 +1,5 @@
 @page "/applications/{referenceNumber}/contributors"
+@using GovUK.Dfe.FlexForms.Application.Contributors
 @using GovUK.Dfe.FlexForms.Web.Extensions
 @model ContributorsModel
 
@@ -63,28 +64,37 @@
             @DisplayCopy.ContributorsCurrentHeading
         </h2>
 
-        <table class="govuk-table">
-            <thead class="govuk-table__head">
-                <tr class="govuk-table__row">
-                    <th scope="col" class="govuk-table__header">Email address</th>
-                    <th scope="col" class="govuk-table__header">Full name</th>
-                    <th scope="col" class="govuk-table__header">Action</th>
-                </tr>
-            </thead>
-            <tbody class="govuk-table__body">
-                <tr class="govuk-table__row" id="contributor-1">
-                    <td class="govuk-table__cell">@leadApplicantEmail</td>
-                    <td class="govuk-table__cell">@leadApplicantName</td>
-                    <td class="govuk-table__cell"></td>
-                </tr>
-                @foreach (var (contributor, index) in Model.Contributors.Select((contributor, index) => (contributor, index)))
-                {
-                    var contributorIndex = index + 2; //zero index so adding 2 so the lead applicant can start from 1
-                    <tr class="govuk-table__row" id="contributor-@contributorIndex">
-                        <td class="govuk-table__cell">@contributor.Email</td>
-                        <td class="govuk-table__cell">@contributor.Name</td>
-                        <td class="govuk-table__cell">
-                            <form method="post" style="display: inline;">
+        <div class="govuk-summary-card" id="contributor-1">
+            <div class="govuk-summary-card__title-wrapper">
+                <h3 class="govuk-summary-card__title">@(string.IsNullOrWhiteSpace(leadApplicantName) ? "Lead applicant" : leadApplicantName)</h3>
+            </div>
+            <div class="govuk-summary-card__content">
+                <dl class="govuk-summary-list">
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">Email address</dt>
+                        <dd class="govuk-summary-list__value">@leadApplicantEmail</dd>
+                    </div>
+                    <div class="govuk-summary-list__row">
+                        <dt class="govuk-summary-list__key">Role</dt>
+                        <dd class="govuk-summary-list__value">Lead applicant</dd>
+                    </div>
+                </dl>
+            </div>
+        </div>
+
+        @foreach (var (contributor, index) in Model.Contributors.Select((contributor, index) => (contributor, index)))
+        {
+            var contributorIndex = index + 2; // zero-based, so +2 keeps the lead applicant as contributor-1
+            var permissionLabels = Model.ApplicationId.HasValue
+                ? ContributorAccessLabels.ForApplication(contributor, Model.ApplicationId.Value, DisplayCopy.Singular)
+                : Array.Empty<string>();
+
+            <div class="govuk-summary-card" id="contributor-@contributorIndex">
+                <div class="govuk-summary-card__title-wrapper">
+                    <h3 class="govuk-summary-card__title">@contributor.Name</h3>
+                    <ul class="govuk-summary-card__actions">
+                        <li class="govuk-summary-card__action">
+                            <form method="post">
                                 @Html.AntiForgeryToken()
                                 <input type="hidden" name="contributorId" value="@contributor.UserId" />
                                 <input type="hidden" name="contributorEmail" value="@contributor.Email" />
@@ -97,10 +107,36 @@
                                     requiredMessage: $"Select yes if you are sure you want to remove this contributor",
                                     buttonId: $"remove-contributor-{contributorIndex}")
                             </form>
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+                        </li>
+                    </ul>
+                </div>
+                <div class="govuk-summary-card__content">
+                    <dl class="govuk-summary-list">
+                        <div class="govuk-summary-list__row">
+                            <dt class="govuk-summary-list__key">Email address</dt>
+                            <dd class="govuk-summary-list__value">@contributor.Email</dd>
+                        </div>
+                        <div class="govuk-summary-list__row">
+                            <dt class="govuk-summary-list__key">Permissions</dt>
+                            <dd class="govuk-summary-list__value">
+                                @if (permissionLabels.Count == 0)
+                                {
+                                    <span>No permissions listed</span>
+                                }
+                                else
+                                {
+                                    <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-0">
+                                        @foreach (var label in permissionLabels)
+                                        {
+                                            <li>@label</li>
+                                        }
+                                    </ul>
+                                }
+                            </dd>
+                        </div>
+                    </dl>
+                </div>
+            </div>
+        }
     </div>
 </div>
