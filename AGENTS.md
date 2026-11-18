@@ -25,13 +25,16 @@ Companion of `flexforms-api`. Reporting is `flexforms-prism` (no code dependency
 
 1. Read [`README.md`](README.md) architecture section if you are new.
 2. Open the matching [`.ai/features/`](.ai/features/) file and [`.ai/known-pitfalls.md`](.ai/known-pitfalls.md).
-3. Confirm against PageModels + Application services. The form engine is large — `RenderForm` is a dispatcher, logic is in Application/Infrastructure services.
+3. If the change crosses into the API, Prism, scanner or CoreLibs, read [`.ai/ecosystem.md`](.ai/ecosystem.md) first.
+4. Confirm against PageModels + Application services. The form engine is large — `RenderForm` is a dispatcher, logic is in Application/Infrastructure services.
 
 ## Knowledge map
 
 | File | Use when |
 |------|----------|
 | [`.ai/README.md`](.ai/README.md) | Index |
+| [`.ai/ecosystem.md`](.ai/ecosystem.md) | Whole-platform map (same file in all six repos): topology, flows, topics, auth matrix, contracts, version matrix, cross-repo playbooks |
+| [`.ai/code-map.md`](.ai/code-map.md) | Projects, pages → use-case services, controllers, middleware order, API clients, config |
 | [`.ai/architecture.md`](.ai/architecture.md) | Layers, middleware, bootstrap |
 | [`.ai/domain-model.md`](.ai/domain-model.md) | FormTemplate models, routing |
 | [`.ai/business-rules.md`](.ai/business-rules.md) | Navigation, live templates, contributors |
