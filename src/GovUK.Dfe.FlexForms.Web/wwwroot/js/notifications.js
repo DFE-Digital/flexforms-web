@@ -58,11 +58,12 @@ window.renderOrUpdate = function (n, options) {
     renderSingleNotification(n, options);
 };
 
-function fileValidationStatusLabel(status) {
+function fileValidationStatusLabel(status, cell) {
     const key = String(status ?? '').toLowerCase();
-    if (key === 'pending' || key === '1') return 'Validation pending';
-    if (key === 'passed' || key === '2') return 'Validated';
-    if (key === 'failed' || key === '3') return 'Validation failed';
+    const custom = name => (cell?.dataset?.[name] || '').trim();
+    if (key === 'pending' || key === '1') return custom('statusTextPending') || 'Validation pending';
+    if (key === 'passed' || key === '2') return custom('statusTextPassed') || 'Validated';
+    if (key === 'failed' || key === '3') return custom('statusTextFailed') || 'Validation failed';
     return '';
 }
 
@@ -136,7 +137,7 @@ function applyFileValidationStatus(notification, options) {
 
     const cell = document.querySelector(`[data-file-validation-status="${fileId}"]`);
     if (cell) {
-        const label = fileValidationStatusLabel(meta.status || meta.Status);
+        const label = fileValidationStatusLabel(meta.status || meta.Status, cell);
         const detail = meta.message || meta.Message || '';
         if (label) {
             cell.replaceChildren();

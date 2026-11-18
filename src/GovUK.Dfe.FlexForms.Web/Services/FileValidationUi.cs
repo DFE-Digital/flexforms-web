@@ -1,5 +1,6 @@
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums;
 using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
+using GovUK.Dfe.FlexForms.Domain.Models;
 using Microsoft.Extensions.Configuration;
 
 namespace GovUK.Dfe.FlexForms.Web.Services;
@@ -34,13 +35,22 @@ public static class FileValidationUi
             .ToList();
     }
 
-    public static string StatusText(FileValidationStatus status) => status switch
+    public const string DefaultPendingText = "Validation pending";
+    public const string DefaultPassedText = "Validated";
+    public const string DefaultFailedText = "Validation failed";
+
+    public static string StatusText(FileValidationStatus status) => StatusText(status, null);
+
+    public static string StatusText(FileValidationStatus status, FileValidationStatusText? overrides) => status switch
     {
-        FileValidationStatus.Pending => "Validation pending",
-        FileValidationStatus.Passed => "Validated",
-        FileValidationStatus.Failed => "Validation failed",
+        FileValidationStatus.Pending => Pick(overrides?.Pending, DefaultPendingText),
+        FileValidationStatus.Passed => Pick(overrides?.Passed, DefaultPassedText),
+        FileValidationStatus.Failed => Pick(overrides?.Failed, DefaultFailedText),
         _ => string.Empty
     };
+
+    private static string Pick(string? value, string fallback) =>
+        string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
 
     private static bool TryParse(string? value, out FileValidationMode mode)
     {
