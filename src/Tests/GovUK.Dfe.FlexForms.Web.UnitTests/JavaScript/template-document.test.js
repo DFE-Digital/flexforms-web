@@ -407,6 +407,18 @@ test('contributor role choices label custom roles as view-only', () => {
     assert.equal(items[1].label, 'Caseworker (view-only on this application)');
 });
 
+test('contributor role choices use supplied singular terminology', () => {
+    const userRoleId = '11111111-1111-4111-8111-111111111111';
+    const caseworkerRoleId = '22222222-2222-4222-8222-222222222222';
+    const roles = [
+        { roleId: userRoleId, name: 'User' },
+        { roleId: caseworkerRoleId, name: 'Caseworker' }
+    ];
+    const items = lib.contributorRoleChoices(roles, null, 'visit');
+    assert.equal(items[0].label, 'User (can edit this visit)');
+    assert.equal(items[1].label, 'Caseworker (view-only on this visit)');
+});
+
 test('contributor role choices treat saved user role id as the default user option', () => {
     const userRoleId = '11111111-1111-4111-8111-111111111111';
     const roles = [{ roleId: userRoleId, name: 'User' }];

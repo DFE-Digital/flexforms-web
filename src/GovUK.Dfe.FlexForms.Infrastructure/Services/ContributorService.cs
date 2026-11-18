@@ -25,7 +25,7 @@ public class ContributorService(
         {
             logger.LogInformation("Getting contributors for application {ApplicationId}", applicationId);
 
-            var users = await applicationsClient.GetContributorsAsync(applicationId, includePermissionDetails: false, cancellationToken);
+            var users = await applicationsClient.GetContributorsAsync(applicationId, includePermissionDetails: true, cancellationToken);
             
             return users.AsReadOnly();
         }

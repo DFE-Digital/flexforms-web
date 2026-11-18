@@ -1069,12 +1069,18 @@
         return null;
     }
 
-    function contributorRoleOptionLabel(role) {
+    function resolvedSingular(singular) {
+        var value = singular && String(singular).trim();
+        return value || 'application';
+    }
+
+    function contributorRoleOptionLabel(role, singular) {
         var name = (role && (role.name || role.roleId)) || '';
+        var noun = resolvedSingular(singular);
         if (String(name).toLowerCase() === 'user') {
-            return 'User (can edit this application)';
+            return 'User (can edit this ' + noun + ')';
         }
-        return name + ' (view-only on this application)';
+        return name + ' (view-only on this ' + noun + ')';
     }
 
     function contributorRoleIsKnown(items, savedRoleId, userRoleId) {
@@ -1084,13 +1090,14 @@
         return !!(userRoleId && roleIdsEqual(savedRoleId, userRoleId));
     }
 
-    function contributorRoleChoices(contributorRoles, savedRoleId) {
+    function contributorRoleChoices(contributorRoles, savedRoleId, singular) {
         var userRoleId = findUserRoleId(contributorRoles);
-        var items = [{ value: '', label: 'User (can edit this application)' }];
+        var noun = resolvedSingular(singular);
+        var items = [{ value: '', label: 'User (can edit this ' + noun + ')' }];
         (contributorRoles || []).forEach(function (role) {
             if (!role || !role.roleId) return;
             if (userRoleId && roleIdsEqual(role.roleId, userRoleId)) return;
-            items.push({ value: role.roleId, label: contributorRoleOptionLabel(role) });
+            items.push({ value: role.roleId, label: contributorRoleOptionLabel(role, noun) });
         });
         if (savedRoleId && !contributorRoleIsKnown(items, savedRoleId, userRoleId)) {
             items.push({ value: savedRoleId, label: 'Saved role (no longer available)' });
@@ -1124,7 +1131,8 @@
         inventory: inventory,
         contributorRoleChoices: contributorRoleChoices,
         contributorRoleSelectValue: contributorRoleSelectValue,
-        roleIdsEqual: roleIdsEqual
+        roleIdsEqual: roleIdsEqual,
+        resolvedSingular: resolvedSingular
     };
 
     if (typeof module !== 'undefined' && module.exports) {
