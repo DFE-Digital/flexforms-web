@@ -49,5 +49,12 @@ namespace GovUK.Dfe.FlexForms.Domain.Models
         /// </summary>
         [JsonPropertyName("summaryDisplay")]
         public string? SummaryDisplay { get; set; }
+
+        /// <summary>
+        /// Upload fields only. Overrides the file validation status labels for this field.
+        /// Blank or missing values keep the built-in defaults.
+        /// </summary>
+        [JsonPropertyName("validationStatusText")]
+        public FileValidationStatusText? ValidationStatusText { get; set; }
     }
 }

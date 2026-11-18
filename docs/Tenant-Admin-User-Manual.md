@@ -244,7 +244,7 @@ For a full step-by-step guide with screenshots, see the [Template Studio User Ma
 - **Undo** and **Redo** step back and forward through your changes, including moves, deletes and JSON edits. Typing in one box counts as one change. Outside text boxes you can also press Ctrl+Z and Ctrl+Y (Cmd on a Mac). Undoing back to where you started clears **Unsaved changes**. The breadcrumbs above the heading take you back up the structure. Each item lists what's inside it, with a **Change** link for each, and has an **Add …** form for adding more. Ids are made from names as you type, until you change an id yourself.
 - **Questions** — choose the question type, wording, hint, whether it must be answered and the error message, options for radios, checkboxes and dropdowns, a length limit, and format checks such as a UK telephone number. Search and upload questions list the complex fields set up for the tenant. Changing the text of an existing option keeps its saved value, because saved answers and rules use it.
 - **Rules** — **Add a rule** to show pages and questions only when an answer is, isn't, or is one of the values you choose, or has or hasn't been given. Template Studio saves each rule as the pair the form needs: one rule that skips and hides them, and one that shows them. You can also start a rule from a page or question (**Add a rule that shows this page**). Rules made this way can be changed later; rules written in JSON can be turned on and off or deleted, and changed in the JSON tab. Pages and questions that a rule shows are marked **Shown by a rule** in the structure. Pages set to "Go to the next page a rule shows" only follow rules that use "is".
-- **Template settings** — also set the dashboard columns under **Dashboard**, which apply template-wide from the latest version (up to 3 answers alongside built-in columns, plus optional lead applicant name or email), the **Details on the task list** (up to 10 rows, from application details or answers), the **role invited contributors get**, wording grouped by area (dashboard, application page, preview, submitted page, contributor sidebar and invitation page), and **Email templates** (Notify IDs for this form; blank keeps the tenant setting). These are split into four groups: **Dashboard**, **Wording**, **Form structure** and **Emails**. **Use the default columns** or **Use the default details** goes back to the platform defaults. Blank wording keeps the organisation setting.
+- **Template settings** — also set the dashboard columns under **Dashboard**, which apply template-wide from the latest version (up to 3 answers alongside built-in columns, plus optional lead applicant name or email), the **Details on the task list** (up to 10 rows, from application details or answers), the **membership role invited contributors get** (what they can do on the application is chosen by the lead applicant at invite time), wording grouped by area (dashboard, application page, preview, submitted page, contributor sidebar and invitation page), and **Email templates** (Notify IDs for this form; blank keeps the tenant setting). These are split into four groups: **Dashboard**, **Wording**, **Form structure** and **Emails**. **Use the default columns** or **Use the default details** goes back to the platform defaults. Blank wording keeps the organisation setting.
 - **Tasks and lists** — a task can be questions on pages, a repeatable list, or pages repeated for each item in another list (for example a declaration for each trust). You can change the type while the task has no pages. Repeatable lists also have the columns shown for each added item and the added, changed and removed messages.
 - **Checks only when another answer matches** — a length limit or format check can apply only when another answer is, or isn't, a value. Whether a question must be answered can't depend on another answer; use a rule to show the question instead.
 - **Once applications use the template** — Template Studio checks how many applications use the template. If there are any, or it can't check:
@@ -438,6 +438,8 @@ Title: **Edit user**
 
 Name and email are read-only. You can change **Role** and **Forms this user can access**, then **Save**.
 
+Where the tenant uses Test Authentication, the page also has a **Sign-in lock** section above the role, with its own save button (see 8.9).
+
 Changing only form access does **not** change the person’s role. The access audit trail records that as form access updated, not as a new role assignment.
 
 ### 8.4 User-level permissions
@@ -473,6 +475,9 @@ Typical actions:
 | **FormAccessUpdated** | Their form (template) list was changed without a role change |
 | **MembershipDeactivated** | They were removed from the tenant |
 | **TestAuthAuthenticatorSetupCodeCreated** | An admin created an authenticator app setup code for them (test environments only, see 8.8) |
+| **TestAuthSignInLocked** | An admin locked them out of sign-in (test environments only, see 8.9) |
+| **TestAuthSignInUnlocked** | An admin unlocked their sign-in (see 8.9) |
+| **TestAuthTemporaryLockoutCleared** | An admin used **Unlock now** after they entered too many wrong authenticator app codes (see 8.9) |
 
 ### 8.6 Grant to all vs User Manager
 
@@ -546,7 +551,22 @@ A legacy `ExternalApplicationsApiClient:DefaultTemplateId` tenant setting is onl
 
 Invite/remove of extra people on **one application** is done from that application’s task list when the template has `"contributorPattern": true`.
 
-In Template Studio, **Role for invited contributors** chooses what those people can do. Leave it as **User** and they can edit the application. Choose any other custom role and they can only view that application and its files. Admin, SuperAdmin and Administrator cannot be chosen. People already invited keep the access they have. See the [Template Studio user manual](Template-Studio-User-Manual.md#41-role-for-invited-contributors).
+On the invite page, the lead applicant chooses what the invitee can do on **that application**:
+
+- **View this application** (always included)
+- **Change this application**
+- If the form has file uploads: **View uploaded files**, **Upload files**, and **Delete uploaded files**
+
+Those choices are set only when the person is invited. They are not changed later from this screen.
+
+The checkboxes are pre-selected from the template’s **Role for invited contributors**:
+
+- **User** (or none chosen) → all options selected (full access)
+- Any other role → view only (**View this application**, and **View uploaded files** when the form has uploads)
+
+The lead can still change the ticks before sending the invite.
+
+In Template Studio, **Role for invited contributors** also sets the **tenant membership role** for people who are not already in the tenant. Admin, SuperAdmin and Administrator cannot be chosen. People already invited keep the access they have. See the [Template Studio user manual](Template-Studio-User-Manual.md#41-role-for-invited-contributors).
 
 Admins and SuperAdmins can also look up who is on an application, or look up a user by email to see the applications they created and who they invited, at **Admin → Users & Roles → Contributor management** (`/admin/contributor-management`). Custom User Manager roles cannot open this page.
 
@@ -571,6 +591,27 @@ Things to know:
 - Every code appears in the access audit trail as **TestAuthAuthenticatorSetupCodeCreated** (see 8.5).
 - To set up, replace or remove **your own** authenticator app, use **Admin → Users & Roles → Authenticator app**.
 - Codes are for the tenant you are signed in to. A SuperAdmin or platform engineer who needs a code for another tenant, without signing in to it, can create one by hand in Redis: see `docs/test-auth-authenticator-setup-codes.md` in the flexforms-api repository.
+
+### 8.9 Sign-in locks (test environments only)
+
+Page: `/admin/user-manager/edit`, section **Sign-in lock**
+
+Only shown where the tenant uses Test Authentication (never in Production).
+
+**Temporary lock.** If someone enters 5 wrong authenticator app codes, their authenticator sign-in is locked for up to 15 minutes, counted from their first wrong code. The sign in page tells them how many minutes to wait and that they can get a one-time password by email instead. The **Status** row shows **Temporarily locked** and when it unlocks. Select **Unlock now** to let them try again straight away.
+
+**Lock a user out.** Tick **Lock this user out of sign-in** and select **Save sign-in lock**. While locked:
+
+- they cannot sign in with a one-time password by email, an authenticator app or a setup code. No email is sent
+- the sign in page tells them their account has been locked and to contact their tenant administrator
+- the lock never ends on its own. **Status** shows **Locked by an administrator**, with when and by whom
+
+To unlock them, untick the box and select **Save sign-in lock**. That also removes any temporary lock.
+
+- Saving this section does not change the user's role or forms, and saving the role does not change the lock.
+- A lock stops new sign-ins. Someone who is already signed in stays signed in until their session ends.
+- You cannot lock yourself out. Only a **SuperAdmin** can lock or unlock another administrator.
+- Every change appears in the access audit trail (see 8.5).
 
 ---
 
@@ -2453,7 +2494,7 @@ Some settings are not in the Admin UI at all, even for SuperAdmins, because they
 | **Application / reform plan / …** | One submitted or in-progress form. The on-screen word is configurable. |
 | **Catalogue** | The templates that belong to this tenant (owned or mapped). |
 | **Claim / grant** | A single permission assigned to a role or user. |
-| **Contributor** | Someone invited onto a specific application, not necessarily a tenant user with their own forms. |
+| **Contributor** | Someone invited onto a specific application, not necessarily a tenant user with their own forms. What they can do on that application is chosen by the lead applicant when they are invited. |
 | **Live** | Visible to end users who have access. |
 | **JSON** | Structured text made of labelled facts (keys and values). Templates and some tenant settings are stored this way. See [JSON in plain English](Form-Template-Designer-Manual.md#11-json-in-plain-english). |
 | **Schema / JSON schema** | The template document Template Manager saves as a version. |

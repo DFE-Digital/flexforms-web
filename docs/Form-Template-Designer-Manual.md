@@ -175,7 +175,7 @@ In Transfer: “Trust details” uses a collection; “Reason and benefits” us
 | `defaultFieldRequirementPolicy` | `"required"` or `"optional"`. If a field has no `required` validation and no `required` flag, this policy applies. Transfer uses `"required"`. |
 | `hideFieldLabelWhenOnlyOneField` | When `true` (default), a page with **exactly one** normal field hides that field’s label so the **page title** is the question. Complex fields are excluded from this behaviour. |
 | `contributorPattern` | When `true` (default), invite-contributor features are available. Set `false` to hide them. |
-| `contributorRoleId` | Optional GUID of a custom tenant role. Omit it, or use the User role, and invited contributors can edit the application. Any other allowed role can only view that application and its files. Admin, SuperAdmin and Administrator are rejected. See §3.3. |
+| `contributorRoleId` | Optional GUID of a custom tenant role used as **tenant membership** for new invitees who are not already in the tenant. What they can do on the application is chosen by the lead applicant on the invite page. Admin, SuperAdmin and Administrator are rejected. See §3.3. |
 | `dashboard` | Optional. Configures applications-dashboard columns (see §3.1). |
 | `applicationMetaData` | Optional. Configures the metadata block on the application task list (see §3.2). |
 | `displayCopy` | Optional. Per-template headings and buttons. A blank field uses the wording from Organisation settings. If that is also blank, the FlexForms default wording is used. See §3.4. |
@@ -303,12 +303,24 @@ Optional. Used only when `contributorPattern` is true.
 "contributorRoleId": "8f1c2d3e-4a5b-6c7d-8e9f-0a1b2c3d4e5f"
 ```
 
-| Value | Access granted to a newly invited contributor |
-|-------|-----------------------------------------------|
-| Omitted, empty, the User role id, or the name User | Application Read and Write, and ApplicationFiles Read, Write and Delete. Same as today. |
-| Any other custom role in this tenant | Application Read and ApplicationFiles Read only. If they are not already in the tenant, their membership is created with that role. |
+This value sets the **tenant membership role** for a newly invited person who is not already in the tenant. It does **not** decide Application / ApplicationFiles access when the invite includes explicit permissions (the FlexForms Web invite page always sends those).
 
-The API rejects a missing role, a role from another tenant, and Admin, SuperAdmin or Administrator. It does not fall back to User. An existing membership is not changed. Grants already on the user are not removed, so someone who already has Write keeps it.
+| Value | Membership for a newly invited contributor |
+|-------|---------------------------------------------|
+| Omitted, empty, the User role id, or the name User | Membership uses the system **User** role. |
+| Any other custom role in this tenant | Membership uses that role (if they are not already in the tenant). Custom roles must not grant Application or ApplicationFiles Write or Delete. |
+
+**Invite permissions (Web):** the lead applicant chooses, for that application only:
+
+- Application Read (always)
+- Application Write (optional)
+- ApplicationFiles Read / Write / Delete (optional; file options appear only when the template has upload fields). Upload or Delete also grants files Read.
+
+Checkbox defaults on the invite page follow `contributorRoleId`: User / omitted → all options selected; any other role → Application Read and ApplicationFiles Read only (when uploads exist).
+
+If an API client omits `permissions` on `AddContributorRequest`, the API keeps the older fallback: User membership → full Application and ApplicationFiles access; any other allowed role → Application Read and ApplicationFiles Read only.
+
+The API rejects a missing role (when one is configured), a role from another tenant, and Admin, SuperAdmin or Administrator. It does not fall back to User. An existing membership is not changed. Grants already on the user are not removed, so someone who already has Write keeps it.
 
 ### 3.4 Per-template wording (`displayCopy`)
 
@@ -684,6 +696,7 @@ You **do not** put the API URL, API key, or OAuth client secret in the template.
 | `confirmationTitle` | No | Whole confirmation heading, for example `"Is this the correct {name}?"`. Leave it out for "Is this the right {name}?". |
 | `dropdownDisplay` | No | How each search result is labelled in the dropdown (and in the box after the user chooses). Overrides the same setting in FormEngine when both are set. |
 | `confirmationDisplay` | No | How the chosen answer is shown on **check your answers** / preview, and which properties appear on “Is this the right …?”. Overrides FormEngine when set. |
+| `validationStatusText` | No | Upload fields only. Object with `pending`, `passed` and `failed` text shown in the Status column of the uploaded files table. Each upload question has its own. Blank or missing keys keep the defaults: `Validation pending`, `Validated`, `Validation failed`. Example: `"validationStatusText": { "passed": "Checked" }`. |
 
 If both display properties are omitted, FlexForms keeps the built-in Trusts/Academies layout:
 

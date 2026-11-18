@@ -1,6 +1,7 @@
 @using GovUK.Dfe.FlexForms.Web.Services
 @using GovUK.Dfe.FlexForms.Web.Extensions
 @using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response
+@using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Enums
 @inject IHttpContextAccessor httpContext;
 @inject GovUK.Dfe.FlexForms.Web.Interfaces.IFormErrorStore FormErrorStore
 @inject GovUK.Dfe.FlexForms.Application.Interfaces.IInfectedFileStore infectedFileStore
@@ -46,6 +47,7 @@
         ? 0
         : Math.Max(0, ComplexFieldConfigurationService.GetConfiguration(complexFieldId).MaxSelections);
     var fileLimitReached = maxFiles > 0 && files.Count() >= maxFiles;
+    var statusTextOverrides = Model.Field.ComplexField?.ValidationStatusText;
 }
 
 @functions {
@@ -258,9 +260,12 @@
                             </td>
                             <td class="govuk-table__cell">@FormatFileSize(file.FileSize)</td>
                             <td class="govuk-table__cell">@(System.IO.Path.GetExtension(file.OriginalFileName)?.TrimStart('.').ToUpperInvariant() ?? "Unknown")</td>
-                            <td class="govuk-table__cell" data-file-validation-status="@file.Id">
+                            <td class="govuk-table__cell" data-file-validation-status="@file.Id"
+                                data-status-text-pending="@FileValidationUi.StatusText(FileValidationStatus.Pending, statusTextOverrides)"
+                                data-status-text-passed="@FileValidationUi.StatusText(FileValidationStatus.Passed, statusTextOverrides)"
+                                data-status-text-failed="@FileValidationUi.StatusText(FileValidationStatus.Failed, statusTextOverrides)">
                                 @{
-                                    var validationLabel = GovUK.Dfe.FlexForms.Web.Services.FileValidationUi.StatusText(file.ValidationStatus);
+                                    var validationLabel = FileValidationUi.StatusText(file.ValidationStatus, statusTextOverrides);
                                 }
                                 @if (!string.IsNullOrWhiteSpace(validationLabel))
                                 {
