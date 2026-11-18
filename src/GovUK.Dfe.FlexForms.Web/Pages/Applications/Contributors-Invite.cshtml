@@ -77,6 +77,70 @@
                        aria-describedby="EmailAddress-hint @(ViewData.ModelState.ContainsKey(nameof(Model.EmailAddress)) && ViewData.ModelState[nameof(Model.EmailAddress)]!.Errors.Count > 0 ? "EmailAddress-error" : "")">
             </div>
 
+            <div class="govuk-form-group">
+                <fieldset class="govuk-fieldset" aria-describedby="permissions-hint">
+                    <legend class="govuk-fieldset__legend govuk-fieldset__legend--m">
+                        What can they do on this application?
+                    </legend>
+                    <div id="permissions-hint" class="govuk-hint">
+                        Choose what this person will be able to do on this application.
+                    </div>
+                    <div class="govuk-checkboxes" data-module="govuk-checkboxes">
+                        <div class="govuk-checkboxes__item">
+                            <input class="govuk-checkboxes__input"
+                                   id="CanViewApplication"
+                                   name="CanViewApplication"
+                                   type="checkbox"
+                                   value="true"
+                                   checked
+                                   disabled>
+                            <label class="govuk-label govuk-checkboxes__label" for="CanViewApplication">
+                                View this application
+                            </label>
+                        </div>
+
+                        <div class="govuk-checkboxes__item">
+                            <input class="govuk-checkboxes__input"
+                                   asp-for="CanChangeApplication"
+                                   id="CanChangeApplication">
+                            <label class="govuk-label govuk-checkboxes__label" for="CanChangeApplication">
+                                Change this application
+                            </label>
+                        </div>
+
+                        @if (Model.ShowFilePermissions)
+                        {
+                            <div class="govuk-checkboxes__item">
+                                <input class="govuk-checkboxes__input"
+                                       asp-for="CanViewUploadedFiles"
+                                       id="CanViewUploadedFiles">
+                                <label class="govuk-label govuk-checkboxes__label" for="CanViewUploadedFiles">
+                                    View uploaded files
+                                </label>
+                            </div>
+
+                            <div class="govuk-checkboxes__item">
+                                <input class="govuk-checkboxes__input"
+                                       asp-for="CanUploadFiles"
+                                       id="CanUploadFiles">
+                                <label class="govuk-label govuk-checkboxes__label" for="CanUploadFiles">
+                                    Upload files
+                                </label>
+                            </div>
+
+                            <div class="govuk-checkboxes__item">
+                                <input class="govuk-checkboxes__input"
+                                       asp-for="CanDeleteUploadedFiles"
+                                       id="CanDeleteUploadedFiles">
+                                <label class="govuk-label govuk-checkboxes__label" for="CanDeleteUploadedFiles">
+                                    Delete uploaded files
+                                </label>
+                            </div>
+                        }
+                    </div>
+                </fieldset>
+            </div>
+
             <div class="govuk-button-group">
                 <button id="send-email-invite" class="govuk-button" data-module="govuk-button" type="submit">
                     Send email invite
@@ -93,4 +157,4 @@
             </div>
         </form>
     </div>
-</div> 
+</div>
