@@ -37,6 +37,18 @@ public class TestLoginModel : PageModel
     public const string InvalidSetupConfirmCodeMessage =
         "The code is incorrect, or setting up has expired. Check the code in your app and try again.";
 
+    /// <summary>Shown when an administrator has locked the email out of every sign-in method.</summary>
+    public const string PermanentLockoutMessage =
+        "You cannot sign in with this email address because your account has been locked. Contact your tenant administrator to unlock it.";
+
+    /// <summary>Shown after too many wrong authenticator app codes, with the wait rounded up to whole minutes.</summary>
+    public static string TemporaryLockoutMessage(int? retryAfterSeconds)
+    {
+        var minutes = Math.Max(1, (int)Math.Ceiling((retryAfterSeconds ?? 60) / 60d));
+        var wait = minutes == 1 ? "1 minute" : $"{minutes} minutes";
+        return $"You have entered too many incorrect codes. Try your authenticator app again in {wait}, or get a one-time password by email instead.";
+    }
+
     private static readonly Regex PasswordPattern = new(@"^\d{6}$", RegexOptions.Compiled, TimeSpan.FromSeconds(1));
 
     private readonly IOptions<TestAuthenticationOptions> _testAuthOptions;
@@ -145,6 +157,13 @@ public class TestLoginModel : PageModel
         }
         catch (ExternalApplicationsException ex)
         {
+            if (ex.StatusCode == StatusCodes.Status423Locked)
+            {
+                _logger.LogWarning("Test authentication password not sent to {Email}: sign-in is locked", Input.Email);
+                ErrorMessage = PermanentLockoutMessage;
+                return Page();
+            }
+
             _logger.LogError(ex, "Failed to send test authentication password to {Email}", Input.Email);
             ErrorMessage = ex.StatusCode == StatusCodes.Status403Forbidden ? NotEnabledMessage : SendFailedMessage;
             return Page();
@@ -185,6 +204,13 @@ public class TestLoginModel : PageModel
             return Page();
         }
 
+        if (verification.IsPermanentLockout)
+        {
+            Input.Password = null;
+            ErrorMessage = PermanentLockoutMessage;
+            return Page();
+        }
+
         if (!verification.IsValid)
         {
             ModelState.AddModelError($"{nameof(Input)}.{nameof(InputModel.Password)}", InvalidPasswordMessage);
@@ -222,6 +248,15 @@ public class TestLoginModel : PageModel
         {
             _logger.LogError(ex, "Failed to verify test authentication authenticator code for {Email}", Input.Email);
             ErrorMessage = ex.StatusCode == StatusCodes.Status403Forbidden ? NotEnabledMessage : AuthenticatorVerifyFailedMessage;
+            return Page();
+        }
+
+        if (verification.IsLockedOut)
+        {
+            Input.Password = null;
+            ErrorMessage = verification.IsPermanentLockout
+                ? PermanentLockoutMessage
+                : TemporaryLockoutMessage(verification.RetryAfterSeconds);
             return Page();
         }
 
@@ -268,6 +303,13 @@ public class TestLoginModel : PageModel
         {
             Input.SetupCode = null;
             ModelState.AddModelError($"{nameof(Input)}.{nameof(InputModel.SetupCode)}", InvalidSetupCodeMessage);
+            return Page();
+        }
+        catch (ExternalApplicationsException ex) when (ex.StatusCode == StatusCodes.Status423Locked)
+        {
+            // The API leaves the setup code unused, so it still works once an administrator unlocks the user.
+            Input.SetupCode = null;
+            ErrorMessage = PermanentLockoutMessage;
             return Page();
         }
         catch (ExternalApplicationsException ex)
@@ -324,6 +366,14 @@ public class TestLoginModel : PageModel
         {
             _logger.LogError(ex, "Failed to confirm test authentication authenticator setup for {Email}", Input.Email);
             ErrorMessage = ex.StatusCode == StatusCodes.Status403Forbidden ? NotEnabledMessage : AuthenticatorVerifyFailedMessage;
+            return Page();
+        }
+
+        if (confirmation.IsPermanentLockout)
+        {
+            Input.Password = null;
+            SettingUpFromCode = false;
+            ErrorMessage = PermanentLockoutMessage;
             return Page();
         }
 

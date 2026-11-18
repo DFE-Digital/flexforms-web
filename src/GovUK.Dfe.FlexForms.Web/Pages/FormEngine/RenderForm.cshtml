@@ -2,6 +2,7 @@
 @using GovUK.Dfe.FlexForms.Application.Interfaces
 @using GovUK.Dfe.FlexForms.Domain.FormEngine
 @using GovUk.Frontend.AspNetCore.TagHelpers
+@inject IApplicationTerminologyProvider TerminologyProvider
 @model RenderFormModel
 @{
     ViewData["Title"] = "New application";
@@ -13,7 +14,7 @@
         case FormState.TaskList:
             if (Model.UseApplicationsListBackLink)
             {
-                <govuk-back-link href="/applications">Back to applications</govuk-back-link>
+                <govuk-back-link href="/applications">Back to @TerminologyProvider.Plural</govuk-back-link>
             }
             else
             {
@@ -24,13 +25,13 @@
             <govuk-back-link href="@Model.BackLinkUrl">Back</govuk-back-link>
             break;
         case FormState.TaskSummary:
-            <govuk-back-link href="/applications/@Model.ReferenceNumber">Back to application task list</govuk-back-link>
+            <govuk-back-link href="/applications/@Model.ReferenceNumber">Back to @TerminologyProvider.Singular task list</govuk-back-link>
             break;
         case FormState.DerivedCollectionFlowSummary:
-            <govuk-back-link href="/applications/@Model.ReferenceNumber">Back to application task list</govuk-back-link>
+            <govuk-back-link href="/applications/@Model.ReferenceNumber">Back to @TerminologyProvider.Singular task list</govuk-back-link>
             break;
         case FormState.ApplicationPreview:
-            <govuk-back-link href="/applications/@Model.ReferenceNumber">Back to application task list</govuk-back-link>
+            <govuk-back-link href="/applications/@Model.ReferenceNumber">Back to @TerminologyProvider.Singular task list</govuk-back-link>
             break;
     }
 }
