@@ -34,6 +34,16 @@ public static class Files
             headers: fileValidationApiKey is not null ? new Dictionary<string, string> { ["X-Api-Key"] = fileValidationApiKey } : null);
     }
 
+    public static async Task RecordValidationResultAsync(IAPIRequestContext request, string applicationId,
+        string fileName, bool isValid, string message)
+    {
+        var files = await ApplicationApi.GetFilesAsync(request, applicationId);
+        var fileId = files.SingleOrDefault(file => file.OriginalFileName == fileName)?.Id
+                     ?? throw new InvalidOperationException($"No file called {fileName} on application {applicationId}");
+
+        await ValidationResultAsync(request, new FileValidationRequest(isValid, message, null, "test-source"), fileId);
+    }
+
     public static async Task ValidateValidFileForApplicationAsync(IAPIRequestContext request, IPage page)
     {
         var applicationRef = ApplicationReferenceFromUrl(page.Url);

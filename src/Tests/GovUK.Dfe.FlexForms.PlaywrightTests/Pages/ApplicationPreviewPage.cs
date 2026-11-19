@@ -22,11 +22,40 @@ public sealed class ApplicationPreviewPage(IPage page) : BasePage(page)
         await Assertions.Expect(LeadApplicantSubmitMessage(singular)).ToBeVisibleAsync();
     }
 
+    /// <summary>
+    /// The lead applicant gets an enabled submit button. It is only disabled while an uploaded file blocks
+    /// submission; whether every task is complete is checked when it is pressed.
+    /// </summary>
+    public async Task ExpectLeadApplicantCanSubmitAsync(string singular)
+    {
+        await Assertions.Expect(Preview()).ToBeVisibleAsync();
+        await Assertions.Expect(SubmitApplicationButton()).ToBeEnabledAsync();
+        await Assertions.Expect(LeadApplicantSubmitMessage(singular)).ToHaveCountAsync(0);
+    }
+
     public async Task ExpectSubmittedAsync(string submitMessage = "submitted")
     {
         await Assertions.Expect(Page).ToHaveURLAsync(new Regex(@"/application-submitted/"));
         await Assertions.Expect(SubmittedHeading(submitMessage)).ToBeVisibleAsync();
     }
+
+    /// <summary>A checkboxes answer is a list of the ticked options' labels, in order, not the stored values.</summary>
+    public async Task ExpectListAnswerAsync(params string[] items)
+    {
+        var answer = Preview().Locator(".govuk-summary-list__value").Filter(new LocatorFilterOptions
+        {
+            Has = Page.Locator("li").Filter(new LocatorFilterOptions { HasTextRegex = ExactText(items[0]) }),
+        });
+
+        await Assertions.Expect(answer.Locator("li")).ToHaveTextAsync(items);
+    }
+
+    public async Task ExpectTextAnswerAsync(string text) =>
+        await Assertions.Expect(Preview().Locator(".govuk-summary-list__value")
+                .Filter(new LocatorFilterOptions { HasTextRegex = ExactText(text) }))
+            .ToHaveCountAsync(1);
+
+    private static Regex ExactText(string text) => new($@"^\s*{Regex.Escape(text)}\s*$");
 
     private ILocator Preview() => Page.Locator("[data-application-preview=\"true\"]");
 
@@ -38,4 +67,35 @@ public sealed class ApplicationPreviewPage(IPage page) : BasePage(page)
 
     private ILocator SubmittedHeading(string submitMessage) =>
         Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = submitMessage });
+
+    private const string FileValidationBlocksSubmitText = "You cannot submit until uploaded files pass validation.";
+
+    /// <summary>The submit button is replaced by a problem listing the file, with the validator's message.</summary>
+    public async Task ExpectFileValidationBlocksSubmitAsync(string fileName)
+    {
+        await Assertions.Expect(Preview()).ToBeVisibleAsync();
+        await Assertions.Expect(FileValidationErrorSummary().GetByText(FileValidationBlocksSubmitText,
+            new LocatorGetByTextOptions { Exact = true })).ToBeVisibleAsync();
+        await Assertions.Expect(BlockingFile(fileName)).ToBeVisibleAsync();
+        await Assertions.Expect(SubmitApplicationButton()).ToBeDisabledAsync();
+    }
+
+    public async Task ExpectFileValidationDoesNotBlockSubmitAsync()
+    {
+        await Assertions.Expect(Preview()).ToBeVisibleAsync();
+        await Assertions.Expect(Page.GetByText(FileValidationBlocksSubmitText,
+            new PageGetByTextOptions { Exact = true })).ToHaveCountAsync(0);
+        await Assertions.Expect(SubmitApplicationButton()).ToBeEnabledAsync();
+    }
+
+    /// <summary>The file's entry in the list of files stopping the submit, including the validator's message.</summary>
+    public ILocator BlockingFile(string fileName) =>
+        FileValidationErrorSummary().Locator(".govuk-error-summary__list > li")
+            .Filter(new LocatorFilterOptions { HasText = fileName });
+
+    private ILocator FileValidationErrorSummary() => Page.Locator(".govuk-error-summary")
+        .Filter(new LocatorFilterOptions
+        {
+            Has = Page.GetByText(FileValidationBlocksSubmitText, new PageGetByTextOptions { Exact = true }),
+        });
 }

@@ -34,7 +34,11 @@ public sealed class ApplicationsTests : PlaywrightTestBase
 
         var standardFieldsTask = new StandardFieldsTask(Page);
         await standardFieldsTask.OpenAsync();
-        await standardFieldsTask.CompleteAsync();
+        await standardFieldsTask.AnswerAllQuestionsAsync();
+        // Checkboxes show their labels rather than the stored JSON, and dates are day first.
+        await standardFieldsTask.ExpectListAnswerAsync(StandardFieldsTask.Topics, StandardFieldsTask.AnsweredTopics);
+        await standardFieldsTask.ExpectTextAnswerAsync(StandardFieldsTask.ProposedDate, StandardFieldsTask.AnsweredProposedDate);
+        await standardFieldsTask.MarkCompleteAsync();
         await standardFieldsTask.ExpectCompletedAsync();
 
         var configuredFieldsTask = new ConfiguredFieldsTask(Page);
@@ -68,6 +72,8 @@ public sealed class ApplicationsTests : PlaywrightTestBase
         await taskList.ReviewApplicationAsync();
 
         var preview = new ApplicationPreviewPage(Page);
+        await preview.ExpectListAnswerAsync(StandardFieldsTask.AnsweredTopics);
+        await preview.ExpectTextAnswerAsync(StandardFieldsTask.AnsweredProposedDate);
         await preview.SubmitAsync();
         await preview.ExpectSubmittedAsync();
     }
