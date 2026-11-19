@@ -25,6 +25,20 @@ Forwarded headers → original host → correlation → platform tenant configur
 
 Health: `/health`, `/healthz`, `/liveness` with `.ShortCircuit()` so probes never touch Redis session (**Verified** comment in `Program.cs` ~818).
 
+## Error boundaries
+
+**Verified** (2026-11). These places swallow or rewrite errors. A catch block written above one of them may never run, so check this table, and read the method you call, before relying on a status code reaching your code. Add new swallowing points here.
+
+| Where | What happens | Why |
+|-------|--------------|-----|
+| `Security/UserPermissionsCache.RefreshAsync` | Logs and returns `null` for every exception except the no-membership denial (`TenantMembershipDenial`), which it rethrows | A permissions blip must not break page loads |
+| Api.Client `TokenExchangeHandler` | Every exchange failure becomes a synthetic 401 `Exchange-401` and the forced-logout flag is set, except no membership → 403 `Exchange-403-NoTenantMembership` | Callers only see "authenticated or not" |
+| Api.Client `TokenManagementMiddleware`, `Middleware/ActivityBasedTokenRefreshMiddleware` | Their own exceptions are logged and the request continues | Token housekeeping must not break the request |
+| Generated client (`Client.g.cs`) | A status the endpoint doesn't declare (for example 403 on most endpoints) throws an **untyped** `ExternalApplicationsException`; the body is only in `Response`, not `Result` | NSwag only types the declared responses |
+| `Filters/ExternalApiExceptionFilter` `IsAuthenticationFailureMessage`, `PermissionsCacheMiddleware.IsAuthenticationFailure` | A 403 whose message contains "token", "expired" or "unauthorized" (and some other phrases in the middleware) is treated as a logout | Word matching on API messages; avoid those words in user-facing 403 text |
+| CoreLibs `DistributedCacheAdapter` | A read error is treated as a cache miss | General caches; the session adapter must **not** do this (constraint 7) |
+| `UseStatusCodePages` (`Program.cs`) | A bare 401/403/404/5xx response becomes a redirect to the matching `/Error/*` page | Friendly pages for responses that have no body |
+
 ## Caches across replicas
 
 **Verified.**

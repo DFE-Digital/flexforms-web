@@ -27,6 +27,13 @@ public static class ApplicationAccessMessages
         "You do not have permission to update notifications.";
 
     /// <summary>
+    /// Shown when a user signs in to a tenant they have no membership in.
+    /// Uses "authorised", not "unauthorized": the latter is treated as a token failure by the exception filter.
+    /// </summary>
+    public const string NotAuthorisedForTenant =
+        "You are not authorised to access this service. If you think you should have access, contact your administrator.";
+
+    /// <summary>
     /// Shown when a user cannot view a page or resource.
     /// </summary>
     public const string NoAccess =

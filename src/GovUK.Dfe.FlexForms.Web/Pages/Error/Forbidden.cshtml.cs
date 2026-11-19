@@ -1,4 +1,5 @@
 using GovUK.Dfe.FlexForms.Web.Constants;
+using GovUK.Dfe.FlexForms.Web.Security;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.Diagnostics.CodeAnalysis;
 
@@ -18,6 +19,12 @@ public class ForbiddenModel : PageModel
     public string? ErrorId { get; private set; }
     public string? DenialReason { get; private set; }
 
+    /// <summary>
+    /// True when the user signed in to a tenant they are not a member of. They have been signed out
+    /// of this service, so the dashboard link would only sign them in again and return here.
+    /// </summary>
+    public bool IsTenantMembershipDenial { get; private set; }
+
     public ForbiddenModel(IConfiguration configuration)
     {
         _configuration = configuration;
@@ -28,6 +35,7 @@ public class ForbiddenModel : PageModel
         ErrorId = TempData["ApiErrorId"] as string;
         DenialReason = TempData["AccessDeniedReason"] as string
             ?? ApplicationAccessMessages.NoAccess;
+        IsTenantMembershipDenial = string.Equals(ErrorId, TenantMembershipDenial.ErrorId, StringComparison.Ordinal);
 
         SupportEmail = _configuration["SupportEmail"] ?? "RegionalServices.RG@education.gov.uk";
 

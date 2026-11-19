@@ -28,6 +28,17 @@ Companion of `flexforms-api`. Reporting is `flexforms-prism` (no code dependency
 3. If the change crosses into the API, Prism, scanner or CoreLibs, read [`.ai/ecosystem.md`](.ai/ecosystem.md) first.
 4. Confirm against PageModels + Application services. The form engine is large — `RenderForm` is a dispatcher, logic is in Application/Infrastructure services.
 
+## Planning checklist
+
+Before you propose a plan (plan mode or not), check each of these and cite what you found:
+
+1. **Read first.** Open the matching `.ai/features/` file and `.ai/known-pitfalls.md`, and name them in the plan. Plans that skip this have missed documented behaviour.
+2. **Trace errors from where they are thrown to where they are handled.** Read the method you call, not just the catch blocks around the call. Check `.ai/architecture.md` (Error boundaries) for places that swallow or rewrite errors. For sign-in and token problems, walk `.ai/features/auth-and-bootstrap.md` (First request after sign-in) step by step.
+3. **Reuse before adding.** Look for an existing page, middleware, helper or message that already does the job (`.ai/code-map.md`, Error pages; `Constants/ApplicationAccessMessages.cs`). Say which one you reuse, or why none fits.
+4. **Check deployed contracts.** If the change depends on text or IDs another repo matches on (API messages, `ErrorId`s, Service Bus payloads), check what the **deployed** version does, not just your branch. Web pins `GovUK.Dfe.FlexForms.Api.Client`, so the API client fix only takes effect after the package is published and the pin is bumped.
+5. **Verify generated-client behaviour in `Client.g.cs`.** For example, whether a status throws a typed or an untyped exception. Don't assume.
+6. **Fix stale docs you notice** while planning (trust code over docs).
+
 ## Knowledge map
 
 | File | Use when |

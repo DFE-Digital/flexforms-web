@@ -62,10 +62,26 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
                            ?? throw new InvalidOperationException("Page filter only for Razor Pages");
 
                 var response = (apiException as ExternalApplicationsException<ExceptionResponse>)?.Result;
-                var statusCode = response?.StatusCode ?? apiException.StatusCode;
+                // Synthetic client responses (e.g. Exchange-401) used to omit StatusCode on the body
+                // (default 0). Prefer the HTTP status from the exception when the body has none.
+                var statusCode = response is { StatusCode: > 0 }
+                    ? response.StatusCode
+                    : apiException.StatusCode;
                 var message = response?.Message ?? apiException.Message;
 
                 LogApiException(context.HttpContext, response, statusCode, message);
+
+                // Signed in but not a member of this tenant: show why, rather than treating it as
+                // a file/write denial or an expired session.
+                if (TenantMembershipDenial.IsMatch(apiException)
+                    || TenantMembershipDenial.IsMatch(response))
+                {
+                    page.TempData["ApiErrorId"] = TenantMembershipDenial.ErrorId;
+                    page.TempData["AccessDeniedReason"] = ApplicationAccessMessages.NotAuthorisedForTenant;
+                    executedContext.Result = new RedirectToPageResult("/Error/Forbidden");
+                    executedContext.ExceptionHandled = true;
+                    return;
+                }
 
                 if (TryHandleApplicationFileAccessDenied(context.HttpContext, page, statusCode, message, out var fileAccessResult))
                 {
@@ -97,7 +113,7 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
 
                 var r = response;
 
-                if (r.StatusCode is 400 or 422)
+                if (statusCode is 400 or 422)
                 {
                     if (TryAddModelStateErrorsFromContext(page, r))
                     {
@@ -110,7 +126,7 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
                     }
                 }
 
-                if (r.StatusCode == 400 || r.StatusCode == 409)
+                if (statusCode == 400 || statusCode == 409)
                 {
                     AddNonFieldError(page, r.Message);
 
@@ -122,7 +138,7 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
                     return;
                 }
 
-                if (r.StatusCode == 429)
+                if (statusCode == 429)
                 {
                     page.TempData["ApiErrorId"] = r.ErrorId;
                     page.TempData["ErrorMessage"] = r.Message;
@@ -131,14 +147,14 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
                     return;
                 }
 
-                if (r.StatusCode == 404)
+                if (statusCode == 404)
                 {
                     executedContext.Result = new RedirectToPageResult("/Error/NotFound");
                     executedContext.ExceptionHandled = true;
                     return;
                 }
 
-                if (r.StatusCode == 401)
+                if (statusCode == 401)
                 {
                     page.TempData["ApiErrorId"] = r.ErrorId;
                     executedContext.Result = new RedirectToPageResult("/Error/Forbidden");
@@ -146,7 +162,7 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
                     return;
                 }
 
-                if (r.StatusCode == 403)
+                if (statusCode == 403)
                 {
                     page.TempData["ApiErrorId"] = r.ErrorId;
                     if (!string.IsNullOrWhiteSpace(r.Message))
@@ -173,7 +189,7 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
                     return;
                 }
 
-                if (r.StatusCode >= 500)
+                if (statusCode >= 500)
                 {
                     page.TempData["ApiErrorId"] = r.ErrorId;
                     executedContext.Result = new RedirectToPageResult("/Error/ServerError");
