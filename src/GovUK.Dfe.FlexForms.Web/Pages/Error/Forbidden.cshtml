@@ -33,8 +33,18 @@
             </p>
         }
         
-        <p class="govuk-body govuk-!-margin-top-6">
-            <a class="govuk-link" href="/applications/dashboard">Go to your applications dashboard</a>
-        </p>
+        @if (Model.IsTenantMembershipDenial)
+        {
+            <p class="govuk-body govuk-!-margin-top-6">
+                You have been signed out of this service. If you signed in with the wrong account,
+                sign out of your account provider before you try again.
+            </p>
+        }
+        else
+        {
+            <p class="govuk-body govuk-!-margin-top-6">
+                <a class="govuk-link" href="/applications/dashboard">Go to your applications dashboard</a>
+            </p>
+        }
     </div>
 </div>

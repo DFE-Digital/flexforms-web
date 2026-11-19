@@ -37,6 +37,8 @@ Per-request overlays: `TenantAwareOpenIdConnectConfigurator`, `TenantAwareEntraS
 
 `TenantSessionBindingMiddleware` binds the signed-in session to its tenant. Re-read it and `TenantIdResolver` tests before changing resolver order.
 
+**No membership in the tenant** (**Verified**, `Security/TenantMembershipDenial.cs`, `Middleware/PermissionsCacheMiddleware.cs`, `Filters/ExternalApiExceptionFilter.cs`). Someone who signs in successfully to a tenant they are not a member of is denied at token exchange (API 403 "not a member of tenant"). Api.Client `TokenExchangeHandler` turns that into a 403 with `ErrorId` `Exchange-403-NoTenantMembership`; older clients returned a generic 401 instead. This is authorisation, not an expired session. `UserPermissionsCache.RefreshAsync` rethrows it (it swallows every other failure). `PermissionsCacheMiddleware` then writes `ApplicationAccessMessages.NotAuthorisedForTenant` to TempData, signs out the local cookie only (not the IdP) and redirects to `/Error/Forbidden`, which hides the dashboard link for this case. The page filter does the same if a page call hits it. Keep the message free of "token", "expired" and "unauthorized" (American spelling), or the 403 handlers treat it as a token failure and log the user out. `TenantMembershipDenial.ErrorId` must equal Api.Client `TokenExchangeErrors.NoTenantMembershipErrorId`.
+
 ## Roles in UI
 
 `Security/AdminAccessHelper.cs`: SuperAdmin, Admin, User, plus Manage claims (`Template:Any:Manage`, …). Policies wrap those for admin folders.

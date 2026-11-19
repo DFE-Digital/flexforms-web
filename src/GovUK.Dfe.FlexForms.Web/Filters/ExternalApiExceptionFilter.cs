@@ -67,6 +67,17 @@ namespace GovUK.Dfe.FlexForms.Web.Filters
 
                 LogApiException(context.HttpContext, response, statusCode, message);
 
+                // Signed in but not a member of this tenant: show why, rather than treating it as
+                // a file/write denial or an expired session.
+                if (TenantMembershipDenial.IsMatch(apiException))
+                {
+                    page.TempData["ApiErrorId"] = TenantMembershipDenial.ErrorId;
+                    page.TempData["AccessDeniedReason"] = ApplicationAccessMessages.NotAuthorisedForTenant;
+                    executedContext.Result = new RedirectToPageResult("/Error/Forbidden");
+                    executedContext.ExceptionHandled = true;
+                    return;
+                }
+
                 if (TryHandleApplicationFileAccessDenied(context.HttpContext, page, statusCode, message, out var fileAccessResult))
                 {
                     executedContext.Result = fileAccessResult;
