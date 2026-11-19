@@ -287,6 +287,31 @@ public class ExternalApiExceptionFilterTests
     }
 
     [Fact]
+    public async Task OnPageHandlerExecutionAsync_ShouldUseHttpStatus_WhenExceptionResponseOmitsStatusCode()
+    {
+        // TokenExchangeHandler's synthetic Exchange-401 historically omitted StatusCode on the body
+        // (default 0). Routing on the body alone sent users to /Error/General.
+        var page = CreatePageModel();
+        var executingContext = CreateExecutingContext(page);
+        var response = new ExceptionResponse
+        {
+            StatusCode = 0,
+            Message = "Authentication tokens are invalid or expired",
+            ErrorId = "Exchange-401"
+        };
+        var executedContext = CreateExecutedContext(
+            executingContext,
+            CreateTypedApiException(response, httpStatusCode: 401));
+
+        await _pageFilter.OnPageHandlerExecutionAsync(executingContext, () => Task.FromResult(executedContext));
+
+        var redirect = Assert.IsType<RedirectToPageResult>(executedContext.Result);
+        Assert.Equal("/Error/Forbidden", redirect.PageName);
+        Assert.Equal("Exchange-401", page.TempData["ApiErrorId"]);
+        Assert.Null(page.TempData["ErrorMessage"]);
+    }
+
+    [Fact]
     public async Task OnPageHandlerExecutionAsync_ShouldRedirectTyped403GetApplicationToNotFound()
     {
         var page = CreatePageModel();
@@ -965,10 +990,12 @@ public class ExternalApiExceptionFilterTests
     private static ExternalApplicationsException CreatePlainApiException(int statusCode, string message) =>
         new(message, statusCode, message, new Dictionary<string, IEnumerable<string>>(), null);
 
-    private static ExternalApplicationsException<ExceptionResponse> CreateTypedApiException(ExceptionResponse response) =>
+    private static ExternalApplicationsException<ExceptionResponse> CreateTypedApiException(
+        ExceptionResponse response,
+        int? httpStatusCode = null) =>
         new(
             response.Message,
-            response.StatusCode,
+            httpStatusCode ?? response.StatusCode,
             response.Message,
             new Dictionary<string, IEnumerable<string>>(),
             response,

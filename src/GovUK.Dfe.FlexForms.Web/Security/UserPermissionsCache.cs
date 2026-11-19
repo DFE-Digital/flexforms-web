@@ -106,6 +106,11 @@ public static class UserPermissionsCache
             // (PermissionsCacheMiddleware, page filter) turn this into the Forbidden page.
             throw;
         }
+        catch (ExternalApplicationsException ex) when (ex.StatusCode is 401 or 403)
+        {
+            // Auth/authorisation failures must reach PermissionsCacheMiddleware (logout vs Forbidden).
+            throw;
+        }
         catch (Exception ex)
         {
             logger?.LogError(ex, "Failed to refresh user permissions for the signed-in user");
