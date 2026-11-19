@@ -17,6 +17,10 @@ public sealed class DashboardPage : BasePage
 
     public async Task GoToAsync() => await Page.GotoAsync("/applications/dashboard");
 
+    /// <summary>Opens the dashboard with a <c>templateId</c> in the link, which selects that template if the user may open it.</summary>
+    public async Task GoToWithTemplateAsync(string templateId) =>
+        await Page.GotoAsync($"/applications/dashboard?templateId={templateId}");
+
     public async Task GoToAllApplicationsAsync() => await Page.GotoAsync("/applications");
 
     public async Task ChooseDefaultFormAsync()
