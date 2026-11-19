@@ -27,7 +27,7 @@ Per-request overlays: `TenantAwareOpenIdConnectConfigurator`, `TenantAwareEntraS
 
 ## Token exchange and refresh
 
-`AddTokenRefreshWithOidc`. `ActivityBasedTokenRefreshMiddleware`, `TokenExpiryMiddleware`. Tickets in distributed cache (`DistributedCacheTicketStore`).
+`AddTokenRefreshWithOidc`. `ActivityBasedTokenRefreshMiddleware`, Api.Client `TokenManagementMiddleware` (Web's `TokenExpiryMiddleware` exists but is not registered). Tickets in distributed cache (`DistributedCacheTicketStore`).
 
 **Entra tenants still need `TokenRefresh:TokenEndpoint`.** `TenantTokenRefreshOptionsAccessor` validates every request. Historical production crash: empty TokenEndpoint after dropping DfE Sign-In.
 

@@ -30,7 +30,20 @@ Authorisation conventions (`Program.cs`): every page needs `OpenIdConnectPolicy`
 
 ## Middleware (order in `Program.cs`, do not reorder casually)
 
-ForwardedHeaders → CorrelationId → `UsePlatformTenantConfiguration` (`TenantConfigurationMiddleware`) → exception handler/HSTS → security headers → HTTPS redirect (not health) → compression → static files → routing → cookie policy → request timing → **session** → status code pages → authentication → `TenantSessionBindingMiddleware` → reporting session binding → `UseTokenManagementMiddleware` (`TokenExpiryMiddleware`) → `ActivityBasedTokenRefreshMiddleware` (idle 30 min, absolute 8 h, refresh at 30 min remaining) → `PermissionsCacheMiddleware` → authorization → `TemplateSelectionMiddleware` → `RequestTelemetryEnrichmentMiddleware` → GOV.UK Frontend → endpoints. Health `/health`, `/healthz`, `/liveness` are `.ShortCircuit()`.
+ForwardedHeaders → CorrelationId → `UsePlatformTenantConfiguration` (`TenantConfigurationMiddleware`) → exception handler/HSTS → security headers → HTTPS redirect (not health) → compression → static files → routing → cookie policy → request timing → **session** → status code pages → authentication → `TenantSessionBindingMiddleware` → reporting session binding → `UseTokenManagementMiddleware` (Api.Client `TokenManagementMiddleware`; Web's own `Middleware/TokenExpiryMiddleware.cs` is not registered) → `ActivityBasedTokenRefreshMiddleware` (idle 30 min, absolute 8 h, refresh at 30 min remaining) → `PermissionsCacheMiddleware` → authorization → `TemplateSelectionMiddleware` → `RequestTelemetryEnrichmentMiddleware` → GOV.UK Frontend → endpoints. Health `/health`, `/healthz`, `/liveness` are `.ShortCircuit()`.
+
+## Error pages
+
+**Verified** (2026-11). All are `AllowAnonymousToPage` in `Program.cs`. Reuse these before adding a page.
+
+| Page | Use for | TempData it reads |
+|------|---------|-------------------|
+| `/Error/Forbidden` | Access denied (403, and 401 from the filter) | `AccessDeniedReason` (shown instead of `ApplicationAccessMessages.NoAccess`), `ApiErrorId` (error reference). Hides the dashboard link when `ApiErrorId` is the no-membership ID |
+| `/Error/NotFound` | 404, `ApplicationAccessException`, and 403 on GET application pages (to avoid revealing that the application exists) | none |
+| `/Error/General` | 429 and other API errors with a message | `ErrorMessage`, `ApiErrorId` |
+| `/Error/ServerError` | 5xx and unhandled exceptions | `ApiErrorId` |
+
+TempData is session-backed (`AddSessionStateTempDataProvider`), so it survives a cookie sign-out. Middleware has no `PageModel`, so it writes TempData through `ITempDataDictionaryFactory` and calls `Save()` (see `PermissionsCacheMiddleware`). Pattern for "sign out and say why": `TenantSessionBindingMiddleware` and the no-membership path in `PermissionsCacheMiddleware` (cookie sign-out only, then redirect). User-facing copy lives in `Constants/ApplicationAccessMessages.cs`.
 
 ## API usage
 
