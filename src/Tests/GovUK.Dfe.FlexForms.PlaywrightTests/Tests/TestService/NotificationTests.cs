@@ -73,11 +73,20 @@ public sealed class NotificationTests : PlaywrightTestBase
 
         await notificationsPage.ExpectBannerAsync($"Your file '{fileName}' uploaded.", timeout: 15_000);
 
+        // A reload would render the same status and message, so mark this document to prove it's still the one
+        // that received the update. notifications.js does reload check your answers on a result, but not this page.
+        var documentMarker = Guid.NewGuid().ToString("N");
+        await Page.EvaluateAsync("marker => { window.__uploadPageDocumentMarker = marker; }", documentMarker);
+
         await Files.RecordValidationResultAsync(AdminApiClient, _createdApplication.ApplicationId, fileName,
             isValid: false, FileValidationMessage.Markdown);
 
         await uploadField.ExpectValidationStatusAsync(fileName, "Validation failed");
         await FileValidationMessage.ExpectFormattedAsync(uploadField.ValidationStatus(fileName));
+        Assert.That(
+            await Page.EvaluateAsync<string?>("() => window.__uploadPageDocumentMarker ?? null"),
+            Is.EqualTo(documentMarker),
+            "The upload page reloaded when the validation result arrived, instead of updating in place.");
     }
 
     [TestCase(TestName = "User can dismiss a notification and clear all notifications")]

@@ -95,11 +95,16 @@ public sealed class TemplateManagerAccessTests : PlaywrightTestBase
         await chooseFormPage.ExpectFormCanBeChosenAsync(_givenTemplateId);
         await chooseFormPage.ExpectFormCannotBeChosenAsync(_otherTemplateId);
 
+        // Getting past the disabled radio: the chooser's POST handler turns the other template away.
+        await chooseFormPage.ForceChooseFormAsync(_otherTemplateId);
+        await chooseFormPage.ExpectErrorAsync("You do not have access to that form.");
+
         // Unlike other users, a template manager can choose a given template that isn't live, as a preview.
         await chooseFormPage.SelectFormAsync(GivenTemplateName, "Not live");
         await chooseFormPage.GoToDashboardAsync();
         await dashboardPage.ExpectPreviewBannerVisibleAsync(GivenTemplateName);
 
+        // A link to the other template is ignored, so they stay on the template they chose.
         await dashboardPage.GoToWithTemplateAsync(_otherTemplateId);
         await Assertions.Expect(Page).ToHaveURLAsync(new Regex("/applications/dashboard"));
         await dashboardPage.ExpectPreviewBannerVisibleAsync(GivenTemplateName);
