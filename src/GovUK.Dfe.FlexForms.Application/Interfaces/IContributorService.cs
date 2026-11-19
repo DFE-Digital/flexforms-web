@@ -9,7 +9,7 @@ namespace GovUK.Dfe.FlexForms.Application.Interfaces;
 public interface IContributorService
 {
     /// <summary>
-    /// Gets all contributors for a specific application
+    /// Gets all contributors for a specific application, including Application / ApplicationFiles grants.
     /// </summary>
     /// <param name="applicationId">The application ID to get contributors for</param>
     /// <param name="cancellationToken">Cancellation token</param>

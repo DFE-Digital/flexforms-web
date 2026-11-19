@@ -60,7 +60,7 @@ public static class NewTenantMessages
     {
         "Layout" =>
             "Other layout options copied from the current tenant. ServiceName is always set from the Service name field above.",
-        "Template" or "ApplicationTemplates" =>
+        "ApplicationTemplates" =>
             "Template ids the current tenant owns are rejected, because a tenant can only map its own templates. "
             + "Clear them (and use the new hostname as the key) unless they are shared legacy templates. "
             + "If the new tenant uses a different database, leave mappings out and add them after creation.",

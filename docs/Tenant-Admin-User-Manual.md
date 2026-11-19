@@ -438,6 +438,8 @@ Title: **Edit user**
 
 Name and email are read-only. You can change **Role** and **Forms this user can access**, then **Save**.
 
+Where the tenant uses Test Authentication, the page also has a **Sign-in lock** section above the role, with its own save button (see 8.9).
+
 Changing only form access does **not** change the person’s role. The access audit trail records that as form access updated, not as a new role assignment.
 
 ### 8.4 User-level permissions
@@ -473,6 +475,9 @@ Typical actions:
 | **FormAccessUpdated** | Their form (template) list was changed without a role change |
 | **MembershipDeactivated** | They were removed from the tenant |
 | **TestAuthAuthenticatorSetupCodeCreated** | An admin created an authenticator app setup code for them (test environments only, see 8.8) |
+| **TestAuthSignInLocked** | An admin locked them out of sign-in (test environments only, see 8.9) |
+| **TestAuthSignInUnlocked** | An admin unlocked their sign-in (see 8.9) |
+| **TestAuthTemporaryLockoutCleared** | An admin used **Unlock now** after they entered too many wrong authenticator app codes (see 8.9) |
 
 ### 8.6 Grant to all vs User Manager
 
@@ -546,18 +551,18 @@ A legacy `ExternalApplicationsApiClient:DefaultTemplateId` tenant setting is onl
 
 Invite/remove of extra people on **one application** is done from that application’s task list when the template has `"contributorPattern": true`.
 
-On the invite page, the lead applicant chooses what the invitee can do on **that application**:
+On the invite page, the lead applicant chooses what the invitee can do on **that application** (wording uses the form’s singular term from the template or Organisation settings, for example “visit”):
 
-- **View this application** (always included)
-- **Change this application**
+- **View this …** (always included)
+- **Change this …**
 - If the form has file uploads: **View uploaded files**, **Upload files**, and **Delete uploaded files**
 
-Those choices are set only when the person is invited. They are not changed later from this screen.
+Those choices are set only when the person is invited. They are not changed later from this screen. On the contributors list, each invitee appears as a card that shows the permissions they were given.
 
 The checkboxes are pre-selected from the template’s **Role for invited contributors**:
 
 - **User** (or none chosen) → all options selected (full access)
-- Any other role → view only (**View this application**, and **View uploaded files** when the form has uploads)
+- Any other role → view only (**View this …**, and **View uploaded files** when the form has uploads)
 
 The lead can still change the ticks before sending the invite.
 
@@ -572,7 +577,7 @@ Title: **Authenticator app setup code**
 
 Only shown where the tenant uses Test Authentication (never in Production). On the sign in page, testers normally get a one-time password by email. If they cannot receive email they can sign in with an authenticator app instead, but they need to set one up first. Use a setup code for that:
 
-1. In User Manager, select **Create authenticator setup code** (or, on **Edit user**, **Create an authenticator app setup code for this user**).
+1. Open the person in **Edit user**, then select **Create an authenticator app setup code for this user**.
 2. Enter their email address. They do not need to have signed in before.
 3. Select **Create setup code** and give them the code (for example `ABCDE-FGHJK`) directly, for example in a Teams message to them only.
 4. They choose **I have an authenticator app setup code** on the sign in page, enter the code, scan the QR code with an authenticator app and enter the 6 digit code it shows. This signs them in, and from then on they can choose **Use my authenticator app**.
@@ -586,6 +591,27 @@ Things to know:
 - Every code appears in the access audit trail as **TestAuthAuthenticatorSetupCodeCreated** (see 8.5).
 - To set up, replace or remove **your own** authenticator app, use **Admin → Users & Roles → Authenticator app**.
 - Codes are for the tenant you are signed in to. A SuperAdmin or platform engineer who needs a code for another tenant, without signing in to it, can create one by hand in Redis: see `docs/test-auth-authenticator-setup-codes.md` in the flexforms-api repository.
+
+### 8.9 Sign-in locks (test environments only)
+
+Page: `/admin/user-manager/edit`, section **Sign-in lock**
+
+Only shown where the tenant uses Test Authentication (never in Production).
+
+**Temporary lock.** If someone enters 5 wrong authenticator app codes, their authenticator sign-in is locked for up to 15 minutes, counted from their first wrong code. The sign in page tells them how many minutes to wait and that they can get a one-time password by email instead. The **Status** row shows **Temporarily locked** and when it unlocks. Select **Unlock now** to let them try again straight away.
+
+**Lock a user out.** Tick **Lock this user out of sign-in** and select **Save sign-in lock**. While locked:
+
+- they cannot sign in with a one-time password by email, an authenticator app or a setup code. No email is sent
+- the sign in page tells them their account has been locked and to contact their tenant administrator
+- the lock never ends on its own. **Status** shows **Locked by an administrator**, with when and by whom
+
+To unlock them, untick the box and select **Save sign-in lock**. That also removes any temporary lock.
+
+- Saving this section does not change the user's role or forms, and saving the role does not change the lock.
+- A lock stops new sign-ins. Someone who is already signed in stays signed in until their session ends.
+- You cannot lock yourself out. Only a **SuperAdmin** can lock or unlock another administrator.
+- Every change appears in the access audit trail (see 8.5).
 
 ---
 

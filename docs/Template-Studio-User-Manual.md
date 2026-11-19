@@ -146,7 +146,7 @@ This is shown only when **Let applicants invite contributors** is ticked.
 
 **Role for invited contributors** is the tenant membership role given to someone who is invited and is not already in the tenant. It is not what decides whether they can edit that application.
 
-When the lead applicant invites someone, they choose what that person can do on **that application** (view, change, and — if the form has file uploads — view, upload or delete files). **View this application** is always included. Those choices are set only at invite time.
+When the lead applicant invites someone, they choose what that person can do on **that application** (view, change, and — if the form has file uploads — view, upload or delete files). **View this …** is always included; the noun follows **What you call this form** (or Organisation settings). Those choices are set only at invite time. The **Role for invited contributors** options in Template Studio use the same singular term (for example “User (can edit this visit)”).
 
 The invite page pre-selects checkboxes from this setting: **User** (or none) starts with full access selected; any other role starts with view-only selected. The lead can change the ticks before sending.
 
@@ -429,6 +429,8 @@ Choose **What to search** (or which **Upload field** to use) from the search and
 **Name in a sentence**, for search questions only, is the wording that replaces `{name}`. Leave it blank to keep the name from Tenant settings. The wording is used as you type it.
 
 **Confirmation heading** is the question above the chosen result, for example `Is this the correct {name}?`. Leave it blank to use "Is this the right {name}?".
+
+**File check status text**, for upload questions only, sets the words shown next to each uploaded file: **Waiting for the file check**, **File check passed** and **File check failed**. Leave a box blank to keep the default (`Validation pending`, `Validated`, `Validation failed`). Each upload question has its own text, so two upload questions in one template can differ.
 
 **How results are shown (optional)**, for search questions only, changes how this question shows its results without changing the tenant's setting for other questions:
 
@@ -855,7 +857,7 @@ New applications use the latest saved version. Applications already started keep
 | The preview says "There's nothing to preview" | The preview ended. Select **Preview task** in Template Studio again. |
 | A search question in the preview has a text box | The preview doesn't search other services. Type the result you'd pick. |
 | A page I didn't expect is hidden | Look for **Shown by a rule** on it, and check the rule on the Rules tab. |
-| Invited contributors can still edit | The lead applicant chose **Change this application** (or file upload/delete) when they invited them. Access is set per invite, not by this template role alone. People invited before keep the access they already have. |
+| Invited contributors can still edit | The lead applicant chose **Change this …** (or file upload/delete) when they invited them — the noun matches **What you call this form**. Access is set per invite, not by this template role alone. People invited before keep the access they already have. |
 | A saved contributor role says it is no longer available | The role was deleted or is not allowed. Choose another role. New invitations are rejected until you do. |
 | Version number rejected | Use three numbers, for example 1.2.1, that haven't been used before. |
 | I made a mistake | Use **Undo**, or leave without saving to discard all your changes. |

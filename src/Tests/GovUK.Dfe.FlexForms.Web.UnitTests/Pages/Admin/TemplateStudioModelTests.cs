@@ -7,6 +7,7 @@ using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Application.Admin;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
+using GovUK.Dfe.FlexForms.Application.Options;
 using GovUK.Dfe.FlexForms.Application.Validation;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using GovUK.Dfe.FlexForms.Web.Pages.Admin;
@@ -21,6 +22,7 @@ using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using Task = System.Threading.Tasks.Task;
 
@@ -38,6 +40,8 @@ public class TemplateStudioModelTests
     private readonly IEventMappingReferenceReader _eventMappings = Substitute.For<IEventMappingReferenceReader>();
     private readonly IApplicationsClient _applications = Substitute.For<IApplicationsClient>();
     private readonly IRolesClient _roles = Substitute.For<IRolesClient>();
+    private readonly IOptions<ApplicationTerminologyOptions> _terminology =
+        Options.Create(new ApplicationTerminologyOptions());
     private readonly InMemorySession _session = new();
     private readonly TemplateDto _template = new() { TemplateId = Guid.NewGuid(), Name = "Transfers", CreatedOn = DateTime.UtcNow };
     private readonly TemplateStudioModel _model;
@@ -47,7 +51,7 @@ public class TemplateStudioModelTests
         _roles.ListAsync(Arg.Any<CancellationToken>())
             .Returns(new System.Collections.ObjectModel.ObservableCollection<TenantRoleDto>());
         _model = new TemplateStudioModel(
-            _admin, _selection, _validation, _cacheInvalidator, _complexFields, _eventMappings, _applications, _roles, NullLogger<TemplateStudioModel>.Instance);
+            _admin, _selection, _validation, _cacheInvalidator, _complexFields, _eventMappings, _applications, _roles, _terminology, NullLogger<TemplateStudioModel>.Instance);
         GivenApplicationCount(Task.FromResult(new PagedResultOfApplicationDto { TotalCount = 4 }));
 
         var httpContext = new DefaultHttpContext

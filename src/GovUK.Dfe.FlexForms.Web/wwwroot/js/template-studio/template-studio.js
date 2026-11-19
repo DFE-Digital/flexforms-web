@@ -1749,8 +1749,13 @@
         ];
     }
 
+    function contributorSingular(root) {
+        var fromTemplate = root && root.displayCopy && root.displayCopy.terminology && root.displayCopy.terminology.singular;
+        return lib.resolvedSingular(fromTemplate || data.organisationTerminologySingular);
+    }
+
     function contributorRoleChoices(root) {
-        return lib.contributorRoleChoices(data.contributorRoles, root.contributorRoleId);
+        return lib.contributorRoleChoices(data.contributorRoles, root.contributorRoleId, contributorSingular(root));
     }
 
     function copyValue(section, property) {
@@ -1926,7 +1931,7 @@
             root.contributorPattern !== false && data.canChooseContributorRole !== false ? selectInput({
                 id: 'tpl-contributor-role',
                 label: 'Role for invited contributors',
-                hint: 'User can edit the application. Any other role can only view it and its files.',
+                hint: 'User can edit the ' + contributorSingular(root) + '. Any other role can only view it and its files.',
                 value: lib.contributorRoleSelectValue(root.contributorRoleId, data.contributorRoles),
                 items: contributorRoleChoices(root),
                 onChange: function (value) {
@@ -2456,7 +2461,37 @@
                     edited(path);
                 }
             }) : null,
-            type === 'search' ? searchDisplaySettings(path, config) : null
+            type === 'search' ? searchDisplaySettings(path, config) : null,
+            type === 'upload' ? uploadStatusTextSettings(path, config) : null
+        ]);
+    }
+
+    var UPLOAD_STATUS_TEXTS = [
+        { key: 'pending', label: 'Waiting for the file check', placeholder: 'Validation pending' },
+        { key: 'passed', label: 'File check passed', placeholder: 'Validated' },
+        { key: 'failed', label: 'File check failed', placeholder: 'Validation failed' }
+    ];
+
+    // Labels shown next to each uploaded file. Blank keeps the default, and the object is removed when all are blank.
+    function uploadStatusTextSettings(path, config) {
+        var current = config.validationStatusText || {};
+        return h('div', { class: 'govuk-form-group' }, [
+            h('h3', { class: 'govuk-heading-s', text: 'File check status text' }),
+            h('p', { class: 'govuk-hint', text: 'Shown next to each uploaded file. Leave blank to use the default.' }),
+            UPLOAD_STATUS_TEXTS.map(function (item) {
+                return textInput({
+                    id: 'tpl-complex-status-' + item.key,
+                    label: item.label,
+                    hint: 'Default: ' + item.placeholder,
+                    value: current[item.key] || '',
+                    onInput: function (value) {
+                        var texts = config.validationStatusText || (config.validationStatusText = {});
+                        if (value.trim()) texts[item.key] = value.trim(); else delete texts[item.key];
+                        if (!Object.keys(texts).length) delete config.validationStatusText;
+                        edited(path);
+                    }
+                });
+            })
         ]);
     }
 

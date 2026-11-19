@@ -3,6 +3,7 @@ using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using GovUK.Dfe.FlexForms.Application.Admin;
 using GovUK.Dfe.FlexForms.Application.Interfaces;
+using GovUK.Dfe.FlexForms.Application.Options;
 using GovUK.Dfe.FlexForms.Domain.Templates;
 using GovUK.Dfe.FlexForms.Web.Features;
 using GovUK.Dfe.FlexForms.Web.Security;
@@ -10,6 +11,7 @@ using GovUK.Dfe.FlexForms.Web.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Options;
 using Microsoft.FeatureManagement.Mvc;
 
 namespace GovUK.Dfe.FlexForms.Web.Pages.Admin;
@@ -31,6 +33,7 @@ public class TemplateStudioModel(
     IEventMappingReferenceReader eventMappingReferenceReader,
     IApplicationsClient applicationsClient,
     IRolesClient rolesClient,
+    IOptions<ApplicationTerminologyOptions> terminology,
     ILogger<TemplateStudioModel> logger) : PageModel
 {
     private const string TemplateVersionSessionKey = "TemplateVersionNumber";
@@ -382,6 +385,8 @@ public class TemplateStudioModel(
                 .Select(reference => new { fieldId = reference.FieldId, eventType = reference.EventType, mappingId = reference.MappingId }),
             contributorRoles = await ContributorRolesAsync(cancellationToken),
             canChooseContributorRole = AdminAccessHelper.IsAdmin(User),
+            // Template displayCopy.terminology wins in the studio UI; this is the Organisation Settings fallback.
+            organisationTerminologySingular = terminology.Value.Singular,
             validateUrl = Url.Page("/Admin/TemplateStudio", "Validate")
         });
     }
