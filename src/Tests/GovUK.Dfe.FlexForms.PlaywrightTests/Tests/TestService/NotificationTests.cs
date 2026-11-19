@@ -2,7 +2,9 @@ using GovUK.Dfe.FlexForms.PlaywrightTests.Api;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Api.Builders;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Infrastructure;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Pages;
+using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Components;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Tasks;
+using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService;
 
@@ -46,7 +48,8 @@ public sealed class NotificationTests : PlaywrightTestBase
 
         await notificationsPage.ExpectNotificationAsync($"Your file '{uploadedFileName}' uploaded.");
 
-        await Files.ValidateValidFile(AdminApiClient, _createdApplication.ApplicationReference);
+        await Files.RecordValidationResultAsync(AdminApiClient, _createdApplication.ApplicationId, uploadedFileName,
+            isValid: true, "File is valid");
         await Page.ReloadAsync();
 
         await notificationsPage.ExpectUnreadBadgeAsync(2);
@@ -54,6 +57,36 @@ public sealed class NotificationTests : PlaywrightTestBase
         // extend timeout for file-validation pipeline completing
         await notificationsPage.ExpectNotificationAsync(
             $"The file '{uploadedFileName}' has been validated.", timeout: 20_000);
+    }
+
+    [TestCase(TestName = "A file validation result appears on the upload page without a reload, with its message formatted")]
+    [CiRetry]
+    public async Task AValidationResultAppearsOnTheUploadPageWithoutAReloadAsync()
+    {
+        var uploadField = new UploadField(Page, "supportingDocuments");
+        var notificationsPage = new NotificationsPage(Page);
+        var fileName = UploadField.UniqueFileName("live-validation");
+
+        await new ConfiguredFieldsTask(Page).GoToAsync(_createdApplication.ApplicationReference, ConfiguredFieldsTask.UploadPage);
+        await uploadField.UploadAsync(fileName);
+        await uploadField.ExpectFileListedAsync(fileName);
+
+        await notificationsPage.ExpectBannerAsync($"Your file '{fileName}' uploaded.", timeout: 15_000);
+
+        // A reload would render the same status and message, so mark this document to prove it's still the one
+        // that received the update. notifications.js does reload check your answers on a result, but not this page.
+        var documentMarker = Guid.NewGuid().ToString("N");
+        await Page.EvaluateAsync("marker => { window.__uploadPageDocumentMarker = marker; }", documentMarker);
+
+        await Files.RecordValidationResultAsync(AdminApiClient, _createdApplication.ApplicationId, fileName,
+            isValid: false, FileValidationMessage.Markdown);
+
+        await uploadField.ExpectValidationStatusAsync(fileName, "Validation failed");
+        await FileValidationMessage.ExpectFormattedAsync(uploadField.ValidationStatus(fileName));
+        Assert.That(
+            await Page.EvaluateAsync<string?>("() => window.__uploadPageDocumentMarker ?? null"),
+            Is.EqualTo(documentMarker),
+            "The upload page reloaded when the validation result arrived, instead of updating in place.");
     }
 
     [TestCase(TestName = "User can dismiss a notification and clear all notifications")]

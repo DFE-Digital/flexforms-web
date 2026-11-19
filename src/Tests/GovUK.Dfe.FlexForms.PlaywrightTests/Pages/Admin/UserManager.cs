@@ -70,7 +70,7 @@ public sealed class UserManager(IPage page) : BasePage(page)
             await RevokeFormAccessAsync(formName);
         }
 
-        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save" }).ClickAsync();
+        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = "Save", Exact = true }).ClickAsync();
         await Assertions.Expect(Page).ToHaveURLAsync(new Regex(@"/admin/user-manager(?:\?|$)"));
         await Assertions.Expect(Page.GetByRole(AriaRole.Alert))
             .ToContainTextAsync("User role and form access updated.");

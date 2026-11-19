@@ -18,6 +18,15 @@ public static class Roles
             string.Equals(role.Name, roleName.Trim(), StringComparison.OrdinalIgnoreCase))?.RoleId;
     }
 
+    /// <summary>Replaces every permission on the role with <paramref name="permissions"/>.</summary>
+    public static Task SetPermissionsAsync(IAPIRequestContext request, string roleId,
+        params RolePermissionGrant[] permissions) =>
+        ApiBase.ApiRequestAsync(
+            request,
+            $"/v1/roles/{roleId}/permissions",
+            method: "PUT",
+            data: new { Permissions = permissions });
+
     public static async Task RemoveRoleAsync(IAPIRequestContext request, string roleName)
     {
         var roleId = await GetRoleIdByNameAsync(request, roleName);

@@ -39,7 +39,7 @@ public sealed record AddContributorRequest(string Email, string Name);
 
 public sealed record CustomApplicationStatusRequest(ApplicationStatus ApplicationStatus, string Label);
 
-public sealed record UploadDto(string Id, string ApplicationId);
+public sealed record UploadDto(string Id, string ApplicationId, string? OriginalFileName = null);
 
 public sealed record ExchangeTokenRequest([property: JsonPropertyName("accessToken")] string AccessToken);
 
@@ -79,6 +79,8 @@ public sealed record TenantUserDto(string UserId, string? Email, string? Name);
 public sealed record TenantUsersResult(IReadOnlyList<TenantUserDto>? Items);
 
 public sealed record TenantRoleDto(string RoleId, string Name, bool IsSystem);
+
+public sealed record RolePermissionGrant(string ResourceType, string ResourceKey, string AccessType);
 
 
 public sealed record CreateUserRoleRequest(string Email, string Name, string Role, string[] TemplateIds);
