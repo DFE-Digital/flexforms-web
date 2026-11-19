@@ -52,6 +52,18 @@ public sealed class ChangeLeadApplicantTests : PlaywrightTestBase
         await dashboardPage.ExpectApplicationNotPresentAsync(application.ApplicationReference);
         await taskList.GoToAsync(application.ApplicationReference);
         await new ErrorPage(Page).ExpectPageNotFoundAsync();
+
+        // Submitting needs Write on the application and to be its creator, which changing the lead applicant
+        // must both hand over. Done through the API: it doesn't need every task complete, unlike the web journey.
+        // NUnit 5's async asserts return a Task: without await they don't assert anything.
+        var previousLeadSubmit = await Assert.ThrowsAsync<ApiRequestException>(() =>
+            ApplicationApi.SubmitApplicationAsync(ApiClient, application.ApplicationId));
+        Assert.That(previousLeadSubmit!.Message, Does.Contain("(403)"));
+
+        await using var newLeadApiClient = await ApiBase.CreateApiRequestContextAsync(
+            AssemblySetup.Playwright, ApiConfigFactory.ApiConfigForUser("user2", ApiConfig));
+        await Assert.DoesNotThrowAsync(() =>
+            ApplicationApi.SubmitApplicationAsync(newLeadApiClient, application.ApplicationId));
     }
 
     [TestCase(TestName = "Changing the lead applicant to the current lead applicant shows an error")]

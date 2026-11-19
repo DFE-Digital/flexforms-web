@@ -23,13 +23,13 @@ public sealed class ApplicationPreviewPage(IPage page) : BasePage(page)
     }
 
     /// <summary>
-    /// The lead applicant gets the submit section. Its button is disabled until every task is complete,
-    /// so this checks the button is there rather than that it can be pressed.
+    /// The lead applicant gets an enabled submit button. It is only disabled while an uploaded file blocks
+    /// submission; whether every task is complete is checked when it is pressed.
     /// </summary>
     public async Task ExpectLeadApplicantCanSubmitAsync(string singular)
     {
         await Assertions.Expect(Preview()).ToBeVisibleAsync();
-        await Assertions.Expect(SubmitApplicationButton()).ToBeVisibleAsync();
+        await Assertions.Expect(SubmitApplicationButton()).ToBeEnabledAsync();
         await Assertions.Expect(LeadApplicantSubmitMessage(singular)).ToHaveCountAsync(0);
     }
 
@@ -85,6 +85,7 @@ public sealed class ApplicationPreviewPage(IPage page) : BasePage(page)
         await Assertions.Expect(Preview()).ToBeVisibleAsync();
         await Assertions.Expect(Page.GetByText(FileValidationBlocksSubmitText,
             new PageGetByTextOptions { Exact = true })).ToHaveCountAsync(0);
+        await Assertions.Expect(SubmitApplicationButton()).ToBeEnabledAsync();
     }
 
     /// <summary>The file's entry in the list of files stopping the submit, including the validator's message.</summary>
