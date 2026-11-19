@@ -100,6 +100,12 @@ public static class UserPermissionsCache
             logger?.LogDebug("Permissions refresh canceled for the signed-in user");
             return null;
         }
+        catch (ExternalApplicationsException ex) when (TenantMembershipDenial.IsMatch(ex))
+        {
+            // Not a transient failure: the user has no membership in this tenant. Callers
+            // (PermissionsCacheMiddleware, page filter) turn this into the Forbidden page.
+            throw;
+        }
         catch (Exception ex)
         {
             logger?.LogError(ex, "Failed to refresh user permissions for the signed-in user");

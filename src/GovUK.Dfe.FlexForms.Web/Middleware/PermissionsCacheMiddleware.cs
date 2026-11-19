@@ -1,4 +1,7 @@
 using GovUK.Dfe.FlexForms.Application.Diagnostics;
+using GovUK.Dfe.FlexForms.Web.Constants;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.FlexForms.Web.Telemetry;
 using GovUK.Dfe.FlexForms.Web.Tenancy;
@@ -59,6 +62,11 @@ public class PermissionsCacheMiddleware(
                     logger?.LogDebug("Permissions cache refresh canceled for aborted request {Path}", context.Request.Path);
                     return;
                 }
+                catch (ExternalApplicationsException ex) when (TenantMembershipDenial.IsMatch(ex))
+                {
+                    await DenyNoTenantMembershipAsync(context, logger);
+                    return;
+                }
                 catch (ExternalApplicationsException ex) when (ex.StatusCode == 401)
                 {
                     context.Response.Redirect("/Logout?reason=auth_failed");
@@ -90,6 +98,30 @@ public class PermissionsCacheMiddleware(
         }
 
         await next(context);
+    }
+
+    /// <summary>
+    /// Signed in with a valid identity, but not a member of this tenant. Show the reason on the
+    /// Forbidden page and sign out the local cookie (same as <see cref="TenantSessionBindingMiddleware"/>)
+    /// so later requests do not repeat the failing exchange. The IdP session is left alone.
+    /// </summary>
+    private static async Task DenyNoTenantMembershipAsync(HttpContext context, ILogger? logger)
+    {
+        logger?.LogWarning(
+            "Signed-in user has no membership in tenant {TenantId}; showing access denied",
+            context.RequestServices.GetService<ITenantRequestContext>()?.TenantId);
+
+        var tempDataFactory = context.RequestServices.GetService<ITempDataDictionaryFactory>();
+        if (tempDataFactory is not null)
+        {
+            var tempData = tempDataFactory.GetTempData(context);
+            tempData["AccessDeniedReason"] = ApplicationAccessMessages.NotAuthorisedForTenant;
+            tempData["ApiErrorId"] = TenantMembershipDenial.ErrorId;
+            tempData.Save();
+        }
+
+        await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        context.Response.Redirect("/Error/Forbidden");
     }
 
     private static bool IsAuthenticationFailure(ExternalApplicationsException ex) =>

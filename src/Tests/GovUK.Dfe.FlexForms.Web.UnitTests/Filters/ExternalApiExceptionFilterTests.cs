@@ -7,6 +7,7 @@ using GovUK.Dfe.FlexForms.Web.Constants;
 using GovUK.Dfe.FlexForms.Web.Filters;
 using GovUK.Dfe.FlexForms.Web.Interfaces;
 using GovUK.Dfe.FlexForms.Web.Pages.FormEngine;
+using GovUK.Dfe.FlexForms.Web.Security;
 using GovUK.Dfe.FlexForms.Web.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
@@ -343,6 +344,54 @@ public class ExternalApiExceptionFilterTests
         var redirect = Assert.IsType<RedirectToPageResult>(executedContext.Result);
         Assert.Equal("/Error/Forbidden", redirect.PageName);
         Assert.Equal("Role required", page.TempData["AccessDeniedReason"]);
+    }
+
+    [Theory]
+    [InlineData("GET", "/applications/dashboard")]
+    [InlineData("POST", "/applications/REF-1/t1")]
+    public async Task OnPageHandlerExecutionAsync_ShouldShowTenantDenialReason_WhenUntyped403IsNoTenantMembership(
+        string method,
+        string path)
+    {
+        var page = CreatePageModel();
+        var executingContext = CreateExecutingContext(page, method: method, path: path);
+        var body = JsonSerializer.Serialize(new ExceptionResponse
+        {
+            StatusCode = 403,
+            Message = "You are not authorised to access this service.",
+            ErrorId = TenantMembershipDenial.ErrorId
+        });
+        var exception = new ExternalApplicationsException(
+            "The HTTP status code of the response was not expected (403).",
+            403,
+            body,
+            new Dictionary<string, IEnumerable<string>>(),
+            null);
+        var executedContext = CreateExecutedContext(executingContext, exception);
+
+        await _pageFilter.OnPageHandlerExecutionAsync(executingContext, () => Task.FromResult(executedContext));
+
+        var redirect = Assert.IsType<RedirectToPageResult>(executedContext.Result);
+        Assert.Equal("/Error/Forbidden", redirect.PageName);
+        Assert.Equal(ApplicationAccessMessages.NotAuthorisedForTenant, page.TempData["AccessDeniedReason"]);
+        Assert.Equal(TenantMembershipDenial.ErrorId, page.TempData["ApiErrorId"]);
+        Assert.True(executedContext.ExceptionHandled);
+    }
+
+    [Fact]
+    public async Task OnPageHandlerExecutionAsync_ShouldShowTenantDenialReason_WhenRawApiMembership403ReachesWeb()
+    {
+        var page = CreatePageModel();
+        var executingContext = CreateExecutingContext(page, method: "GET", path: "/applications/dashboard");
+        var executedContext = CreateExecutedContext(
+            executingContext,
+            CreatePlainApiException(403, "User is not a member of tenant 'Transfers'."));
+
+        await _pageFilter.OnPageHandlerExecutionAsync(executingContext, () => Task.FromResult(executedContext));
+
+        var redirect = Assert.IsType<RedirectToPageResult>(executedContext.Result);
+        Assert.Equal("/Error/Forbidden", redirect.PageName);
+        Assert.Equal(ApplicationAccessMessages.NotAuthorisedForTenant, page.TempData["AccessDeniedReason"]);
     }
 
     [Fact]

@@ -403,6 +403,8 @@ Lead copy: “Manage who can access forms in this tenant.”
 
 Removing someone **does not delete their account**. It only clears their access in **this** tenant.
 
+If someone who is not a user in this tenant signs in (and the service does not register new users automatically), they see **You do not have permission** with the message “You are not authorised to access this service. If you think you should have access, contact your administrator.” They are signed out of the service. Add them in User Manager to give them access.
+
 ### 8.1 The user list
 
 Each person is a card showing:
