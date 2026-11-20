@@ -4,10 +4,10 @@ using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 namespace GovUK.Dfe.FlexForms.Web.Security;
 
 /// <summary>
-/// Recognises the API client's "signed in, but not a member of this tenant" denial.
-/// Api.Client <c>TokenExchangeHandler</c> turns the API's exchange 403 into a synthetic 403
-/// carrying <see cref="ErrorId"/>. This is authorisation, not an expired session, so Web shows
-/// the reason instead of signing the user out as a token failure.
+/// Recognises "signed in, but not allowed into this tenant" denials from token exchange.
+/// Api.Client <c>TokenExchangeHandler</c> turns the API's exchange 403 (no membership) or 404
+/// (user not found) into a synthetic 403 carrying <see cref="ErrorId"/>. This is authorisation,
+/// not an expired session, so Web shows the reason instead of signing the user out.
 /// </summary>
 public static class TenantMembershipDenial
 {
@@ -21,26 +21,39 @@ public static class TenantMembershipDenial
     /// Phrase in the API's own exchange 403 ("User is not a member of tenant '…'"), in case the
     /// raw API response reaches Web.
     /// </summary>
-    private const string ApiMessageMarker = "not a member of tenant";
+    private const string NotMemberMarker = "not a member of tenant";
+
+    /// <summary>
+    /// Phrase in the API's exchange 404 ("User not found for email …"). Test Auth can still send
+    /// an OTP for an email that has no EA user row.
+    /// </summary>
+    private const string UserNotFoundMarker = "user not found";
 
     public static bool IsMatch(ExternalApplicationsException exception)
     {
-        if (exception.StatusCode != StatusCodes.Status403Forbidden)
-            return false;
-
         if (exception is ExternalApplicationsException<ExceptionResponse> { Result: { } typed }
-            && (IsMatch(typed.ErrorId) || ContainsMarker(typed.Message)))
+            && IsMatch(typed))
         {
             return true;
         }
 
-        // The generated client throws an untyped exception for 403, with the body in Response.
-        return ContainsErrorId(exception.Response) || ContainsMarker(exception.Response);
+        // Synthetic client 403 (preferred path after Api.Client bump).
+        if (exception.StatusCode == StatusCodes.Status403Forbidden
+            && (ContainsErrorId(exception.Response) || ContainsNotMemberMarker(exception.Response)))
+        {
+            return true;
+        }
+
+        // Raw API 404 "User not found" if it reaches Web before the client maps it.
+        return exception.StatusCode == StatusCodes.Status404NotFound
+            && ContainsUserNotFoundMarker(exception.Response);
     }
 
     public static bool IsMatch(ExceptionResponse? response) =>
         response is not null
-        && (IsMatch(response.ErrorId) || ContainsMarker(response.Message));
+        && (IsMatch(response.ErrorId)
+            || ContainsNotMemberMarker(response.Message)
+            || ContainsUserNotFoundMarker(response.Message));
 
     private static bool IsMatch(string? errorId) =>
         string.Equals(errorId, ErrorId, StringComparison.Ordinal);
@@ -48,6 +61,9 @@ public static class TenantMembershipDenial
     private static bool ContainsErrorId(string? text) =>
         text?.Contains(ErrorId, StringComparison.Ordinal) == true;
 
-    private static bool ContainsMarker(string? text) =>
-        text?.Contains(ApiMessageMarker, StringComparison.OrdinalIgnoreCase) == true;
+    private static bool ContainsNotMemberMarker(string? text) =>
+        text?.Contains(NotMemberMarker, StringComparison.OrdinalIgnoreCase) == true;
+
+    private static bool ContainsUserNotFoundMarker(string? text) =>
+        text?.Contains(UserNotFoundMarker, StringComparison.OrdinalIgnoreCase) == true;
 }

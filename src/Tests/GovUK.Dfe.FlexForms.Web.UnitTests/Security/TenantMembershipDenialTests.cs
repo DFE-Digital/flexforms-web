@@ -46,12 +46,21 @@ public class TenantMembershipDenialTests
         => Assert.False(TenantMembershipDenial.IsMatch(Untyped(403, "{\"message\":\"Role required\"}")));
 
     [Fact]
-    public void IsMatch_False_WhenStatusIsNot403()
+    public void IsMatch_False_WhenStatusIsNot403Or404()
     {
         var body = JsonSerializer.Serialize(new ExceptionResponse { ErrorId = TenantMembershipDenial.ErrorId });
 
         Assert.False(TenantMembershipDenial.IsMatch(Untyped(401, body)));
     }
+
+    [Fact]
+    public void IsMatch_True_ForRawApiUserNotFound404()
+        => Assert.True(TenantMembershipDenial.IsMatch(
+            Untyped(404, "{\"message\":\"User not found for email someone@education.gov.uk\"}")));
+
+    [Fact]
+    public void IsMatch_False_ForUnrelated404()
+        => Assert.False(TenantMembershipDenial.IsMatch(Untyped(404, "{\"message\":\"Template not found\"}")));
 
     [Fact]
     public void ErrorId_MatchesApiClientContract()

@@ -6,7 +6,7 @@ Typed clients from `AddExternalApplicationsApiClients`: applications, templates,
 
 All business calls: exchanged JWT + `X-Tenant-ID` + `x-correlationId` (+ optional `X-Template-Id` / `X-Application-Reference`).
 
-Exchange failures: the client returns a synthetic 401 `Exchange-401` for token problems, and a 403 `Exchange-403-NoTenantMembership` when the user is not a member of the tenant. Web handles the 403 in `Security/TenantMembershipDenial.cs` (see `.ai/security.md`). The generated client throws an **untyped** `ExternalApplicationsException` for 403, so read the body from `Response`, not `Result`.
+Exchange failures: the client returns a synthetic 401 `Exchange-401` for token problems, and a 403 `Exchange-403-NoTenantMembership` when exchange is 404 user-not-found or 403 not-a-member. Web handles that in `Security/TenantMembershipDenial.cs` (see `.ai/security.md`). The generated client throws an **untyped** `ExternalApplicationsException` for unexpected 403/404, so read the body from `Response`, not `Result`.
 
 Startup: app-only Entra token → host-config.
 

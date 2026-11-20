@@ -32,7 +32,7 @@ Health: `/health`, `/healthz`, `/liveness` with `.ShortCircuit()` so probes neve
 | Where | What happens | Why |
 |-------|--------------|-----|
 | `Security/UserPermissionsCache.RefreshAsync` | Logs and returns `null` for every exception except the no-membership denial (`TenantMembershipDenial`), which it rethrows | A permissions blip must not break page loads |
-| Api.Client `TokenExchangeHandler` | Every exchange failure becomes a synthetic 401 `Exchange-401` and the forced-logout flag is set, except no membership → 403 `Exchange-403-NoTenantMembership` | Callers only see "authenticated or not" |
+| Api.Client `TokenExchangeHandler` | Every exchange failure becomes a synthetic 401 `Exchange-401` and the forced-logout flag is set, except no EA user / no membership → 403 `Exchange-403-NoTenantMembership` | Callers only see "authenticated or not" |
 | Api.Client `TokenManagementMiddleware`, `Middleware/ActivityBasedTokenRefreshMiddleware` | Their own exceptions are logged and the request continues | Token housekeeping must not break the request |
 | Generated client (`Client.g.cs`) | A status the endpoint doesn't declare (for example 403 on most endpoints) throws an **untyped** `ExternalApplicationsException`; the body is only in `Response`, not `Result` | NSwag only types the declared responses |
 | `Filters/ExternalApiExceptionFilter` `IsAuthenticationFailureMessage`, `PermissionsCacheMiddleware.IsAuthenticationFailure` | A 403 whose message contains "token", "expired" or "unauthorized" (and some other phrases in the middleware) is treated as a logout | Word matching on API messages; avoid those words in user-facing 403 text |
