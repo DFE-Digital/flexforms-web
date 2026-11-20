@@ -36,7 +36,6 @@ jobs:
       PW_ARTIFACTS: on-retry
       BASE_URL: ${{ vars.PL_BASE_URL}}
       API_BASE_URL: ${{ vars.PL_API_BASE_URL }}
-      SERVICE: TestService
       TENANT_ID: 99999999-9999-1999-2999-999999999999
       TEMPLATE_ID: ${{ vars.PL_TEMPLATE_ID }}
       TERMINOLOGY_SINGULAR: Application
@@ -75,7 +74,6 @@ jobs:
       - name: Run Playwright tests
         run: >
           dotnet test GovUK.Dfe.FlexForms.PlaywrightTests.csproj --no-build
-          --filter "FullyQualifiedName~.Tests.${{ env.SERVICE }}."
           --logger "trx;LogFileName=report.trx"
           --results-directory reports
           -- NUnit.NumberOfTestWorkers=4

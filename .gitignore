@@ -149,10 +149,6 @@ _NCrunch*
 .ntvs_analysis.dat
 node_modules/
 
-# screenshots and videos
-CypressTests/cypress/screenshots
-CypressTests/cypress/videos
-
 # ZAP
 .ZAP
 .java

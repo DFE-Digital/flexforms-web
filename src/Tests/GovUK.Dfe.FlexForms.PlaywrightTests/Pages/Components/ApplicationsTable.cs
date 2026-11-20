@@ -26,20 +26,6 @@ public sealed class ApplicationsTable
         return this;
     }
 
-    public ApplicationsTable HasTableHeaders(IReadOnlyList<string> headers)
-    {
-        Enqueue(async () =>
-        {
-            var headerCells = HeaderCells();
-            await Assertions.Expect(headerCells).ToHaveCountAsync(headers.Count);
-            for (var i = 0; i < headers.Count; i++)
-            {
-                await Assertions.Expect(headerCells.Nth(i)).ToHaveTextAsync(headers[i]);
-            }
-        });
-        return this;
-    }
-
     public ApplicationsTable HasNumberOfRows(int expected)
     {
         Enqueue(async () => await Assertions.Expect(BodyRows()).ToHaveCountAsync(expected));
@@ -66,18 +52,6 @@ public sealed class ApplicationsTable
         return this;
     }
 
-    public ApplicationsTable ColumnHasValueWithLink(string tableColumn, string expectedValue, string href)
-    {
-        Enqueue(async () =>
-        {
-            var cell = await CellForColumnAsync(tableColumn);
-            var link = CellLink(cell);
-            await Assertions.Expect(link).ToContainTextAsync(expectedValue);
-            await Assertions.Expect(link).ToHaveAttributeAsync("href", href);
-        });
-        return this;
-    }
-
     public async Task VerifyAsync()
     {
         foreach (var assertion in _assertions)
@@ -95,8 +69,6 @@ public sealed class ApplicationsTable
 
     private ILocator BodyRows() => _table.GetByRole(AriaRole.Row)
         .Filter(new LocatorFilterOptions { Has = _page.GetByRole(AriaRole.Cell) });
-
-    private ILocator CellLink(ILocator cell) => cell.GetByRole(AriaRole.Link);
 
     private async Task<ILocator> CellForColumnAsync(string tableColumn)
     {

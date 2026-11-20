@@ -52,9 +52,6 @@ public sealed class ViewApplications : BasePage
                 .Filter(new LocatorFilterOptions { Has = ById("owner-change-success-title") }))
             .ToContainTextAsync(message);
 
-    public async Task ExpectErrorAsync(string message) =>
-        await Assertions.Expect(Page.Locator(".govuk-error-summary")).ToContainTextAsync(message);
-
     private ILocator ApplicationCard(string reference) =>
         Page.Locator(".admin-application-card")
             .Filter(new LocatorFilterOptions
