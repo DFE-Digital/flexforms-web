@@ -263,39 +263,8 @@ builder.Services.Configure<Microsoft.AspNetCore.Mvc.MvcOptions>(options =>
     options.Filters.Add<RequestTimingResultFilter>();
 });
 
-builder.Services.AddRazorPages(options =>
-{
-    options.Conventions.AuthorizeFolder("/", "OpenIdConnectPolicy");
-    options.Conventions.AllowAnonymousToPage("/Logout");
-
-    options.Conventions.AuthorizePage("/Diagnostics", AdminAccessHelper.CanManageTenantSettingsPolicy);
-    
-    // Allow anonymous access to feedback pages
-    options.Conventions.AllowAnonymousToPage("/Feedback/Index");
-    options.Conventions.AllowAnonymousToPage("/Feedback/BugReport");
-    options.Conventions.AllowAnonymousToPage("/Feedback/SupportRequest");
-    options.Conventions.AllowAnonymousToPage("/Feedback/General");
-    options.Conventions.AllowAnonymousToPage("/Feedback/ThankYou");
-    
-    options.Conventions.AllowAnonymousToPage("/Shared/Cookies");
-
-    // Allow anonymous access to error pages
-    options.Conventions.AllowAnonymousToPage("/Error/NotFound");
-    options.Conventions.AllowAnonymousToPage("/Error/Forbidden");
-    options.Conventions.AllowAnonymousToPage("/Error/General");
-    options.Conventions.AllowAnonymousToPage("/Error/ServerError");
-    
-    // Allow anonymous access to test pages in non-production environments
-    if (builder.Environment.IsDevelopment() || builder.Environment.IsEnvironment("Test") || builder.Environment.IsStaging())
-    {
-        options.Conventions.AllowAnonymousToPage("/TestError");
-    }
-    
-    // Always allow anonymous access; pages return 404 unless the current tenant
-    // (or host) selects Test Authentication via TenantAuthSchemeSelector.
-    options.Conventions.AllowAnonymousToPage("/TestLogin");
-    options.Conventions.AllowAnonymousToPage("/TestLogout");
-})
+// Folder and page access rules live in PageAccessConventions; ExpectedPageSecurity.json pins the result.
+builder.Services.AddRazorPages(options => PageAccessConventions.Apply(options.Conventions, builder.Environment))
 .AddSessionStateTempDataProvider();
 
 // Add controllers for API endpoints

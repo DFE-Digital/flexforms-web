@@ -9,7 +9,6 @@ using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.DependencyInjection;
-using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
 using Task = System.Threading.Tasks.Task;
 
@@ -18,7 +17,6 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Shared
     /// <summary>
     /// Base class for form-related PageModels containing common properties and functionality
     /// </summary>
-    [ExcludeFromCodeCoverage]
     public abstract class BaseFormPageModel(
         IFieldRendererService renderer,
         IApplicationResponseService applicationResponseService,

@@ -371,6 +371,53 @@ public class ExternalApiExceptionFilterTests
         Assert.Equal("Role required", page.TempData["AccessDeniedReason"]);
     }
 
+    /// <summary>
+    /// The API's 403 when a non-admin saves to, or uploads or deletes a file on, a submitted application
+    /// (API <c>ApplicationAmendmentPolicy.SubmittedMessage</c>). Web shows the form again with its own
+    /// permission message; it must not log the user out, which it would if the message mentioned a token.
+    /// </summary>
+    private const string SubmittedApplicationMessage = "Only an administrator can change a submitted application";
+
+    public static TheoryData<string?, string> SubmittedApplicationChanges() => new()
+    {
+        { null, ApplicationAccessMessages.NoWritePermission },
+        { "OnPostUploadFileAsync", ApplicationAccessMessages.NoFileWritePermission },
+        { "OnPostDeleteFileAsync", ApplicationAccessMessages.NoFileDeletePermission },
+    };
+
+    [Theory]
+    [MemberData(nameof(SubmittedApplicationChanges))]
+    public async Task OnPageHandlerExecutionAsync_ShowsTheFormWithAnError_WhenANonAdminChangesASubmittedApplication(
+        string? handler,
+        string expectedError)
+    {
+        foreach (var exception in new ExternalApplicationsException[]
+                 {
+                     CreateTypedApiException(new ExceptionResponse
+                     {
+                         StatusCode = 403,
+                         Message = SubmittedApplicationMessage,
+                         ErrorId = "999999"
+                     }),
+                     CreatePlainApiException(403, SubmittedApplicationMessage)
+                 })
+        {
+            var page = CreatePageModel();
+            var executingContext = CreateExecutingContext(
+                page,
+                method: "POST",
+                path: "/applications/REF-1/t1",
+                handlerMethod: handler is null ? null : new HandlerMethodDescriptor { Name = handler });
+            var executedContext = CreateExecutedContext(executingContext, exception);
+
+            await _pageFilter.OnPageHandlerExecutionAsync(executingContext, () => Task.FromResult(executedContext));
+
+            Assert.True(executedContext.ExceptionHandled);
+            Assert.IsType<PageResult>(executedContext.Result);
+            Assert.Contains(page.ModelState["Error"]!.Errors, e => e.ErrorMessage == expectedError);
+        }
+    }
+
     [Theory]
     [InlineData("GET", "/applications/dashboard")]
     [InlineData("POST", "/applications/REF-1/t1")]

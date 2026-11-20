@@ -9,6 +9,7 @@ This repo is the **form engine and admin UX**. It does not own TenantConfig rows
 | Task | Read |
 |------|------|
 | Page / use case | `architecture.md`, matching `Application/` folder |
+| New page or controller action, or a changed access rule | `security.md` (page access golden file), `ExpectedPageSecurity.json` |
 | Form save/navigation/collections | `features/form-engine.md`, `known-pitfalls.md` |
 | Login / token refresh / test OTP | `security.md`, `features/auth-and-bootstrap.md` |
 | Admin / tenant settings / Template Studio | `features/admin-and-studio.md` |

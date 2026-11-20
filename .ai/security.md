@@ -35,13 +35,35 @@ Per-request overlays: `TenantAwareOpenIdConnectConfigurator`, `TenantAwareEntraS
 
 `TenantIdResolver` order (README): `X-Tenant-ID` → query `tenantId` → hostname API resolve.
 
-`TenantSessionBindingMiddleware` binds the signed-in session to its tenant. Re-read it and `TenantIdResolver` tests before changing resolver order.
+`TenantSessionBindingMiddleware` binds the signed-in session to its tenant: a `tenant_id` claim for another tenant signs out the cookie and redirects to `/Error/Forbidden`; a missing claim (cookies issued before it existed), a non-GUID claim or no resolved tenant is let through. Re-read it, `TenantSessionBindingMiddlewareTests` and the `TenantIdResolver` tests before changing resolver order.
 
 **No access to the tenant** (**Verified**, `Security/TenantMembershipDenial.cs`, `Middleware/PermissionsCacheMiddleware.cs`, `Filters/ExternalApiExceptionFilter.cs`). Someone who signs in successfully but has no EA user (API exchange **404** "User not found for email") or no membership (API **403** "not a member of tenant") is denied at token exchange. Api.Client `TokenExchangeHandler` turns both into a 403 with `ErrorId` `Exchange-403-NoTenantMembership`; older clients returned a generic 401 and Web sent them to `/Logout?reason=auth_failed`. This is authorisation, not an expired session. `UserPermissionsCache.RefreshAsync` rethrows it (it swallows every other failure). `PermissionsCacheMiddleware` then writes `ApplicationAccessMessages.NotAuthorisedForTenant` to TempData, signs out the local cookie only (not the IdP) and redirects to `/Error/Forbidden`, which hides the dashboard link for this case. The page filter does the same if a page call hits it. Keep the message free of "token", "expired" and "unauthorized" (American spelling), or the 403 handlers treat it as a token failure and log the user out. `TenantMembershipDenial.ErrorId` must equal Api.Client `TokenExchangeErrors.NoTenantMembershipErrorId`.
 
 ## Roles in UI
 
 `Security/AdminAccessHelper.cs`: SuperAdmin, Admin, User, plus Manage claims (`Template:Any:Manage`, …). Policies wrap those for admin folders.
+
+## Page access golden file
+
+**Verified.** `src/Tests/GovUK.Dfe.FlexForms.Web.UnitTests/Security/ExpectedPageSecurity.json` lists the effective access rule for every Razor page and controller action, the way the API's `ExpectedSecurity.json` does for its endpoints. `PageSecurityTests` works it out from `PageAccessConventions` (folder and page rules) plus the attributes on the page, its PageModel, or the controller and action, and fails on any difference, including a new page or action with no row.
+
+- Values: `Anonymous` (anything allowing anonymous access wins over every policy), `None` (nothing protects it; no current row), or the requirements joined with ` + `, all of which apply: `Policy:X`, `Roles:X`, `SignedIn` (a bare `[Authorize]`).
+- The file is the Production view. Outside Production only `/TestError` becomes anonymous, and a separate test pins that.
+- Change a rule in `PageAccessConventions` or on the page, then update the row in the same PR so the change is visible in review.
+- `FrontHubTicketController` is `[AllowAnonymous]` on purpose: `notifications.js` calls it on anonymous pages too, and a signed-out caller gets a 401 from Api.Client without reaching the API.
+- `/Shared/PrivacyNotice` and `/Shared/TermsAndConditions` need sign-in today (no anonymous rule).
+
+## Tests for security code
+
+**Verified.** These are unit tested and counted in Sonar coverage; don't add `[ExcludeFromCodeCoverage]` to them or a Sonar exclusion for them:
+
+- `AdminAccessHelperTests`: one theory per check, one row per kind of user (anonymous, User, Caseworker, Template Manager, User Manager, Admin, SuperAdmin). A changed row is a change to who can do what, so call it out in review.
+- `ApplicationPermissionHelperTests`: write needs Admin or an exact `Application:{id}:Write` (`Application:Any:Write` doesn't count); read accepts exact or `Any`; starting an application needs Template Write (`Manage` doesn't count).
+- `BaseFormPageModelTests`: who can edit an application in which status, using the real `ApplicationStateService.IsApplicationEditable`. A service-authenticated caller with an Admin role is not an admin.
+- `TenantSessionBindingMiddlewareTests` and `PermissionsCacheMiddlewareTests`: the tenant mismatch and no-membership paths, and which failures log out.
+- `UserPermissionsCacheTests`: the claim rebuild, cache key per tenant, and which API failures are rethrown.
+
+`dotnet-ci.yml` still excludes five middleware files by name. Only `MiddlewareExtensions` is untestable wiring. `TenantConfigurationMiddleware`, `ActivityBasedTokenRefreshMiddleware`, `HostTemplateMiddleware` and `TokenExpiryMiddleware` (not registered) have no tests yet; take a file off the list when it gets tests. New middleware is counted by default.
 
 ## Secrets UX
 
