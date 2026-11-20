@@ -59,7 +59,7 @@ public sealed class UserManagerTests : PlaywrightTestBase
         await AuthenticateAsync("user2");
         await dashboardPage.GoToAsync();
 
-        await new ErrorPage(Page).ExpectInvalidOrExpiredTokensAsync();
+        await new ErrorPage(Page).ExpectPermissionErrorAsync();
     }
 
     [OneTimeTearDown]
