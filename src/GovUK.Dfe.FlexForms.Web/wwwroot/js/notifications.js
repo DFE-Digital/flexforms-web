@@ -318,7 +318,8 @@ async function ensureHubCookie() {
 }
 
 async function startHub() {
-    // Skip SignalR when running under Cypress to avoid WebSocket proxy issues
+    // Skip SignalR in browser tests to avoid WebSocket proxy issues. Playwright sets window.Cypress;
+    // the name is left over from the old Cypress suite (see PlaywrightTestBase).
     if (window.Cypress) {
         console.log('Cypress detected - skipping SignalR notifications hub');
         return;

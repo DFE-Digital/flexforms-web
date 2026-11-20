@@ -7,7 +7,7 @@
 5. **Test Auth:** key length; an old `Web` row overriding a `Shared` row of the same category (new overlaps are rejected by the API, see flexforms-api `.ai/known-pitfalls.md` #2); tenant settings written straight to the API are not seen until the Web cache expires (see 23); optional API URL rewrite to another environment.
 6. **Data Protection ring** must be shared across web replicas and **not** the API ring.
 7. **Forwarded headers** required behind ACA/Front Door or OIDC redirect URIs break.
-8. **SignalR/Cypress** — tests disable the hub. Don’t “fix” Cypress by forcing WebSockets without the proxy.
+8. **SignalR in browser tests** — Playwright sets `window.Cypress` so `notifications.js` skips the hub. Don’t “fix” this by forcing WebSockets without the proxy, and rename the flag in both places or neither.
 9. **FeatureManagement Target** for Template Studio is `Web`, not `Api`/`Shared`.
 10. **Upload summary blank** → FormEngine `AllowMultiple` + refresh settings. The upload **file limit** is `MaxSelections` on the same entry (see `.ai/features/form-engine.md`); it used to be ignored for uploads.
 11. **Render notification text with `textContent` or a sanitiser**, never `innerHTML` on raw text. The only `innerHTML` in `notifications.js` inserts output from `/file-validation/message/render` (server `MarkdownSafe`); keep it that way.
