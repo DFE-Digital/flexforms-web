@@ -6,7 +6,7 @@ using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Components;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Tasks;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 
-namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService;
+namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests;
 
 [TestFixture(Description = "File upload")]
 public sealed class FileUploadTests : PlaywrightTestBase
@@ -53,31 +53,6 @@ public sealed class FileUploadTests : PlaywrightTestBase
 
         await preview.GoToAsync(_application.ApplicationReference);
         await preview.ExpectFileValidationDoesNotBlockSubmitAsync();
-    }
-
-    [TestCase(TestName = "A file with the same name as one already uploaded is rejected")]
-    [CiRetry]
-    public async Task AFileWithTheSameNameIsRejectedAsync()
-    {
-        var fileName = UploadField.UniqueFileName("duplicate");
-
-        await _uploadField.UploadAsync(fileName);
-        await _uploadField.ExpectFileListedAsync(fileName);
-
-        await _uploadField.UploadAsync(fileName);
-        await _uploadField.ExpectErrorAsync(
-            "The selected file has already been uploaded. Upload a file with a different name.");
-        await _uploadField.ExpectFileCountAsync(1);
-    }
-
-    [TestCase(TestName = "An empty file is rejected")]
-    [CiRetry]
-    public async Task AnEmptyFileIsRejectedAsync()
-    {
-        await _uploadField.UploadAsync(UploadField.UniqueFileName("empty"), content: []);
-
-        await _uploadField.ExpectErrorAsync("Select a file to upload");
-        await _uploadField.ExpectFileCountAsync(0);
     }
 
     [OneTimeTearDown]

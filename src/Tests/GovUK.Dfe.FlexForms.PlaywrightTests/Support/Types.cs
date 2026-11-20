@@ -1,19 +1,10 @@
 namespace GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 
-public enum ServiceName
-{
-    Transfers,
-    Lsrp,
-    Visits,
-    TestService,
-}
-
 public sealed record Terminology(string Singular, string Plural);
 
 public sealed record AuthUser(string Name, string Email, string ApiKey);
 
 public sealed record ServiceConfig(
-    ServiceName Name,
     string Url,
     string Username,
     string ApiKey,

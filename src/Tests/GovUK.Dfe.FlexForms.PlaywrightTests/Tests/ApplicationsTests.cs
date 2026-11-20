@@ -4,7 +4,7 @@ using GovUK.Dfe.FlexForms.PlaywrightTests.Pages;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Tasks;
 using NUnit.Framework;
 
-namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService;
+namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests;
 
 [TestFixture(Description = "Applications")]
 public sealed class ApplicationsTests : PlaywrightTestBase

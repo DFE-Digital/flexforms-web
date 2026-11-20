@@ -6,7 +6,7 @@ using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Tasks;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 using Microsoft.Playwright;
 
-namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService;
+namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests;
 
 [TestFixture(Description = "Contributor permission tests")]
 public sealed class ContributorsTests : PlaywrightTestBase

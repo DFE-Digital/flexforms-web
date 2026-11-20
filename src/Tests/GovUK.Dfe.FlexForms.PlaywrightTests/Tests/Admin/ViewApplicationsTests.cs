@@ -6,7 +6,7 @@ using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Admin;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Components;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 
-namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService.Admin;
+namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.Admin;
 
 [TestFixture(Description = "Admin application management")]
 public sealed class ViewApplicationsTests : PlaywrightTestBase

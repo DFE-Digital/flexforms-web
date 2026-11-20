@@ -6,7 +6,7 @@ using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Admin;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 using Microsoft.Playwright;
 
-namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService.Admin;
+namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.Admin;
 
 /// <summary>
 /// Template managers (a custom role with Template:Any:Manage) see every template, but can only work in

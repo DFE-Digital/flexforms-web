@@ -6,7 +6,7 @@ using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Admin;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 using static GovUK.Dfe.FlexForms.PlaywrightTests.Api.Builders.StudioTemplateBuilder;
 
-namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService.Admin;
+namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.Admin;
 
 [TestFixture(Description = "Template Studio")]
 public sealed class TemplateStudioTests : PlaywrightTestBase

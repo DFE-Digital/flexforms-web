@@ -3,7 +3,7 @@ using GovUK.Dfe.FlexForms.PlaywrightTests.Api.Builders;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Infrastructure;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Tasks;
 
-namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService;
+namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests;
 
 [TestFixture(Description = "Conditional navigation")]
 public sealed class ConditionalNavigationTests : PlaywrightTestBase
