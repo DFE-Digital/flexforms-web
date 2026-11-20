@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
 
 namespace GovUK.Dfe.FlexForms.Web.Security;
@@ -7,7 +6,6 @@ namespace GovUK.Dfe.FlexForms.Web.Security;
 /// Evaluates application write permissions from the user's permission claims.
 /// Mirrors API write-access semantics: admin role or an explicit Application write claim.
 /// </summary>
-[ExcludeFromCodeCoverage]
 public static class ApplicationPermissionHelper
 {
     private const string PermissionClaimType = "permission";

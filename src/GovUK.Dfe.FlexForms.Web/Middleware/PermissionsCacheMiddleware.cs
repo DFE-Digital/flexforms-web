@@ -8,13 +8,11 @@ using GovUK.Dfe.FlexForms.Web.Tenancy;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Caching.Memory;
-using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
 using Task = System.Threading.Tasks.Task;
 
 namespace GovUK.Dfe.FlexForms.Web.Middleware;
 
-[ExcludeFromCodeCoverage]
 public class PermissionsCacheMiddleware(
     RequestDelegate next,
     IMemoryCache cache,

@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
 
 namespace GovUK.Dfe.FlexForms.Web.Security;
@@ -6,7 +5,6 @@ namespace GovUK.Dfe.FlexForms.Web.Security;
 /// <summary>
 /// Shared admin-role and Manage-access checks for navigation and page authorization.
 /// </summary>
-[ExcludeFromCodeCoverage]
 public static class AdminAccessHelper
 {
     public const string AuthorizeRoles = "Admin,SuperAdmin";
