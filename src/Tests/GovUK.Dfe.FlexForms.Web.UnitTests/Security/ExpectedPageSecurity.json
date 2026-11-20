@@ -1,0 +1,296 @@
+{
+  "Pages": [
+    {
+      "Page": "/Admin/Admin",
+      "ExpectedSecurity": "Policy:CanAccessAdminArea + Policy:OpenIdConnectPolicy"
+    },
+    {
+      "Page": "/Admin/Applications",
+      "ExpectedSecurity": "Policy:OpenIdConnectPolicy + Roles:Admin,SuperAdmin"
+    },
+    {
+      "Page": "/Admin/ContributorManagement",
+      "ExpectedSecurity": "Policy:OpenIdConnectPolicy + Roles:Admin,SuperAdmin"
+    },
+    {
+      "Page": "/Admin/CreateTemplate",
+      "ExpectedSecurity": "Policy:CanManageTemplates + Policy:OpenIdConnectPolicy"
+    },
+    {
+      "Page": "/Admin/CustomStatusLabelOverrides",
+      "ExpectedSecurity": "Policy:CanManageTemplates + Policy:OpenIdConnectPolicy"
+    },
+    {
+      "Page": "/Admin/EventMappings",
+      "ExpectedSecurity": "Policy:CanManageEventMappings + Policy:OpenIdConnectPolicy"
+    },
+    {
+      "Page": "/Admin/NewTenant",
+      "ExpectedSecurity": "Policy:CanManagePlatformTenants + Policy:OpenIdConnectPolicy"
+    },
+    {
+      "Page": "/Admin/OrganisationSettings",
+      "ExpectedSecurity": "Policy:OpenIdConnectPolicy + Roles:Admin,SuperAdmin"
+    },
+    {
+      "Page": "/Admin/PlatformTenants",
+      "ExpectedSecurity": "Policy:CanManagePlatformTenants + Policy:OpenIdConnectPolicy"
+    },
+    {
+      "Page": "/Admin/ReportingExport",
+      "ExpectedSecurity": "Policy:CanManageTenantSettings + Policy:OpenIdConnectPolicy"
+    },
+    {
+      "Page": "/Admin/RoleManager",
+      "ExpectedSecurity": "Policy:OpenIdConnectPolicy + Roles:Admin,SuperAdmin"
+    },
+    {
+      "Page": "/Admin/RoleManagerPermissions",
+      "ExpectedSecurity": "Policy:OpenIdConnectPolicy + Roles:Admin,SuperAdmin"
+    },
+    {
+      "Page": "/Admin/TemplateManager",
+      "ExpectedSecurity": "Policy:CanManageTemplates + Policy:OpenIdConnectPolicy"
+    },
+    {
+      "Page": "/Admin/TemplateStudio",
+      "ExpectedSecurity": "Policy:CanManageTemplates + Policy:OpenIdConnectPolicy"
+    },
+    {
+      "Page": "/Admin/TemplateStudioPreview",
+      "ExpectedSecurity": "Policy:CanManageTemplates + Policy:OpenIdConnectPolicy"
+    },
+    {
+      "Page": "/Admin/TenantSettings",
+      "ExpectedSecurity": "Policy:CanManageTenantSettings + Policy:OpenIdConnectPolicy"
+    },
+    {
+      "Page": "/Admin/UserManager",
+      "ExpectedSecurity": "Policy:CanManageUsers + Policy:OpenIdConnectPolicy"
+    },
+    {
+      "Page": "/Admin/UserManagerAdd",
+      "ExpectedSecurity": "Policy:CanManageUsers + Policy:OpenIdConnectPolicy"
+    },
+    {
+      "Page": "/Admin/UserManagerAuthenticatorCode",
+      "ExpectedSecurity": "Policy:CanManageUsers + Policy:OpenIdConnectPolicy"
+    },
+    {
+      "Page": "/Admin/UserManagerEdit",
+      "ExpectedSecurity": "Policy:CanManageUsers + Policy:OpenIdConnectPolicy"
+    },
+    {
+      "Page": "/Admin/UserManagerPermissions",
+      "ExpectedSecurity": "Policy:CanManageUsers + Policy:OpenIdConnectPolicy"
+    },
+    {
+      "Page": "/Applications/ApplicationSubmitted",
+      "ExpectedSecurity": "Policy:OpenIdConnectPolicy"
+    },
+    {
+      "Page": "/Applications/Contributors",
+      "ExpectedSecurity": "Policy:OpenIdConnectPolicy + SignedIn"
+    },
+    {
+      "Page": "/Applications/Contributors-Invite",
+      "ExpectedSecurity": "Policy:OpenIdConnectPolicy + SignedIn"
+    },
+    {
+      "Page": "/Applications/Dashboard",
+      "ExpectedSecurity": "Policy:OpenIdConnectPolicy + SignedIn"
+    },
+    {
+      "Page": "/Applications/Index",
+      "ExpectedSecurity": "Policy:CanReadAnyApplication + Policy:OpenIdConnectPolicy"
+    },
+    {
+      "Page": "/Confirmation/Index",
+      "ExpectedSecurity": "Policy:OpenIdConnectPolicy"
+    },
+    {
+      "Page": "/Diagnostics",
+      "ExpectedSecurity": "Policy:CanManageTenantSettings + Policy:OpenIdConnectPolicy"
+    },
+    {
+      "Page": "/Error/Forbidden",
+      "ExpectedSecurity": "Anonymous"
+    },
+    {
+      "Page": "/Error/General",
+      "ExpectedSecurity": "Anonymous"
+    },
+    {
+      "Page": "/Error/NotFound",
+      "ExpectedSecurity": "Anonymous"
+    },
+    {
+      "Page": "/Error/ServerError",
+      "ExpectedSecurity": "Anonymous"
+    },
+    {
+      "Page": "/Feedback/BugReport",
+      "ExpectedSecurity": "Anonymous"
+    },
+    {
+      "Page": "/Feedback/General",
+      "ExpectedSecurity": "Anonymous"
+    },
+    {
+      "Page": "/Feedback/Index",
+      "ExpectedSecurity": "Anonymous"
+    },
+    {
+      "Page": "/Feedback/SupportRequest",
+      "ExpectedSecurity": "Anonymous"
+    },
+    {
+      "Page": "/Feedback/ThankYou",
+      "ExpectedSecurity": "Anonymous"
+    },
+    {
+      "Page": "/FormEngine/RemoveFieldItem",
+      "ExpectedSecurity": "Policy:OpenIdConnectPolicy"
+    },
+    {
+      "Page": "/FormEngine/RenderForm",
+      "ExpectedSecurity": "Policy:OpenIdConnectPolicy"
+    },
+    {
+      "Page": "/FormEngine/UploadFile",
+      "ExpectedSecurity": "Policy:OpenIdConnectPolicy"
+    },
+    {
+      "Page": "/Logout",
+      "ExpectedSecurity": "Anonymous"
+    },
+    {
+      "Page": "/Notifications/Index",
+      "ExpectedSecurity": "Policy:OpenIdConnectPolicy + SignedIn"
+    },
+    {
+      "Page": "/Shared/Cookies",
+      "ExpectedSecurity": "Anonymous"
+    },
+    {
+      "Page": "/Shared/PrivacyNotice",
+      "ExpectedSecurity": "Policy:OpenIdConnectPolicy"
+    },
+    {
+      "Page": "/Shared/TermsAndConditions",
+      "ExpectedSecurity": "Policy:OpenIdConnectPolicy"
+    },
+    {
+      "Page": "/Templates/Index",
+      "ExpectedSecurity": "Policy:OpenIdConnectPolicy + SignedIn"
+    },
+    {
+      "Page": "/TestAuthenticator",
+      "ExpectedSecurity": "Policy:OpenIdConnectPolicy + SignedIn"
+    },
+    {
+      "Page": "/TestError",
+      "ExpectedSecurity": "Policy:OpenIdConnectPolicy"
+    },
+    {
+      "Page": "/TestLogin",
+      "ExpectedSecurity": "Anonymous"
+    },
+    {
+      "Page": "/TestLogout",
+      "ExpectedSecurity": "Anonymous"
+    }
+  ],
+  "Controllers": [
+    {
+      "Controller": "CookiesController",
+      "Action": "HideCookieMessage",
+      "ExpectedSecurity": "Anonymous"
+    },
+    {
+      "Controller": "CookiesController",
+      "Action": "KeepAlive",
+      "ExpectedSecurity": "Anonymous"
+    },
+    {
+      "Controller": "CookiesController",
+      "Action": "LogOut",
+      "ExpectedSecurity": "Anonymous"
+    },
+    {
+      "Controller": "CookiesController",
+      "Action": "SetConsent",
+      "ExpectedSecurity": "Anonymous"
+    },
+    {
+      "Controller": "FileValidationMessageController",
+      "Action": "Render",
+      "ExpectedSecurity": "SignedIn"
+    },
+    {
+      "Controller": "FrontHubTicketController",
+      "Action": "Get",
+      "ExpectedSecurity": "Anonymous"
+    },
+    {
+      "Controller": "NotificationsController",
+      "Action": "ClearAllAsync",
+      "ExpectedSecurity": "SignedIn"
+    },
+    {
+      "Controller": "NotificationsController",
+      "Action": "CreateAsync",
+      "ExpectedSecurity": "SignedIn"
+    },
+    {
+      "Controller": "NotificationsController",
+      "Action": "GetAllAsync",
+      "ExpectedSecurity": "SignedIn"
+    },
+    {
+      "Controller": "NotificationsController",
+      "Action": "GetUnreadAsync",
+      "ExpectedSecurity": "SignedIn"
+    },
+    {
+      "Controller": "NotificationsController",
+      "Action": "MarkAllAsReadAsync",
+      "ExpectedSecurity": "SignedIn"
+    },
+    {
+      "Controller": "NotificationsController",
+      "Action": "MarkAsReadAsync",
+      "ExpectedSecurity": "SignedIn"
+    },
+    {
+      "Controller": "NotificationsController",
+      "Action": "RemoveAsync",
+      "ExpectedSecurity": "SignedIn"
+    },
+    {
+      "Controller": "SessionController",
+      "Action": "SignOutImmediately",
+      "ExpectedSecurity": "SignedIn"
+    },
+    {
+      "Controller": "SessionController",
+      "Action": "StaySignedInGet",
+      "ExpectedSecurity": "SignedIn"
+    },
+    {
+      "Controller": "SessionController",
+      "Action": "StaySignedInPost",
+      "ExpectedSecurity": "SignedIn"
+    },
+    {
+      "Controller": "SessionController",
+      "Action": "TimeoutSignOutGet",
+      "ExpectedSecurity": "SignedIn"
+    },
+    {
+      "Controller": "SessionController",
+      "Action": "TimeoutSignOutPost",
+      "ExpectedSecurity": "SignedIn"
+    }
+  ]
+}

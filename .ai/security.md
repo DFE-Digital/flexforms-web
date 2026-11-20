@@ -43,6 +43,16 @@ Per-request overlays: `TenantAwareOpenIdConnectConfigurator`, `TenantAwareEntraS
 
 `Security/AdminAccessHelper.cs`: SuperAdmin, Admin, User, plus Manage claims (`Template:Any:Manage`, …). Policies wrap those for admin folders.
 
+## Page access golden file
+
+**Verified.** `src/Tests/GovUK.Dfe.FlexForms.Web.UnitTests/Security/ExpectedPageSecurity.json` lists the effective access rule for every Razor page and controller action, the way the API's `ExpectedSecurity.json` does for its endpoints. `PageSecurityTests` works it out from `PageAccessConventions` (folder and page rules) plus the attributes on the page, its PageModel, or the controller and action, and fails on any difference, including a new page or action with no row.
+
+- Values: `Anonymous` (anything allowing anonymous access wins over every policy), `None` (nothing protects it; no current row), or the requirements joined with ` + `, all of which apply: `Policy:X`, `Roles:X`, `SignedIn` (a bare `[Authorize]`).
+- The file is the Production view. Outside Production only `/TestError` becomes anonymous, and a separate test pins that.
+- Change a rule in `PageAccessConventions` or on the page, then update the row in the same PR so the change is visible in review.
+- `FrontHubTicketController` is `[AllowAnonymous]` on purpose: `notifications.js` calls it on anonymous pages too, and a signed-out caller gets a 401 from Api.Client without reaching the API.
+- `/Shared/PrivacyNotice` and `/Shared/TermsAndConditions` need sign-in today (no anonymous rule).
+
 ## Tests for security code
 
 **Verified.** These are unit tested and counted in Sonar coverage; don't add `[ExcludeFromCodeCoverage]` to them or a Sonar exclusion for them:

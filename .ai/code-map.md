@@ -22,7 +22,7 @@
 | Auth | `TestLogin`, `TestLogout`, `TestAuthenticator`, `Logout` | `TestAuthenticationService` |
 | Other | `Feedback/*`, `Error/*`, `Shared/Cookies`, `Diagnostics`, `TestError` | |
 
-Authorisation conventions (`Program.cs`): every page needs `OpenIdConnectPolicy`; anonymous pages are Logout, Feedback, Cookies, Error and (non-production) TestLogin/TestLogout/TestError. Admin policies from `Security/AdminAccessHelper`: `CanAccessAdminArea`, `CanManageTemplates`, `CanManageUsers`, `CanManageTenantSettings`, `CanManagePlatformTenants`, `CanManageEventMappings`, `CanReadAnyApplication`. UI policies are UX only; the API decides.
+Authorisation conventions (`Security/PageAccessConventions.cs`, applied by `AddRazorPages` in `Program.cs`): every page needs `OpenIdConnectPolicy`; anonymous pages are Logout, Feedback, Cookies, Error, TestLogin and TestLogout (both 404 unless Test Authentication is on) and, outside production, TestError. Every page's and controller action's effective rule is pinned in `ExpectedPageSecurity.json` (see `security.md`). Admin policies from `Security/AdminAccessHelper`: `CanAccessAdminArea`, `CanManageTemplates`, `CanManageUsers`, `CanManageTenantSettings`, `CanManagePlatformTenants`, `CanManageEventMappings`, `CanReadAnyApplication`. UI policies are UX only; the API decides.
 
 ## Controllers
 
@@ -34,7 +34,7 @@ ForwardedHeaders → CorrelationId → `UsePlatformTenantConfiguration` (`Tenant
 
 ## Error pages
 
-**Verified** (2026-11). All are `AllowAnonymousToPage` in `Program.cs`. Reuse these before adding a page.
+**Verified** (2026-11). All are anonymous rules in `Security/PageAccessConventions.cs`. Reuse these before adding a page.
 
 | Page | Use for | TempData it reads |
 |------|---------|-------------------|
