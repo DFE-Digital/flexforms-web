@@ -483,6 +483,12 @@
         <input type="hidden" asp-for="TaskId" />
         <input type="hidden" asp-for="ReferenceNumber" />
         
+        @if (Model.AutoCompletion.IsAutomatic)
+        {
+            @await Html.PartialAsync("FormEngine/_AutoCompletionStatus", Model.AutoCompletion)
+        }
+        else
+        {
         <div class="govuk-checkboxes" data-module="govuk-checkboxes">
             <div class="govuk-checkboxes__item">
                 <input class="govuk-checkboxes__input" id="IsTaskCompleted" name="IsTaskCompleted" type="checkbox" value="true" @(Model.IsTaskCompleted ? "checked" : "")>
@@ -491,6 +497,7 @@
                 </label>
             </div>
         </div>
+        }
 
         <div class="govuk-button-group govuk-!-margin-top-6">
             <govuk-button type="submit" id="save-task-summary-button">Save and continue</govuk-button>

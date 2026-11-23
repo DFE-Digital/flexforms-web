@@ -36,6 +36,14 @@ public sealed class CompleteFormTaskService(
 
         if (state.CurrentTask != null && state.ApplicationId.HasValue)
         {
+            if (state.Template != null
+                && TaskCompletionPolicy.IsAutomatic(state.CurrentTask, state.Template)
+                && TaskCompletionRules.HasCompletionCriteria(state.CurrentTask, state.Template, fieldRequirementService))
+            {
+                // Automatic tasks are completed by AutoCompleteTaskService, not by the (hidden) checkbox.
+                return FormEngineOutcome.Redirect($"/applications/{state.ReferenceNumber}");
+            }
+
             if (state.IsTaskCompleted)
             {
                 var errorLines = CollectCompletionErrors(state, visibility);
@@ -108,83 +116,16 @@ public sealed class CompleteFormTaskService(
         return new FormConditionalState();
     }
 
-    private List<string> CollectCompletionErrors(FormEngineWorkState state, FormEngineVisibilityEvaluator visibility)
-    {
-        var errorLines = new List<string>();
-        var missingFieldsWithMessages = fieldRequirementService.GetMissingRequiredFieldsWithMessages(
+    private List<string> CollectCompletionErrors(FormEngineWorkState state, FormEngineVisibilityEvaluator visibility) =>
+        TaskCompletionRules.CollectStandardAndCollectionErrors(
             state.CurrentTask!,
             state.Template!,
             state.FormData,
-            visibility.IsFieldHidden);
+            fieldRequirementService,
+            visibility,
+            logger);
 
-        errorLines.AddRange(missingFieldsWithMessages.Values);
-
-        if (state.CurrentTask!.Summary?.Mode?.Equals("multiCollectionFlow", StringComparison.OrdinalIgnoreCase) != true
-            || state.CurrentTask.Summary.Flows == null
-            || !state.CurrentTask.Summary.Flows.Any())
-        {
-            return errorLines;
-        }
-
-        foreach (var flow in state.CurrentTask.Summary.Flows)
-        {
-            var items = FormEngineCollectionItems.Read(state.FormData, flow.FieldId);
-            var requiredMin = flow.MinItems ?? 1;
-            if (items.Count < requiredMin)
-            {
-                var flowTitle = string.IsNullOrWhiteSpace(flow.Title)
-                    ? (string.IsNullOrWhiteSpace(state.CurrentTask.TaskName) ? "this section" : state.CurrentTask.TaskName)
-                    : flow.Title;
-                errorLines.Add($"• Add at least {requiredMin} item(s) to {flowTitle}");
-                logger.LogInformation(
-                    "Collection flow '{FlowId}' requires at least {MinItems} items but has {Count}",
-                    flow.FlowId,
-                    requiredMin,
-                    items.Count);
-            }
-
-            if (flow.Pages == null || items.Count == 0)
-                continue;
-
-            foreach (var item in items)
-            {
-                var requiredFieldIds = flow.Pages
-                    .Where(p => p?.Fields != null)
-                    .SelectMany(p => p.Fields)
-                    .Where(f => fieldRequirementService.IsFieldRequired(f, state.Template!))
-                    .Select(f => f.FieldId)
-                    .ToList();
-                visibility.EnsureItemFieldVisibility(item, requiredFieldIds);
-
-                var itemHasMissingFields = flow.Pages
-                    .Where(page => page?.Fields != null)
-                    .SelectMany(page => page.Fields)
-                    .Where(field => fieldRequirementService.IsFieldRequired(field, state.Template!))
-                    .Where(field => !visibility.IsFieldHiddenForItem(field.FieldId, item))
-                    .Any(field =>
-                    {
-                        var hasValue = item.TryGetValue(field.FieldId, out var val)
-                                       && val != null
-                                       && !string.IsNullOrWhiteSpace(val.ToString());
-                        return !hasValue;
-                    });
-
-                if (!itemHasMissingFields)
-                    continue;
-
-                var flowTitle = string.IsNullOrWhiteSpace(flow.Title)
-                    ? (string.IsNullOrWhiteSpace(state.CurrentTask.TaskName) ? "this section" : state.CurrentTask.TaskName)
-                    : flow.Title;
-                errorLines.Add($"Complete all required questions for each item in {flowTitle}");
-                logger.LogInformation("Collection flow '{FlowId}' has an item with incomplete required fields", flow.FlowId);
-                break;
-            }
-        }
-
-        return errorLines;
-    }
-
-    private static bool HasAnyTaskData(TaskModel task, Dictionary<string, object> formData)
+    internal static bool HasAnyTaskData(TaskModel task, Dictionary<string, object> formData)
     {
         var taskFieldIds = new List<string>();
         if (task.Pages != null)

@@ -309,6 +309,7 @@ public class SaveFormPageServiceTests
             Substitute.For<IComplexFieldConfigurationService>(),
             Substitute.For<IDerivedCollectionFlowService>(),
             Substitute.For<IApplicationStateService>(),
+            NSubstitute.Substitute.For<GovUK.Dfe.FlexForms.Application.FormEngine.IAutoCompleteTask>(),
             NullLogger<SaveFormPageService>.Instance);
     }
 
@@ -414,6 +415,7 @@ public class PrepareFormEngineGetServiceTests
             _applications,
             Substitute.For<INavigationHistoryService>(),
             Substitute.For<IApplicationStateService>(),
+            NSubstitute.Substitute.For<GovUK.Dfe.FlexForms.Application.FormEngine.IAutoCompleteTask>(),
             NullLogger<PrepareFormEngineGetService>.Instance);
     }
 

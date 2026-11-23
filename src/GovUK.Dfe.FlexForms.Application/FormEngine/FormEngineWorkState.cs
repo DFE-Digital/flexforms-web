@@ -51,6 +51,8 @@ public sealed class FormEngineWorkState
 
     public bool IsTaskCompleted { get; set; }
 
+    public AutoCompleteTaskResult AutoCompletion { get; set; } = AutoCompleteTaskResult.NotApplicable;
+
     public string ErrorContextKey => $"{ReferenceNumber}_{TaskId}_{CurrentPageId}";
 
     public FormFileFieldContext FileFieldContext => new(ApplicationId, FlowId, InstanceId);

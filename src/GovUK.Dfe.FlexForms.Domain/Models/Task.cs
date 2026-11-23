@@ -39,6 +39,9 @@ public class Task
     // Custom summary configuration (optional)
     [JsonPropertyName("summary")] public TaskSummaryConfiguration? Summary { get; set; }
 
+    // Optional override of the template taskCompletion: "manual" or "automatic"
+    [JsonPropertyName("taskCompletion")] public string? TaskCompletion { get; set; }
+
     // Control visibility in main task list
     [JsonPropertyName("visibleInTaskList")] public bool? VisibleInTaskList { get; set; }
 }

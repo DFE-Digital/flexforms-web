@@ -178,6 +178,7 @@ public class RenderFormModelCharacterizationTests
             _applicationsClient,
             _fixture.Create<INavigationHistoryService>(),
             _applicationState,
+            NSubstitute.Substitute.For<GovUK.Dfe.FlexForms.Application.FormEngine.IAutoCompleteTask>(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<PrepareFormEngineGetService>.Instance));
         _fixture.Register<ISaveFormPage>(() => new SaveFormPageService(
             _templates,
@@ -194,6 +195,7 @@ public class RenderFormModelCharacterizationTests
             _fixture.Create<IComplexFieldConfigurationService>(),
             _fixture.Create<IDerivedCollectionFlowService>(),
             _applicationState,
+            NSubstitute.Substitute.For<GovUK.Dfe.FlexForms.Application.FormEngine.IAutoCompleteTask>(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<SaveFormPageService>.Instance));
         _fixture.Register<IRemoveCollectionItem>(() => new RemoveCollectionItemService(
             _templates,

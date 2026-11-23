@@ -65,6 +65,7 @@ public class SaveFormPageServiceCoverageTests
             _complexFields,
             _derivedFlows,
             _applicationState,
+            NSubstitute.Substitute.For<GovUK.Dfe.FlexForms.Application.FormEngine.IAutoCompleteTask>(),
             NullLogger<SaveFormPageService>.Instance);
     }
 

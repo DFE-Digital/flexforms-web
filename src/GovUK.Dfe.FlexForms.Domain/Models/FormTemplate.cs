@@ -33,6 +33,13 @@ namespace GovUK.Dfe.FlexForms.Domain.Models
         [JsonPropertyName("defaultFieldRequirementPolicy")]
         public string? DefaultFieldRequirementPolicy { get; set; }
 
+        /// <summary>
+        /// How tasks are marked complete: "manual" (default) or "automatic".
+        /// A task's own taskCompletion overrides this. Missing or unknown values mean manual.
+        /// </summary>
+        [JsonPropertyName("taskCompletion")]
+        public string? TaskCompletion { get; set; }
+
         [JsonPropertyName("hideFieldLabelWhenOnlyOneField")]
         public bool HideFieldLabelWhenOnlyOneField { get; set; } = true; // Default to true for backward compatibility
 

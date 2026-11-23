@@ -884,3 +884,7 @@ New applications use the latest saved version. Applications already started keep
 | **Rule** | Shows pages or questions only when an earlier answer matches. |
 | **Format check** | Makes sure an answer matches a pattern, such as a postcode. |
 | **Search field / upload field** | A question that searches or uploads using a service set up for your organisation. |
+
+## Task completion setting
+
+In the template settings choose **Manual** (default) or **Automatic** task completion. Each task can **Inherit**, or override with Manual or Automatic. Choosing Manual at template level or Inherit at task level removes the property from the JSON. Automatic tasks hide the completion checkbox and show their status and outstanding items instead.

@@ -173,7 +173,7 @@ In Transfer: “Trust details” uses a collection; “Reason and benefits” us
 | `taskGroups` | Required. At least one group with one task. |
 | `conditionalLogic` | Optional. Show/hide/skip rules. |
 | `defaultFieldRequirementPolicy` | `"required"` or `"optional"`. If a field has no `required` validation and no `required` flag, this policy applies. Transfer uses `"required"`. |
-| `hideFieldLabelWhenOnlyOneField` | When `true` (default), a page with **exactly one** normal field hides that field’s label so the **page title** is the question. Complex fields are excluded from this behaviour. |
+| `hideFieldLabelWhenOnlyOneField` | When
 | `contributorPattern` | When `true` (default), invite-contributor features are available. Set `false` to hide them. |
 | `contributorRoleId` | Optional GUID of a custom tenant role used as **tenant membership** for new invitees who are not already in the tenant. What they can do on the application is chosen by the lead applicant on the invite page. Admin, SuperAdmin and Administrator are rejected. See §3.3. |
 | `dashboard` | Optional. Configures applications-dashboard columns (see §3.1). |
@@ -1309,3 +1309,13 @@ change fields freely.
 - HTML/CSS — the engine renders GOV.UK components
 
 ---
+## Automatic task completion (`taskCompletion`)
+
+Optional, opt-in. Absent or unrecognised values mean **manual** (the applicant ticks the completion checkbox on the task summary), so existing templates are unchanged.
+
+- Template level: `"taskCompletion": "automatic"` at the root applies to every task.
+- Task level: `"taskCompletion": "manual" | "automatic"` on a task overrides the template.
+- Automatic tasks are marked Completed when they meet the same rules as manual completion (visible required fields, collection flow minimum items, derived flow items signed). They revert to In progress / Not started if they later become incomplete.
+- Evaluated after a page save and when the task summary loads. Not evaluated on the task list. Not applied to read-only or submitted applications.
+- Tasks with no completion criteria (no required fields or flows) stay manual.
+- Validation rejects values other than `manual` or `automatic`.

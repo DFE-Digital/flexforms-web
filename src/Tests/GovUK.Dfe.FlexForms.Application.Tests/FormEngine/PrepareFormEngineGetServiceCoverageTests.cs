@@ -54,6 +54,7 @@ public class PrepareFormEngineGetServiceCoverageTests
             _applications,
             _history,
             _applicationState,
+            NSubstitute.Substitute.For<GovUK.Dfe.FlexForms.Application.FormEngine.IAutoCompleteTask>(),
             NullLogger<PrepareFormEngineGetService>.Instance);
     }
 

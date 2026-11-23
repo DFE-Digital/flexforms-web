@@ -70,6 +70,7 @@ namespace GovUK.Dfe.FlexForms.Web.Extensions
             services.AddScoped<IFormFileFieldService, FormFileFieldService>();
             services.AddSingleton<IPostedFormDataBinder, PostedFormDataBinder>();
             services.AddScoped<ICompleteFormTask, CompleteFormTaskService>();
+            services.AddScoped<IAutoCompleteTask, AutoCompleteTaskService>();
             services.AddScoped<ISubmitFormApplication, SubmitFormApplicationService>();
             services.AddScoped<IPrepareFormEngineGet, PrepareFormEngineGetService>();
             services.AddScoped<ISaveFormPage, SaveFormPageService>();

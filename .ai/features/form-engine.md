@@ -48,3 +48,7 @@ Application FormEngine tests, Infrastructure conditional-logic tests, Web Render
 ## 9. Limits
 
 Engine is template-driven; product-specific behaviour belongs in JSON + tenant FormEngine settings, not hardcoded Transfers logic. RenderForm was historically huge; keep new logic in services.
+
+## Automatic task completion
+
+`IAutoCompleteTask`/`AutoCompleteTaskService` (Application) runs after `SaveFormPageService` saves and in `PrepareFormEngineGetService` on summary views. Uses shared `TaskCompletionRules` (same rules as `CompleteFormTaskService`). Writes status only on change via `SaveTaskStatusAsync`; reverts Completed if no longer complete; skips read-only, Submitted and no-criteria tasks; swallows exceptions. Result in `FormEngineWorkState.AutoCompletion` drives `_AutoCompletionStatus` partial instead of the manual checkbox. API unchanged.

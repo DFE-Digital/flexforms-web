@@ -111,6 +111,12 @@ public class TemplateValidationService(ILogger<TemplateValidationService> logger
         }
 
         // Validate task groups
+        if (!string.IsNullOrWhiteSpace(template.TaskCompletion)
+            && !Domain.FormEngine.TaskCompletionPolicy.IsRecognised(template.TaskCompletion))
+        {
+            errors.Add($"Template: 'taskCompletion' must be 'manual' or 'automatic' (found '{template.TaskCompletion}')");
+        }
+
         if (template.TaskGroups == null || template.TaskGroups.Count == 0)
         {
             errors.Add("Template must have at least one task group in 'taskGroups'");
@@ -366,6 +372,12 @@ public class TemplateValidationService(ILogger<TemplateValidationService> logger
         }
 
         // Validate pages if present
+        if (!string.IsNullOrWhiteSpace(task.TaskCompletion)
+            && !Domain.FormEngine.TaskCompletionPolicy.IsRecognised(task.TaskCompletion))
+        {
+            errors.Add($"{taskContext}: 'taskCompletion' must be 'manual' or 'automatic' (found '{task.TaskCompletion}')");
+        }
+
         if (task.Pages != null && task.Pages.Count > 0)
         {
             for (int i = 0; i < task.Pages.Count; i++)
