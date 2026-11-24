@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using GovUK.Dfe.FlexForms.Web.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
@@ -11,18 +12,22 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Microsoft.FeatureManagement.Mvc;
 
 namespace GovUK.Dfe.FlexForms.Web.UnitTests.Security;
 
 /// <summary>
 /// Pins who can reach every Razor page and controller action. The effective rule is worked out the way
 /// ASP.NET Core does it: <see cref="PageAccessConventions"/> applied to the page, plus the attributes on
-/// the page, its PageModel or the controller and action. Anonymous wins over everything else.
-/// A new page or action, or a changed rule, fails here until <c>Security/ExpectedPageSecurity.json</c> is updated.
+/// the page, its PageModel or the controller and action. Anonymous wins over every authorization rule;
+/// a <c>[FeatureGate]</c> is listed as well because it still hides the page when the feature is off.
+/// Minimal APIs are read from the <c>app.Map…</c> calls in <c>Program.cs</c>.
+/// A new page, action or minimal API, or a changed rule, fails here until <c>Security/ExpectedPageSecurity.json</c> is updated.
 /// </summary>
 public sealed class PageSecurityTests
 {
     private const string ExpectedFile = "Security/ExpectedPageSecurity.json";
+    private const string ProgramFile = "Security/WebProgram.cs.txt";
     private const string Missing = "<no row in ExpectedPageSecurity.json>";
     private const string Gone = "<no such page or action>";
 
@@ -81,7 +86,36 @@ public sealed class PageSecurityTests
         Assert.Contains("Page /Admin/Admin", actual.Keys);
         Assert.Contains("Page /Shared/PrivacyNotice", actual.Keys);
         Assert.Contains("Controller NotificationsController.GetUnreadAsync", actual.Keys);
+        Assert.Contains("Endpoint GET /health", actual.Keys);
         Assert.True(actual.Count(k => k.Key.StartsWith("Page ", StringComparison.Ordinal)) >= 50);
+    }
+
+    [Fact]
+    public void FeatureGatedPages_ShowTheGate()
+    {
+        var actual = Actual(Environments.Production);
+
+        Assert.StartsWith("FeatureGate:TemplateStudio + ", actual["Page /Admin/TemplateStudio"], StringComparison.Ordinal);
+        Assert.StartsWith("FeatureGate:TemplateStudio + ", actual["Page /Admin/TemplateStudioPreview"], StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("app.MapGet(\"/a\", () => Results.Ok());", "GET /a", "None")]
+    [InlineData("app.MapPost(\"/a\", (string x) => Results.Ok(x)).RequireAuthorization(\"CanX\");", "POST /a", "Policy:CanX")]
+    [InlineData("app.MapGet(\"/a\", c => { c.Response.Redirect(\"/b\"); return Task.CompletedTask; })\n    .RequireAuthorization();", "GET /a", "SignedIn")]
+    [InlineData("app.Map(\"/a\", () => 1).AllowAnonymous().ShortCircuit();", "ANY /a", "Anonymous + ShortCircuit")]
+    [InlineData("// app.MapGet(\"/old\", () => 1);\napp.MapGet(\"/a\", () => 1).AllowAnonymous();", "GET /a", "Anonymous")]
+    public void MinimalApiReader_ReadsTheRouteAndItsRule(string source, string expectedKey, string expectedSecurity)
+    {
+        var endpoints = MinimalApis(source);
+
+        Assert.Equal([(expectedKey, expectedSecurity)], endpoints.Select(e => (e.Key, e.Value)));
+    }
+
+    [Fact]
+    public void MinimalApiReader_FailsOnAMappingItCannotRead()
+    {
+        Assert.Throws<InvalidOperationException>(() => MinimalApis("app.MapGet(RoutePattern, () => 1);"));
     }
 
 
@@ -106,6 +140,9 @@ public sealed class PageSecurityTests
                 action.GetProperty("ExpectedSecurity").GetString()!));
         }
 
+        foreach (var endpoint in document.RootElement.GetProperty("MinimalApis").EnumerateArray())
+            rows.Add(($"Endpoint {endpoint.GetProperty("Endpoint").GetString()}", endpoint.GetProperty("ExpectedSecurity").GetString()!));
+
         return rows;
     }
 
@@ -129,7 +166,99 @@ public sealed class PageSecurityTests
             }
         }
 
+        var program = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, ProgramFile));
+        foreach (var (key, security) in MinimalApis(program))
+            result[$"Endpoint {key}"] = security;
+
         return result;
+    }
+
+    private static readonly Regex MapCall = new(@"\bapp\.Map(?<verb>[A-Za-z]*)\s*\(", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Reads every <c>app.Map…("route", …)</c> call and the calls chained after it, up to the end of the statement.
+    /// <c>MapRazorPages</c> and <c>MapControllers</c> are covered by the page and controller rows. A mapping this
+    /// can't read throws, so a new kind of mapping is noticed rather than skipped.
+    /// </summary>
+    private static List<KeyValuePair<string, string>> MinimalApis(string source)
+    {
+        var code = string.Join('\n', source.Split('\n').Where(line => !line.TrimStart().StartsWith("//", StringComparison.Ordinal)));
+        var endpoints = new List<KeyValuePair<string, string>>();
+
+        foreach (Match match in MapCall.Matches(code))
+        {
+            var verb = match.Groups["verb"].Value;
+            if (verb is "RazorPages" or "Controllers")
+                continue;
+
+            var openParen = match.Index + match.Length - 1;
+            var arguments = code[(openParen + 1)..ClosingParen(code, openParen)];
+            var route = Regex.Match(arguments, "^\\s*\"(?<route>[^\"]*)\"");
+            if (!route.Success)
+                throw new InvalidOperationException($"Can't read the route of app.Map{verb}({arguments.Trim()}).");
+
+            var chain = new List<(string Name, string Arguments)>();
+            var position = ClosingParen(code, openParen) + 1;
+            while (true)
+            {
+                var call = Regex.Match(code[position..], @"^\s*\.(?<name>[A-Za-z]+)\s*\(");
+                if (!call.Success)
+                    break;
+
+                var callParen = position + call.Index + call.Length - 1;
+                var close = ClosingParen(code, callParen);
+                chain.Add((call.Groups["name"].Value, code[(callParen + 1)..close].Trim()));
+                position = close + 1;
+            }
+
+            var method = verb.Length == 0 ? "ANY" : verb.ToUpperInvariant();
+            endpoints.Add(new($"{method} {route.Groups["route"].Value}", DescribeChain(chain)));
+        }
+
+        return endpoints;
+    }
+
+    private static string DescribeChain(List<(string Name, string Arguments)> chain)
+    {
+        var shortCircuit = chain.Any(c => c.Name == "ShortCircuit") ? " + ShortCircuit" : "";
+        if (chain.Any(c => c.Name == "AllowAnonymous"))
+            return Anonymous + shortCircuit;
+
+        var requirements = chain.Where(c => c.Name == "RequireAuthorization")
+            .SelectMany(c => c.Arguments.Length == 0
+                ? ["SignedIn"]
+                : c.Arguments.Split(',').Select(a => $"Policy:{a.Trim().Trim('"')}"))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        return (requirements.Count == 0 ? "None" : string.Join(" + ", requirements)) + shortCircuit;
+    }
+
+    /// <summary>The index of the parenthesis that closes the one at <paramref name="open"/>, skipping string literals.</summary>
+    private static int ClosingParen(string code, int open)
+    {
+        var depth = 0;
+        for (var i = open; i < code.Length; i++)
+        {
+            switch (code[i])
+            {
+                case '"':
+                    i++;
+                    while (i < code.Length && code[i] != '"')
+                        i += code[i] == '\\' ? 2 : 1;
+                    break;
+                case '(':
+                    depth++;
+                    break;
+                case ')':
+                    if (--depth == 0)
+                        return i;
+                    break;
+            }
+        }
+
+        throw new InvalidOperationException("Unbalanced parentheses in a minimal API mapping.");
     }
 
     private static IEnumerable<(string Path, PageApplicationModel Model)> PageModels(string environmentName)
@@ -186,22 +315,33 @@ public sealed class PageSecurityTests
             .OrderBy(m => m.Name, StringComparer.Ordinal);
 
     /// <summary>
-    /// "Anonymous" when anything allows anonymous access (it wins); otherwise every requirement, sorted
-    /// and joined with " + " because they all apply; "None" when nothing protects it.
+    /// "Anonymous" when anything allows anonymous access (it wins over every authorization rule); otherwise
+    /// every requirement, sorted and joined with " + " because they all apply; "None" when nothing protects it.
+    /// A feature gate is added either way, since it still turns the page off.
     /// </summary>
     private static string Describe(IEnumerable<object> metadata)
     {
         var items = metadata.ToList();
+        var gates = items.OfType<FeatureGateAttribute>().Select(DescribeGate).Distinct(StringComparer.Ordinal).ToList();
+
         if (items.OfType<IAllowAnonymous>().Any())
-            return Anonymous;
+            return string.Join(" + ", [Anonymous, .. gates.Order(StringComparer.Ordinal)]);
 
         var requirements = items.OfType<IAuthorizeData>()
             .SelectMany(Requirements)
+            .Concat(gates)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToList();
 
         return requirements.Count == 0 ? "None" : string.Join(" + ", requirements);
+    }
+
+    private static string DescribeGate(FeatureGateAttribute gate)
+    {
+        var features = gate.Features.ToList();
+        var list = features.Count == 1 ? features[0] : $"{gate.RequirementType}({string.Join(",", features)})";
+        return gate.Negate ? $"FeatureGate:Not({list})" : $"FeatureGate:{list}";
     }
 
     private static IEnumerable<string> Requirements(IAuthorizeData data)

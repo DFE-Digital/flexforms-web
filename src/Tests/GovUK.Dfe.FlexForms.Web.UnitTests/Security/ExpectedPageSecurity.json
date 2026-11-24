@@ -54,11 +54,11 @@
     },
     {
       "Page": "/Admin/TemplateStudio",
-      "ExpectedSecurity": "Policy:CanManageTemplates + Policy:OpenIdConnectPolicy"
+      "ExpectedSecurity": "FeatureGate:TemplateStudio + Policy:CanManageTemplates + Policy:OpenIdConnectPolicy"
     },
     {
       "Page": "/Admin/TemplateStudioPreview",
-      "ExpectedSecurity": "Policy:CanManageTemplates + Policy:OpenIdConnectPolicy"
+      "ExpectedSecurity": "FeatureGate:TemplateStudio + Policy:CanManageTemplates + Policy:OpenIdConnectPolicy"
     },
     {
       "Page": "/Admin/TenantSettings",
@@ -291,6 +291,24 @@
       "Controller": "SessionController",
       "Action": "TimeoutSignOutPost",
       "ExpectedSecurity": "SignedIn"
+    }
+  ],
+  "MinimalApis": [
+    {
+      "Endpoint": "GET /",
+      "ExpectedSecurity": "None"
+    },
+    {
+      "Endpoint": "GET /health",
+      "ExpectedSecurity": "Anonymous + ShortCircuit"
+    },
+    {
+      "Endpoint": "GET /healthz",
+      "ExpectedSecurity": "Anonymous + ShortCircuit"
+    },
+    {
+      "Endpoint": "GET /liveness",
+      "ExpectedSecurity": "Anonymous + ShortCircuit"
     }
   ]
 }

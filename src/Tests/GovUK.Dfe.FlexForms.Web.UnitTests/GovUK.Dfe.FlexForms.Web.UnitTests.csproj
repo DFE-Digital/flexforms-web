@@ -37,6 +37,10 @@
         <None Update="Security\ExpectedPageSecurity.json">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
+        <!-- PageSecurityTests reads the minimal API mappings from Program.cs; they can't be found by reflection. -->
+        <None Include="..\..\GovUK.Dfe.FlexForms.Web\Program.cs" Link="Security\WebProgram.cs.txt">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
     </ItemGroup>
 
 </Project>
