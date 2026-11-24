@@ -849,7 +849,7 @@ dotnet run --project src/GovUK.Dfe.FlexForms.Web --launch-profile Lsrp-https
 dotnet test GovUK.Dfe.FlexForms.Web.sln
 ```
 
-Cypress specs live under `src/Tests/GovUK.Dfe.FlexForms.CypressTests/` (optional Test auth).
+Browser tests are in `src/Tests/GovUK.Dfe.FlexForms.PlaywrightTests/` (see `.ai/development-workflows.md`).
 
 ---
 

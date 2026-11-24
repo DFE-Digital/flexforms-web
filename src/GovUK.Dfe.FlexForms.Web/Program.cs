@@ -308,7 +308,6 @@ builder.Services.AddControllers(options =>
 
 builder.Services.AddHttpContextAccessor();
 
-// Register Cypress authentication services using CoreLibs pattern
 builder.Services.AddKeyedScoped<ICustomRequestChecker, InternalAuthRequestChecker>("internal");
 // Add confirmation interceptor filter globally for all MVC actions
 builder.Services.Configure<Microsoft.AspNetCore.Mvc.MvcOptions>(options =>
