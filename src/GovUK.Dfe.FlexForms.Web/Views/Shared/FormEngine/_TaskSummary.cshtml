@@ -61,6 +61,8 @@
             var hasValue = Model.HasFieldValue(field.FieldId);
             var formattedFieldValue = Model.GetFormattedFieldValue(field.FieldId);
             var changeUrl = $"/applications/{Model.ReferenceNumber}/{Model.TaskId}/{page.PageId}";
+            // Per-field fragment so adjacent Change links do not share an href (WAVE "Redundant link").
+            var fieldChangeUrl = changeUrl + "#" + System.Uri.EscapeDataString("Data_" + field.FieldId);
 
             var fieldIdHyphenated = field.FieldId.Replace(" ", "-").ToLower();
 
@@ -148,7 +150,7 @@
                     <dd class="govuk-summary-list__actions">
                         @if (Model.IsApplicationEditable())
                         {
-                            <a class="govuk-link" href="@changeUrl" id="field-@fieldIdHyphenated-change-link" data-testid="field-@fieldIdHyphenated-change-link">
+                            <a class="govuk-link" href="@fieldChangeUrl" id="field-@fieldIdHyphenated-change-link" data-testid="field-@fieldIdHyphenated-change-link">
                                 Change<span class="govuk-visually-hidden"> @field.Label.Value</span>
                             </a>
                         }
@@ -426,7 +428,7 @@
                     <dd class="govuk-summary-list__actions">
                         @if (Model.IsApplicationEditable())
                         {
-                            <a class="govuk-link" href="@changeUrl" id="field-@fieldIdHyphenated-change-link" data-testid="field-@fieldIdHyphenated-change-link">
+                            <a class="govuk-link" href="@fieldChangeUrl" id="field-@fieldIdHyphenated-change-link" data-testid="field-@fieldIdHyphenated-change-link">
                                 Change<span class="govuk-visually-hidden"> @field.Label.Value</span>
                             </a>
                         }

@@ -588,6 +588,9 @@ public sealed class FormEnginePresentationComposer(
             }
 
             var changeUrl = $"/applications/{context.ReferenceNumber}/{context.TaskId}/flow/{flow.FlowId}/{(item.TryGetValue("id", out var changeItemId) ? changeItemId?.ToString() : string.Empty)}/{pageId}";
+            // Fragment per column so adjacent Change links on the same page do not share an href (WAVE "Redundant link").
+            // Targets the question element rendered with id Data_{FieldId} (see FieldViewModel.Id).
+            var fieldChangeUrl = changeUrl + "#" + System.Uri.EscapeDataString("Data_" + col.Field);
             var changeHiddenText = $"{col.Label} for {memberTitle}";
 
             SummaryValueViewModel valueVm;
@@ -622,7 +625,7 @@ public sealed class FormEnginePresentationComposer(
             {
                 Key = col.Label,
                 Value = valueVm,
-                ChangeUrl = changeUrl,
+                ChangeUrl = fieldChangeUrl,
                 ChangeHiddenText = changeHiddenText
             });
         }

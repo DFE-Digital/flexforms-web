@@ -1783,7 +1783,7 @@ public class FormEnginePresentationComposerTests
 
         Assert.Equal(string.Empty, item.ItemId);
         Assert.Equal(string.Empty, item.Remove.ItemId);
-        Assert.Equal("/applications/REF-1/t1/flow/members//p1", item.Rows.Single().ChangeUrl);
+        Assert.Equal("/applications/REF-1/t1/flow/members//p1#Data_fullName", item.Rows.Single().ChangeUrl);
     }
 
     [Fact]
@@ -1807,7 +1807,7 @@ public class FormEnginePresentationComposerTests
             .BuildCollectionFlows(Context(formData, Template(task), taskId: "t1"), task)
             .Single().Items.Single().Rows.Single();
 
-        Assert.Equal("/applications/REF-1/t1/flow/members/i1/", row.ChangeUrl);
+        Assert.Equal("/applications/REF-1/t1/flow/members/i1/#Data_fullName", row.ChangeUrl);
         Assert.Equal("Full name for Item 1", row.ChangeHiddenText);
     }
 
@@ -1832,7 +1832,7 @@ public class FormEnginePresentationComposerTests
             .BuildCollectionFlows(Context(formData, Template(task), taskId: "t1"), task)
             .Single().Items.Single().Rows.Single();
 
-        Assert.Equal("/applications/REF-1/t1/flow/members/i1/p1", row.ChangeUrl);
+        Assert.Equal("/applications/REF-1/t1/flow/members/i1/p1#Data_fullName", row.ChangeUrl);
     }
 
     [Fact]
