@@ -8,7 +8,6 @@ using System.Text.Encodings.Web;
 
 namespace GovUK.Dfe.FlexForms.Web.Authentication;
 
-[ExcludeFromCodeCoverage]
 public class TestAuthenticationHandler : AuthenticationHandler<TestAuthenticationSchemeOptions>
 {
     public const string SchemeName = "TestAuthentication";

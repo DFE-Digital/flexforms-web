@@ -60,10 +60,14 @@ Per-request overlays: `TenantAwareOpenIdConnectConfigurator`, `TenantAwareEntraS
 - `AdminAccessHelperTests`: one theory per check, one row per kind of user (anonymous, User, Caseworker, Template Manager, User Manager, Admin, SuperAdmin). A changed row is a change to who can do what, so call it out in review.
 - `ApplicationPermissionHelperTests`: write needs Admin or an exact `Application:{id}:Write` (`Application:Any:Write` doesn't count); read accepts exact or `Any`; starting an application needs Template Write (`Manage` doesn't count).
 - `BaseFormPageModelTests`: who can edit an application in which status, using the real `ApplicationStateService.IsApplicationEditable`. A service-authenticated caller with an Admin role is not an admin.
-- `TenantSessionBindingMiddlewareTests` and `PermissionsCacheMiddlewareTests`: the tenant mismatch and no-membership paths, and which failures log out.
+- `TenantSessionBindingMiddlewareTests` and `PermissionsCacheMiddlewareTests`: the tenant mismatch and no-membership paths, and which failures log out (each of the five keywords in `IsAuthenticationFailure`). The `HttpRequestException` and `OperationCanceledException` catches are reached only when the claims transformation throws, because `RefreshAsync` swallows those itself; the tests throw from a substitute transformation.
+- `TestAuthenticationHandlerTests`: a Test Authentication session bound to another tenant fails and clears the session; no tenant claim or no resolved tenant is let through.
+- `ActivityBasedTokenRefreshMiddlewareTests`: absolute and idle timeouts, refresh failure near expiry, the skip paths, and that Test Authentication bypasses the checks only where it's allowed.
+- `TenantConfigurationMiddlewareTests`: 400 for an unresolved public host or a hostname conflict, 404 for a private or Container Apps host, and the bypassed paths.
+- `AdminAreaAuthorizationResultHandlerTests`: a signed-in user forbidden on `/admin` gets 404; a signed-out user gets the normal challenge or forbid.
 - `UserPermissionsCacheTests`: the claim rebuild, cache key per tenant, and which API failures are rethrown.
 
-`dotnet-ci.yml` still excludes five middleware files by name. Only `MiddlewareExtensions` is untestable wiring. `TenantConfigurationMiddleware`, `ActivityBasedTokenRefreshMiddleware`, `HostTemplateMiddleware` and `TokenExpiryMiddleware` (not registered) have no tests yet; take a file off the list when it gets tests. New middleware is counted by default.
+`dotnet-ci.yml` still excludes three middleware files by name, and `Authentication/InternalServiceAuthenticationHandler.cs`. Only `MiddlewareExtensions` is untestable wiring. `HostTemplateMiddleware`, `TokenExpiryMiddleware` (not registered) and `InternalServiceAuthenticationHandler` have no tests yet; take a file off the list when it gets tests. New middleware and authentication handlers are counted by default.
 
 ## Secrets UX
 

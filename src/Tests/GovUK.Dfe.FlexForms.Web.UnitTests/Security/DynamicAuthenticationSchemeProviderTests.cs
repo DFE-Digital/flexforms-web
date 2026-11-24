@@ -181,4 +181,71 @@ public class AdminAreaAuthorizationResultHandlerTests
 
         Assert.NotEqual(StatusCodes.Status404NotFound, context.Response.StatusCode);
     }
+
+    [Fact]
+    public async Task HandleAsync_ChallengesASignedOutUserOnAdmin_InsteadOfReturning404()
+    {
+        var handler = new AdminAreaAuthorizationResultHandler();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie();
+        var context = new DefaultHttpContext { RequestServices = services.BuildServiceProvider() };
+        context.Request.Path = "/admin";
+        context.User = new ClaimsPrincipal(new ClaimsIdentity());
+
+        await handler.HandleAsync(
+            _ => Task.CompletedTask,
+            context,
+            new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build(),
+            PolicyAuthorizationResult.Challenge());
+
+        Assert.Equal(StatusCodes.Status302Found, context.Response.StatusCode);
+        Assert.Contains("/Account/Login", context.Response.Headers.Location.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ForbiddenSignedOutUserOnAdmin_GetsTheNormalForbidNot404()
+    {
+        var handler = new AdminAreaAuthorizationResultHandler();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie();
+        var context = new DefaultHttpContext { RequestServices = services.BuildServiceProvider() };
+        context.Request.Path = "/admin";
+        context.User = new ClaimsPrincipal(new ClaimsIdentity());
+
+        await handler.HandleAsync(
+            _ => Task.CompletedTask,
+            context,
+            new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build(),
+            PolicyAuthorizationResult.Forbid());
+
+        Assert.Equal(StatusCodes.Status302Found, context.Response.StatusCode);
+        Assert.Contains("/Account/AccessDenied", context.Response.Headers.Location.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task HandleAsync_LetsAnAuthorisedUserThroughToAdmin()
+    {
+        var handler = new AdminAreaAuthorizationResultHandler();
+        var context = new DefaultHttpContext();
+        context.Request.Path = "/admin";
+        context.User = new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim(ClaimTypes.Name, "admin")],
+            authenticationType: "Cookies"));
+
+        var nextCalled = false;
+        await handler.HandleAsync(
+            _ =>
+            {
+                nextCalled = true;
+                return Task.CompletedTask;
+            },
+            context,
+            new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build(),
+            PolicyAuthorizationResult.Success());
+
+        Assert.True(nextCalled);
+        Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+    }
 }

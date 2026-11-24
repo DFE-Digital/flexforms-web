@@ -16,7 +16,6 @@ namespace GovUK.Dfe.FlexForms.Web.Middleware;
 /// The UI warning overlay is driven client-side (SessionTimeoutBanner). This middleware
 /// enforces limits on the next authenticated request.
 /// </summary>
-[ExcludeFromCodeCoverage]
 public class ActivityBasedTokenRefreshMiddleware(
     RequestDelegate next,
     ILogger<ActivityBasedTokenRefreshMiddleware> logger,

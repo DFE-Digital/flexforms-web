@@ -150,12 +150,17 @@ public sealed class PermissionsCacheMiddlewareTests
         await _authentication.DidNotReceiveWithAnyArgs().SignOutAsync(default!, default, default);
     }
 
-    [Fact]
-    public async Task ForbiddenBecauseTheTokenExpired_LogsOutAsTokenExpired()
+    [Theory]
+    [InlineData("Invalid TOKEN")]
+    [InlineData("Session expired")]
+    [InlineData("Unauthorized request")]
+    [InlineData("Not authenticated")]
+    [InlineData("No user identifier in the request")]
+    public async Task ForbiddenWithAnAuthenticationFailureMessage_LogsOutAsTokenExpired(string message)
     {
         var context = CreateContext(SignedIn());
         _usersClient.GetMyPermissionsAsync(Arg.Any<CancellationToken>())
-            .ThrowsAsync(new ExternalApplicationsException("The token has expired", 403, "", NoHeaders, null));
+            .ThrowsAsync(new ExternalApplicationsException(message, 403, "", NoHeaders, null));
 
         await InvokeAsync(context);
 
@@ -177,6 +182,69 @@ public sealed class PermissionsCacheMiddlewareTests
         await _authentication.DidNotReceiveWithAnyArgs().SignOutAsync(default!, default, default);
     }
 
+    // RefreshAsync swallows its own HttpRequestException and cancellation, so these catches are only
+    // reached when the claims transformation throws.
+    [Theory]
+    [InlineData("Response status code does not indicate success: 403 (Forbidden).", "/Logout?reason=token_expired")]
+    [InlineData("Response status code does not indicate success: 401 (Unauthorized).", "/Logout?reason=auth_failed")]
+    public async Task ClaimsTransformationThrowsHttpAuthError_LogsOut(string message, string expectedLocation)
+    {
+        var context = CreateContext(SignedIn(), transformation: Throwing(new HttpRequestException(message)));
+        ReturnNoPermissions();
+
+        await InvokeAsync(context);
+
+        Assert.False(_nextCalled);
+        Assert.Equal(expectedLocation, context.Response.Headers.Location.ToString());
+    }
+
+    [Fact]
+    public async Task ClaimsTransformationThrowsOtherHttpError_IsNotCaught()
+    {
+        var context = CreateContext(SignedIn(), transformation: Throwing(new HttpRequestException("Connection refused")));
+        ReturnNoPermissions();
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => InvokeAsync(context));
+        Assert.False(_nextCalled);
+    }
+
+    [Fact]
+    public async Task ClaimsTransformationCanceledByAbortedRequest_StopsWithoutCallingNext()
+    {
+        var context = CreateContext(SignedIn(), transformation: Throwing(new OperationCanceledException()));
+        using var aborted = new CancellationTokenSource();
+        aborted.Cancel();
+        context.RequestAborted = aborted.Token;
+        ReturnNoPermissions();
+
+        await InvokeAsync(context);
+
+        Assert.False(_nextCalled);
+        Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+        Assert.False(context.Response.Headers.ContainsKey("Location"));
+    }
+
+    [Fact]
+    public async Task ClaimsTransformationCanceledWhileRequestIsLive_IsNotCaught()
+    {
+        var context = CreateContext(SignedIn(), transformation: Throwing(new OperationCanceledException()));
+        ReturnNoPermissions();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => InvokeAsync(context));
+        Assert.False(_nextCalled);
+    }
+
+    private void ReturnNoPermissions() =>
+        _usersClient.GetMyPermissionsAsync(Arg.Any<CancellationToken>())
+            .Returns(new UserAuthorizationDto { Permissions = [], Roles = [] });
+
+    private static IClaimsTransformation Throwing(Exception exception)
+    {
+        var transformation = Substitute.For<IClaimsTransformation>();
+        transformation.TransformAsync(Arg.Any<ClaimsPrincipal>()).ThrowsAsync(exception);
+        return transformation;
+    }
+
     private async Task InvokeAsync(HttpContext context)
     {
         var middleware = new PermissionsCacheMiddleware(
@@ -192,7 +260,10 @@ public sealed class PermissionsCacheMiddlewareTests
         await middleware.InvokeAsync(context);
     }
 
-    private DefaultHttpContext CreateContext(ClaimsPrincipal user, string path = "/applications/dashboard")
+    private DefaultHttpContext CreateContext(
+        ClaimsPrincipal user,
+        string path = "/applications/dashboard",
+        IClaimsTransformation? transformation = null)
     {
         var accessor = new HttpContextAccessor();
         var services = new ServiceCollection();
@@ -200,8 +271,8 @@ public sealed class PermissionsCacheMiddlewareTests
         services.AddSingleton(_authentication);
         services.AddSingleton<ITenantRequestContext>(new TenantRequestContext { TenantId = TenantId });
         services.AddSingleton<ITempDataDictionaryFactory>(new TempDataDictionaryFactory(_tempDataProvider));
-        services.AddSingleton<IClaimsTransformation>(
-            new CustomClaimsTransformation([new PermissionsClaimProvider(_cache, accessor)]));
+        services.AddSingleton(transformation
+            ?? new CustomClaimsTransformation([new PermissionsClaimProvider(_cache, accessor)]));
 
         var context = new DefaultHttpContext { User = user, RequestServices = services.BuildServiceProvider() };
         context.Request.Path = path;
