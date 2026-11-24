@@ -33,10 +33,10 @@ public sealed class ApplicationPreviewPage(IPage page) : BasePage(page)
         await Assertions.Expect(LeadApplicantSubmitMessage(singular)).ToHaveCountAsync(0);
     }
 
-    public async Task ExpectSubmittedAsync(string submitMessage = "submitted")
+    public async Task ExpectSubmittedAsync()
     {
         await Assertions.Expect(Page).ToHaveURLAsync(new Regex(@"/application-submitted/"));
-        await Assertions.Expect(SubmittedHeading(submitMessage)).ToBeVisibleAsync();
+        await Assertions.Expect(SubmittedHeading()).ToBeVisibleAsync();
     }
 
     /// <summary>A checkboxes answer is a list of the ticked options' labels, in order, not the stored values.</summary>
@@ -65,8 +65,8 @@ public sealed class ApplicationPreviewPage(IPage page) : BasePage(page)
         Page.GetByText($"Only the lead applicant can submit this {singular}.",
             new PageGetByTextOptions { Exact = true });
 
-    private ILocator SubmittedHeading(string submitMessage) =>
-        Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = submitMessage });
+    private ILocator SubmittedHeading() =>
+        Page.GetByRole(AriaRole.Heading, new PageGetByRoleOptions { Name = "submitted" });
 
     private const string FileValidationBlocksSubmitText = "You cannot submit until uploaded files pass validation.";
 

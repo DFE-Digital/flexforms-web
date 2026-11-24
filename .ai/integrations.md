@@ -12,7 +12,7 @@ Startup: app-only Entra token → host-config.
 
 ## SignalR
 
-Browser connects to **API** `{api-base}/hubs/notifications`, not Web. Ticket via `FrontHubTicketController` → `IHubAuthClient`. Cypress sets `window.Cypress` and skips the hub (WebSocket proxy issues).
+Browser connects to **API** `{api-base}/hubs/notifications`, not Web. Ticket via `FrontHubTicketController` → `IHubAuthClient`. Playwright sets `window.Cypress` and the page skips the hub (WebSocket proxy issues). The flag name is left over from the removed Cypress suite.
 
 Cookie lifecycle in `wwwroot/js/notifications.js` (**Verified**): the API ticket is single use for 60s and the `hubauth` cookie lasts 10 minutes. `ensureHubCookie` treats a failed redeem as failure (30s cooldown). If the first start fails (expired session, ticket redeemed too late) or the connection closes after reconnect gives up, `scheduleHubStartRetry` resets `__flexformsHubStarted` and retries with exponential backoff (30s doubling, capped at 10 minutes), only while the tab is visible; a `visibilitychange` back to visible also restarts it. Renewal of a live connection's cookie runs every 8 minutes only while the tab is visible, on `visibilitychange` when the cookie is stale, and on `onreconnecting` so the retry negotiate has a live cookie. The renewal timer and visibility listener are registered once at module level, so retries never stack them. `FrontHubTicketController` returns the API's 401/403 as-is (information log, no exception) when the user's API session has expired.
 

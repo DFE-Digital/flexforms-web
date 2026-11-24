@@ -51,7 +51,7 @@ TokenEndpoint, forwarded headers, Data Protection, tenant-config cache minutes, 
 
 ## 8. Tests
 
-Middleware and auth unit tests, Playwright TestService admin journeys.
+Middleware and auth unit tests, Playwright admin journeys.
 
 ## 9. Limits
 
