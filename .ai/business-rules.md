@@ -26,7 +26,7 @@ Task summary filenames for complex uploads require tenant FormEngine `ComplexFie
 
 ## Who can change an application
 
-**Verified** (`BaseFormPageModel.IsApplicationEditable`, `BaseFormPageModelTests`). Admins and SuperAdmins can change an application in any status; an admin save to a deleted application moves it back to In progress. Everyone else needs Write (or to be the lead applicant) and only while it is Created or In progress. A service-authenticated caller with an Admin role is not an admin. The API enforces the same rule (`ApplicationAmendmentPolicy`), so a stale page that posts anyway gets a 403, which `ExternalApiExceptionFilter` shows as the form with "You do not have permission to make changes to this application." (or the upload/delete equivalent), never a logout.
+**Verified** (`BaseFormPageModel.IsApplicationEditable`, `BaseFormPageModelTests`). Admins and SuperAdmins can change an application in any status; an admin save to a deleted application moves it back to In progress. Everyone else needs Write (or to be the lead applicant) and only while it is Created or In progress. A service-authenticated caller with an Admin role is not an admin. The API enforces the same rule (`ApplicationAmendmentPolicy`), so a stale page that posts anyway gets a 403, which `ExternalApiExceptionFilter` shows as the form with "You do not have permission to make changes to this application." (or the upload/delete equivalent), never a logout. On the standalone upload page (`/applications/{ref}/…/upload-file`) the filter instead sends the user back to the page's local return URL with the upload error saved in `IFormErrorStore`, and does so even when the 403 message mentions a token (`ExternalApiExceptionFilterTests`).
 
 ## Submit
 

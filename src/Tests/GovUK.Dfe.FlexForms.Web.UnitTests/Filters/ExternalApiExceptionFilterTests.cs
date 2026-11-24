@@ -502,6 +502,45 @@ public class ExternalApiExceptionFilterTests
         Assert.Equal("I am a teapot", page.TempData["ErrorMessage"]);
     }
 
+    /// <summary>
+    /// The standalone upload page (<c>/applications/{ref}/…/upload-file</c>). A 403 on upload sends the user
+    /// back to the page they came from with the upload permission error. It never logs out, even when the
+    /// message mentions a token, because file access is checked before the token-failure rule.
+    /// </summary>
+    [Theory]
+    [InlineData(SubmittedApplicationMessage)]
+    [InlineData("The token has expired")]
+    public async Task OnPageHandlerExecutionAsync_SendsTheStandaloneUploadBackWithAnError_On403(string message)
+    {
+        const string returnUrl = "/applications/REF-1/t1/p1";
+        foreach (var exception in new ExternalApplicationsException[]
+                 {
+                     CreateTypedApiException(new ExceptionResponse { StatusCode = 403, Message = message, ErrorId = "999999" }),
+                     CreatePlainApiException(403, message)
+                 })
+        {
+            var formErrorStore = Substitute.For<IFormErrorStore>();
+            var services = new ServiceCollection();
+            services.AddSingleton(formErrorStore);
+            var page = CreateUploadFilePage(returnUrl, services.BuildServiceProvider());
+            var executingContext = CreateExecutingContext(
+                page,
+                method: "POST",
+                path: "/applications/REF-1/t1/p1/upload-file",
+                form: UploadForm(fieldId: "evidence", returnUrl: returnUrl),
+                handlerMethod: new HandlerMethodDescriptor { Name = "OnPostUploadFileAsync" });
+            var executedContext = CreateExecutedContext(executingContext, exception);
+
+            await _pageFilter.OnPageHandlerExecutionAsync(executingContext, () => Task.FromResult(executedContext));
+
+            Assert.True(executedContext.ExceptionHandled);
+            var redirect = Assert.IsType<RedirectResult>(executedContext.Result);
+            Assert.Equal(returnUrl, redirect.Url);
+            Assert.Contains(page.ModelState["Error"]!.Errors, e => e.ErrorMessage == ApplicationAccessMessages.NoFileWritePermission);
+            formErrorStore.Received(1).Save("evidence", page.ModelState, null);
+        }
+    }
+
     #endregion
 
     #region ExternalApiPageExceptionFilter – upload / file operation detection
