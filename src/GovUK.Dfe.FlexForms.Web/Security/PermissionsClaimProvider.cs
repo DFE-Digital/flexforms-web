@@ -2,13 +2,11 @@ using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.CoreLibs.Security.Interfaces;
 using GovUK.Dfe.FlexForms.Web.Tenancy;
 using Microsoft.Extensions.Caching.Memory;
-using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
 using Task = System.Threading.Tasks.Task;
 
 namespace GovUK.Dfe.FlexForms.Web.Security;
 
-[ExcludeFromCodeCoverage]
 public class PermissionsClaimProvider(
     IMemoryCache cache,
     IHttpContextAccessor httpContextAccessor) : ICustomClaimProvider

@@ -3,7 +3,6 @@ using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using GovUK.Dfe.FlexForms.Api.Client.Contracts;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
-using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
 
 namespace GovUK.Dfe.FlexForms.Web.Security;
@@ -11,7 +10,6 @@ namespace GovUK.Dfe.FlexForms.Web.Security;
 /// <summary>
 /// Helpers for the in-memory user permissions cache used by <see cref="PermissionsCacheMiddleware"/>.
 /// </summary>
-[ExcludeFromCodeCoverage]
 public static class UserPermissionsCache
 {
     /// <summary>

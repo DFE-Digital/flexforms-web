@@ -371,6 +371,53 @@ public class ExternalApiExceptionFilterTests
         Assert.Equal("Role required", page.TempData["AccessDeniedReason"]);
     }
 
+    /// <summary>
+    /// The API's 403 when a non-admin saves to, or uploads or deletes a file on, a submitted application
+    /// (API <c>ApplicationAmendmentPolicy.SubmittedMessage</c>). Web shows the form again with its own
+    /// permission message; it must not log the user out, which it would if the message mentioned a token.
+    /// </summary>
+    private const string SubmittedApplicationMessage = "Only an administrator can change a submitted application";
+
+    public static TheoryData<string?, string> SubmittedApplicationChanges() => new()
+    {
+        { null, ApplicationAccessMessages.NoWritePermission },
+        { "OnPostUploadFileAsync", ApplicationAccessMessages.NoFileWritePermission },
+        { "OnPostDeleteFileAsync", ApplicationAccessMessages.NoFileDeletePermission },
+    };
+
+    [Theory]
+    [MemberData(nameof(SubmittedApplicationChanges))]
+    public async Task OnPageHandlerExecutionAsync_ShowsTheFormWithAnError_WhenANonAdminChangesASubmittedApplication(
+        string? handler,
+        string expectedError)
+    {
+        foreach (var exception in new ExternalApplicationsException[]
+                 {
+                     CreateTypedApiException(new ExceptionResponse
+                     {
+                         StatusCode = 403,
+                         Message = SubmittedApplicationMessage,
+                         ErrorId = "999999"
+                     }),
+                     CreatePlainApiException(403, SubmittedApplicationMessage)
+                 })
+        {
+            var page = CreatePageModel();
+            var executingContext = CreateExecutingContext(
+                page,
+                method: "POST",
+                path: "/applications/REF-1/t1",
+                handlerMethod: handler is null ? null : new HandlerMethodDescriptor { Name = handler });
+            var executedContext = CreateExecutedContext(executingContext, exception);
+
+            await _pageFilter.OnPageHandlerExecutionAsync(executingContext, () => Task.FromResult(executedContext));
+
+            Assert.True(executedContext.ExceptionHandled);
+            Assert.IsType<PageResult>(executedContext.Result);
+            Assert.Contains(page.ModelState["Error"]!.Errors, e => e.ErrorMessage == expectedError);
+        }
+    }
+
     [Theory]
     [InlineData("GET", "/applications/dashboard")]
     [InlineData("POST", "/applications/REF-1/t1")]
@@ -453,6 +500,45 @@ public class ExternalApiExceptionFilterTests
         Assert.Equal("/Error/General", redirect.PageName);
         Assert.Equal("101010", page.TempData["ApiErrorId"]);
         Assert.Equal("I am a teapot", page.TempData["ErrorMessage"]);
+    }
+
+    /// <summary>
+    /// The standalone upload page (<c>/applications/{ref}/…/upload-file</c>). A 403 on upload sends the user
+    /// back to the page they came from with the upload permission error. It never logs out, even when the
+    /// message mentions a token, because file access is checked before the token-failure rule.
+    /// </summary>
+    [Theory]
+    [InlineData(SubmittedApplicationMessage)]
+    [InlineData("The token has expired")]
+    public async Task OnPageHandlerExecutionAsync_SendsTheStandaloneUploadBackWithAnError_On403(string message)
+    {
+        const string returnUrl = "/applications/REF-1/t1/p1";
+        foreach (var exception in new ExternalApplicationsException[]
+                 {
+                     CreateTypedApiException(new ExceptionResponse { StatusCode = 403, Message = message, ErrorId = "999999" }),
+                     CreatePlainApiException(403, message)
+                 })
+        {
+            var formErrorStore = Substitute.For<IFormErrorStore>();
+            var services = new ServiceCollection();
+            services.AddSingleton(formErrorStore);
+            var page = CreateUploadFilePage(returnUrl, services.BuildServiceProvider());
+            var executingContext = CreateExecutingContext(
+                page,
+                method: "POST",
+                path: "/applications/REF-1/t1/p1/upload-file",
+                form: UploadForm(fieldId: "evidence", returnUrl: returnUrl),
+                handlerMethod: new HandlerMethodDescriptor { Name = "OnPostUploadFileAsync" });
+            var executedContext = CreateExecutedContext(executingContext, exception);
+
+            await _pageFilter.OnPageHandlerExecutionAsync(executingContext, () => Task.FromResult(executedContext));
+
+            Assert.True(executedContext.ExceptionHandled);
+            var redirect = Assert.IsType<RedirectResult>(executedContext.Result);
+            Assert.Equal(returnUrl, redirect.Url);
+            Assert.Contains(page.ModelState["Error"]!.Errors, e => e.ErrorMessage == ApplicationAccessMessages.NoFileWritePermission);
+            formErrorStore.Received(1).Save("evidence", page.ModelState, null);
+        }
     }
 
     #endregion

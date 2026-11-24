@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Text.Json;
 using GovUK.Dfe.FlexForms.Web.Configuration;
@@ -12,7 +11,6 @@ namespace GovUK.Dfe.FlexForms.Web.Middleware;
 /// <summary>
 /// Resolves the current tenant (header or hostname) and loads its configuration from the platform API.
 /// </summary>
-[ExcludeFromCodeCoverage]
 public sealed class TenantConfigurationMiddleware(
     RequestDelegate next,
     IOptions<PlatformBootstrapOptions> bootstrapOptions,
