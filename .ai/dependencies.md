@@ -11,4 +11,4 @@ Terraform: `terraform-azurerm-container-apps-hosting` (module version may differ
 
 Release Flow matches API (`docs/release-process.md`): main→dev, release branch→test, tagged image→prod. GitHub `production-build` vs `production` environments. Coupled go-lives can set `required_api_release` on the Web production deploy so Release waits until that API tag is Latest.
 
-Playwright is in the solution; Cypress under `src/Tests/GovUK.Dfe.FlexForms.CypressTests` is **not** in the `.sln`.
+Playwright is in the solution. There is no Cypress suite; it was removed.

@@ -7,8 +7,10 @@ API enforces persistence rules. Web enforces **navigation and UX** rules.
 **Verified** in `SaveFormPageService`:
 
 - Save-and-continue uses `SaveFormPageService`, **not** a simpler helper that ignores conditionals.
-- `returnToSummaryPage: true` still goes to the next **visible** page if a show-page conditional fires.
-- Last question in a task returns to summary even if `returnToSummaryPage` is false.
+- `navigationAfterSave` (`summary`, `linear` or `branch`) decides where a save goes. When it isn't set, `returnToSummaryPage: true` means `summary` and `false` means `linear` (`PageNavigationPolicy`).
+- `summary` goes to the task summary even when a show-page conditional reveals another page. The revealed page is listed on the summary and blocks completion until it is answered. To go straight to the revealed page, use `branch`.
+- `branch` goes to a page this page's answers reveal; if none, to the summary. `linear` goes to the next visible page in the task.
+- The last visible page in a task always returns to the summary, whatever these settings say.
 
 ## Live templates
 
