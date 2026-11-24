@@ -16,7 +16,7 @@ The Web project's `BuildDockerImage` target runs `docker compose` after build wh
 
 `dotnet test GovUK.Dfe.FlexForms.Web.sln` — Domain, Application, Infrastructure.UnitTests, Web.UnitTests (includes architecture guards).
 
-Playwright: NUnit project, product journeys (Transfers, Visits, TestService). Cypress optional/out of solution.
+Playwright: NUnit project, journeys against the template set by `TEMPLATE_ID` (`Tests/` and `Tests/Admin/`). Every test runs in CI; there is no `SERVICE` filter. Cypress optional/out of solution.
 
 Playwright sets `window.Cypress = true` with `Context.AddInitScriptAsync` (`PlaywrightTestBase`), so every tab in the test gets it, including the Template Studio preview tab. A page-level init script does not reach tabs the page opens. Without the flag, a tab runs the SignalR and unread-count fetches, which can overwrite session state (see `.ai/known-pitfalls.md` #21).
 

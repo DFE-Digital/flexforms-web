@@ -4,7 +4,7 @@ using GovUK.Dfe.FlexForms.PlaywrightTests.Api.Builders;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Infrastructure;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Admin;
 
-namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService.Admin;
+namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.Admin;
 
 /// <summary>
 /// Uses the shared default template, which applications already use. Nothing is saved.

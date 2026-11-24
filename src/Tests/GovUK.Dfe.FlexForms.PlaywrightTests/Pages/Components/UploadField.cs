@@ -8,13 +8,13 @@ public sealed class UploadField(IPage page, string fieldId) : BasePage(page)
     public static string UniqueFileName(string label) => $"{label}-{Guid.NewGuid():N}.pdf";
 
     /// <summary>Chooses a file and presses Upload file. It doesn't wait for the upload to be accepted.</summary>
-    public async Task UploadAsync(string fileName, byte[]? content = null)
+    public async Task UploadAsync(string fileName)
     {
         await ById($"choose-file-{fieldId}").SetInputFilesAsync(new FilePayload
         {
             Name = fileName,
             MimeType = "application/pdf",
-            Buffer = content ?? await File.ReadAllBytesAsync(FormPage.UploadFixture),
+            Buffer = await File.ReadAllBytesAsync(FormPage.UploadFixture),
         });
         await ById($"submit-upload-file-{fieldId}").ClickAsync();
     }
@@ -25,12 +25,6 @@ public sealed class UploadField(IPage page, string fieldId) : BasePage(page)
 
     public async Task ExpectFileCountAsync(int count) =>
         await Assertions.Expect(FileRows()).ToHaveCountAsync(count);
-
-    public async Task ExpectErrorAsync(string message)
-    {
-        await Assertions.Expect(Page.Locator(".govuk-error-summary")).ToContainTextAsync(message);
-        await Assertions.Expect(Page.Locator(".govuk-error-message")).ToContainTextAsync(message);
-    }
 
     /// <summary>Waits for the file's validation status, which can arrive after the page loads.</summary>
     public async Task ExpectValidationStatusAsync(string fileName, string status) =>

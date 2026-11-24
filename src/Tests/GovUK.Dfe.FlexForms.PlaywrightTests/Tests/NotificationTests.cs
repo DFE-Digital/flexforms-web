@@ -6,7 +6,7 @@ using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Components;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Tasks;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 
-namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService;
+namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests;
 
 [TestFixture(Description = "Notifications")]
 public sealed class NotificationTests : PlaywrightTestBase

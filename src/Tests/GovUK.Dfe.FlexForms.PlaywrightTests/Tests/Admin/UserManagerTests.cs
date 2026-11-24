@@ -5,7 +5,7 @@ using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Admin;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Pages.Tasks;
 using GovUK.Dfe.FlexForms.PlaywrightTests.Support;
 
-namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.TestService.Admin;
+namespace GovUK.Dfe.FlexForms.PlaywrightTests.Tests.Admin;
 
 [NonParallelizable]
 [TestFixture(Description = "User management")]
