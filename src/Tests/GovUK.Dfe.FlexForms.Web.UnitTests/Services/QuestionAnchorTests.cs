@@ -14,16 +14,51 @@ public class QuestionAnchorTests
     }
 
     [Fact]
-    public void ElementId_replaces_whitespace_so_the_id_is_valid_html()
+    public void ElementId_encodes_whitespace_so_the_id_is_valid_html()
     {
-        Assert.Equal("question-Lead-attendee-name", QuestionAnchor.ElementId("Lead attendee  name"));
+        var id = QuestionAnchor.ElementId("Lead attendee  name");
+
+        Assert.Equal("question-Lead%20attendee%20%20name", id);
+        Assert.DoesNotContain(' ', id);
     }
 
     [Fact]
-    public void Fragment_is_the_url_escaped_element_id()
+    public void Fragment_is_the_hash_prefixed_element_id()
     {
         Assert.Equal("#question-fullName", QuestionAnchor.Fragment("fullName"));
         Assert.Equal("#question-a%26b", QuestionAnchor.Fragment("a&b"));
+        Assert.Equal("#question-Lead%20attendee", QuestionAnchor.Fragment("Lead attendee"));
+    }
+
+    [Fact]
+    public void ElementId_and_Fragment_are_distinct_for_ids_differing_only_by_whitespace_or_hyphen()
+    {
+        // Regression: both previously normalised to "question-Lead-attendee", so on one page the
+        // duplicate wrapper ids made both Change links target the first question.
+        Assert.Equal("question-Lead%20attendee", QuestionAnchor.ElementId("Lead attendee"));
+        Assert.Equal("question-Lead-attendee", QuestionAnchor.ElementId("Lead-attendee"));
+        Assert.NotEqual(QuestionAnchor.ElementId("Lead attendee"), QuestionAnchor.ElementId("Lead-attendee"));
+        Assert.NotEqual(QuestionAnchor.Fragment("Lead attendee"), QuestionAnchor.Fragment("Lead-attendee"));
+    }
+
+    [Fact]
+    public void ElementId_does_not_trim_or_collide_with_literal_percent_sequences()
+    {
+        Assert.NotEqual(QuestionAnchor.ElementId("a b"), QuestionAnchor.ElementId(" a b"));
+        Assert.NotEqual(QuestionAnchor.ElementId("a b"), QuestionAnchor.ElementId("a b "));
+        Assert.NotEqual(QuestionAnchor.ElementId("a b"), QuestionAnchor.ElementId("a%20b"));
+    }
+
+    [Fact]
+    public void WrapInQuestionAnchor_renders_unique_ids_for_a_colliding_pair_on_one_page()
+    {
+        var html =
+            Render(FieldRendererService.WrapInQuestionAnchor(NewField("Lead attendee", "text"), HtmlString.Empty)) +
+            Render(FieldRendererService.WrapInQuestionAnchor(NewField("Lead-attendee", "text"), HtmlString.Empty));
+
+        Assert.Equal(
+            "<div id=\"question-Lead%20attendee\"></div><div id=\"question-Lead-attendee\"></div>",
+            html);
     }
 
     [Theory]
@@ -60,9 +95,10 @@ public class QuestionAnchorTests
 
         var html = Render(FieldRendererService.WrapInQuestionAnchor(field, HtmlString.Empty));
 
-        // A "#<id>" fragment must resolve to the rendered element's id.
-        var fragmentId = Uri.UnescapeDataString(QuestionAnchor.Fragment(field.FieldId).TrimStart('#'));
-        Assert.Contains($"id=\"{fragmentId}\"", html);
+        // A "#<id>" fragment must match the rendered element's id exactly (browsers try the raw fragment first).
+        var fragmentId = QuestionAnchor.Fragment(field.FieldId).TrimStart('#');
+        Assert.Equal(QuestionAnchor.ElementId(field.FieldId), fragmentId);
+        Assert.Equal("<div id=\"question-Lead%20attendee\"></div>", html);
     }
 
     private static Field NewField(string fieldId, string type) =>

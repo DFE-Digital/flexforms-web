@@ -1908,6 +1908,39 @@ public class FormEnginePresentationComposerTests
     }
 
     [Fact]
+    public void BuildCollectionFlows_change_links_stay_distinct_for_field_ids_differing_only_by_whitespace_or_hyphen()
+    {
+        var flow = CollectionFlow(
+            "members",
+            "memberList",
+            "Members",
+            summaryColumns:
+            [
+                new FlowSummaryColumn { Field = "Lead attendee", Label = "Lead attendee" },
+                new FlowSummaryColumn { Field = "Lead-attendee", Label = "Lead-attendee" }
+            ],
+            pages: [Page("p1", [Field("Lead attendee", "text", "Lead attendee"), Field("Lead-attendee", "text", "Lead-attendee")])]);
+        var task = Task("t1", "Team", mode: FormStepPolicy.MultiCollectionFlowMode, flows: [flow]);
+        var formData = ItemsFormData(
+            "memberList",
+            new Dictionary<string, object> { ["id"] = "i1", ["Lead attendee"] = "Ada", ["Lead-attendee"] = "Grace" });
+
+        _formatting.GetFormattedFieldValues("Lead attendee", Arg.Any<Dictionary<string, object>>()).Returns(["Ada"]);
+        _formatting.GetFormattedFieldValues("Lead-attendee", Arg.Any<Dictionary<string, object>>()).Returns(["Grace"]);
+
+        var rows = _composer
+            .BuildCollectionFlows(Context(formData, Template(task), taskId: "t1"), task)
+            .Single().Items.Single().Rows;
+
+        Assert.Equal(
+            [
+                "/applications/REF-1/t1/flow/members/i1/p1#question-Lead%20attendee",
+                "/applications/REF-1/t1/flow/members/i1/p1#question-Lead-attendee"
+            ],
+            rows.Select(r => r.ChangeUrl!).ToArray());
+    }
+
+    [Fact]
     public void BuildCollectionFlows_shows_not_answered_when_item_has_no_value_for_column()
     {
         var flow = CollectionFlow(
