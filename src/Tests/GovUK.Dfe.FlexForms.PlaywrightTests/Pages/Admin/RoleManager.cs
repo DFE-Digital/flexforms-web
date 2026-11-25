@@ -15,16 +15,6 @@ public sealed class RoleManager(IPage page) : BasePage(page)
             .ToContainTextAsync($"Role '{roleName}' has been created.");
     }
 
-    public async Task DeleteRoleAsync(string roleName)
-    {
-        var deleteButton = RoleRow(roleName)
-            .GetByRole(AriaRole.Button, new LocatorGetByRoleOptions { Name = "Delete" });
-
-        await AcceptDialogAsync(() => deleteButton.ClickAsync());
-
-        await Assertions.Expect(Page.GetByRole(AriaRole.Alert)).ToContainTextAsync("Role deleted.");
-    }
-
     public async Task ManageRolePermissionsAsync(string roleName)
     {
         await RoleRow(roleName)

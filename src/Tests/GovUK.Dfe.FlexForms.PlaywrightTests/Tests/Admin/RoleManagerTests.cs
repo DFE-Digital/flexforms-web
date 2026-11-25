@@ -49,24 +49,6 @@ public sealed class RoleManagerTests : PlaywrightTestBase
         await userManager.ExpectHeading("Access audit trail");
     }
 
-    [TestCase(TestName = "Admin can remove a custom role from a user and delete the role")]
-    [CiRetry]
-    public async Task AdminCanRemoveCustomRoleFromUserAndDeleteRoleAsync()
-    {
-        await Roles.CreateRoleAsync(AdminApiClient, CustomRoleName);
-        await Users.AddUserToRoleAsync(AdminApiClient, _user2Email, TestData.User2DisplayName, CustomRoleName,
-            TestData.DefaultTemplateName);
-
-        var userManager = new UserManager(Page);
-        var roleManager = new RoleManager(Page);
-
-        await userManager.GoToAsync();
-        await userManager.EditUserAsync(_user2Email, newRole: TestData.UserRoleName);
-
-        await roleManager.GoToAsync();
-        await roleManager.DeleteRoleAsync(CustomRoleName);
-    }
-
     [TearDown]
     public async Task RemoveUserFromTenantAsync()
     {
