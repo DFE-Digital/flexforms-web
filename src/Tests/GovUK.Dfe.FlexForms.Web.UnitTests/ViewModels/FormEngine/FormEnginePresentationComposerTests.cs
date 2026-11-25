@@ -1783,7 +1783,7 @@ public class FormEnginePresentationComposerTests
 
         Assert.Equal(string.Empty, item.ItemId);
         Assert.Equal(string.Empty, item.Remove.ItemId);
-        Assert.Equal("/applications/REF-1/t1/flow/members//p1#Data_fullName", item.Rows.Single().ChangeUrl);
+        Assert.Equal("/applications/REF-1/t1/flow/members//p1#question-fullName", item.Rows.Single().ChangeUrl);
     }
 
     [Fact]
@@ -1807,7 +1807,7 @@ public class FormEnginePresentationComposerTests
             .BuildCollectionFlows(Context(formData, Template(task), taskId: "t1"), task)
             .Single().Items.Single().Rows.Single();
 
-        Assert.Equal("/applications/REF-1/t1/flow/members/i1/#Data_fullName", row.ChangeUrl);
+        Assert.Equal("/applications/REF-1/t1/flow/members/i1/#question-fullName", row.ChangeUrl);
         Assert.Equal("Full name for Item 1", row.ChangeHiddenText);
     }
 
@@ -1832,7 +1832,79 @@ public class FormEnginePresentationComposerTests
             .BuildCollectionFlows(Context(formData, Template(task), taskId: "t1"), task)
             .Single().Items.Single().Rows.Single();
 
-        Assert.Equal("/applications/REF-1/t1/flow/members/i1/p1#Data_fullName", row.ChangeUrl);
+        Assert.Equal("/applications/REF-1/t1/flow/members/i1/p1#question-fullName", row.ChangeUrl);
+    }
+
+    [Theory]
+    [InlineData("text", null, null)]
+    [InlineData("autocomplete", null, null)]
+    [InlineData("complexField", "org-auto", "autocomplete")]
+    [InlineData("complexField", "upload-1", "upload")]
+    public void BuildCollectionFlows_change_link_targets_the_question_anchor_for_every_field_type(
+        string fieldType, string? complexFieldId, string? complexFieldKind)
+    {
+        // Data_{FieldId} is a hidden input for autocomplete and does not exist for uploads, so the
+        // fragment must target the question wrapper (QuestionAnchor) regardless of field type.
+        var field = Field("files", fieldType, "Files", complexFieldId: complexFieldId);
+        if (complexFieldId is not null)
+        {
+            _complexFields.GetConfiguration(complexFieldId)
+                .Returns(new ComplexFieldConfiguration { Id = complexFieldId, FieldType = complexFieldKind! });
+        }
+
+        var flow = CollectionFlow(
+            "docs",
+            "docList",
+            "Documents",
+            summaryColumns: [new FlowSummaryColumn { Field = "files", Label = "Files" }],
+            pages: [Page("p1", [field])]);
+        var task = Task("t1", "Docs", mode: FormStepPolicy.MultiCollectionFlowMode, flows: [flow]);
+        var formData = ItemsFormData(
+            "docList",
+            new Dictionary<string, object> { ["id"] = "i1", ["files"] = "value" });
+
+        _formatting.GetFormattedFieldValues("files", Arg.Any<Dictionary<string, object>>())
+            .Returns(["value"]);
+
+        var row = _composer
+            .BuildCollectionFlows(Context(formData, Template(task), taskId: "t1"), task)
+            .Single().Items.Single().Rows.Single();
+
+        Assert.Equal("/applications/REF-1/t1/flow/docs/i1/p1#question-files", row.ChangeUrl);
+        Assert.DoesNotContain("Data_", row.ChangeUrl);
+    }
+
+    [Fact]
+    public void BuildCollectionFlows_change_links_for_adjacent_columns_have_distinct_hrefs()
+    {
+        var flow = CollectionFlow(
+            "members",
+            "memberList",
+            "Members",
+            summaryColumns:
+            [
+                new FlowSummaryColumn { Field = "firstName", Label = "First name" },
+                new FlowSummaryColumn { Field = "lastName", Label = "Last name" }
+            ],
+            pages: [Page("p1", [Field("firstName", "text", "First name"), Field("lastName", "text", "Last name")])]);
+        var task = Task("t1", "Team", mode: FormStepPolicy.MultiCollectionFlowMode, flows: [flow]);
+        var formData = ItemsFormData(
+            "memberList",
+            new Dictionary<string, object> { ["id"] = "i1", ["firstName"] = "Ada", ["lastName"] = "Lovelace" });
+
+        _formatting.GetFormattedFieldValues("firstName", Arg.Any<Dictionary<string, object>>()).Returns(["Ada"]);
+        _formatting.GetFormattedFieldValues("lastName", Arg.Any<Dictionary<string, object>>()).Returns(["Lovelace"]);
+
+        var rows = _composer
+            .BuildCollectionFlows(Context(formData, Template(task), taskId: "t1"), task)
+            .Single().Items.Single().Rows;
+
+        Assert.Equal(
+            [
+                "/applications/REF-1/t1/flow/members/i1/p1#question-firstName",
+                "/applications/REF-1/t1/flow/members/i1/p1#question-lastName"
+            ],
+            rows.Select(r => r.ChangeUrl!).ToArray());
     }
 
     [Fact]

@@ -62,7 +62,7 @@
             var formattedFieldValue = Model.GetFormattedFieldValue(field.FieldId);
             var changeUrl = $"/applications/{Model.ReferenceNumber}/{Model.TaskId}/{page.PageId}";
             // Per-field fragment so adjacent Change links do not share an href (WAVE "Redundant link").
-            var fieldChangeUrl = changeUrl + "#" + System.Uri.EscapeDataString("Data_" + field.FieldId);
+            var fieldChangeUrl = changeUrl + GovUK.Dfe.FlexForms.Web.Services.QuestionAnchor.Fragment(field.FieldId);
 
             var fieldIdHyphenated = field.FieldId.Replace(" ", "-").ToLower();
 
