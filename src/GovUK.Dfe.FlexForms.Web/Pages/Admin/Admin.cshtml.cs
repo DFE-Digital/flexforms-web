@@ -11,12 +11,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using System.Diagnostics.CodeAnalysis;
 using Task = System.Threading.Tasks.Task;
 
 namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
 {
-    [ExcludeFromCodeCoverage]
     [Authorize(Policy = AdminAccessHelper.CanAccessAdminAreaPolicy)]
     public class AdminModel(
         IAdminHome adminHome,

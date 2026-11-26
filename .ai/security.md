@@ -67,6 +67,13 @@ Per-request overlays: `TenantAwareOpenIdConnectConfigurator`, `TenantAwareEntraS
 - `TenantConfigurationMiddlewareTests`: 400 for an unresolved public host or a hostname conflict, 404 for a private or Container Apps host, and the bypassed paths.
 - `AdminAreaAuthorizationResultHandlerTests`: a signed-in user forbidden on `/admin` gets 404; a signed-out user gets the normal challenge or forbid.
 - `UserPermissionsCacheTests`: the claim rebuild, cache key per tenant, and which API failures are rethrown.
+- Admin PageModel access tests (`Pages/Admin/*ModelTests`, `Pages/Templates/TemplatesIndexModelTests`), sharing `Pages/PageModelTestContext` and `TestPrincipals`:
+  - `AdminModelTests`: making a template live or not live, or opening it, with no grant on it shows `NoTemplateAccessText` and makes no API call; someone who can't manage templates gets 403 on every template handler.
+  - `TemplatesIndexModelTests`: a forced post of a template with no grant, a not-live one when only live are offered, or one the user can't see is refused; templates without a grant are listed but never auto-opened or preselected; the return URL must be local and not `/templates`.
+  - `TemplateStudioModelTests`: save and grant-to-all posted with a template the manager has no grant on do nothing; a save of the given template goes to that template, not the session's.
+  - `CustomStatusLabelOverridesModelTests`: a posted or session template with no grant is refused with no save and no cache removal; a valid save clears that template's status cache.
+  - `TenantSettingsModelTests`: a tenant Admin can't validate, add, update or delete the SuperAdmin-only categories (named one by one in the test, case and spaces ignored); a SuperAdmin can.
+  - `TestAuthenticationAdminPagesTests`: the authenticator code page and the edit page's sign-in lock handlers are 404, and the lock is hidden, unless Test Authentication is active (allowed environment and the tenant turns it on).
 
 `dotnet-ci.yml` still excludes three middleware files by name, and `Authentication/InternalServiceAuthenticationHandler.cs`. Only `MiddlewareExtensions` is untestable wiring. `HostTemplateMiddleware`, `TokenExpiryMiddleware` (not registered) and `InternalServiceAuthenticationHandler` have no tests yet; take a file off the list when it gets tests. New middleware and authentication handlers are counted by default.
 

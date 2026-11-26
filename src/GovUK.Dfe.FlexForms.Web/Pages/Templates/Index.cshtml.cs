@@ -5,7 +5,6 @@ using GovUK.Dfe.CoreLibs.Contracts.ExternalApplications.Models.Response;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using System.Diagnostics.CodeAnalysis;
 
 namespace GovUK.Dfe.FlexForms.Web.Pages.Templates;
 
@@ -13,7 +12,6 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.Templates;
 /// Lets the user choose which form dashboard to open.
 /// Admins also see non-live forms for preview.
 /// </summary>
-[ExcludeFromCodeCoverage]
 [Authorize]
 public sealed class IndexModel(
     ITemplateSelectionService templateSelectionService,

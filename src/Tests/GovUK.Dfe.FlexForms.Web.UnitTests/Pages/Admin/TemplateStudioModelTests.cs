@@ -173,6 +173,68 @@ public class TemplateStudioModelTests
     }
 
     [Fact]
+    public async Task OnPostSaveAsync_ShouldNotSave_WhenTheManagerPostsATemplateTheyHaveNoGrantOn()
+    {
+        var granted = new TemplateDto { TemplateId = Guid.NewGuid(), Name = "Visits", CreatedOn = DateTime.UtcNow };
+        _selection.GetSelectableTemplatesAsync(Arg.Any<CancellationToken>()).Returns([_template, granted]);
+        GivenTemplateManager(granted.TemplateId);
+        GivenSaveSucceeds();
+        _model.SelectedTemplateId = _template.TemplateId;
+        _model.NewVersion = "1.0.4";
+        _model.NewSchema = StoredSchema;
+
+        var result = await _model.OnPostSaveAsync(CancellationToken.None);
+
+        Assert.IsType<RedirectToPageResult>(result);
+        await _admin.DidNotReceiveWithAnyArgs().LoadTemplateDataAsync(default!, default, default);
+        await _admin.DidNotReceiveWithAnyArgs().CreateVersionAsync(default!, default, default);
+        await _cacheInvalidator.DidNotReceiveWithAnyArgs().InvalidateAsync(default!);
+        await _selection.DidNotReceiveWithAnyArgs().SelectTemplateAsync(default!, default!, default);
+    }
+
+    [Fact]
+    public async Task OnPostSaveAsync_ShouldSaveTheTemplateTheManagerWasGiven()
+    {
+        var other = new TemplateDto { TemplateId = Guid.NewGuid(), Name = "Visits", CreatedOn = DateTime.UtcNow };
+        _selection.GetSelectableTemplatesAsync(Arg.Any<CancellationToken>()).Returns([other, _template]);
+        _selection.GetSelectedTemplateId(Arg.Any<HttpContext>()).Returns(other.TemplateId.ToString());
+        GivenTemplateManager(_template.TemplateId);
+        GivenStoredVersion("1.0.3");
+        GivenSaveSucceeds();
+        _model.SelectedTemplateId = _template.TemplateId;
+        _model.StartedFromLatestVersion = "1.0.3";
+        _model.NewVersion = "1.0.4";
+        _model.NewSchema = StoredSchema;
+
+        var result = await _model.OnPostSaveAsync(CancellationToken.None);
+
+        Assert.IsType<RedirectToPageResult>(result);
+        await _admin.Received(1).CreateVersionAsync(Arg.Any<TemplateManagerWorkState>(), _template.TemplateId, Arg.Any<CancellationToken>());
+        await _admin.DidNotReceive().CreateVersionAsync(Arg.Any<TemplateManagerWorkState>(), other.TemplateId, Arg.Any<CancellationToken>());
+        await _cacheInvalidator.Received(1).InvalidateAsync(_template.TemplateId.ToString());
+    }
+
+    [Fact]
+    public async Task OnPostGrantToAllUsersAsync_ShouldNotGrant_WhenTheManagerPostsATemplateTheyHaveNoGrantOn()
+    {
+        var granted = new TemplateDto { TemplateId = Guid.NewGuid(), Name = "Visits", CreatedOn = DateTime.UtcNow };
+        _selection.GetSelectableTemplatesAsync(Arg.Any<CancellationToken>()).Returns([_template, granted]);
+        GivenTemplateManager(granted.TemplateId);
+        _model.TempData = new TempDataDictionary(_model.HttpContext, Substitute.For<ITempDataProvider>());
+        _model.SelectedTemplateId = _template.TemplateId;
+
+        var result = await _model.OnPostGrantToAllUsersAsync(CancellationToken.None);
+
+        Assert.IsType<PageResult>(result);
+        Assert.Contains(
+            _model.ModelState[string.Empty]!.Errors,
+            error => error.ErrorMessage == TemplateManagerMessages.GrantRequiresTemplate);
+        await _admin.DidNotReceiveWithAnyArgs().GrantToAllUsersAsync(default!, default, default);
+        await _selection.DidNotReceiveWithAnyArgs().SelectTemplateAsync(default!, default!, default);
+        Assert.Null(_model.TempData["TemplateStudioGrantSummary"]);
+    }
+
+    [Fact]
     public async Task OnPostSelectTemplateAsync_ShouldIgnoreATemplateFromAnotherTenant()
     {
         _model.SelectedTemplateId = Guid.NewGuid();
