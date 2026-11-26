@@ -71,7 +71,23 @@ namespace GovUK.Dfe.FlexForms.Web.Services
 
             viewData.Model = new FieldViewModel(field, prefix, DisplayHelpers.UnsanitiseHtmlInput(currentValue), errorMessage, currentTask, currentPage, selectedValues);
 
-            return await ((IHtmlHelper)htmlHelper).PartialAsync($"~/Views/Shared/{partialName}.cshtml", viewData.Model);
+            var content = await ((IHtmlHelper)htmlHelper).PartialAsync($"~/Views/Shared/{partialName}.cshtml", viewData.Model);
+
+            return WrapInQuestionAnchor(field, content);
+        }
+
+        /// <summary>
+        /// Wraps the rendered field in an element with a stable id (<see cref="QuestionAnchor.ElementId"/>) so
+        /// "Change" links can target the question for every field type. Field partials cannot provide this
+        /// themselves: autocomplete puts <c>Data_{FieldId}</c> on a hidden input, and uploads render no such
+        /// element (nor an input once the upload limit is reached).
+        /// </summary>
+        internal static IHtmlContent WrapInQuestionAnchor(Field field, IHtmlContent content)
+        {
+            var wrapper = new TagBuilder("div");
+            wrapper.Attributes["id"] = QuestionAnchor.ElementId(field.FieldId);
+            wrapper.InnerHtml.AppendHtml(content);
+            return wrapper;
         }
     }
 
