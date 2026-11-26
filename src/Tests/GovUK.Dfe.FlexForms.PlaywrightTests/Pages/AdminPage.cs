@@ -137,6 +137,12 @@ public sealed class AdminPage(IPage page) : BasePage(page)
         await Assertions.Expect(Page).ToHaveURLAsync("/admin/user-manager");
     }
 
+    public async Task OpenContributorManagementAsync()
+    {
+        await ById("go-to-contributor-management-button").ClickAsync();
+        await Assertions.Expect(Page).ToHaveURLAsync("/admin/contributor-management");
+    }
+
     public async Task OpenRoleManagerAsync()
     {
         await ById("go-to-role-manager-button").ClickAsync();

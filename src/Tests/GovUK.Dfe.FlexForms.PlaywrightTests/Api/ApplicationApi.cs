@@ -75,4 +75,12 @@ public static class ApplicationApi
             request,
             $"/v1/applications/{applicationId}",
             method: "DELETE");
+
+    public static Task<UserDto> AddContributorToApplicationAsync(IAPIRequestContext request, string applicationId,
+        string email) =>
+        ApiBase.ApiRequestAsync<UserDto>(
+            request,
+            $"/v1/applications/{applicationId}/contributors",
+            method: "POST",
+            data: new AddContributorRequest(email, "Test Name"));
 }

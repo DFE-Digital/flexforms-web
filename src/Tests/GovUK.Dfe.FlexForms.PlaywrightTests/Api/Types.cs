@@ -35,6 +35,8 @@ public sealed record CreateApplicationResponse(string ApplicationId, string Appl
 
 public sealed record AddApplicationResponseRequest(string ResponseBody);
 
+public sealed record AddContributorRequest(string Email, string Name);
+
 public sealed record CustomApplicationStatusRequest(ApplicationStatus ApplicationStatus, string Label);
 
 public sealed record UploadDto(string Id, string ApplicationId, string? OriginalFileName = null);
