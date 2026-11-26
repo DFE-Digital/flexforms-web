@@ -6,6 +6,7 @@ using GovUK.Dfe.FlexForms.Domain.Models;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Task = System.Threading.Tasks.Task;
+using TaskModel = GovUK.Dfe.FlexForms.Domain.Models.Task;
 
 namespace GovUK.Dfe.FlexForms.Application.Tests.FormEngine;
 
@@ -14,11 +15,12 @@ public class DeleteFormFileServiceTests
     private readonly IFormFileFieldService _fields = Substitute.For<IFormFileFieldService>();
     private readonly IFileUploadService _uploads = Substitute.For<IFileUploadService>();
     private readonly IApplicationResponseService _responses = Substitute.For<IApplicationResponseService>();
+    private readonly IAutoCompleteTask _autoCompletion = Substitute.For<IAutoCompleteTask>();
     private readonly DeleteFormFileService _service;
 
     public DeleteFormFileServiceTests()
     {
-        _service = new DeleteFormFileService(_fields, _uploads, _responses, NullLogger<DeleteFormFileService>.Instance);
+        _service = new DeleteFormFileService(_fields, _uploads, _responses, _autoCompletion, NullLogger<DeleteFormFileService>.Instance);
     }
 
     [Fact]
@@ -30,6 +32,7 @@ public class DeleteFormFileServiceTests
 
         Assert.Equal("/back", result.RedirectUrl);
         await _uploads.DidNotReceive().DeleteFileAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await _autoCompletion.DidNotReceive().EvaluateAsync(Arg.Any<FormEngineWorkState>(), Arg.Any<Dictionary<string, object>>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -41,7 +44,7 @@ public class DeleteFormFileServiceTests
             .Returns([new UploadDto { Id = fileId, OriginalFileName = "a.pdf" }]);
 
         var result = await _service.ExecuteAsync(
-            new FormEngineWorkState { ReferenceNumber = "REF-1", ApplicationId = appId },
+            new FormEngineWorkState { ReferenceNumber = "REF-1", ApplicationId = appId, IsEditable = true, CurrentTask = new TaskModel { TaskId = "t1", TaskName = "T", TaskOrder = 1, TaskStatusString = "NotStarted", Pages = [] } },
             new DeleteFormFileRequest(appId, fileId, "evidence", ReturnUrl: null, Confirmed: true));
 
         Assert.Equal(FormEngineOutcomeKind.StayOnPage, result.Kind);
@@ -49,6 +52,10 @@ public class DeleteFormFileServiceTests
         await _uploads.Received().DeleteFileAsync(fileId, appId, Arg.Any<CancellationToken>());
         await _responses.Received().SaveApplicationResponseAsync(
             appId,
+            Arg.Any<Dictionary<string, object>>(),
+            Arg.Any<CancellationToken>());
+        await _autoCompletion.Received(1).EvaluateAsync(
+            Arg.Any<FormEngineWorkState>(),
             Arg.Any<Dictionary<string, object>>(),
             Arg.Any<CancellationToken>());
     }

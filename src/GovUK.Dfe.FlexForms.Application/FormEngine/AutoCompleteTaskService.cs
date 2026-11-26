@@ -2,6 +2,7 @@ using GovUK.Dfe.FlexForms.Application.Interfaces;
 using GovUK.Dfe.FlexForms.Domain.FormEngine;
 using GovUK.Dfe.FlexForms.Domain.Models;
 using Microsoft.Extensions.Logging;
+using TaskModel = GovUK.Dfe.FlexForms.Domain.Models.Task;
 
 namespace GovUK.Dfe.FlexForms.Application.FormEngine;
 
@@ -38,29 +39,47 @@ public sealed class AutoCompleteTaskService(
         Dictionary<string, object> formData,
         CancellationToken cancellationToken = default)
     {
+        var task = state.CurrentTask;
+        var template = state.Template;
+        if (task == null || template == null || !state.ApplicationId.HasValue)
+            return AutoCompleteTaskResult.NotApplicable;
+
+        if (!state.IsEditable
+            || state.ApplicationStatus.Equals("Submitted", StringComparison.OrdinalIgnoreCase))
+            return AutoCompleteTaskResult.NotApplicable;
+
+        var result = await EvaluateTaskAsync(state, template, task, state.CurrentPageId, formData);
+
+        foreach (var dependent in GetDependentDerivedTasks(template, task))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await EvaluateTaskAsync(state, template, dependent, string.Empty, formData);
+        }
+
+        return result;
+    }
+
+    private async Task<AutoCompleteTaskResult> EvaluateTaskAsync(
+        FormEngineWorkState state,
+        FormTemplate template,
+        TaskModel task,
+        string pageId,
+        Dictionary<string, object> formData)
+    {
         try
         {
-            var task = state.CurrentTask;
-            var template = state.Template;
-            if (task == null || template == null || !state.ApplicationId.HasValue)
-                return AutoCompleteTaskResult.NotApplicable;
-
             if (!TaskCompletionPolicy.IsAutomatic(task, template))
-                return AutoCompleteTaskResult.NotApplicable;
-
-            if (!state.IsEditable
-                || state.ApplicationStatus.Equals("Submitted", StringComparison.OrdinalIgnoreCase))
                 return AutoCompleteTaskResult.NotApplicable;
 
             if (!TaskCompletionRules.HasCompletionCriteria(task, template, fieldRequirementService))
                 return AutoCompleteTaskResult.NotApplicable;
 
-            var conditionalState = await ApplyConditionalLogicAsync(state, template, formData);
+            var conditionalState = await ApplyConditionalLogicAsync(template, task.TaskId, pageId, formData);
             var visibility = new FormEngineVisibilityEvaluator(
                 template,
                 conditionalState,
                 conditionalLogicOrchestrator,
-                state.CurrentPageId,
+                pageId,
                 task.TaskId,
                 logger);
 
@@ -76,7 +95,7 @@ public sealed class AutoCompleteTaskService(
             if (isComplete && !isCurrentlyCompleted)
             {
                 await applicationStateService.SaveTaskStatusAsync(
-                    state.ApplicationId.Value, task.TaskId, Domain.Models.TaskStatus.Completed);
+                    state.ApplicationId!.Value, task.TaskId, Domain.Models.TaskStatus.Completed);
             }
             else if (!isComplete && isCurrentlyCompleted)
             {
@@ -84,21 +103,51 @@ public sealed class AutoCompleteTaskService(
                     ? Domain.Models.TaskStatus.InProgress
                     : Domain.Models.TaskStatus.NotStarted;
                 await applicationStateService.SaveTaskStatusAsync(
-                    state.ApplicationId.Value, task.TaskId, revertedStatus);
+                    state.ApplicationId!.Value, task.TaskId, revertedStatus);
             }
 
             return new AutoCompleteTaskResult(true, isComplete, errors);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Automatic task completion failed for task {TaskId}", state.CurrentTask?.TaskId);
+            logger.LogError(ex, "Automatic task completion failed for task {TaskId}", task.TaskId);
             return AutoCompleteTaskResult.NotApplicable;
         }
     }
 
+    private static List<TaskModel> GetDependentDerivedTasks(FormTemplate template, TaskModel sourceTask)
+    {
+        var sourceFieldIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (sourceTask.Pages != null)
+        {
+            foreach (var page in sourceTask.Pages.Where(p => p?.Fields != null))
+                foreach (var field in page.Fields)
+                    sourceFieldIds.Add(field.FieldId);
+        }
+
+        if (sourceTask.Summary?.Flows != null)
+        {
+            foreach (var flow in sourceTask.Summary.Flows.Where(f => !string.IsNullOrEmpty(f.FieldId)))
+                sourceFieldIds.Add(flow.FieldId);
+        }
+
+        if (sourceFieldIds.Count == 0)
+            return [];
+
+        return template.TaskGroups
+            .Where(g => g?.Tasks != null)
+            .SelectMany(g => g.Tasks)
+            .Where(t => t.TaskId != sourceTask.TaskId)
+            .Where(t => t.Summary?.DerivedFlows?.Any(d =>
+                !string.IsNullOrEmpty(d.SourceFieldId) && sourceFieldIds.Contains(d.SourceFieldId)) == true)
+            .ToList();
+    }
+
     private async Task<FormConditionalState> ApplyConditionalLogicAsync(
-        FormEngineWorkState state,
         FormTemplate template,
+        string taskId,
+        string pageId,
         Dictionary<string, object> formData)
     {
         try
@@ -107,8 +156,8 @@ public sealed class AutoCompleteTaskService(
             {
                 var context = new ConditionalLogicContext
                 {
-                    CurrentPageId = state.CurrentPageId,
-                    CurrentTaskId = state.TaskId,
+                    CurrentPageId = pageId,
+                    CurrentTaskId = taskId,
                     IsClientSide = false,
                     Trigger = "task_summary_validation"
                 };

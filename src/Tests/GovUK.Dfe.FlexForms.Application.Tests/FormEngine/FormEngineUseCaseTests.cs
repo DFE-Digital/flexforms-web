@@ -505,6 +505,7 @@ public class RemoveCollectionItemServiceTests
             Substitute.For<IApplicationResponseService>(),
             Substitute.For<IFileUploadService>(),
             Substitute.For<IFormNavigationService>(),
+            Substitute.For<IAutoCompleteTask>(),
             NullLogger<RemoveCollectionItemService>.Instance);
 
         var result = await service.ExecuteAsync(new FormEngineWorkState { IsEditable = true }, "", "i1", "f1", true);

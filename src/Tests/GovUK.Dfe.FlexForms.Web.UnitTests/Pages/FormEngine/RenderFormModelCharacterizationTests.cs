@@ -202,6 +202,7 @@ public class RenderFormModelCharacterizationTests
             _responses,
             _fileUploadService,
             _navigation,
+            Substitute.For<GovUK.Dfe.FlexForms.Application.FormEngine.IAutoCompleteTask>(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<RemoveCollectionItemService>.Instance));
         _fixture.Register<IUploadFormFile>(() => new UploadFormFileService(
             _fileFieldService,
@@ -213,6 +214,7 @@ public class RenderFormModelCharacterizationTests
             _fileFieldService,
             _fileUploadService,
             _responses,
+            Substitute.For<GovUK.Dfe.FlexForms.Application.FormEngine.IAutoCompleteTask>(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<DeleteFormFileService>.Instance));
         _fixture.Register<IDownloadFormFile>(() => new DownloadFormFileService(
             _fileUploadService,

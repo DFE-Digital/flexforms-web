@@ -26,6 +26,7 @@ public sealed class RemoveCollectionItemService(
     IApplicationResponseService applicationResponseService,
     IFileUploadService fileUploadService,
     IFormNavigationService formNavigationService,
+    IAutoCompleteTask autoCompleteTask,
     ILogger<RemoveCollectionItemService> logger) : IRemoveCollectionItem
 {
     public async Task<FormEngineOutcome> ExecuteAsync(
@@ -117,6 +118,14 @@ public sealed class RemoveCollectionItemService(
                     await applicationResponseService.SaveApplicationResponseAsync(
                         state.ApplicationId.Value,
                         new Dictionary<string, object> { [fieldId] = updatedJson },
+                        cancellationToken);
+                }
+
+                if (state.IsEditable && state.CurrentTask != null && state.ApplicationId.HasValue)
+                {
+                    await autoCompleteTask.EvaluateAsync(
+                        state,
+                        applicationResponseService.GetAccumulatedFormData(),
                         cancellationToken);
                 }
             }

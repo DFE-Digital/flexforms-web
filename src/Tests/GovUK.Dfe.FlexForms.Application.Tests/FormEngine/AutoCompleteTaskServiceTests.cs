@@ -38,7 +38,7 @@ public class AutoCompleteTaskServiceTests
         ]
     };
 
-    private FormEngineWorkState NewState(TaskModel task, string? templateCompletion = null, bool editable = true, string appStatus = "InProgress") => new()
+    private FormEngineWorkState NewState(TaskModel task, string? templateCompletion = null, bool editable = true, string appStatus = "InProgress", params TaskModel[] otherTasks) => new()
     {
         ApplicationId = _appId,
         ApplicationStatus = appStatus,
@@ -48,7 +48,8 @@ public class AutoCompleteTaskServiceTests
         Template = new FormTemplate
         {
             TemplateId = "tpl", TemplateName = "T", Description = "d",
-            TaskGroups = [], TaskCompletion = templateCompletion
+            TaskGroups = [new TaskGroup { GroupId = "g1", GroupName = "G", GroupOrder = 1, GroupStatus = "NotStarted", Tasks = [task, .. otherTasks] }],
+            TaskCompletion = templateCompletion
         }
     };
 
@@ -61,6 +62,12 @@ public class AutoCompleteTaskServiceTests
 
     private void CurrentStatus(TaskStatus status) =>
         _state.CalculateTaskStatus(default!, default!, default!, default, default!).ReturnsForAnyArgs(status);
+
+    private void NoDerivedItems()
+    {
+        _derived.GenerateItemsFromSourceField(default!, default!, default!).ReturnsForAnyArgs(new List<DerivedCollectionItem>());
+        _derived.GetItemStatuses(default!, default!).ReturnsForAnyArgs(new Dictionary<string, string>());
+    }
 
     [Fact]
     public async Task Manual_task_is_never_touched()
@@ -165,4 +172,93 @@ public class AutoCompleteTaskServiceTests
 
         Assert.False(result.IsAutomatic);
     }
+
+    [Fact]
+    public async Task Dependent_derived_task_is_reevaluated_when_source_field_belongs_to_current_task()
+    {
+        Missing();
+        NoDerivedItems();
+        CurrentStatus(TaskStatus.InProgress);
+        var source = NewTask(null);
+        var dependent = DependentTask("d1", sourceFieldId: "f1");
+
+        await Sut().EvaluateAsync(NewState(source, otherTasks: dependent), new());
+
+        _state.Received(1).CalculateTaskStatus("d1", Arg.Any<FormTemplate>(), Arg.Any<Dictionary<string, object>>(), Arg.Any<Guid?>(), Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task Dependent_derived_task_is_reevaluated_when_source_field_is_a_collection_flow()
+    {
+        Missing();
+        NoDerivedItems();
+        CurrentStatus(TaskStatus.InProgress);
+        var source = NewTask(null);
+        source.Summary = new TaskSummaryConfiguration
+        {
+            Flows = [new MultiCollectionFlowConfiguration { FieldId = "flow1" }]
+        };
+        var dependent = DependentTask("d1", sourceFieldId: "flow1");
+
+        await Sut().EvaluateAsync(NewState(source, otherTasks: dependent), new());
+
+        _state.Received(1).CalculateTaskStatus("d1", Arg.Any<FormTemplate>(), Arg.Any<Dictionary<string, object>>(), Arg.Any<Guid?>(), Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task Unrelated_dependent_task_is_not_reevaluated()
+    {
+        Missing();
+        NoDerivedItems();
+        CurrentStatus(TaskStatus.InProgress);
+        var dependent = DependentTask("d1", sourceFieldId: "other-field");
+
+        await Sut().EvaluateAsync(NewState(NewTask("automatic"), otherTasks: dependent), new());
+
+        await _state.DidNotReceive().SaveTaskStatusAsync(_appId, "d1", Arg.Any<TaskStatus>());
+    }
+
+    [Fact]
+    public async Task Current_task_is_not_treated_as_its_own_dependent()
+    {
+        Missing();
+        NoDerivedItems();
+        CurrentStatus(TaskStatus.InProgress);
+        var source = NewTask("automatic");
+        source.Summary = new TaskSummaryConfiguration
+        {
+            DerivedFlows = [new DerivedCollectionFlowConfiguration { SourceFieldId = "f1" }]
+        };
+
+        await Sut().EvaluateAsync(NewState(source), new());
+
+        _state.Received(1).CalculateTaskStatus("t1", Arg.Any<FormTemplate>(), Arg.Any<Dictionary<string, object>>(), Arg.Any<Guid?>(), Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task Manual_current_task_still_reevaluates_dependent_derived_tasks()
+    {
+        Missing();
+        NoDerivedItems();
+        CurrentStatus(TaskStatus.InProgress);
+        var dependent = DependentTask("d1", sourceFieldId: "f1");
+
+        await Sut().EvaluateAsync(NewState(NewTask(null), otherTasks: dependent), new());
+
+        _state.Received(1).CalculateTaskStatus("d1", Arg.Any<FormTemplate>(), Arg.Any<Dictionary<string, object>>(), Arg.Any<Guid?>(), Arg.Any<string>());
+    }
+
+    private static TaskModel DependentTask(string taskId, string sourceFieldId) => new()
+    {
+        TaskId = taskId,
+        TaskName = "Dependent",
+        TaskOrder = 2,
+        TaskStatusString = "NotStarted",
+        TaskCompletion = "automatic",
+        Pages = [],
+        Summary = new TaskSummaryConfiguration
+        {
+            DerivedFlows = [new DerivedCollectionFlowConfiguration { SourceFieldId = sourceFieldId }]
+        }
+    };
 }
