@@ -118,7 +118,7 @@ public sealed class UploadFormFileService(
         string message)
     {
         IReadOnlyList<UploadDto> files = formFileFieldService.GetFiles(context, request.FieldId);
-        var errors = new[] { new FormValidationError("UploadFile", message) };
+        var errors = new[] { new FormValidationError($"choose-file-{request.FieldId}", message) };
         var persistKey = string.IsNullOrEmpty(request.FieldId) ? null : request.FieldId;
 
         if (!string.IsNullOrEmpty(request.ReturnUrl))
