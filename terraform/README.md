@@ -135,13 +135,13 @@ If everything looks good, answer `yes` and wait for the new infrastructure to be
 | Name | Version |
 | ---- | ------- |
 | <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | 4.81.0 |
-| <a name="provider_null"></a> [null](#provider\_null) | 3.3.0 |
+| <a name="provider_null"></a> [null](#provider\_null) | 3.3.2 |
 
 ## Modules
 
 | Name | Source | Version |
 | ---- | ------ | ------- |
-| <a name="module_azure_container_apps_hosting"></a> [azure\_container\_apps\_hosting](#module\_azure\_container\_apps\_hosting) | github.com/DFE-Digital/terraform-azurerm-container-apps-hosting | v2.8.1 |
+| <a name="module_azure_container_apps_hosting"></a> [azure\_container\_apps\_hosting](#module\_azure\_container\_apps\_hosting) | github.com/DFE-Digital/terraform-azurerm-container-apps-hosting | v2.11.2 |
 
 ## Resources
 
@@ -176,6 +176,7 @@ If everything looks good, answer `yes` and wait for the new infrastructure to be
 | <a name="input_dns_ns_records"></a> [dns\_ns\_records](#input\_dns\_ns\_records) | DNS NS records to add to the DNS Zone | <pre>map(<br/>    object({<br/>      ttl : optional(number, 300),<br/>      records : list(string)<br/>    })<br/>  )</pre> | n/a | yes |
 | <a name="input_dns_txt_records"></a> [dns\_txt\_records](#input\_dns\_txt\_records) | DNS TXT records to add to the DNS Zone | <pre>map(<br/>    object({<br/>      ttl : optional(number, 300),<br/>      records : list(string)<br/>    })<br/>  )</pre> | n/a | yes |
 | <a name="input_dns_zone_domain_name"></a> [dns\_zone\_domain\_name](#input\_dns\_zone\_domain\_name) | DNS zone domain name. If created, records will automatically be created to point to the CDN. | `string` | n/a | yes |
+| <a name="input_enable_container_health_probe"></a> [enable\_container\_health\_probe](#input\_enable\_container\_health\_probe) | Enable liveness probes for the Container | `bool` | `true` | no |
 | <a name="input_enable_container_registry"></a> [enable\_container\_registry](#input\_enable\_container\_registry) | Set to true to create a container registry | `bool` | `false` | no |
 | <a name="input_enable_dns_zone"></a> [enable\_dns\_zone](#input\_enable\_dns\_zone) | Conditionally create a DNS zone | `bool` | n/a | yes |
 | <a name="input_enable_health_insights_api"></a> [enable\_health\_insights\_api](#input\_enable\_health\_insights\_api) | Deploys a Function App that exposes the last 3 HTTP Web Tests via an API endpoint. 'enable\_app\_insights\_integration' and 'enable\_monitoring' must be set to 'true'. | `bool` | `false` | no |

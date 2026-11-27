@@ -1,5 +1,5 @@
 module "azure_container_apps_hosting" {
-  source = "github.com/DFE-Digital/terraform-azurerm-container-apps-hosting?ref=v2.8.1"
+  source = "github.com/DFE-Digital/terraform-azurerm-container-apps-hosting?ref=v2.11.2"
 
   environment    = local.environment
   project_name   = local.project_name
@@ -26,6 +26,7 @@ module "azure_container_apps_hosting" {
   container_apps_allow_ips_inbound       = local.container_apps_allow_ips_inbound
   container_min_replicas                 = local.container_min_replicas
   container_port                         = local.container_port
+  enable_container_health_probe          = local.enable_container_health_probe
 
   enable_health_insights_api          = local.enable_health_insights_api
   health_insights_api_cors_origins    = local.health_insights_api_cors_origins

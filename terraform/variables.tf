@@ -301,3 +301,9 @@ variable "dns_alias_records" {
   )
   default = {}
 }
+
+variable "enable_container_health_probe" {
+  description = "Enable liveness probes for the Container"
+  type        = bool
+  default     = true
+}
