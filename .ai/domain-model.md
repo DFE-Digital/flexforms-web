@@ -23,3 +23,7 @@ Transport: saves (`ApplicationResponseService`) send Base64 and the API stores d
 ## Template Studio
 
 Client-side editor in `wwwroot/js/template-studio/` mutates the same JSON the engine consumes. Raw JSON tab is advanced mode.
+
+## Task completion
+
+`FormTemplate.TaskCompletion` and `Task.TaskCompletion` (`taskCompletion` JSON, optional string `manual`/`automatic`). `TaskCompletionPolicy.Resolve` (Domain): task, then template, then Manual. Unknown or absent = Manual.

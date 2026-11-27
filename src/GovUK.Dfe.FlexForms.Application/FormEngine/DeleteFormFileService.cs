@@ -27,6 +27,7 @@ public sealed class DeleteFormFileService(
     IFormFileFieldService formFileFieldService,
     IFileUploadService fileUploadService,
     IApplicationResponseService applicationResponseService,
+    IAutoCompleteTask autoCompleteTask,
     ILogger<DeleteFormFileService> logger) : IDeleteFormFile
 {
     public async Task<FormEngineOutcome> ExecuteAsync(
@@ -58,6 +59,14 @@ public sealed class DeleteFormFileService(
         currentFieldFiles.RemoveAll(f => f.Id == request.FileId);
         formFileFieldService.SaveFiles(context, request.FieldId, currentFieldFiles);
         await SaveUploadedFilesToResponseAsync(request.ApplicationId, request.FieldId, currentFieldFiles, cancellationToken);
+
+        if (state.IsEditable && state.CurrentTask != null)
+        {
+            await autoCompleteTask.EvaluateAsync(
+                state,
+                applicationResponseService.GetAccumulatedFormData(),
+                cancellationToken);
+        }
 
         if (!string.IsNullOrEmpty(request.ReturnUrl))
         {

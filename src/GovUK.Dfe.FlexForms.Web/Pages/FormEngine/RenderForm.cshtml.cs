@@ -74,6 +74,8 @@ namespace GovUK.Dfe.FlexForms.Web.Pages.FormEngine
 
         [BindProperty] public bool IsTaskCompleted { get; set; }
 
+        public AutoCompleteTaskResult AutoCompletion { get; set; } = AutoCompleteTaskResult.NotApplicable;
+
         [BindProperty] public new string? FlowId { get; set; }
         [BindProperty] public new string? InstanceId { get; set; }
         [BindProperty] public string? FlowPageId { get; set; }

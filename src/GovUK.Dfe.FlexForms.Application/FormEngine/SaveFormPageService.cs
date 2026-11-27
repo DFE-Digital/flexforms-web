@@ -38,6 +38,7 @@ public sealed class SaveFormPageService(
     IComplexFieldConfigurationService complexFieldConfigurationService,
     IDerivedCollectionFlowService derivedCollectionFlowService,
     IApplicationStateService applicationStateService,
+    IAutoCompleteTask autoCompleteTask,
     ILogger<SaveFormPageService> logger) : ISaveFormPage
 {
     public async Task<FormEngineOutcome> ExecuteAsync(
@@ -45,6 +46,25 @@ public sealed class SaveFormPageService(
         IReadOnlyDictionary<string, IReadOnlyList<string>> postedFields,
         string? isTaskCompletedValue,
         CancellationToken cancellationToken = default)
+    {
+        var outcome = await SaveAsync(state, postedFields, isTaskCompletedValue, cancellationToken);
+
+        if (state.IsEditable && state.CurrentTask != null && state.ApplicationId.HasValue)
+        {
+            await autoCompleteTask.EvaluateAsync(
+                state,
+                applicationResponseService.GetAccumulatedFormData(),
+                cancellationToken);
+        }
+
+        return outcome;
+    }
+
+    private async Task<FormEngineOutcome> SaveAsync(
+        FormEngineWorkState state,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> postedFields,
+        string? isTaskCompletedValue,
+        CancellationToken cancellationToken)
     {
         ResolveRoute(state);
 
@@ -719,46 +739,10 @@ public sealed class SaveFormPageService(
         var isCompleted = ParseCompleted(isTaskCompletedValue);
         if (isCompleted)
         {
-            var derivedFlows = state.CurrentTask?.Summary?.DerivedFlows;
-            var errorLines = new List<string>();
-
-            if (derivedFlows != null && derivedFlows.Count > 0)
-            {
-                foreach (var derivedFlow in derivedFlows)
-                {
-                    var derivedItems = derivedCollectionFlowService.GenerateItemsFromSourceField(
-                        derivedFlow.SourceFieldId,
-                        state.FormData,
-                        derivedFlow);
-
-                    if (derivedItems.Count == 0)
-                    {
-                        var errorMessage = !string.IsNullOrEmpty(derivedFlow.NoItemsErrorMessage)
-                            ? derivedFlow.NoItemsErrorMessage
-                            : $"You need to add at least one item before signing the {derivedFlow.Title}";
-                        errorLines.Add(errorMessage);
-                        continue;
-                    }
-
-                    var statuses = derivedCollectionFlowService.GetItemStatuses(derivedFlow.FieldId, state.FormData);
-                    var unsignedItems = derivedItems
-                        .Where(item => !statuses.ContainsKey(item.Id) || statuses[item.Id] != "Signed")
-                        .ToList();
-
-                    foreach (var item in unsignedItems)
-                    {
-                        var displayName = FormEngineDerivedItems.GetDisplayName(
-                            derivedFlow,
-                            item.Id,
-                            state.FormData,
-                            derivedCollectionFlowService);
-                        var errorMessage = !string.IsNullOrEmpty(derivedFlow.UnsignedItemErrorMessage)
-                            ? derivedFlow.UnsignedItemErrorMessage.Replace("{sourceName}", displayName)
-                            : $"You need to sign the declaration for {displayName}";
-                        errorLines.Add(errorMessage);
-                    }
-                }
-            }
+            var errorLines = TaskCompletionRules.CollectDerivedErrors(
+                state.CurrentTask,
+                state.FormData,
+                derivedCollectionFlowService);
 
             if (errorLines.Count > 0)
             {

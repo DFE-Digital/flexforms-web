@@ -69,6 +69,7 @@ public partial class RenderFormModel
         DerivedPageId = state.DerivedPageId;
         ConditionalState = state.ConditionalState;
         IsTaskCompleted = state.IsTaskCompleted;
+        AutoCompletion = state.AutoCompletion;
         _visibility = null;
     }
 

@@ -178,6 +178,7 @@ public class RenderFormModelCharacterizationTests
             _applicationsClient,
             _fixture.Create<INavigationHistoryService>(),
             _applicationState,
+            NSubstitute.Substitute.For<GovUK.Dfe.FlexForms.Application.FormEngine.IAutoCompleteTask>(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<PrepareFormEngineGetService>.Instance));
         _fixture.Register<ISaveFormPage>(() => new SaveFormPageService(
             _templates,
@@ -194,12 +195,14 @@ public class RenderFormModelCharacterizationTests
             _fixture.Create<IComplexFieldConfigurationService>(),
             _fixture.Create<IDerivedCollectionFlowService>(),
             _applicationState,
+            NSubstitute.Substitute.For<GovUK.Dfe.FlexForms.Application.FormEngine.IAutoCompleteTask>(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<SaveFormPageService>.Instance));
         _fixture.Register<IRemoveCollectionItem>(() => new RemoveCollectionItemService(
             _templates,
             _responses,
             _fileUploadService,
             _navigation,
+            Substitute.For<GovUK.Dfe.FlexForms.Application.FormEngine.IAutoCompleteTask>(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<RemoveCollectionItemService>.Instance));
         _fixture.Register<IUploadFormFile>(() => new UploadFormFileService(
             _fileFieldService,
@@ -211,6 +214,7 @@ public class RenderFormModelCharacterizationTests
             _fileFieldService,
             _fileUploadService,
             _responses,
+            Substitute.For<GovUK.Dfe.FlexForms.Application.FormEngine.IAutoCompleteTask>(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<DeleteFormFileService>.Instance));
         _fixture.Register<IDownloadFormFile>(() => new DownloadFormFileService(
             _fileUploadService,

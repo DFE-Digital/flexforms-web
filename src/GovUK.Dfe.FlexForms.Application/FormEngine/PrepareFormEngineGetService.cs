@@ -37,6 +37,7 @@ public sealed class PrepareFormEngineGetService(
     IApplicationsClient applicationsClient,
     INavigationHistoryService navigationHistoryService,
     IApplicationStateService applicationStateService,
+    IAutoCompleteTask autoCompleteTask,
     ILogger<PrepareFormEngineGetService> logger) : IPrepareFormEngineGet
 {
     public async Task<FormEngineOutcome> ExecuteAsync(
@@ -101,6 +102,12 @@ public sealed class PrepareFormEngineGetService(
                 || formStateManager.ShouldShowDerivedCollectionFlowSummary(state.CurrentTask);
             if (isSummary)
             {
+                if (isEditable && !isPreview)
+                {
+                    state.IsEditable = true;
+                    state.AutoCompletion = await autoCompleteTask.EvaluateAsync(state, state.FormData, cancellationToken);
+                }
+
                 var taskStatus = applicationStateService.CalculateTaskStatus(
                     state.CurrentTask.TaskId,
                     state.Template,

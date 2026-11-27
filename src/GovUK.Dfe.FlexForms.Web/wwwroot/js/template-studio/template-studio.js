@@ -1907,6 +1907,20 @@
                 ],
                 onChange: function (value) { root.defaultFieldRequirementPolicy = value; restructured(); }
             }),
+            radios({
+                name: 'tpl-task-completion',
+                legend: 'How are tasks marked as complete?',
+                value: root.taskCompletion === 'automatic' ? 'automatic' : 'manual',
+                items: [
+                    { value: 'manual', label: 'Applicants tick a box to mark each task complete' },
+                    { value: 'automatic', label: 'Automatically, when everything required in the task is done',
+                        hint: 'Tasks with nothing required to check still show the tick box.' }
+                ],
+                onChange: function (value) {
+                    if (value === 'automatic') root.taskCompletion = value; else delete root.taskCompletion;
+                    restructured();
+                }
+            }),
             checkbox({
                 id: 'tpl-hide-single-label',
                 label: 'Use the page heading as the question when a page has one question',
@@ -2054,6 +2068,20 @@
             checkbox({
                 id: 'tpl-task-visible', label: 'Show this task on the task list', checked: task.visibleInTaskList !== false,
                 onChange: function (checked) { task.visibleInTaskList = checked; edited(path); }
+            }),
+            radios({
+                name: 'tpl-task-completion-' + task.taskId,
+                legend: 'How is this task marked as complete?',
+                value: task.taskCompletion === 'automatic' || task.taskCompletion === 'manual' ? task.taskCompletion : 'inherit',
+                items: [
+                    { value: 'inherit', label: 'Use the template setting' },
+                    { value: 'manual', label: 'Applicants tick a box' },
+                    { value: 'automatic', label: 'Automatically, when everything required is done' }
+                ],
+                onChange: function (value) {
+                    if (value === 'inherit') delete task.taskCompletion; else task.taskCompletion = value;
+                    edited(path);
+                }
             }),
             taskTypeSetting(path, task)
         ];

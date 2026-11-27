@@ -62,3 +62,7 @@ Application Admin tests, Web.UnitTests PageModels, Playwright admin journeys.
 ## 8. Limits
 
 Studio is a visual editor over the same JSON as the designer manual — keep the model canonical; don’t invent a second schema.
+
+## Studio: taskCompletion
+
+Template-level Manual/Automatic radios and per-task Inherit/Manual/Automatic radios in `template-studio.js`. Manual/Inherit delete the property so JSON stays unchanged by default.

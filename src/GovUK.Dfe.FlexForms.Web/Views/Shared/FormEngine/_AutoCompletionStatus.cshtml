@@ -1,0 +1,25 @@
+@using GovUK.Dfe.FlexForms.Application.FormEngine
+@model AutoCompleteTaskResult
+
+@if (Model.IsComplete)
+{
+    <p class="govuk-body govuk-!-margin-top-6" id="auto-completion-status">
+        <strong class="govuk-tag govuk-tag--green">Completed</strong>
+        <div class="govuk-inset-text">This section is marked as complete automatically if all required fields have been answered.</div>
+    </p>
+}
+else
+{
+    <div class="govuk-inset-text govuk-!-margin-top-6" id="auto-completion-status">
+        <p class="govuk-body">This section is marked as complete automatically when everything required is done.</p>
+        @if (Model.Outstanding.Count > 0)
+        {
+            <ul class="govuk-list govuk-list--bullet">
+                @foreach (var line in Model.Outstanding)
+                {
+                    <li>@line.TrimStart('•', ' ')</li>
+                }
+            </ul>
+        }
+    </div>
+}

@@ -71,6 +71,12 @@
             <form method="post" action="/applications/@Model.ReferenceNumber/@Model.TaskId?handler=Page">
                 @Html.AntiForgeryToken()
                 <input type="hidden" asp-for="TaskId" />
+                @if (Model.AutoCompletion.IsAutomatic)
+                {
+                    @await Html.PartialAsync("FormEngine/_AutoCompletionStatus", Model.AutoCompletion)
+                }
+                else
+                {
                 <div class="govuk-checkboxes__item">
                     <input class="govuk-checkboxes__input" 
                            id="IsTaskCompleted" 
@@ -82,6 +88,7 @@
                         Mark this section as complete, it's ready for review
                     </label>
                 </div>
+                }
                 <button type="submit" class="govuk-button govuk-!-margin-top-4" id="save-task-summary-button">Save and continue</button>
             </form>
         }

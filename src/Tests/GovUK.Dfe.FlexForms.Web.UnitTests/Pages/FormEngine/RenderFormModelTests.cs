@@ -152,6 +152,7 @@ public class RenderFormModelTests
             _fixture.Create<IApplicationsClient>(),
             _navigationHistoryService,
             _fixture.Create<IApplicationStateService>(),
+            NSubstitute.Substitute.For<GovUK.Dfe.FlexForms.Application.FormEngine.IAutoCompleteTask>(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<PrepareFormEngineGetService>.Instance));
         _fixture.Register<ISaveFormPage>(() => new SaveFormPageService(
             _templateManagementService,
@@ -168,12 +169,14 @@ public class RenderFormModelTests
             _fixture.Create<IComplexFieldConfigurationService>(),
             _fixture.Create<IDerivedCollectionFlowService>(),
             _fixture.Create<IApplicationStateService>(),
+            NSubstitute.Substitute.For<GovUK.Dfe.FlexForms.Application.FormEngine.IAutoCompleteTask>(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<SaveFormPageService>.Instance));
         _fixture.Register<IRemoveCollectionItem>(() => new RemoveCollectionItemService(
             _templateManagementService,
             _applicationResponseService,
             _fixture.Create<IFileUploadService>(),
             formNavigationService,
+            NSubstitute.Substitute.For<GovUK.Dfe.FlexForms.Application.FormEngine.IAutoCompleteTask>(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<RemoveCollectionItemService>.Instance));
         _fixture.Register<IUploadFormFile>(() => new UploadFormFileService(
             fileFieldService,
@@ -185,6 +188,7 @@ public class RenderFormModelTests
             fileFieldService,
             _fixture.Create<IFileUploadService>(),
             _applicationResponseService,
+            NSubstitute.Substitute.For<GovUK.Dfe.FlexForms.Application.FormEngine.IAutoCompleteTask>(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<DeleteFormFileService>.Instance));
         _fixture.Register<IDownloadFormFile>(() => new DownloadFormFileService(
             _fixture.Create<IFileUploadService>(),

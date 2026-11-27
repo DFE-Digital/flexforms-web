@@ -22,6 +22,7 @@ public class RemoveCollectionItemServiceCoverageTests
     private readonly IApplicationResponseService _responses = Substitute.For<IApplicationResponseService>();
     private readonly IFileUploadService _files = Substitute.For<IFileUploadService>();
     private readonly IFormNavigationService _navigation = Substitute.For<IFormNavigationService>();
+    private readonly IAutoCompleteTask _autoCompletion = Substitute.For<IAutoCompleteTask>();
     private readonly RemoveCollectionItemService _service;
 
     public RemoveCollectionItemServiceCoverageTests()
@@ -33,6 +34,7 @@ public class RemoveCollectionItemServiceCoverageTests
             _responses,
             _files,
             _navigation,
+            _autoCompletion,
             NullLogger<RemoveCollectionItemService>.Instance);
     }
 
@@ -85,6 +87,7 @@ public class RemoveCollectionItemServiceCoverageTests
         Assert.Equal(SummaryUrl, result.RedirectUrl);
         Assert.Null(result.SuccessMessage);
         _responses.DidNotReceive().AccumulateFormData(Arg.Any<Dictionary<string, object>>());
+        await _autoCompletion.DidNotReceive().EvaluateAsync(Arg.Any<FormEngineWorkState>(), Arg.Any<Dictionary<string, object>>(), Arg.Any<CancellationToken>());
     }
 
     // ---------------------------------------------------------------------
@@ -100,6 +103,7 @@ public class RemoveCollectionItemServiceCoverageTests
         var result = await _service.ExecuteAsync(State(), FieldId, "i1", FlowId, confirmed: true);
 
         Assert.Equal("Ada has been removed from members", result.SuccessMessage);
+        await _autoCompletion.Received(1).EvaluateAsync(Arg.Any<FormEngineWorkState>(), Arg.Any<Dictionary<string, object>>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
