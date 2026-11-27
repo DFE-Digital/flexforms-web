@@ -10,12 +10,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System.ComponentModel.DataAnnotations;
-using System.Diagnostics.CodeAnalysis;
 using Task = System.Threading.Tasks.Task;
 
 namespace GovUK.Dfe.FlexForms.Web.Pages.Admin
 {
-    [ExcludeFromCodeCoverage]
     [Authorize(Policy = AdminAccessHelper.CanManageTemplatesPolicy)]
     public class CustomStatusLabelOverridesModel(
         ICustomStatusLabelOverridesAdmin customStatusLabelOverridesAdmin,

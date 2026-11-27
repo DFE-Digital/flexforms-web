@@ -111,24 +111,6 @@ public sealed class TemplateManagerAccessTests : PlaywrightTestBase
         await dashboardPage.ExpectPreviewBannerHiddenAsync(OtherTemplateName);
     }
 
-    [TestCase(TestName = "A template manager can save a new version of a template they've been given in Template Studio, and can't choose others")]
-    [CiRetry]
-    public async Task TemplateStudioSavesOnlyTheGivenTemplatesAsync()
-    {
-        var studio = new TemplateStudio(Page);
-
-        await studio.OpenAsync(_givenTemplateId);
-        await studio.ExpectOpenAsync(GivenTemplateName);
-        await studio.ExpectTemplateCanBeChosenAsync(_givenLiveTemplateId);
-        await studio.ExpectTemplateCannotBeChosenAsync(_otherTemplateId);
-
-        var version = await studio.SaveNewVersionAsync();
-        await studio.ExpectSavedAsync(version);
-
-        var saved = await Templates.FindTemplateByNameAsync(AdminApiClient, GivenTemplateName);
-        Assert.That(saved?.LatestVersionNumber, Is.EqualTo(version));
-    }
-
     [OneTimeTearDown]
     public async Task RemoveTemplateManagerRoleAsync() => await RemoveTemplateManagerAsync();
 

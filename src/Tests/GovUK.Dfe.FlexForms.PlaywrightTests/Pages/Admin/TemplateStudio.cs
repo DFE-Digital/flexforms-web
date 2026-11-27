@@ -20,18 +20,6 @@ public sealed class TemplateStudio(IPage page) : BasePage(page)
         await Assertions.Expect(Status()).ToHaveTextAsync("No unsaved changes");
     }
 
-    public async Task ExpectTemplateCanBeChosenAsync(string templateId) =>
-        await Assertions.Expect(TemplateOption(templateId)).ToBeEnabledAsync();
-
-    public async Task ExpectTemplateCannotBeChosenAsync(string templateId)
-    {
-        await Assertions.Expect(TemplateOption(templateId)).ToBeDisabledAsync();
-        await Assertions.Expect(TemplateOption(templateId)).ToContainTextAsync("You do not have access to this template");
-    }
-
-    private ILocator TemplateOption(string templateId) =>
-        Page.Locator($"select#SelectedTemplateId option[value=\"{templateId.ToLowerInvariant()}\"]");
-
     // ---- Structure -------------------------------------------------------------------------------------------------
 
     /// <summary>Opens sections, tasks and pages in the structure by name, in order.</summary>

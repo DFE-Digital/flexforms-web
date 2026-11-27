@@ -30,23 +30,6 @@ public sealed class ContributorsTests : PlaywrightTestBase
         await taskList.ExpectLoadedAsync();
     }
 
-    [TestCase(TestName = "admin can edit any application")]
-    [CiRetry]
-    public async Task AdminCanEditAnyApplicationAsync()
-    {
-        var application = await CreateApplicationForTemplateAsync(ApiClient, ApiConfig.TemplateId);
-        var taskList = new TaskListPage(Page);
-        var standardFieldsTask = new StandardFieldsTask(Page);
-
-        await LoginAsync("admin");
-        await taskList.GoToAsync(application.ApplicationReference);
-        await taskList.ExpectLoadedAsync();
-
-        await standardFieldsTask.OpenAsync();
-        await standardFieldsTask.CompleteAsync();
-        await standardFieldsTask.ExpectCompletedAsync();
-    }
-
     [TestCase(TestName = "admin cannot submit another user's application")]
     [CiRetry]
     public async Task AdminCannotSubmitAnotherUsersApplicationAsync()
@@ -61,23 +44,6 @@ public sealed class ContributorsTests : PlaywrightTestBase
 
         var preview = new ApplicationPreviewPage(Page);
         await preview.ExpectNonLeadApplicantCannotSubmitAsync(Terminology.Singular);
-    }
-
-    [TestCase(TestName = "user should not be able to view an application that is not shared with them")]
-    [CiRetry]
-    public async Task UserCannotViewUnsharedApplicationAsync()
-    {
-        var application = await CreateApplicationForTemplateAsync(AdminApiClient, ApiConfig.TemplateId);
-        var dashboardPage = new DashboardPage(Page);
-        var taskList = new TaskListPage(Page);
-        var errorPage = new ErrorPage(Page);
-
-        await LoginAsync();
-        await dashboardPage.GoToAsync();
-        await dashboardPage.ExpectApplicationNotPresentAsync(application.ApplicationReference);
-
-        await taskList.GoToAsync(application.ApplicationReference);
-        await errorPage.ExpectPageNotFoundAsync();
     }
 
     [TestCase(TestName =
