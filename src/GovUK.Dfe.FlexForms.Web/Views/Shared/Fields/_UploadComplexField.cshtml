@@ -183,7 +183,7 @@
         }
         else
         {
-        <form method="post" asp-page="/FormEngine/RenderForm" asp-route-referenceNumber="@referenceNumber" asp-route-taskId="@taskId" asp-route-pageId="@actualPageId" asp-page-handler="UploadFile" enctype="multipart/form-data">
+        <form id="UploadFile" method="post" asp-page="/FormEngine/RenderForm" asp-route-referenceNumber="@referenceNumber" asp-route-taskId="@taskId" asp-route-pageId="@actualPageId" asp-page-handler="UploadFile" enctype="multipart/form-data">
             <input type="hidden" name="ApplicationId" value="@applicationId" />
             <input type="hidden" name="FieldId" value="@fieldId" />
             <input type="hidden" name="ReturnUrl" value="@actualReturnUrl" />
